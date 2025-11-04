@@ -6,7 +6,7 @@ dotenv.config({ path: './secure.env' });
 
 // Create SMTP transporter
 const createTransporter = () => {
-  return nodemailer.createTransport({
+  const config = {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT),
     secure: process.env.SMTP_SECURE === 'true',
@@ -16,8 +16,22 @@ const createTransporter = () => {
     },
     tls: {
       rejectUnauthorized: false
-    }
-  });
+    },
+    // Add connection pooling and timeout settings
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 30000, // 30 seconds
+    // Enable debug logging in development
+    debug: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === 'development'
+  };
+  
+  console.log(`📧 Creating SMTP transporter with config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT} (secure: ${process.env.SMTP_SECURE})`);
+  
+  return nodemailer.createTransporter(config);
 };
 
 // Verify SMTP connection
@@ -166,9 +180,18 @@ export const sendOTPEmail = async (to, otpCode, type = 'registration') => {
 
   } catch (error) {
     console.error('❌ Error sending OTP email:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
     return {
       success: false,
       error: error.message,
+      errorCode: error.code,
+      errorResponse: error.response,
       message: 'Failed to send OTP email'
     };
   }
@@ -200,9 +223,18 @@ export const sendNotificationEmail = async (to, subject, message, isHtml = false
 
   } catch (error) {
     console.error('❌ Error sending notification email:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
     return {
       success: false,
       error: error.message,
+      errorCode: error.code,
+      errorResponse: error.response,
       message: 'Failed to send notification email'
     };
   }
@@ -259,9 +291,18 @@ export const sendPasswordSetupEmail = async (to, firstName, token) => {
 
   } catch (error) {
     console.error('❌ Error sending password setup email:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
     return {
       success: false,
       error: error.message,
+      errorCode: error.code,
+      errorResponse: error.response,
       message: 'Failed to send password setup email'
     };
   }
