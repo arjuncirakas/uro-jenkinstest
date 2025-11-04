@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "setup-db": "node scripts/setup-db.js",
+    "create-superadmin": "node scripts/create-superadmin.js",
     "migrate-db": "node scripts/migrate-database.js",
     "test-security": "node scripts/test-security.js",
     "test-email": "node scripts/test-email.js",
