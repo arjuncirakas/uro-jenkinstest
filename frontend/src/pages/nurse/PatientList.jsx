@@ -1,0 +1,295 @@
+import React, { useState, useEffect } from 'react';
+import { FiEye, FiCalendar } from 'react-icons/fi';
+import NurseHeader from '../../components/layout/NurseHeader';
+import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
+import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
+import { patientService } from '../../services/patientService';
+
+const PatientList = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUrologist, setSelectedUrologist] = useState('all');
+  const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
+  const [isUpdateAppointmentModalOpen, setIsUpdateAppointmentModalOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  
+  // API state
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [urologists, setUrologists] = useState([]);
+
+  // Fetch patients from API
+  const fetchPatients = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await patientService.getPatients({
+        page: 1,
+        limit: 100, // Get more patients for the list
+        search: searchQuery,
+        status: 'Active'
+      });
+      
+      if (result.success) {
+        console.log('✅ PatientList: Patient data received:', result.data);
+        console.log('✅ PatientList: Number of patients:', result.data?.length || 0);
+        setPatients(result.data || []);
+        
+        // Extract unique urologists
+        const uniqueUrologists = [...new Set(
+          (result.data || [])
+            .map(patient => patient.assignedUrologist)
+            .filter(urologist => urologist && urologist.trim() !== '')
+        )].sort();
+        console.log('✅ PatientList: Unique urologists:', uniqueUrologists);
+        setUrologists(uniqueUrologists);
+      } else {
+        setError(result.error || 'Failed to fetch patients');
+        console.error('Error fetching patients:', result.error);
+      }
+    } catch (error) {
+      setError('Failed to fetch patients');
+      console.error('Error fetching patients:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load patients on component mount and when search query changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchPatients();
+    }, 300); // Debounce search
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Get initials from name
+  const getInitials = (name) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  };
+
+  // Determine patient pathway based on data from API
+  const getPatientPathway = (patient) => {
+    // Use the actual care pathway from the API
+    return patient.carePathway || patient.care_pathway || patient.pathway || 'OPD Queue';
+  };
+
+  // Get pathway status styling
+  const getPathwayStyle = (pathway) => {
+    switch (pathway) {
+      case 'OPD Queue':
+        return 'bg-blue-100 text-blue-800';
+      case 'Active Surveillance':
+        return 'bg-green-100 text-green-800';
+      case 'Surgical Pathway':
+        return 'bg-orange-100 text-orange-800';
+      case 'Post-Op Follow-up':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+
+  // Filter patients based on search query and urologist selection
+  const filteredPatients = patients.filter(patient => {
+    const patientPathway = getPatientPathway(patient);
+    const patientUrologist = patient.assignedUrologist || 'Unassigned';
+    
+    const matchesSearch = patient.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         patient.upi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         patientPathway.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         patientUrologist.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesUrologist = selectedUrologist === 'all' || patientUrologist === selectedUrologist;
+    
+    return matchesSearch && matchesUrologist;
+  });
+
+  // Handle patient actions
+  const handleViewDetails = (patient) => {
+    setSelectedPatient(patient);
+    setIsPatientDetailsModalOpen(true);
+  };
+
+  const handleUpdateAppointment = (patient) => {
+    setSelectedPatient(patient);
+    setIsUpdateAppointmentModalOpen(true);
+  };
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <NurseHeader 
+          title="Patient List"
+          subtitle="All patients under urology care"
+          onSearch={setSearchQuery}
+          searchPlaceholder="Search by name, UPI, pathway, or urologist..."
+        />
+
+        {/* Filter Controls */}
+        <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            {selectedUrologist !== 'all' && (
+              <div className="inline-flex items-center bg-teal-50 border border-teal-200 rounded-lg px-4 py-2 shadow-sm">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
+                  <span className="text-sm text-gray-700">
+                    Filtered by: <span className="font-semibold text-teal-700">{selectedUrologist}</span>
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedUrologist('all')}
+                  className="ml-3 px-3 py-1 bg-white border border-teal-300 text-teal-700 text-xs font-medium rounded-md hover:bg-teal-50 hover:border-teal-400 transition-colors"
+                >
+                  Clear Filter
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center space-x-2">
+            <label htmlFor="urologist-filter" className="text-sm font-medium text-gray-700">
+              Filter by Urologist:
+            </label>
+            <select
+              id="urologist-filter"
+              value={selectedUrologist}
+              onChange={(e) => setSelectedUrologist(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            >
+              <option value="all">All Urologists</option>
+              {urologists.map((urologist) => (
+                <option key={urologist} value={urologist}>
+                  {urologist}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Patient Table */}
+        <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PATIENT</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">UROLOGIST</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PATHWAY</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PSA LEVEL</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">BOOK APPOINTMENT</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-8">
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                        <span className="text-gray-600 text-sm">Loading patients...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-8">
+                      <div className="text-center">
+                        <div className="text-red-600 text-sm mb-2">{error}</div>
+                        <button
+                          onClick={fetchPatients}
+                          className="px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredPatients.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-8 text-gray-500 text-sm">
+                      {searchQuery ? 'No patients found matching your search' : 'No patients found'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPatients.map((patient) => {
+                    const patientPathway = getPatientPathway(patient);
+                    const patientUrologist = patient.assignedUrologist || 'Unassigned';
+                    
+                    return (
+                      <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="py-4 px-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                              {getInitials(patient.fullName || 'Unknown')}
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900 text-sm">{patient.fullName || 'Unknown Patient'}</div>
+                              <div className="text-xs text-gray-600">
+                                UPI: {patient.upi} • Age: {patient.age} • {patient.gender}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="text-sm font-medium text-gray-900">{patientUrologist}</div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPathwayStyle(patientPathway)}`}>
+                            {patientPathway}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-gray-700 text-sm">
+                          <div className="flex items-center">
+                            <div className="w-2 h-2 bg-orange-500 rounded-full mr-2"></div>
+                            <span>{patient.initialPSA || 0} ng/mL</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <button 
+                            onClick={() => handleUpdateAppointment(patient)}
+                            className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
+                          >
+                            <FiCalendar className="w-3 h-3" />
+                            <span>Book Appointment</span>
+                          </button>
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <button 
+                            onClick={() => handleViewDetails(patient)}
+                            className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center space-x-1 mx-auto"
+                          >
+                            <FiEye className="w-3 h-3" />
+                            <span>View Details</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Nurse Patient Details Modal */}
+      <NursePatientDetailsModal 
+        isOpen={isPatientDetailsModalOpen}
+        onClose={() => setIsPatientDetailsModalOpen(false)}
+        patient={selectedPatient}
+      />
+
+      {/* Update Appointment Modal */}
+      <UpdateAppointmentModal 
+        isOpen={isUpdateAppointmentModalOpen}
+        onClose={() => setIsUpdateAppointmentModalOpen(false)}
+        patient={selectedPatient}
+      />
+    </div>
+  );
+};
+
+export default PatientList;

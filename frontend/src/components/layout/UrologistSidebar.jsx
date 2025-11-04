@@ -1,0 +1,213 @@
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { HiHome } from 'react-icons/hi';
+import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaClipboardList, FaProcedures, FaHeartbeat } from 'react-icons/fa';
+import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
+
+const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
+  const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  
+  // Auto-expand Patients menu when on any patients route
+  const isPatientsExpanded = location.pathname.startsWith('/urologist/patients');
+  const [manuallyCollapsed, setManuallyCollapsed] = useState(false);
+
+  // Reset manual collapse when navigating away from patients routes
+  useEffect(() => {
+    if (!isPatientsExpanded) {
+      setManuallyCollapsed(false);
+    }
+  }, [isPatientsExpanded]);
+
+  const navigationItems = [
+    { name: 'Dashboard', icon: HiHome, path: '/urologist/dashboard', active: location.pathname === '/urologist/dashboard' || location.pathname === '/urologist' },
+    { 
+      name: 'Patients', 
+      icon: FaUsers, 
+      path: '/urologist/patients', 
+      active: location.pathname.startsWith('/urologist/patients'),
+      hasSubItems: true,
+      subItems: [
+        { name: 'All Patients', icon: FaUsers, path: '/urologist/patients', active: location.pathname === '/urologist/patients' },
+        { name: 'New Patients', icon: FaClipboardList, path: '/urologist/patients/new', active: location.pathname === '/urologist/patients/new' },
+        { name: 'Surgery Pathway', icon: FaProcedures, path: '/urologist/patients/surgery-pathway', active: location.pathname === '/urologist/patients/surgery-pathway' },
+        { name: 'Post-op Followup', icon: FaHeartbeat, path: '/urologist/patients/post-op-followup', active: location.pathname === '/urologist/patients/post-op-followup' },
+      ]
+    },
+    { name: 'Appointments', icon: FaCalendarAlt, path: '/urologist/appointments', active: location.pathname === '/urologist/appointments' },
+  ];
+
+  const handleLinkClick = () => {
+    if (onClose) {
+      onClose();
+    }
+  };
+
+
+  return (
+    <div className={`
+      ${isCollapsed ? 'w-[80px]' : 'w-[280px]'} bg-white flex flex-col h-screen border-r border-gray-200
+      fixed lg:static z-40 transition-all duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+    `}>
+      {/* Logo Section */}
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <img 
+              src={isCollapsed ? "/qwe.png" : "/rdshgdsr.png"}
+              alt="Urology Care System Logo" 
+              className={`${isCollapsed ? 'w-10 h-10' : 'w-32 h-auto'} flex-shrink-0 transition-all duration-300`}
+            />
+          </div>
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <IoChevronForward className="text-gray-600 text-lg" />
+            ) : (
+              <IoChevronBack className="text-gray-600 text-lg" />
+            )}
+          </button>
+        </div>
+        {!isCollapsed && <div className="mt-2 text-xs text-gray-500">Urologist Panel</div>}
+      </div>
+
+      {/* Navigation Menu */}
+      <nav className="flex-1 px-4 py-2 overflow-y-auto">
+        <ul className="space-y-1">
+          {navigationItems.map((item) => {
+            const IconComponent = item.icon;
+            return (
+              <li key={item.name}>
+                {item.hasSubItems ? (
+                  <>
+                    <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-4 py-3 rounded-lg transition-all ${
+                      item.active
+                        ? 'bg-teal-50 text-teal-700'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}>
+                      <Link
+                        to={item.path}
+                        onClick={() => {
+                          setManuallyCollapsed(false); // Always expand when clicking main Patients link
+                          handleLinkClick();
+                        }}
+                        className="flex items-center flex-1"
+                        title={isCollapsed ? item.name : ''}
+                      >
+                        <IconComponent className={`text-xl ${isCollapsed ? '' : 'mr-4'} ${item.active ? 'text-teal-600' : 'text-gray-500'}`} />
+                        {!isCollapsed && <span className="font-medium text-base">{item.name}</span>}
+                      </Link>
+                      {!isCollapsed && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setManuallyCollapsed(!manuallyCollapsed);
+                          }}
+                          className="p-1 hover:bg-teal-100 rounded transition-colors"
+                          aria-label={manuallyCollapsed ? "Expand patients menu" : "Collapse patients menu"}
+                        >
+                          {(isPatientsExpanded && !manuallyCollapsed) ? (
+                            <FaChevronDown className={`text-sm ${item.active ? 'text-teal-600' : 'text-gray-500'}`} />
+                          ) : (
+                            <FaChevronRight className={`text-sm ${item.active ? 'text-teal-600' : 'text-gray-500'}`} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {isPatientsExpanded && !isCollapsed && !manuallyCollapsed && (
+                      <div className="mt-2 ml-4 relative">
+                        {/* Main vertical line */}
+                        <div className="absolute left-[20px] top-0 w-[2px] h-full bg-teal-300"></div>
+                        
+                        <ul className="space-y-1">
+                          {item.subItems.map((subItem, index) => {
+                            const SubIconComponent = subItem.icon;
+                            return (
+                              <li key={subItem.name} className="relative">
+                                {/* Horizontal line connecting to vertical line */}
+                                <div className="absolute left-[20px] top-[20px] w-[16px] h-[2px] bg-teal-300"></div>
+                                
+                                <Link
+                                  to={subItem.path}
+                                  onClick={handleLinkClick}
+                                  className={`flex items-center pl-8 py-2.5 rounded-lg transition-all relative ${
+                                    subItem.active
+                                      ? 'bg-teal-50 text-teal-700 shadow-sm'
+                                      : 'text-gray-600 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                                    subItem.active 
+                                      ? 'bg-teal-100' 
+                                      : 'bg-gray-100'
+                                  }`}>
+                                    <SubIconComponent className={`text-sm ${subItem.active ? 'text-teal-600' : 'text-gray-500'}`} />
+                                  </div>
+                                  <span className="text-sm font-medium">{subItem.name}</span>
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Link
+                    to={item.path}
+                    onClick={handleLinkClick}
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${
+                      item.active
+                        ? 'bg-teal-50 text-teal-700'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title={isCollapsed ? item.name : ''}
+                  >
+                    <IconComponent className={`text-xl ${isCollapsed ? '' : 'mr-4'} ${item.active ? 'text-teal-600' : 'text-gray-500'}`} />
+                    {!isCollapsed && <span className="font-medium text-base">{item.name}</span>}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* Bottom Section */}
+      <div className="p-4 space-y-4">
+        <button 
+          onClick={onOpenAddPatient}
+          className={`w-full bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors flex items-center justify-center ${isCollapsed ? 'text-2xl' : ''}`}
+          title={isCollapsed ? "New Patient" : ""}
+        >
+          <span className={`${isCollapsed ? '' : 'text-xl mr-2'}`}>+</span>
+          {!isCollapsed && 'New Patient'}
+        </button>
+        
+        <Link
+          to="/login"
+          className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors`}
+          title={isCollapsed ? "Logout" : ""}
+        >
+          <IoLogOutOutline className={`text-xl ${isCollapsed ? '' : 'mr-3'}`} />
+          {!isCollapsed && <span className="font-medium">Logout</span>}
+        </Link>
+        
+        {/* Powered by AhimsaGlobal */}
+        {!isCollapsed && (
+          <div className="text-center pt-4 border-t border-gray-100">
+            <p className="text-xs text-gray-400">Powered by AhimsaGlobal</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default UrologistSidebar;
+

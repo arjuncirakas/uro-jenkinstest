@@ -1,0 +1,1728 @@
+import pool from '../config/database.js';
+import { sendNotificationEmail } from '../services/emailService.js';
+import { createPathwayTransferNotification } from '../services/notificationService.js';
+
+// Generate unique UPI (Urology Patient ID)
+const generateUPI = () => {
+  const year = new Date().getFullYear();
+  const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `URP${year}${randomNum}`;
+};
+
+// Helper function to format date as YYYY-MM-DD without timezone conversion
+const formatDateOnly = (dateString) => {
+  if (!dateString) return null;
+  
+  // If already in YYYY-MM-DD format, return as is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  
+  // Handle Date objects from PostgreSQL
+  if (dateString instanceof Date) {
+    const year = dateString.getUTCFullYear();
+    const month = String(dateString.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dateString.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Handle ISO string with timezone (from PostgreSQL TIMESTAMP)
+  if (typeof dateString === 'string' && dateString.includes('T')) {
+    // Use UTC methods to avoid timezone conversion
+    const date = new Date(dateString);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Fallback for other formats
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Add new patient
+export const addPatient = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const {
+      firstName,
+      lastName,
+      dateOfBirth,
+      gender,
+      phone,
+      email,
+      address,
+      postcode,
+      city,
+      state,
+      referringDepartment,
+      referralDate,
+      initialPSA,
+      initialPSADate,
+      medicalHistory,
+      currentMedications,
+      allergies,
+      assignedUrologist,
+      emergencyContactName,
+      emergencyContactPhone,
+      emergencyContactRelationship,
+      priority = 'Normal',
+      notes,
+      referredByGpId // Added to accept referring GP from frontend
+    } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !dateOfBirth || !gender || !phone || !initialPSA) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name, last name, date of birth, gender, phone, and initial PSA are required'
+      });
+    }
+
+    // Validate gender
+    if (!['Male', 'Female', 'Other'].includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Gender must be Male, Female, or Other'
+      });
+    }
+
+    // Validate priority
+    if (priority && !['Low', 'Normal', 'High', 'Urgent'].includes(priority)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Priority must be Low, Normal, High, or Urgent'
+      });
+    }
+
+    // Check if email already exists (if provided)
+    if (email) {
+      const existingEmail = await client.query(
+        'SELECT id FROM patients WHERE email = $1',
+        [email]
+      );
+      
+      if (existingEmail.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Patient with this email already exists'
+        });
+      }
+    }
+
+    // Check if phone already exists (if provided)
+    if (phone) {
+      const existingPhone = await client.query(
+        'SELECT id FROM patients WHERE phone = $1',
+        [phone]
+      );
+      
+      if (existingPhone.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Patient with this phone number already exists'
+        });
+      }
+    }
+
+    // Generate unique UPI
+    let upi;
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (!isUnique && attempts < maxAttempts) {
+      upi = generateUPI();
+      const existingUPI = await client.query(
+        'SELECT id FROM patients WHERE upi = $1',
+        [upi]
+      );
+      
+      if (existingUPI.rows.length === 0) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+
+    if (!isUnique) {
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to generate unique patient ID. Please try again.'
+      });
+    }
+
+    // Determine referred_by_gp_id
+    // Priority: 1. From request body (when nurse/urologist selects GP), 2. Current user if GP, 3. null
+    let finalReferredByGpId = null;
+    if (referredByGpId) {
+      // Use the GP selected in the form (for nurses/urologists)
+      finalReferredByGpId = parseInt(referredByGpId);
+    } else if (req.user.role === 'gp') {
+      // If current user is GP, use their ID
+      finalReferredByGpId = req.user.id;
+    }
+
+    // Format date fields to prevent timezone conversion issues
+    const formattedDateOfBirth = formatDateOnly(dateOfBirth);
+    const formattedReferralDate = formatDateOnly(referralDate);
+    const formattedInitialPSADate = formatDateOnly(initialPSADate);
+
+    // Insert new patient
+    const result = await client.query(
+      `INSERT INTO patients (
+        upi, first_name, last_name, date_of_birth, gender, phone, email, address, 
+        postcode, city, state, referring_department, referral_date, initial_psa, 
+        initial_psa_date, medical_history, current_medications, allergies, 
+        assigned_urologist, emergency_contact_name, emergency_contact_phone, 
+        emergency_contact_relationship, priority, notes, created_by, referred_by_gp_id
+      ) VALUES (
+        $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12, $13::date, $14, $15::date, $16, 
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+      ) RETURNING *`,
+      [
+        upi, firstName, lastName, formattedDateOfBirth, gender, phone, email, address,
+        postcode, city, state, referringDepartment, formattedReferralDate, initialPSA,
+        formattedInitialPSADate, medicalHistory, currentMedications, allergies,
+        assignedUrologist, emergencyContactName, emergencyContactPhone,
+        emergencyContactRelationship, priority, notes, req.user.id, finalReferredByGpId
+      ]
+    );
+
+    const newPatient = result.rows[0];
+
+    // Calculate age
+    const age = new Date().getFullYear() - new Date(dateOfBirth).getFullYear();
+
+    res.status(201).json({
+      success: true,
+      message: 'Patient added successfully',
+      data: {
+        patient: {
+          id: newPatient.id,
+          upi: newPatient.upi,
+          firstName: newPatient.first_name,
+          lastName: newPatient.last_name,
+          fullName: `${newPatient.first_name} ${newPatient.last_name}`,
+          dateOfBirth: formattedDateOfBirth, // Use the formatted input date
+          age,
+          gender: newPatient.gender,
+          phone: newPatient.phone,
+          email: newPatient.email,
+          address: newPatient.address,
+          postcode: newPatient.postcode,
+          city: newPatient.city,
+          state: newPatient.state,
+          referringDepartment: newPatient.referring_department,
+          referralDate: formattedReferralDate, // Use the formatted input date
+          initialPSA: newPatient.initial_psa,
+          initialPSADate: formattedInitialPSADate, // Use the formatted input date
+          medicalHistory: newPatient.medical_history,
+          currentMedications: newPatient.current_medications,
+          allergies: newPatient.allergies,
+          assignedUrologist: newPatient.assigned_urologist,
+          emergencyContactName: newPatient.emergency_contact_name,
+          emergencyContactPhone: newPatient.emergency_contact_phone,
+          emergencyContactRelationship: newPatient.emergency_contact_relationship,
+          priority: newPatient.priority,
+          notes: newPatient.notes,
+          status: newPatient.status,
+          createdBy: newPatient.created_by,
+          createdAt: newPatient.created_at,
+          updatedAt: newPatient.updated_at
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Add patient error:', error);
+    
+    // Handle unique constraint violations
+    if (error.code === '23505') {
+      if (error.constraint === 'patients_email_key') {
+        return res.status(409).json({
+          success: false,
+          message: 'Patient with this email already exists'
+        });
+      }
+      if (error.constraint === 'patients_phone_key') {
+        return res.status(409).json({
+          success: false,
+          message: 'Patient with this phone number already exists'
+        });
+      }
+      if (error.constraint === 'patients_upi_key') {
+        return res.status(409).json({
+          success: false,
+          message: 'Patient with this UPI already exists'
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Get all patients (with filtering and pagination)
+export const getPatients = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const {
+      page = 1,
+      limit = 50,
+      search = '',
+      status = 'Active',
+      assignedUrologist = '',
+      carePathway = '',
+      sortBy = 'created_at',
+      sortOrder = 'DESC'
+    } = req.query;
+
+    const offset = (page - 1) * limit;
+    
+    // Build WHERE clause
+    let whereConditions = ['p.status = $1'];
+    let queryParams = [status];
+    let paramCount = 1;
+
+    // If user is GP, filter by referred_by_gp_id
+    // Only show patients explicitly assigned to this GP AND have a valid creator
+    if (req.user && req.user.role === 'gp') {
+      paramCount++;
+      whereConditions.push(`p.referred_by_gp_id = $${paramCount}`);
+      queryParams.push(req.user.id);
+      // Also exclude patients with NULL created_by (orphaned/invalid assignments)
+      whereConditions.push(`p.created_by IS NOT NULL`);
+      console.log(`🔍 GP Filter (getPatients): User ID = ${req.user.id}, Role = ${req.user.role}, Email = ${req.user.email}`);
+    }
+
+    // Add care pathway filter - CRITICAL for Active Monitoring page
+    if (carePathway) {
+      paramCount++;
+      whereConditions.push(`p.care_pathway = $${paramCount}`);
+      queryParams.push(carePathway);
+      console.log(`🔍 Care Pathway Filter: ${carePathway}`);
+    }
+
+    // Add search filter
+    if (search) {
+      paramCount++;
+      whereConditions.push(`(
+        p.first_name ILIKE $${paramCount} OR 
+        p.last_name ILIKE $${paramCount} OR 
+        p.upi ILIKE $${paramCount} OR 
+        p.phone ILIKE $${paramCount} OR 
+        p.email ILIKE $${paramCount}
+      )`);
+      queryParams.push(`%${search}%`);
+    }
+
+    // Add urologist filter
+    if (assignedUrologist) {
+      paramCount++;
+      whereConditions.push(`p.assigned_urologist = $${paramCount}`);
+      queryParams.push(assignedUrologist);
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM patients p 
+      WHERE ${whereClause}
+    `;
+    const countResult = await client.query(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get patients with user info
+    const patientsQuery = `
+      SELECT 
+        p.id, p.upi, p.first_name, p.last_name, p.gender, p.phone, p.email,
+        p.address, p.postcode, p.city, p.state, p.referring_department,
+        p.initial_psa, p.medical_history, p.current_medications, p.allergies,
+        p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
+        p.emergency_contact_relationship, p.priority, p.notes, p.status,
+        p.care_pathway, p.created_by, p.created_at, p.updated_at,
+        TO_CHAR(p.date_of_birth, 'YYYY-MM-DD') as date_of_birth,
+        TO_CHAR(p.referral_date, 'YYYY-MM-DD') as referral_date,
+        TO_CHAR(p.initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,
+        u.first_name as created_by_first_name,
+        u.last_name as created_by_last_name,
+        gp.first_name as gp_first_name,
+        gp.last_name as gp_last_name
+      FROM patients p
+      LEFT JOIN users u ON p.created_by = u.id
+      LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+      WHERE ${whereClause}
+      ORDER BY p.${sortBy} ${sortOrder}
+      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+    `;
+    
+    queryParams.push(limit, offset);
+    const patientsResult = await client.query(patientsQuery, queryParams);
+
+    // Format patient data
+    const patients = patientsResult.rows.map(patient => {
+      const age = new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear();
+      
+      return {
+        id: patient.id,
+        upi: patient.upi,
+        firstName: patient.first_name,
+        lastName: patient.last_name,
+        fullName: `${patient.first_name} ${patient.last_name}`,
+        dateOfBirth: patient.date_of_birth, // Already formatted by TO_CHAR
+        age,
+        gender: patient.gender,
+        phone: patient.phone,
+        email: patient.email,
+        address: patient.address,
+        postcode: patient.postcode,
+        city: patient.city,
+        state: patient.state,
+        referringDepartment: patient.referring_department,
+        referralDate: patient.referral_date, // Already formatted by TO_CHAR
+        initialPSA: patient.initial_psa,
+        initialPSADate: patient.initial_psa_date, // Already formatted by TO_CHAR
+        medicalHistory: patient.medical_history,
+        currentMedications: patient.current_medications,
+        allergies: patient.allergies,
+        assignedUrologist: patient.assigned_urologist,
+        emergencyContactName: patient.emergency_contact_name,
+        emergencyContactPhone: patient.emergency_contact_phone,
+        emergencyContactRelationship: patient.emergency_contact_relationship,
+        priority: patient.priority,
+        notes: patient.notes,
+        status: patient.status,
+        carePathway: patient.care_pathway,
+        createdBy: patient.created_by,
+        createdByName: patient.created_by_first_name && patient.created_by_last_name 
+          ? `${patient.created_by_first_name} ${patient.created_by_last_name}` 
+          : 'Unknown',
+        referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
+        createdAt: patient.created_at,
+        updatedAt: patient.updated_at
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        patients,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get patients error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Get new patients (recently added, status = 'Active')
+export const getNewPatients = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { limit = 20 } = req.query;
+
+    // Build WHERE clause for GP filtering
+    let whereConditions = ['p.status = $1'];
+    let queryParams = ['Active'];
+    let paramCount = 1;
+
+    // If user is GP, filter by referred_by_gp_id
+    // Only show patients explicitly assigned to this GP AND have a valid creator
+    if (req.user && req.user.role === 'gp') {
+      paramCount++;
+      whereConditions.push(`p.referred_by_gp_id = $${paramCount}`);
+      queryParams.push(req.user.id);
+      // Also exclude patients with NULL created_by (orphaned/invalid assignments)
+      whereConditions.push(`p.created_by IS NOT NULL`);
+      console.log(`🔍 GP Filter (getNewPatients): User ID = ${req.user.id}, Role = ${req.user.role}, Email = ${req.user.email}`);
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
+    const query = `
+      SELECT 
+        p.id,
+        p.upi,
+        p.first_name,
+        p.last_name,
+        p.date_of_birth,
+        p.gender,
+        p.phone,
+        p.email,
+        p.initial_psa,
+        p.initial_psa_date,
+        p.priority,
+        p.status,
+        p.care_pathway,
+        p.created_at,
+        p.updated_at,
+        p.referred_by_gp_id,
+        p.assigned_urologist,
+        u.first_name as created_by_name,
+        u.last_name as created_by_last_name,
+        u.role as created_by_role,
+        gp.first_name as gp_first_name,
+        gp.last_name as gp_last_name,
+        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+      FROM patients p
+      LEFT JOIN users u ON p.created_by = u.id
+      LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+      WHERE ${whereClause}
+      ORDER BY p.created_at DESC
+      LIMIT $${paramCount + 1}
+    `;
+
+    queryParams.push(parseInt(limit));
+    const result = await client.query(query, queryParams);
+
+    console.log(`Found ${result.rows.length} new patients`);
+    if (req.user && req.user.role === 'gp' && result.rows.length > 0) {
+      console.log(`📋 Patient details:`, result.rows.map(p => ({
+        name: `${p.first_name} ${p.last_name}`,
+        referred_by_gp_id: p.referred_by_gp_id,
+        created_by: p.created_by_name
+      })));
+    }
+    
+    // Transform the data to match frontend expectations
+    const transformedPatients = result.rows.map((patient, index) => {
+      try {
+      // Safely format the date
+      let dateOfEntry = '';
+      if (patient.created_at) {
+        if (typeof patient.created_at === 'string') {
+          dateOfEntry = patient.created_at.split('T')[0];
+        } else if (patient.created_at instanceof Date) {
+          dateOfEntry = patient.created_at.toISOString().split('T')[0];
+        } else {
+          // Fallback for other date formats
+          dateOfEntry = new Date(patient.created_at).toISOString().split('T')[0];
+        }
+      }
+
+      return {
+        id: patient.id,
+        upi: patient.upi,
+        name: `${patient.first_name} ${patient.last_name}`,
+        firstName: patient.first_name,
+        lastName: patient.last_name,
+        age: patient.age,
+        gender: patient.gender,
+        phone: patient.phone,
+        email: patient.email,
+        psa: parseFloat(patient.initial_psa) || 0,
+        psaDate: patient.initial_psa_date,
+        priority: patient.priority,
+        status: 'newPatient', // For frontend compatibility
+        category: 'new',
+        dateOfEntry: dateOfEntry,
+        createdBy: patient.created_by_name ? `${patient.created_by_name} ${patient.created_by_last_name}` : 'System',
+        createdByRole: patient.created_by_role,
+        referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
+        assignedUrologist: patient.assigned_urologist,
+        createdAt: patient.created_at,
+        updatedAt: patient.updated_at
+      };
+      } catch (error) {
+        console.error(`Error transforming patient ${index + 1}:`, error);
+        console.error('Patient data:', patient);
+        // Return a safe fallback object
+        return {
+          id: patient.id || 0,
+          upi: patient.upi || 'Unknown',
+          name: `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || 'Unknown Patient',
+          firstName: patient.first_name || '',
+          lastName: patient.last_name || '',
+          age: patient.age || 0,
+          gender: patient.gender || 'Unknown',
+          phone: patient.phone || '',
+          email: patient.email || '',
+          psa: parseFloat(patient.initial_psa) || 0,
+          psaDate: patient.initial_psa_date || null,
+          priority: patient.priority || 'Normal',
+          status: 'newPatient',
+          category: 'new',
+          dateOfEntry: new Date().toISOString().split('T')[0], // Fallback to today
+          createdBy: 'System',
+          createdByRole: null,
+          referredByGP: null,
+          assignedUrologist: null,
+          createdAt: patient.created_at || new Date(),
+          updatedAt: patient.updated_at || new Date()
+        };
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'New patients retrieved successfully',
+      data: {
+        patients: transformedPatients
+      },
+      count: transformedPatients.length
+    });
+  } catch (error) {
+    console.error('Error fetching new patients:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch new patients',
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Get patient by ID
+export const getPatientById = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+
+    const result = await client.query(
+      `SELECT 
+        p.id, p.upi, p.first_name, p.last_name, p.gender, p.phone, p.email,
+        p.address, p.postcode, p.city, p.state, p.referring_department,
+        p.initial_psa, p.medical_history, p.current_medications, p.allergies,
+        p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
+        p.emergency_contact_relationship, p.priority, p.notes, p.status,
+        p.care_pathway, p.created_by, p.created_at, p.updated_at,
+        TO_CHAR(p.date_of_birth, 'YYYY-MM-DD') as date_of_birth,
+        TO_CHAR(p.referral_date, 'YYYY-MM-DD') as referral_date,
+        TO_CHAR(p.initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,
+        u.first_name as created_by_first_name,
+        u.last_name as created_by_last_name,
+        gp.first_name as gp_first_name,
+        gp.last_name as gp_last_name
+      FROM patients p
+      LEFT JOIN users u ON p.created_by = u.id
+      LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+      WHERE p.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found'
+      });
+    }
+
+    const patient = result.rows[0];
+    const age = new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear();
+
+    // Get latest PSA from investigation_results (if any)
+    let latestPSA = null;
+    let latestPSADate = null;
+    try {
+      const psaRes = await client.query(
+        `SELECT result, test_date 
+         FROM investigation_results 
+         WHERE patient_id = $1 AND (test_type ILIKE 'psa' OR test_name ILIKE '%PSA%')
+         ORDER BY test_date DESC, created_at DESC
+         LIMIT 1`,
+        [id]
+      );
+      if (psaRes.rows.length > 0) {
+        latestPSA = psaRes.rows[0].result;
+        latestPSADate = psaRes.rows[0].test_date;
+      }
+    } catch (e) {
+      console.error('Latest PSA lookup failed:', e.message);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        patient: {
+          id: patient.id,
+          upi: patient.upi,
+          firstName: patient.first_name,
+          lastName: patient.last_name,
+          fullName: `${patient.first_name} ${patient.last_name}`,
+          dateOfBirth: patient.date_of_birth, // Already formatted by TO_CHAR
+          age,
+          gender: patient.gender,
+          phone: patient.phone,
+          email: patient.email,
+          address: patient.address,
+          postcode: patient.postcode,
+          city: patient.city,
+          state: patient.state,
+          referringDepartment: patient.referring_department,
+          referralDate: patient.referral_date, // Already formatted by TO_CHAR
+          initialPSA: patient.initial_psa,
+          initialPSADate: patient.initial_psa_date, // Already formatted by TO_CHAR
+          medicalHistory: patient.medical_history,
+          currentMedications: patient.current_medications,
+          allergies: patient.allergies,
+          assignedUrologist: patient.assigned_urologist,
+          emergencyContactName: patient.emergency_contact_name,
+          emergencyContactPhone: patient.emergency_contact_phone,
+          emergencyContactRelationship: patient.emergency_contact_relationship,
+          priority: patient.priority,
+          notes: patient.notes,
+          status: patient.status,
+          createdBy: patient.created_by,
+          createdByName: patient.created_by_first_name && patient.created_by_last_name 
+            ? `${patient.created_by_first_name} ${patient.created_by_last_name}` 
+            : 'Unknown',
+          referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
+          createdAt: patient.created_at,
+          updatedAt: patient.updated_at,
+          latest_psa: latestPSA,
+          latest_psa_date: latestPSADate
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get patient by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Update patient
+export const updatePatient = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Check if patient exists
+    const existingPatient = await client.query(
+      'SELECT id FROM patients WHERE id = $1',
+      [id]
+    );
+
+    if (existingPatient.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found'
+      });
+    }
+
+    // Build dynamic update query
+    const allowedFields = [
+      'first_name', 'last_name', 'date_of_birth', 'gender', 'phone', 'email',
+      'address', 'postcode', 'city', 'state', 'referring_department', 'referral_date',
+      'initial_psa', 'initial_psa_date', 'medical_history', 'current_medications',
+      'allergies', 'assigned_urologist', 'emergency_contact_name', 'emergency_contact_phone',
+      'emergency_contact_relationship', 'priority', 'notes', 'status'
+    ];
+
+    const dateFields = ['date_of_birth', 'referral_date', 'initial_psa_date'];
+    const updateFields = [];
+    const updateValues = [];
+    let paramCount = 0;
+
+    for (const [key, value] of Object.entries(updateData)) {
+      const dbField = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      if (allowedFields.includes(dbField)) {
+        paramCount++;
+        // Format dates and cast them as DATE type in PostgreSQL
+        if (dateFields.includes(dbField)) {
+          updateFields.push(`${dbField} = $${paramCount}::date`);
+          updateValues.push(formatDateOnly(value));
+        } else {
+          updateFields.push(`${dbField} = $${paramCount}`);
+          updateValues.push(value);
+        }
+      }
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields to update'
+      });
+    }
+
+    // Add updated_at timestamp
+    paramCount++;
+    updateFields.push(`updated_at = $${paramCount}`);
+    updateValues.push(new Date());
+
+    // Add patient ID for WHERE clause
+    paramCount++;
+    updateValues.push(id);
+
+    const updateQuery = `
+      UPDATE patients 
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING id, upi, first_name, last_name, gender, phone, email,
+                address, postcode, city, state, referring_department,
+                initial_psa, medical_history, current_medications, allergies,
+                assigned_urologist, emergency_contact_name, emergency_contact_phone,
+                emergency_contact_relationship, priority, notes, status,
+                created_by, created_at, updated_at,
+                TO_CHAR(date_of_birth, 'YYYY-MM-DD') as date_of_birth,
+                TO_CHAR(referral_date, 'YYYY-MM-DD') as referral_date,
+                TO_CHAR(initial_psa_date, 'YYYY-MM-DD') as initial_psa_date
+    `;
+
+    const result = await client.query(updateQuery, updateValues);
+    const updatedPatient = result.rows[0];
+
+    const age = new Date().getFullYear() - new Date(updatedPatient.date_of_birth).getFullYear();
+
+    res.json({
+      success: true,
+      message: 'Patient updated successfully',
+      data: {
+        patient: {
+          id: updatedPatient.id,
+          upi: updatedPatient.upi,
+          firstName: updatedPatient.first_name,
+          lastName: updatedPatient.last_name,
+          fullName: `${updatedPatient.first_name} ${updatedPatient.last_name}`,
+          dateOfBirth: updatedPatient.date_of_birth, // Already formatted by TO_CHAR
+          age,
+          gender: updatedPatient.gender,
+          phone: updatedPatient.phone,
+          email: updatedPatient.email,
+          address: updatedPatient.address,
+          postcode: updatedPatient.postcode,
+          city: updatedPatient.city,
+          state: updatedPatient.state,
+          referringDepartment: updatedPatient.referring_department,
+          referralDate: updatedPatient.referral_date, // Already formatted by TO_CHAR
+          initialPSA: updatedPatient.initial_psa,
+          initialPSADate: updatedPatient.initial_psa_date, // Already formatted by TO_CHAR
+          medicalHistory: updatedPatient.medical_history,
+          currentMedications: updatedPatient.current_medications,
+          allergies: updatedPatient.allergies,
+          assignedUrologist: updatedPatient.assigned_urologist,
+          emergencyContactName: updatedPatient.emergency_contact_name,
+          emergencyContactPhone: updatedPatient.emergency_contact_phone,
+          emergencyContactRelationship: updatedPatient.emergency_contact_relationship,
+          priority: updatedPatient.priority,
+          notes: updatedPatient.notes,
+          status: updatedPatient.status,
+          createdBy: updatedPatient.created_by,
+          createdAt: updatedPatient.created_at,
+          updatedAt: updatedPatient.updated_at
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Update patient error:', error);
+    
+    // Handle unique constraint violations
+    if (error.code === '23505') {
+      if (error.constraint === 'patients_email_key') {
+        return res.status(409).json({
+          success: false,
+          message: 'Patient with this email already exists'
+        });
+      }
+      if (error.constraint === 'patients_phone_key') {
+        return res.status(409).json({
+          success: false,
+          message: 'Patient with this phone number already exists'
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Delete patient (soft delete by setting status to Inactive)
+export const deletePatient = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+
+    const result = await client.query(
+      'UPDATE patients SET status = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      ['Inactive', new Date(), id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Patient deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete patient error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Get patients assigned to current doctor with category filtering
+export const getAssignedPatientsForDoctor = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { category = 'all', limit = 100 } = req.query;
+
+    console.log(`[getAssignedPatientsForDoctor] User ID: ${userId}, Role: ${userRole}, Category: ${category}`);
+
+    // Resolve doctor's full name to match patients.assigned_urologist string field
+    const userQ = await client.query('SELECT first_name, last_name, role FROM users WHERE id = $1', [userId]);
+    if (userQ.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    const doctorName = `${userQ.rows[0].first_name} ${userQ.rows[0].last_name}`.trim();
+    
+    console.log(`[getAssignedPatientsForDoctor] Doctor Name Built: "${doctorName}"`);
+    
+    // Debug: Check all patients with assignments
+    const debugQ = await client.query(
+      `SELECT id, upi, first_name, last_name, assigned_urologist, care_pathway, status 
+       FROM patients 
+       WHERE status = 'Active' AND assigned_urologist IS NOT NULL 
+       ORDER BY created_at DESC LIMIT 5`
+    );
+    console.log(`[getAssignedPatientsForDoctor] Recent assigned patients in DB:`, 
+      debugQ.rows.map(r => ({ 
+        upi: r.upi, 
+        name: `${r.first_name} ${r.last_name}`,
+        assigned_to: `"${r.assigned_urologist}"`,
+        care_pathway: r.care_pathway || 'null'
+      }))
+    );
+
+    // Base WHERE for assignment
+    const whereBase = `p.status = 'Active' AND p.assigned_urologist = $1`;
+
+    let additionalWhere = '';
+    // Category filters
+    if (category === 'new') {
+      // New = assigned patients with no completed urologist appointments and no care pathway set
+      // This includes patients who just had appointments booked
+      additionalWhere = `AND NOT EXISTS (
+          SELECT 1 FROM appointments a 
+          WHERE a.patient_id = p.id 
+            AND a.appointment_type ILIKE 'urologist' 
+            AND a.status = 'completed'
+        )
+        AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
+    } else if (category === 'surgery-pathway') {
+      // Only return patients whose current pathway is Surgery Pathway
+      // Don't include patients who have been transferred to other pathways
+      additionalWhere = `AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
+    } else if (category === 'post-op-followup') {
+      // Only return patients whose current pathway is Post-op Transfer or Post-op Followup
+      additionalWhere = `AND ( 
+        COALESCE(p.care_pathway,'') = 'Post-op Transfer' 
+        OR COALESCE(p.care_pathway,'') = 'Post-op Followup'
+      )`;
+    }
+
+    const query = `
+      SELECT 
+        p.id,
+        p.upi,
+        p.first_name,
+        p.last_name,
+        p.date_of_birth,
+        p.gender,
+        p.priority,
+        p.status,
+        p.care_pathway,
+        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+      FROM patients p
+      WHERE ${whereBase} ${additionalWhere}
+      ORDER BY p.created_at DESC
+      LIMIT $2
+    `;
+
+    const result = await client.query(query, [doctorName, parseInt(limit)]);
+
+    console.log(`[getAssignedPatientsForDoctor] Found ${result.rows.length} patients for category "${category}"`);
+    if (result.rows.length > 0) {
+      console.log(`[getAssignedPatientsForDoctor] Sample patient:`, {
+        id: result.rows[0].id,
+        name: `${result.rows[0].first_name} ${result.rows[0].last_name}`,
+        upi: result.rows[0].upi
+      });
+    }
+
+    const patients = result.rows.map(r => ({
+      id: r.id,
+      upi: r.upi,
+      name: `${r.first_name} ${r.last_name}`,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      age: r.age,
+      gender: r.gender,
+      priority: r.priority,
+      status: r.status,
+      carePathway: r.care_pathway, // Include actual care pathway
+      category: category // Requested category filter
+    }));
+
+    res.json({ success: true, message: 'Assigned patients retrieved', data: { patients, count: patients.length } });
+  } catch (error) {
+    console.error('Get assigned patients error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+};
+
+// Update patient care pathway
+export const updatePatientPathway = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { pathway, reason, notes } = req.body;
+    const userId = req.user.id;
+
+    const allowed = ['Active Monitoring','Surgery Pathway','Medication','Radiotherapy','Post-op Transfer','Post-op Followup','Discharge'];
+    if (!pathway || !allowed.includes(pathway)) {
+      return res.status(400).json({ success: false, message: 'Invalid pathway' });
+    }
+
+    // Ensure patient exists and get patient details including assigned urologist and referring GP
+    const existing = await client.query(
+      `SELECT p.id, p.upi, p.first_name, p.last_name, p.assigned_urologist, p.referred_by_gp_id,
+              gp.email as gp_email, gp.first_name as gp_first_name, gp.last_name as gp_last_name
+       FROM patients p
+       LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+       WHERE p.id = $1`, 
+      [id]
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    const patientData = existing.rows[0];
+
+    // Update pathway and optionally status
+    const newStatus = pathway === 'Discharge' ? 'Discharged' : 'Active';
+    const update = await client.query(
+      `UPDATE patients 
+       SET care_pathway = $1,
+           status = $2,
+           notes = COALESCE($3, notes),
+           updated_at = CURRENT_TIMESTAMP,
+           care_pathway_updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING id, upi, care_pathway, status, updated_at, care_pathway_updated_at`,
+      [pathway, newStatus, notes || null, id]
+    );
+
+    // Store user info for notes (get once, use twice)
+    let userInfo = null;
+    let userName = null;
+    let userRole = null;
+    
+    try {
+      const userQuery = await client.query(
+        'SELECT first_name, last_name, role FROM users WHERE id = $1',
+        [userId]
+      );
+      
+      if (userQuery.rows.length > 0) {
+        userInfo = userQuery.rows[0];
+        userName = `${userInfo.first_name} ${userInfo.last_name}`;
+        userRole = userInfo.role === 'urologist' ? 'Urologist' : 
+                   userInfo.role === 'urology_nurse' ? 'Nurse' : 
+                   userInfo.role === 'gp' ? 'GP' : 
+                   userInfo.role === 'admin' ? 'Admin' : 'User';
+      }
+    } catch (e) {
+      console.error('[updatePatientPathway] Failed to get user info:', e.message);
+    }
+
+    // AUTO-BOOK FOLLOW-UP APPOINTMENT FOR ACTIVE MONITORING
+    let autoBookedAppointment = null;
+    if (pathway === 'Active Monitoring') {
+      try {
+        console.log(`[updatePatientPathway] Patient transferred to Active Monitoring - Auto-booking follow-up...`);
+        
+        // Get the urologist who is transferring the patient (logged-in user)
+        const urologistInfo = await client.query(
+          'SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = $2',
+          [userId, 'urologist']
+        );
+
+        if (urologistInfo.rows.length > 0) {
+          const urologist = urologistInfo.rows[0];
+          const urologistName = `${urologist.first_name} ${urologist.last_name}`;
+          
+          // Calculate follow-up date (3 months from today for Active Monitoring)
+          const followUpDate = new Date();
+          followUpDate.setMonth(followUpDate.getMonth() + 3);
+          const appointmentDate = followUpDate.toISOString().split('T')[0];
+          
+          // Default time: 10:00 AM
+          const appointmentTime = '10:00';
+          
+          // Check if time slot is available
+          const conflictCheck = await client.query(
+            `SELECT id FROM appointments 
+             WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+             AND status IN ('scheduled', 'confirmed')`,
+            [urologist.id, appointmentDate, appointmentTime]
+          );
+
+          // If slot is taken, find next available slot
+          let finalTime = appointmentTime;
+          if (conflictCheck.rows.length > 0) {
+            // Try next 30-minute slot
+            const timeSlots = ['10:30', '11:00', '11:30', '14:00', '14:30', '15:00'];
+            for (const slot of timeSlots) {
+              const slotCheck = await client.query(
+                `SELECT id FROM appointments 
+                 WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+                 AND status IN ('scheduled', 'confirmed')`,
+                [urologist.id, appointmentDate, slot]
+              );
+              if (slotCheck.rows.length === 0) {
+                finalTime = slot;
+                break;
+              }
+            }
+          }
+
+          // Book the appointment
+          const appointment = await client.query(
+            `INSERT INTO appointments (
+              patient_id, appointment_type, appointment_date, appointment_time, 
+              urologist_id, urologist_name, notes, created_by, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *`,
+            [
+              id, 
+              'urologist', 
+              appointmentDate, 
+              finalTime, 
+              urologist.id, 
+              urologistName, 
+              `Auto-booked for Active Monitoring follow-up. ${reason || ''}`.trim(), 
+              userId,
+              'scheduled'
+            ]
+          );
+
+          autoBookedAppointment = {
+            id: appointment.rows[0].id,
+            date: appointmentDate,
+            time: finalTime,
+            urologistName: urologistName
+          };
+
+          console.log(`[updatePatientPathway] ✅ Auto-booked appointment for ${patientData.upi} on ${appointmentDate} at ${finalTime} with ${urologistName}`);
+        } else {
+          console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Current user is not a urologist`);
+        }
+      } catch (autoBookError) {
+        console.error('[updatePatientPathway] Auto-booking failed (non-fatal):', autoBookError.message);
+        // Don't fail the pathway update if auto-booking fails
+      }
+    }
+
+    // AUTO-BOOK FOLLOW-UP APPOINTMENTS FOR POST-OP TRANSFER & POST-OP FOLLOWUP (EVERY 6 MONTHS)
+    if (pathway === 'Post-op Transfer' || pathway === 'Post-op Followup') {
+      try {
+        console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking 6-month follow-up appointments...`);
+        
+        // Get the urologist (either from patient assignment or current user)
+        let urologistId = null;
+        let urologistName = null;
+        
+        // First, try to use the assigned urologist from patient record
+        if (patientData.assigned_urologist) {
+          const assignedUrologistQuery = await client.query(
+            `SELECT id, first_name, last_name FROM users 
+             WHERE role = 'urologist' 
+             AND CONCAT(first_name, ' ', last_name) = $1 
+             LIMIT 1`,
+            [patientData.assigned_urologist]
+          );
+          
+          if (assignedUrologistQuery.rows.length > 0) {
+            const urologist = assignedUrologistQuery.rows[0];
+            urologistId = urologist.id;
+            urologistName = `${urologist.first_name} ${urologist.last_name}`;
+          }
+        }
+        
+        // If no assigned urologist found, use the current user if they're a urologist
+        if (!urologistId) {
+          const currentUrologistQuery = await client.query(
+            'SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = $2',
+            [userId, 'urologist']
+          );
+          
+          if (currentUrologistQuery.rows.length > 0) {
+            const urologist = currentUrologistQuery.rows[0];
+            urologistId = urologist.id;
+            urologistName = `${urologist.first_name} ${urologist.last_name}`;
+          }
+        }
+
+        if (urologistId && urologistName) {
+          // Create multiple follow-up appointments at 6-month intervals for 1 year (6 months, 12 months)
+          const appointmentIntervals = [6, 12]; // months - 6-month intervals for 1 year
+          const bookedAppointments = [];
+          
+          for (const monthsAhead of appointmentIntervals) {
+            const followUpDate = new Date();
+            followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
+            const appointmentDate = followUpDate.toISOString().split('T')[0];
+            
+            // Default time: 10:00 AM
+            let appointmentTime = '10:00';
+            
+            // Check if time slot is available
+            const conflictCheck = await client.query(
+              `SELECT id FROM appointments 
+               WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+               AND status IN ('scheduled', 'confirmed')`,
+              [urologistId, appointmentDate, appointmentTime]
+            );
+
+            // If slot is taken, find next available slot
+            if (conflictCheck.rows.length > 0) {
+              const timeSlots = ['10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '15:30'];
+              for (const slot of timeSlots) {
+                const slotCheck = await client.query(
+                  `SELECT id FROM appointments 
+                   WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+                   AND status IN ('scheduled', 'confirmed')`,
+                  [urologistId, appointmentDate, slot]
+                );
+                if (slotCheck.rows.length === 0) {
+                  appointmentTime = slot;
+                  break;
+                }
+              }
+            }
+
+            // Book the appointment
+            const appointment = await client.query(
+              `INSERT INTO appointments (
+                patient_id, appointment_type, appointment_date, appointment_time, 
+                urologist_id, urologist_name, notes, created_by, status
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              RETURNING *`,
+              [
+                id, 
+                'urologist', 
+                appointmentDate, 
+                appointmentTime, 
+                urologistId, 
+                urologistName, 
+                `Auto-booked ${monthsAhead}-month post-operative follow-up. ${reason || ''}`.trim(), 
+                userId,
+                'scheduled'
+              ]
+            );
+
+            bookedAppointments.push({
+              id: appointment.rows[0].id,
+              date: appointmentDate,
+              time: appointmentTime,
+              monthsAhead: monthsAhead
+            });
+
+            console.log(`[updatePatientPathway] ✅ Auto-booked ${monthsAhead}-month follow-up for ${patientData.upi} on ${appointmentDate} at ${appointmentTime} with ${urologistName}`);
+          }
+
+          // Store first appointment for clinical note
+          if (bookedAppointments.length > 0) {
+            autoBookedAppointment = {
+              id: bookedAppointments[0].id,
+              date: bookedAppointments[0].date,
+              time: bookedAppointments[0].time,
+              urologistName: urologistName,
+              allAppointments: bookedAppointments // Store all booked appointments for note
+            };
+          }
+        } else {
+          console.log(`[updatePatientPathway] ⚠️ Could not auto-book post-op appointments: No urologist found`);
+        }
+      } catch (autoBookError) {
+        console.error('[updatePatientPathway] Post-op auto-booking failed (non-fatal):', autoBookError.message);
+        // Don't fail the pathway update if auto-booking fails
+      }
+    }
+
+    // CREATE CLINICAL NOTE FOR PATHWAY TRANSFER (after auto-booking so we can include appointment details)
+    if (userName && userRole) {
+      try {
+        console.log(`[updatePatientPathway] Creating clinical note for pathway transfer...`);
+        
+        // Create detailed clinical note content
+        let noteContent = `🔄 PATHWAY TRANSFER\n\n` +
+                         `Patient transferred to: ${pathway}\n` +
+                         `Previous pathway: ${patientData.care_pathway || 'None'}\n` +
+                         `Reason: ${reason || 'Not specified'}\n` +
+                         `Clinical Notes: ${notes || 'None'}`;
+        
+        // Add auto-booking info if appointment was created
+        if (autoBookedAppointment) {
+          // Check if multiple appointments were booked (post-op pathway)
+          if (autoBookedAppointment.allAppointments && autoBookedAppointment.allAppointments.length > 1) {
+            noteContent += `\n\n📅 POST-OP FOLLOW-UP APPOINTMENTS AUTO-BOOKED:\n`;
+            autoBookedAppointment.allAppointments.forEach((apt, index) => {
+              const aptDate = new Date(apt.date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              });
+              noteContent += `\n${index + 1}. ${apt.monthsAhead}-Month Follow-up:\n` +
+                            `   Date: ${aptDate}\n` +
+                            `   Time: ${apt.time}\n` +
+                            `   Urologist: ${autoBookedAppointment.urologistName}`;
+            });
+          } else {
+            // Single appointment (Active Monitoring)
+            const aptDate = new Date(autoBookedAppointment.date).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            noteContent += `\n\n📅 FOLLOW-UP APPOINTMENT AUTO-BOOKED:\n` +
+                          `Date: ${aptDate}\n` +
+                          `Time: ${autoBookedAppointment.time}\n` +
+                          `Urologist: ${autoBookedAppointment.urologistName}`;
+          }
+        }
+        
+        noteContent += `\n\nTransferred by: ${userName} (${userRole})`;
+        
+        // Insert into patient_notes table
+        await client.query(
+          `INSERT INTO patient_notes (
+            patient_id, note_type, note_content, author_id, author_name, author_role, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+          [id, 'pathway_transfer', noteContent, userId, userName, userRole]
+        );
+        
+        console.log(`[updatePatientPathway] ✅ Created clinical note for ${patientData.upi} - Transfer to ${pathway}`);
+      } catch (noteError) {
+        console.error('[updatePatientPathway] Failed to create clinical note (non-fatal):', noteError.message);
+        // Don't fail the pathway update if note creation fails
+      }
+    }
+
+    // SEND NOTIFICATION TO REFERRING GP FOR ACTIVE MONITORING OR MEDICATION PATHWAYS
+    if ((pathway === 'Active Monitoring' || pathway === 'Medication') && patientData.referred_by_gp_id && patientData.gp_email) {
+      try {
+        console.log(`[updatePatientPathway] Sending notification to referring GP...`);
+        
+        const patientName = `${patientData.first_name} ${patientData.last_name}`;
+        const gpName = `Dr. ${patientData.gp_first_name} ${patientData.gp_last_name}`;
+        
+        const emailSubject = `Patient Update: ${patientName} - Transferred to ${pathway}`;
+        
+        let emailContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background-color: #0d9488; padding: 20px; text-align: center;">
+              <h1 style="color: white; margin: 0;">Urology Patient Management System</h1>
+            </div>
+            <div style="padding: 30px; background-color: #f9fafb;">
+              <h2 style="color: #1f2937; margin-bottom: 20px;">Patient Care Pathway Update</h2>
+              
+              <p style="color: #374151; font-size: 16px;">Dear ${gpName},</p>
+              
+              <p style="color: #374151; font-size: 16px;">
+                We are writing to inform you that your referred patient has been transferred to a new care pathway.
+              </p>
+              
+              <div style="background-color: white; border-left: 4px solid #0d9488; padding: 20px; margin: 20px 0;">
+                <h3 style="color: #0d9488; margin-top: 0;">Patient Information</h3>
+                <p style="margin: 5px 0;"><strong>Patient Name:</strong> ${patientName}</p>
+                <p style="margin: 5px 0;"><strong>UPI:</strong> ${patientData.upi}</p>
+                <p style="margin: 5px 0;"><strong>New Care Pathway:</strong> <span style="color: #0d9488; font-weight: bold;">${pathway}</span></p>
+                ${reason ? `<p style="margin: 5px 0;"><strong>Reason:</strong> ${reason}</p>` : ''}
+              </div>`;
+        
+        if (pathway === 'Active Monitoring' && autoBookedAppointment) {
+          const aptDate = new Date(autoBookedAppointment.date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          emailContent += `
+              <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0;">
+                <h3 style="color: #10b981; margin-top: 0;">Follow-up Appointment Scheduled</h3>
+                <p style="margin: 5px 0;"><strong>Date:</strong> ${aptDate}</p>
+                <p style="margin: 5px 0;"><strong>Time:</strong> ${autoBookedAppointment.time}</p>
+                <p style="margin: 5px 0;"><strong>Urologist:</strong> ${autoBookedAppointment.urologistName}</p>
+              </div>`;
+        }
+        
+        emailContent += `
+              <p style="color: #374151; font-size: 16px; margin-top: 20px;">
+                You can view the patient's full details and progress in your GP portal.
+              </p>
+              
+              <p style="color: #374151; font-size: 16px;">
+                ${notes ? `<strong>Additional Notes:</strong><br>${notes}` : ''}
+              </p>
+              
+              <p style="color: #374151; font-size: 14px; margin-top: 30px;">
+                Best regards,<br>
+                <strong>Urology Department</strong>
+              </p>
+            </div>
+            <div style="background-color: #e5e7eb; padding: 15px; text-align: center; font-size: 12px; color: #6b7280;">
+              <p style="margin: 0;">This is an automated notification from the Urology Patient Management System.</p>
+              <p style="margin: 5px 0;">Please do not reply to this email.</p>
+            </div>
+          </div>
+        `;
+        
+        const emailResult = await sendNotificationEmail(patientData.gp_email, emailSubject, emailContent, true);
+        
+        if (emailResult.success) {
+          console.log(`[updatePatientPathway] ✅ Notification email sent to GP: ${patientData.gp_email}`);
+        } else {
+          console.error(`[updatePatientPathway] ⚠️ Failed to send notification to GP: ${emailResult.error}`);
+        }
+        
+        // CREATE IN-APP NOTIFICATION FOR GP
+        try {
+          console.log(`[updatePatientPathway] Creating in-app notification for GP...`);
+          
+          const notificationResult = await createPathwayTransferNotification({
+            gpUserId: patientData.referred_by_gp_id,
+            patientName,
+            patientId: id,
+            pathway,
+            urologistName: userName || 'Urologist',
+            reason: reason || ''
+          });
+          
+          if (notificationResult.success) {
+            console.log(`[updatePatientPathway] ✅ In-app notification created for GP`);
+          } else {
+            console.error(`[updatePatientPathway] ⚠️ Failed to create in-app notification: ${notificationResult.error}`);
+          }
+        } catch (notifError) {
+          console.error('[updatePatientPathway] In-app notification failed (non-fatal):', notifError.message);
+        }
+      } catch (emailError) {
+        console.error('[updatePatientPathway] Email notification failed (non-fatal):', emailError.message);
+        // Don't fail the pathway update if email fails
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Patient pathway updated',
+      data: {
+        ...update.rows[0],
+        autoBookedAppointment
+      }
+    });
+  } catch (error) {
+    console.error('Update patient pathway error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+};
+
+// Search patients with autocomplete
+export const searchPatients = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { query, limit = 10 } = req.query;
+    
+    if (!query || query.trim().length < 2) {
+      return res.json({
+        success: true,
+        message: 'Query too short',
+        data: []
+      });
+    }
+    
+    const searchTerm = `%${query.trim()}%`;
+    
+    // Search patients by name, UPI, or phone
+    const result = await client.query(
+      `SELECT 
+        id,
+        upi,
+        first_name,
+        last_name,
+        date_of_birth,
+        gender,
+        phone,
+        email,
+        care_pathway,
+        status,
+        assigned_urologist,
+        initial_psa,
+        priority
+       FROM patients
+       WHERE (
+         LOWER(first_name || ' ' || last_name) LIKE LOWER($1)
+         OR LOWER(upi) LIKE LOWER($1)
+         OR LOWER(phone) LIKE LOWER($1)
+       )
+       AND status != 'Discharged'
+       ORDER BY 
+         CASE 
+           WHEN LOWER(first_name || ' ' || last_name) LIKE LOWER($2) THEN 1
+           WHEN LOWER(upi) LIKE LOWER($2) THEN 2
+           ELSE 3
+         END,
+         first_name, last_name
+       LIMIT $3`,
+      [searchTerm, `${query.trim()}%`, limit]
+    );
+    
+    // Calculate age for each patient
+    const today = new Date();
+    const patients = result.rows.map(row => {
+      const birthDate = new Date(row.date_of_birth);
+      const age = Math.floor((today - birthDate) / (365.25 * 24 * 60 * 60 * 1000));
+      
+      return {
+        id: row.id,
+        upi: row.upi,
+        name: `${row.first_name} ${row.last_name}`,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        age: age,
+        gender: row.gender,
+        phone: row.phone,
+        email: row.email,
+        carePathway: row.care_pathway,
+        status: row.status,
+        assignedUrologist: row.assigned_urologist,
+        initialPSA: row.initial_psa,
+        priority: row.priority
+      };
+    });
+    
+    console.log(`[searchPatients] Found ${patients.length} patients for query: "${query}"`);
+    
+    res.json({
+      success: true,
+      message: 'Patients found',
+      data: patients
+    });
+  } catch (error) {
+    console.error('[searchPatients] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search patients',
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Get patients due for review (7-14 days window)
+export const getPatientsDueForReview = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    // Calculate date range for 7-14 days from now
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() + 7);
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 14);
+    
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+    
+    console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for user ${userId}`);
+    
+    // For urologists, get appointments assigned to them
+    // For nurses, get all appointments in the department
+    const appointmentsQuery = userRole === 'urologist' 
+      ? `SELECT 
+          a.id,
+          a.patient_id,
+          a.appointment_date,
+          a.appointment_time,
+          a.appointment_type,
+          a.urologist_id,
+          a.urologist_name,
+          a.notes,
+          a.status,
+          p.first_name,
+          p.last_name,
+          p.upi,
+          p.date_of_birth,
+          p.gender,
+          p.care_pathway
+         FROM appointments a
+         INNER JOIN patients p ON a.patient_id = p.id
+         WHERE a.appointment_date BETWEEN $1 AND $2
+         AND a.urologist_id = $3
+         AND a.status IN ('scheduled', 'confirmed')
+         ORDER BY a.appointment_date, a.appointment_time`
+      : `SELECT 
+          a.id,
+          a.patient_id,
+          a.appointment_date,
+          a.appointment_time,
+          a.appointment_type,
+          a.urologist_id,
+          a.urologist_name,
+          a.notes,
+          a.status,
+          p.first_name,
+          p.last_name,
+          p.upi,
+          p.date_of_birth,
+          p.gender,
+          p.care_pathway
+         FROM appointments a
+         INNER JOIN patients p ON a.patient_id = p.id
+         WHERE a.appointment_date BETWEEN $1 AND $2
+         AND a.status IN ('scheduled', 'confirmed')
+         ORDER BY a.appointment_date, a.appointment_time`;
+    
+    const queryParams = userRole === 'urologist' 
+      ? [startDateStr, endDateStr, userId]
+      : [startDateStr, endDateStr];
+    
+    const result = await client.query(appointmentsQuery, queryParams);
+    
+    // Transform appointments into patients due for review
+    const patientsMap = new Map();
+    
+    for (const row of result.rows) {
+      const patientId = row.patient_id;
+      
+      // Calculate age
+      const birthDate = new Date(row.date_of_birth);
+      const age = Math.floor((today - birthDate) / (365.25 * 24 * 60 * 60 * 1000));
+      
+      // Determine type based on appointment type or care pathway
+      let type = 'Follow-up';
+      if (row.appointment_type === 'surgery') {
+        type = 'Surgery';
+      } else if (row.care_pathway === 'Post-op Transfer' || row.care_pathway === 'Post-op Followup') {
+        type = 'Post-Op Follow-up';
+      } else if (row.care_pathway === 'Investigation Pathway') {
+        type = 'Investigation';
+      } else if (row.appointment_type === 'investigation') {
+        type = 'Investigation';
+      }
+      
+      // Determine priority based on date proximity and type
+      const daysUntil = Math.floor((new Date(row.appointment_date) - today) / (24 * 60 * 60 * 1000));
+      let priority = 'Medium';
+      if (daysUntil <= 7 || type === 'Post-Op Follow-up') {
+        priority = 'High';
+      } else if (daysUntil > 10) {
+        priority = 'Low';
+      }
+      
+      if (!patientsMap.has(patientId)) {
+        patientsMap.set(patientId, {
+          id: patientId,
+          name: `${row.first_name} ${row.last_name}`,
+          upi: row.upi,
+          age: age,
+          type: type,
+          date: row.appointment_date,
+          time: row.appointment_time,
+          priority: priority,
+          appointmentId: row.id,
+          status: row.status
+        });
+      }
+    }
+    
+    const patients = Array.from(patientsMap.values());
+    
+    // Calculate summary statistics
+    const summary = {
+      total: patients.length,
+      postOpFollowup: patients.filter(p => p.type === 'Post-Op Follow-up').length,
+      investigation: patients.filter(p => p.type === 'Investigation').length,
+      surgical: patients.filter(p => p.type === 'Surgery').length,
+      followup: patients.filter(p => p.type === 'Follow-up').length
+    };
+    
+    console.log(`[getPatientsDueForReview] Found ${patients.length} patients due for review`);
+    console.log(`[getPatientsDueForReview] Summary:`, summary);
+    
+    res.json({
+      success: true,
+      message: 'Patients due for review fetched successfully',
+      data: {
+        patients: patients,
+        summary: summary,
+        dateRange: {
+          start: startDateStr,
+          end: endDateStr
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[getPatientsDueForReview] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch patients due for review',
+      error: error.message 
+    });
+  } finally {
+    client.release();
+  }
+};

@@ -1,0 +1,807 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Calendar,
+  X,
+  Clock,
+  Users,
+  Plus,
+  Search,
+  CheckCircle
+} from 'lucide-react';
+import { useEscapeKey } from '../utils/useEscapeKey';
+import ConfirmModal from './ConfirmModal';
+import { doctorsService } from '../services/doctorsService';
+
+const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
+  // Early return if patient is not provided
+  if (!isOpen || !patient) return null;
+  
+  // Initialize form with current date and time
+  const now = new Date();
+  const currentDate = now.toISOString().split('T')[0];
+  const currentTime = now.toTimeString().slice(0, 5);
+
+  const [mdtForm, setMdtForm] = useState({
+    mdtDate: currentDate,
+    time: currentTime,
+    priority: 'Medium',
+    teamMembers: [],
+    notes: ''
+  });
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [dropdownSearchTerm, setDropdownSearchTerm] = useState('');
+  const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false);
+  const [newTeamMember, setNewTeamMember] = useState({
+    name: '',
+    department: '',
+    email: '',
+    phone: ''
+  });
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [scheduledMDTData, setScheduledMDTData] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Close confirmation modal
+  const closeConfirmModal = (save = false) => {
+    setShowConfirmModal(false);
+    if (save) {
+      // Handle saving logic here if needed
+      console.log('Saving changes...');
+    }
+  };
+
+  // Available team members for dropdown - will be fetched from API
+  const [availableTeamMembers, setAvailableTeamMembers] = useState([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [departments, setDepartments] = useState([]);
+
+  // Fetch doctors and departments
+  const fetchDoctorsAndDepartments = async () => {
+    setLoadingDoctors(true);
+    try {
+      console.log('Fetching doctors and departments...');
+      const [doctorsResponse, departmentsResponse] = await Promise.all([
+        doctorsService.getDoctorsForDropdown(),
+        doctorsService.getAllDepartments({ is_active: true })
+      ]);
+      
+      console.log('Doctors response:', doctorsResponse);
+      console.log('Departments response:', departmentsResponse);
+      
+      setAvailableTeamMembers(doctorsResponse);
+      setDepartments(departmentsResponse.success ? departmentsResponse.data : []);
+      
+      console.log('Updated available team members:', doctorsResponse);
+      console.log('Updated departments:', departmentsResponse.success ? departmentsResponse.data : []);
+    } catch (error) {
+      console.error('Error fetching doctors and departments:', error);
+      setAvailableTeamMembers([]);
+      setDepartments([]);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
+  // Filter team members based on search
+  const filteredTeamMembers = availableTeamMembers.filter(member => 
+    !mdtForm.teamMembers.includes(member.name) && 
+    member.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase())
+  );
+
+  // Reset form when modal opens and fetch doctors
+  useEffect(() => {
+    if (isOpen) {
+      const now = new Date();
+      const currentDate = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().slice(0, 5);
+      
+      setMdtForm({
+        mdtDate: currentDate,
+        time: currentTime,
+        priority: 'Medium',
+        teamMembers: [],
+        notes: ''
+      });
+      
+      // Fetch doctors and departments
+      fetchDoctorsAndDepartments();
+    }
+  }, [isOpen]);
+
+  const handleMDTFormChange = (field, value) => {
+    setMdtForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const addTeamMember = (selectedMember) => {
+    if (selectedMember && !mdtForm.teamMembers.includes(selectedMember.name)) {
+      setMdtForm(prev => ({
+        ...prev,
+        teamMembers: [...prev.teamMembers, selectedMember.name]
+      }));
+    }
+  };
+
+  const removeTeamMember = (index) => {
+    setMdtForm(prev => ({
+      ...prev,
+      teamMembers: prev.teamMembers.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSelectTeamMember = (member) => {
+    addTeamMember(member);
+    setIsDropdownOpen(false);
+    setDropdownSearchTerm('');
+  };
+
+  const handleDropdownToggle = () => {
+    setIsDropdownOpen(!isDropdownOpen);
+  };
+
+  const handleAddNewTeamMember = async () => {
+    if (newTeamMember.name && newTeamMember.department) {
+      try {
+        console.log('Creating new team member:', newTeamMember);
+        console.log('Available departments:', departments);
+        
+        // Find the department ID
+        const department = departments.find(dept => 
+          dept.name.toLowerCase() === newTeamMember.department.toLowerCase()
+        );
+        
+        if (!department) {
+          console.error('Department not found:', newTeamMember.department);
+          alert('Department not found. Please select a valid department.');
+          return;
+        }
+        
+        console.log('Found department:', department);
+        
+        // Create the doctor
+        const doctorData = {
+          first_name: newTeamMember.name.split(' ')[0] || newTeamMember.name,
+          last_name: newTeamMember.name.split(' ').slice(1).join(' ') || '',
+          email: newTeamMember.email || null,
+          phone: newTeamMember.phone || null,
+          department_id: department.id,
+          specialization: newTeamMember.department
+        };
+        
+        console.log('Doctor data to create:', doctorData);
+        
+        const response = await doctorsService.createDoctor(doctorData);
+        console.log('Create doctor response:', response);
+        
+        if (response.success) {
+          console.log('Doctor created successfully, updating dropdown and refreshing lists...');
+          
+          // Prepare the object used by the dropdown immediately
+          const newDoctor = {
+            id: response.data.id,
+            name: doctorsService.formatDoctorName(response.data),
+            first_name: response.data.first_name,
+            last_name: response.data.last_name,
+            specialization: response.data.specialization, // backend sends department name here
+            department_name: department.name
+          };
+
+          // Optimistically add to the available list so it appears instantly
+          setAvailableTeamMembers(prev => {
+            const exists = prev.some(m => m.id === newDoctor.id);
+            return exists ? prev : [newDoctor, ...prev];
+          });
+
+          // Add the new doctor to the current MDT team selection
+          console.log('Adding new doctor to team:', newDoctor);
+          addTeamMember(newDoctor);
+
+          // Refresh the doctors/department lists in the background to stay in sync
+          fetchDoctorsAndDepartments();
+          setNewTeamMember({ name: '', department: '', email: '', phone: '' });
+          setShowAddTeamMemberModal(false);
+          
+          // Show success message
+          alert('Team member added successfully!');
+        } else {
+          console.error('Failed to create doctor:', response);
+          alert('Failed to create team member: ' + (response.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error creating new team member:', error);
+        alert('Failed to create new team member. Please try again.');
+      }
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!patient) {
+      alert('Patient data is missing');
+      return;
+    }
+
+    if (!mdtForm.mdtDate || !mdtForm.time) {
+      alert('Please fill in all required fields (Date, Time)');
+      return;
+    }
+
+    const mdtData = {
+      id: `MDT${Date.now()}`,
+      patient: patient,
+      timestamp: new Date().toISOString(),
+      ...mdtForm
+    };
+
+    console.log('Scheduling MDT:', mdtData);
+    
+    try {
+      if (onScheduled) {
+        // Let parent perform API call and handle success/error modals
+        await onScheduled(mdtData);
+      }
+    } catch (e) {
+      // Parent shows error modal; no local success modal
+      console.error('MDT schedule submit failed:', e);
+    }
+  };
+
+  const handleCancel = () => {
+    onClose();
+  };
+
+  const handleCloseSuccessModal = () => {
+    setShowSuccessModal(false);
+    setScheduledMDTData(null);
+    onClose();
+  };
+
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = mdtForm.notes.trim() !== '' || 
+                           mdtForm.teamMembers.length > 4 || // More than default team
+                           mdtForm.priority !== 'Medium' ||
+                           mdtForm.mdtDate !== currentDate ||
+                           mdtForm.time !== currentTime;
+
+  // Handle save function for Escape key
+  const handleSaveChanges = (e) => {
+    if (e) e.preventDefault();
+    handleSubmit();
+  };
+
+  // Handle Escape key with save confirmation
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        console.log('Escape key pressed in MDTSchedulingModal!');
+        console.log('hasUnsavedChanges:', hasUnsavedChanges);
+        
+        event.preventDefault();
+        event.stopPropagation();
+
+        // Call handleCancel which will check for unsaved changes
+        handleCancel();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, hasUnsavedChanges]);
+
+  if (!isOpen) return null;
+
+  // Success Modal
+  if (showSuccessModal && scheduledMDTData) {
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm overflow-y-auto h-full w-full z-[110] flex items-center justify-center p-4">
+        <div className="relative mx-auto w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            {/* Success Header */}
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border-b border-teal-200 px-4 py-4 sm:px-6 sm:py-6">
+              <div className="flex items-center justify-center">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg mb-3 sm:mb-4 animate-pulse">
+                  <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                </div>
+              </div>
+              <h3 className="text-lg sm:text-2xl font-bold text-gray-900 text-center">MDT Meeting Scheduled Successfully!</h3>
+              <p className="text-xs sm:text-sm text-gray-600 text-center mt-1 sm:mt-2">
+                The multidisciplinary team meeting has been scheduled
+              </p>
+            </div>
+
+            {/* Success Content */}
+            <div className="px-4 py-4 sm:px-6 sm:py-6">
+              <div className="space-y-3 sm:space-y-4">
+                {/* Meeting Details */}
+                <div className="bg-gradient-to-r from-teal-50 to-gray-50 border border-teal-200 rounded-lg p-3 sm:p-5">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-teal-600" />
+                    Meeting Details
+                  </h4>
+                  <div className="space-y-2 sm:space-y-3 text-xs sm:text-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="font-semibold text-gray-700 w-20 sm:w-32 mb-1 sm:mb-0">Patient:</span>
+                      <span className="text-gray-900">
+                        {scheduledMDTData.patient.name} (ID: {scheduledMDTData.patient.id})
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="font-semibold text-gray-700 w-20 sm:w-32 mb-1 sm:mb-0">Date & Time:</span>
+                      <span className="text-gray-900">
+                        {new Date(scheduledMDTData.mdtDate).toLocaleDateString('en-AU', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })} at {scheduledMDTData.time}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="font-semibold text-gray-700 w-20 sm:w-32 mb-1 sm:mb-0">Priority:</span>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
+                        scheduledMDTData.priority === 'High' ? 'bg-red-100 text-red-800' :
+                        scheduledMDTData.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-teal-100 text-teal-800'
+                      }`}>
+                        {scheduledMDTData.priority}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start">
+                      <span className="font-semibold text-gray-700 w-20 sm:w-32 mb-1 sm:mb-0">Meeting ID:</span>
+                      <span className="text-gray-900 font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                        {scheduledMDTData.id}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Team Members */}
+                <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-5">
+                  <h4 className="text-sm sm:text-md font-semibold text-gray-900 mb-2 sm:mb-3 flex items-center">
+                    <Users className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-blue-600" />
+                    Team Members ({scheduledMDTData.teamMembers.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-1 sm:gap-2">
+                    {scheduledMDTData.teamMembers.map((member, idx) => (
+                      <span key={idx} className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full border border-blue-200">
+                        {member}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Additional Notes */}
+                {scheduledMDTData.notes && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-5">
+                    <h4 className="text-sm sm:text-md font-semibold text-gray-900 mb-2">Additional Notes</h4>
+                    <p className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap">{scheduledMDTData.notes}</p>
+                  </div>
+                )}
+
+                {/* Next Steps */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-5">
+                  <h4 className="text-sm sm:text-md font-semibold text-blue-900 mb-2">Next Steps</h4>
+                  <ul className="space-y-1 sm:space-y-2 text-xs sm:text-sm text-blue-800">
+                    <li className="flex items-start">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Calendar invitations will be sent to all team members</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Patient records and imaging will be prepared for review</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Meeting details have been saved to the patient's timeline</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gray-50 border-t border-gray-200">
+              <button
+                onClick={handleCloseSuccessModal}
+                className="w-full bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-2 sm:py-3 px-4 sm:px-6 rounded-lg hover:from-teal-700 hover:to-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all duration-200 shadow-sm text-sm sm:text-base"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main Scheduling Form
+  return (
+    <>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm overflow-y-auto h-full w-full z-[110] flex items-center justify-center p-4">
+      <div className="relative mx-auto w-full max-w-5xl">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden max-h-[90vh] flex flex-col">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-teal-50 to-gray-50 border-b border-gray-200 px-6 py-6 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-teal-600 to-teal-800 rounded-lg flex items-center justify-center shadow-sm">
+                  <Users className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Schedule MDT Meeting</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Schedule multidisciplinary team discussion for {patient?.name}
+                  </p>
+                  {mdtForm.mdtDate && mdtForm.time && (
+                    <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                      <span className="flex items-center">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        {new Date(mdtForm.mdtDate).toLocaleDateString('en-AU')}
+                      </span>
+                      <span className="flex items-center">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {mdtForm.time}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={handleCancel}
+                className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Close
+              </button>
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="px-6 py-6 flex-1 overflow-y-auto">
+            <div className="space-y-6">
+              {/* Patient Information Display */}
+              {patient && (
+                <div className="bg-gradient-to-r from-teal-50 to-gray-50 border border-gray-200 rounded-lg p-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      <div className="w-12 h-12 bg-gradient-to-br from-teal-800 to-black rounded-full flex items-center justify-center">
+                        <span className="text-white font-semibold text-sm">
+                          {patient?.name ? patient.name.split(' ').map(n => n[0]).join('') : 'N/A'}
+                        </span>
+                      </div>
+                      {patient?.priority === 'High' && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-pulse"></div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-lg font-semibold text-gray-900">{patient?.name || 'Unknown Patient'}</h4>
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-600 mt-1">
+                        <span>ID: {patient?.id || 'N/A'}</span>
+                        <span>Age: {patient?.age || 'N/A'}</span>
+                        <span>PSA: {patient?.psa || 'N/A'} ng/mL</span>
+                        {patient?.gleasonScore && (
+                          <span>Gleason: {patient.gleasonScore}</span>
+                        )}
+                        {patient?.stage && (
+                          <span>Stage: {patient.stage}</span>
+                        )}
+                      </div>
+                      {patient?.clinicalNotes && (
+                        <p className="text-sm text-gray-500 mt-1">Notes: {patient.clinicalNotes}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MDT Scheduling Details */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Meeting Details</h4>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      MDT Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={mdtForm.mdtDate}
+                      onChange={(e) => handleMDTFormChange('mdtDate', e.target.value)}
+                      min={(() => {
+                        const now = new Date();
+                        return now.getFullYear() + '-' + 
+                               String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                               String(now.getDate()).padStart(2, '0');
+                      })()}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Time *
+                    </label>
+                    <input
+                      type="time"
+                      value={mdtForm.time}
+                      onChange={(e) => handleMDTFormChange('time', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Priority
+                    </label>
+                    <select
+                      value={mdtForm.priority}
+                      onChange={(e) => handleMDTFormChange('priority', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Team Members */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-gray-900">Team Members</h4>
+                  <div className="relative dropdown-container">
+                    <button
+                      type="button"
+                      onClick={handleDropdownToggle}
+                      className="flex items-center justify-between w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="text-gray-500">Select team member to add</span>
+                      <svg className={`w-4 h-4 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    
+                    {isDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-80 overflow-hidden">
+                        {/* Search Field */}
+                        <div className="p-3 border-b border-gray-200">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <input
+                              type="text"
+                              placeholder="Search team members..."
+                              value={dropdownSearchTerm}
+                              onChange={(e) => setDropdownSearchTerm(e.target.value)}
+                              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Add New Button */}
+                        <div className="p-2 border-b border-gray-200">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddTeamMemberModal(true);
+                              setIsDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add New Team Member
+                          </button>
+                        </div>
+                        
+                        {/* Team Members List */}
+                        <div className="max-h-48 overflow-y-auto">
+                          {loadingDoctors ? (
+                            <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                              Loading doctors...
+                            </div>
+                          ) : filteredTeamMembers.length > 0 ? (
+                            filteredTeamMembers.map((member, index) => (
+                              <button
+                                key={member.id || index}
+                                type="button"
+                                onClick={() => handleSelectTeamMember(member)}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
+                              >
+                                {member.name}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                              {dropdownSearchTerm ? 'No team members found matching your search' : 'No available team members'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {mdtForm.teamMembers.map((member, index) => (
+                    <div key={index} className="flex items-center space-x-3">
+                      <div className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
+                        {member}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeTeamMember(index)}
+                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove team member"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Additional Notes */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Additional Notes</h4>
+                <textarea
+                  value={mdtForm.notes}
+                  onChange={(e) => handleMDTFormChange('notes', e.target.value)}
+                  rows={4}
+                  placeholder="Add any additional notes or information about this MDT meeting..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-2">Optional: Add any relevant notes for the MDT meeting</p>
+              </div>
+
+              {/* Summary */}
+              {patient && mdtForm.mdtDate && mdtForm.time && (
+                <div className="p-4 bg-gradient-to-r from-teal-50 to-teal-50 rounded-lg border border-teal-100">
+                  <div className="flex items-center mb-3">
+                    <div className="h-2 w-2 bg-teal-500 rounded-full mr-2"></div>
+                    <h4 className="text-sm font-semibold text-teal-900">MDT Meeting Summary</h4>
+                  </div>
+                  <div className="text-sm text-teal-800 space-y-2">
+                    <p><strong>Patient:</strong> {patient?.name || 'Unknown Patient'} ({patient?.id || 'N/A'})</p>
+                    <p><strong>Date:</strong> {new Date(mdtForm.mdtDate).toLocaleDateString('en-AU', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })} at {mdtForm.time}</p>
+                    <p><strong>Priority:</strong> {mdtForm.priority}</p>
+                    <p><strong>Team Members:</strong> {mdtForm.teamMembers.length} members</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Actions */}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
+            <div className="flex space-x-3">
+              <button
+                onClick={handleSubmit}
+                disabled={!patient || !mdtForm.mdtDate || !mdtForm.time}
+                className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-3 px-6 rounded-lg hover:from-teal-700 hover:to-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              >
+                <Calendar className="h-4 w-4 mr-2 inline" />
+                Schedule MDT Meeting
+              </button>
+              <button
+                onClick={handleCancel}
+                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Team Member Modal */}
+      {showAddTeamMemberModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Add New Team Member</h2>
+              <button
+                onClick={() => setShowAddTeamMemberModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={newTeamMember.name}
+                  onChange={(e) => setNewTeamMember(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Dr. John Smith"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Department/Specialization
+                </label>
+                <select
+                  value={newTeamMember.department}
+                  onChange={(e) => setNewTeamMember(prev => ({ ...prev, department: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                >
+                  <option value="">Select Department</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.name}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={newTeamMember.email}
+                  onChange={(e) => setNewTeamMember(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="john.smith@hospital.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  value={newTeamMember.phone}
+                  onChange={(e) => setNewTeamMember(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="+1 (555) 123-4567"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex space-x-3">
+              <button
+                onClick={handleAddNewTeamMember}
+                disabled={!newTeamMember.name || !newTeamMember.department}
+                className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Add Member
+              </button>
+              <button
+                onClick={() => setShowAddTeamMemberModal(false)}
+                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+    
+    {/* Confirmation Modal */}
+    <ConfirmModal
+      isOpen={showConfirmModal}
+      onConfirm={closeConfirmModal}
+      onCancel={() => closeConfirmModal(false)}
+      title="Unsaved Changes"
+      message="You have unsaved changes. Do you want to save before closing?"
+    />
+    </>
+  );
+};
+
+export default MDTSchedulingModal;

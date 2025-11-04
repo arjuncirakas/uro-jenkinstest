@@ -1,0 +1,737 @@
+import pkg from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const { Pool } = pkg;
+
+// Database configuration
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'urology_db',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'password',
+  max: 20, // Maximum number of clients in the pool
+  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+};
+
+// Create a new pool instance
+const pool = new Pool(dbConfig);
+
+// Handle pool errors
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
+
+// Test database connection
+export const testConnection = async () => {
+  try {
+    const client = await pool.connect();
+    console.log('✅ Database connected successfully');
+    client.release();
+    return true;
+  } catch (err) {
+    console.error('❌ Database connection failed:', err.message);
+    return false;
+  }
+};
+
+// Initialize database tables
+export const initializeDatabase = async () => {
+  try {
+    const client = await pool.connect();
+    
+    // Check if users table exists and get its structure
+    const tableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      );
+    `);
+    
+    if (tableExists.rows[0].exists) {
+      // Table exists, check for new columns and add them if missing
+      console.log('📋 Users table exists, checking for new columns...');
+      
+      // Add new columns if they don't exist
+      const newColumns = [
+        { name: 'phone', type: 'VARCHAR(20) UNIQUE' },
+        { name: 'organization', type: 'VARCHAR(255)' },
+        { name: 'is_active', type: 'BOOLEAN DEFAULT false' },
+        { name: 'is_verified', type: 'BOOLEAN DEFAULT false' },
+        { name: 'email_verified_at', type: 'TIMESTAMP' },
+        { name: 'phone_verified_at', type: 'TIMESTAMP' },
+        { name: 'last_login_at', type: 'TIMESTAMP' },
+        { name: 'failed_login_attempts', type: 'INTEGER DEFAULT 0' },
+        { name: 'locked_until', type: 'TIMESTAMP' }
+      ];
+      
+      for (const column of newColumns) {
+        try {
+          await client.query(`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column.name} ${column.type};
+          `);
+          console.log(`✅ Added column: ${column.name}`);
+        } catch (err) {
+          console.log(`⚠️  Column ${column.name} might already exist: ${err.message}`);
+        }
+      }
+      
+      // Update role constraint if needed
+      try {
+        await client.query(`
+          ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+        `);
+        await client.query(`
+          ALTER TABLE users ADD CONSTRAINT users_role_check 
+          CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse'));
+        `);
+        console.log('✅ Updated role constraint');
+      } catch (err) {
+        console.log(`⚠️  Role constraint update: ${err.message}`);
+      }
+      
+    } else {
+      // Table doesn't exist, create it with all columns
+      console.log('📋 Creating users table with all columns...');
+      await client.query(`
+        CREATE TABLE users (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          phone VARCHAR(20) UNIQUE,
+          organization VARCHAR(255),
+          role VARCHAR(50) NOT NULL CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse')),
+          is_active BOOLEAN DEFAULT false,
+          is_verified BOOLEAN DEFAULT false,
+          email_verified_at TIMESTAMP,
+          phone_verified_at TIMESTAMP,
+          last_login_at TIMESTAMP,
+          failed_login_attempts INTEGER DEFAULT 0,
+          locked_until TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Users table created successfully');
+    }
+
+    // Create refresh_tokens table
+    const refreshTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'refresh_tokens'
+      );
+    `);
+    
+    if (!refreshTableExists.rows[0].exists) {
+      console.log('📋 Creating refresh_tokens table...');
+      await client.query(`
+        CREATE TABLE refresh_tokens (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          token VARCHAR(500) NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          is_revoked BOOLEAN DEFAULT false
+        )
+      `);
+      console.log('✅ Refresh tokens table created successfully');
+    } else {
+      console.log('✅ Refresh tokens table already exists');
+    }
+
+    // Create otp_verifications table
+    const otpTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'otp_verifications'
+      );
+    `);
+    
+    if (!otpTableExists.rows[0].exists) {
+      console.log('📋 Creating otp_verifications table...');
+      await client.query(`
+        CREATE TABLE otp_verifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          email VARCHAR(255) NOT NULL,
+          otp_code VARCHAR(6) NOT NULL,
+          type VARCHAR(20) NOT NULL CHECK (type IN ('registration', 'login', 'password_reset', 'password_setup')),
+          expires_at TIMESTAMP NOT NULL,
+          attempts INTEGER DEFAULT 0,
+          is_used BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ OTP verifications table created successfully');
+    } else {
+      console.log('✅ OTP verifications table already exists');
+    }
+
+    // Create password_setup_tokens table
+    const passwordSetupTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'password_setup_tokens'
+      );
+    `);
+    
+    if (!passwordSetupTableExists.rows[0].exists) {
+      console.log('📋 Creating password_setup_tokens table...');
+      await client.query(`
+        CREATE TABLE password_setup_tokens (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          email VARCHAR(255) NOT NULL,
+          token VARCHAR(255) NOT NULL UNIQUE,
+          expires_at TIMESTAMP NOT NULL,
+          is_used BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Password setup tokens table created successfully');
+    } else {
+      console.log('✅ Password setup tokens table already exists');
+    }
+
+    // Create index for better performance
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_otp_verifications_email ON otp_verifications(email);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_otp_verifications_user_id ON otp_verifications(user_id);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_otp_verifications_expires_at ON otp_verifications(expires_at);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_user_id ON password_setup_tokens(user_id);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_token ON password_setup_tokens(token);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_expires_at ON password_setup_tokens(expires_at);
+    `);
+
+    // Create patients table
+    const patientsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'patients'
+      );
+    `);
+    
+    if (!patientsTableExists.rows[0].exists) {
+      console.log('📋 Creating patients table...');
+      await client.query(`
+        CREATE TABLE patients (
+          id SERIAL PRIMARY KEY,
+          upi VARCHAR(20) UNIQUE NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          date_of_birth DATE NOT NULL,
+          gender VARCHAR(10) NOT NULL CHECK (gender IN ('Male', 'Female', 'Other')),
+          phone VARCHAR(20) NOT NULL,
+          email VARCHAR(255),
+          address TEXT,
+          postcode VARCHAR(10),
+          city VARCHAR(100),
+          state VARCHAR(10),
+          referring_department VARCHAR(255),
+          referral_date DATE,
+          initial_psa DECIMAL(5,2) NOT NULL,
+          initial_psa_date DATE,
+          medical_history TEXT,
+          current_medications TEXT,
+          allergies TEXT,
+          assigned_urologist VARCHAR(255),
+          emergency_contact_name VARCHAR(100),
+          emergency_contact_phone VARCHAR(20),
+          emergency_contact_relationship VARCHAR(50),
+          priority VARCHAR(20) DEFAULT 'Normal' CHECK (priority IN ('Low', 'Normal', 'High', 'Urgent')),
+          notes TEXT,
+          status VARCHAR(20) DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive', 'Discharged')),
+          created_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Patients table created successfully');
+    } else {
+      console.log('✅ Patients table already exists');
+    }
+
+    // Ensure care_pathway columns exist on patients
+    try {
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS care_pathway VARCHAR(50)`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS care_pathway_updated_at TIMESTAMP`);
+      console.log('✅ Ensured patients.care_pathway columns');
+    } catch (e) {
+      console.log('⚠️  Ensuring care_pathway columns:', e.message);
+    }
+
+    // Create patient_notes table
+    const notesTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'patient_notes'
+      );
+    `);
+
+    if (!notesTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE patient_notes (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          note_content TEXT NOT NULL,
+          note_type VARCHAR(50) DEFAULT 'clinical',
+          author_id INTEGER REFERENCES users(id),
+          author_name VARCHAR(100),
+          author_role VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Patient notes table created successfully');
+    } else {
+      console.log('✅ Patient notes table already exists');
+    }
+
+    // Create indexes for patients table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_upi ON patients(upi);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(first_name, last_name);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_phone ON patients(phone);
+    `);
+
+    // Create indexes for patient_notes table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patient_notes_patient_id ON patient_notes(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patient_notes_created_at ON patient_notes(created_at);
+    `);
+
+    // Create investigation_results table
+    const investigationResultsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'investigation_results'
+      );
+    `);
+
+    if (!investigationResultsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE investigation_results (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          test_type VARCHAR(50) NOT NULL,
+          test_name VARCHAR(200) NOT NULL,
+          test_date DATE NOT NULL,
+          result VARCHAR(100),
+          reference_range VARCHAR(100),
+          status VARCHAR(50) DEFAULT 'Normal',
+          notes TEXT,
+          file_path VARCHAR(500),
+          file_name VARCHAR(200),
+          author_id INTEGER REFERENCES users(id),
+          author_name VARCHAR(100),
+          author_role VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Investigation results table created successfully');
+    } else {
+      console.log('✅ Investigation results table already exists');
+    }
+
+    // Create indexes for investigation_results table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_investigation_results_patient_id ON investigation_results(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_investigation_results_test_type ON investigation_results(test_type);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_investigation_results_test_date ON investigation_results(test_date);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_email ON patients(email);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_assigned_urologist ON patients(assigned_urologist);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_created_by ON patients(created_by);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_status ON patients(status);
+    `);
+
+    // Create appointments table
+    const appointmentsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'appointments'
+      );
+    `);
+
+    if (!appointmentsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE appointments (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          appointment_type VARCHAR(50) NOT NULL,
+          appointment_date DATE NOT NULL,
+          appointment_time TIME NOT NULL,
+          urologist_id INTEGER REFERENCES users(id),
+          urologist_name VARCHAR(100),
+          status VARCHAR(50) DEFAULT 'scheduled',
+          notes TEXT,
+          created_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Appointments table created successfully');
+    } else {
+      console.log('✅ Appointments table already exists');
+    }
+
+    // Create investigation_bookings table
+    const investigationBookingsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'investigation_bookings'
+      );
+    `);
+
+    if (!investigationBookingsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE investigation_bookings (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          investigation_type VARCHAR(100) NOT NULL,
+          investigation_name VARCHAR(200) NOT NULL,
+          scheduled_date DATE NOT NULL,
+          scheduled_time TIME NOT NULL,
+          status VARCHAR(50) DEFAULT 'scheduled',
+          notes TEXT,
+          created_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Investigation bookings table created successfully');
+    } else {
+      console.log('✅ Investigation bookings table already exists');
+    }
+
+    // Create indexes for appointments table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_appointments_type ON appointments(appointment_type);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+    `);
+
+    // Create indexes for investigation_bookings table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_investigation_bookings_patient_id ON investigation_bookings(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_investigation_bookings_type ON investigation_bookings(investigation_type);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_investigation_bookings_date ON investigation_bookings(scheduled_date);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_investigation_bookings_status ON investigation_bookings(status);
+    `);
+
+    // Create MDT meetings table
+    const mdtMeetingsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'mdt_meetings'
+      );
+    `);
+    if (!mdtMeetingsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE mdt_meetings (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          meeting_date DATE NOT NULL,
+          meeting_time TIME NOT NULL,
+          priority VARCHAR(20) DEFAULT 'Medium' CHECK (priority IN ('Low','Medium','High')),
+          status VARCHAR(20) DEFAULT 'Scheduled',
+          notes TEXT,
+          created_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ MDT meetings table created successfully');
+    }
+
+    // Create MDT team members table
+    const mdtMembersTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'mdt_team_members'
+      );
+    `);
+    if (!mdtMembersTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE mdt_team_members (
+          id SERIAL PRIMARY KEY,
+          mdt_meeting_id INTEGER REFERENCES mdt_meetings(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id),
+          external_name VARCHAR(200),
+          role VARCHAR(100) NOT NULL,
+          status VARCHAR(20) DEFAULT 'Invited',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ MDT team members table created successfully');
+    }
+
+    // Ensure user_id is nullable to allow external members
+    try {
+      await client.query(`
+        ALTER TABLE mdt_team_members ALTER COLUMN user_id DROP NOT NULL;
+      `);
+    } catch (e) {
+      // ignore if already nullable
+    }
+
+    // Ensure external_name column exists
+    try {
+      await client.query(`
+        ALTER TABLE mdt_team_members ADD COLUMN IF NOT EXISTS external_name VARCHAR(200);
+      `);
+    } catch (e) {
+      // ignore
+    }
+
+    // Indexes for MDT tables
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_mdt_meetings_patient_id ON mdt_meetings(patient_id);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_mdt_meetings_date ON mdt_meetings(meeting_date, meeting_time);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_mdt_team_members_meeting_id ON mdt_team_members(mdt_meeting_id);
+    `);
+
+    // Create departments table
+    const departmentsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'departments'
+      );
+    `);
+
+    if (!departmentsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE departments (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(100) NOT NULL UNIQUE,
+          description TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Departments table created successfully');
+    } else {
+      console.log('✅ Departments table already exists');
+    }
+
+    // Create doctors table
+    const doctorsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'doctors'
+      );
+    `);
+
+    if (!doctorsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE doctors (
+          id SERIAL PRIMARY KEY,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          email VARCHAR(255) UNIQUE,
+          phone VARCHAR(20),
+          department_id INTEGER REFERENCES departments(id),
+          specialization VARCHAR(100),
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Doctors table created successfully');
+    } else {
+      console.log('✅ Doctors table already exists');
+    }
+
+    // Create indexes for departments table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_departments_is_active ON departments(is_active);
+    `);
+
+    // Create indexes for doctors table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_doctors_name ON doctors(first_name, last_name);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_doctors_department_id ON doctors(department_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_doctors_email ON doctors(email);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_doctors_is_active ON doctors(is_active);
+    `);
+
+    // Create discharge_summaries table
+    const dischargeSummariesTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'discharge_summaries'
+      );
+    `);
+
+    if (!dischargeSummariesTableExists.rows[0].exists) {
+      console.log('📋 Creating discharge_summaries table...');
+      await client.query(`
+        CREATE TABLE discharge_summaries (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          admission_date DATE NOT NULL,
+          discharge_date DATE NOT NULL,
+          discharge_time TIME,
+          length_of_stay VARCHAR(50),
+          consultant_id INTEGER REFERENCES users(id),
+          ward VARCHAR(100),
+          diagnosis JSONB,
+          procedure JSONB,
+          clinical_summary TEXT,
+          investigations JSONB,
+          medications JSONB,
+          follow_up JSONB,
+          gp_actions JSONB,
+          discharged_by VARCHAR(255),
+          documents JSONB,
+          is_deleted BOOLEAN DEFAULT FALSE,
+          created_by INTEGER REFERENCES users(id),
+          updated_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Discharge summaries table created successfully');
+    } else {
+      console.log('✅ Discharge summaries table already exists');
+    }
+
+    // Create indexes for discharge_summaries table
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_discharge_summaries_patient_id ON discharge_summaries(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_discharge_summaries_discharge_date ON discharge_summaries(discharge_date);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_discharge_summaries_consultant_id ON discharge_summaries(consultant_id);
+    `);
+
+    console.log('✅ Database tables initialized successfully');
+    client.release();
+    return true;
+  } catch (err) {
+    console.error('❌ Database initialization failed:', err.message);
+    return false;
+  }
+};
+
+export default pool;
