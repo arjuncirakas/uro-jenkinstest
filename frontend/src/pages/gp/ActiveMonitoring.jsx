@@ -37,8 +37,8 @@ const ActiveMonitoring = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch both Active Monitoring and Medication pathway patients
-      const response = await gpService.getActiveMonitoringAndMedicationPatients();
+      // Fetch only Active Monitoring pathway patients
+      const response = await gpService.getActiveMonitoringPatients();
       if (response.success && response.data && response.data.patients) {
         const patients = Array.isArray(response.data.patients) ? response.data.patients : [];
         const formattedPatients = patients.map(patient => ({
@@ -49,11 +49,17 @@ const ActiveMonitoring = () => {
           gender: patient.gender,
           latestPsa: patient.initialPSA || 0,
           lastPSADate: patient.initialPSADate?.split('T')[0] || patient.createdAt?.split('T')[0],
-          nextReview: 'Not Scheduled',
-          monitoringStatus: patient.carePathway === 'Medication' ? 'On Medication' : 'Stable',
+          nextReview: patient.nextReview || 'Not Scheduled',
+          monitoringStatus: patient.monitoringStatus || 'Stable',
           currentDoctor: patient.assignedUrologist || 'Not Assigned',
-          nextAppointment: 'Not Scheduled',
-          appointmentTime: '',
+          nextAppointment: patient.nextAppointmentDate 
+            ? new Date(patient.nextAppointmentDate).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short', 
+                year: 'numeric'
+              })
+            : 'Not Scheduled',
+          appointmentTime: patient.nextAppointmentTime || '',
           pathway: patient.carePathway || 'Active Monitoring'
         }));
         setMonitoringPatients(formattedPatients);
@@ -86,22 +92,6 @@ const ActiveMonitoring = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  // Get monitoring status styling
-  const getMonitoringStatusStyle = (status) => {
-    switch (status) {
-      case 'Stable':
-        return 'bg-green-100 text-green-800';
-      case 'On Medication':
-        return 'bg-blue-100 text-blue-800';
-      case 'Review Required':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Needs Attention':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   // Get PSA styling and dot color
   const getPsaStyle = (psa) => {
     if (psa > 4.0) {
@@ -121,7 +111,7 @@ const ActiveMonitoring = () => {
 
   // Handle patient actions
   const handleViewDetails = (patient) => {
-    setSelectedPatient(patient.name);
+    setSelectedPatient(patient.id);
     setIsPatientDetailsModalOpen(true);
   };
 
@@ -163,10 +153,10 @@ const ActiveMonitoring = () => {
     <div className="h-full overflow-y-auto">
       <div className="p-4 sm:p-6 lg:p-8">
         <GPHeader 
-          title="Active Monitoring & Medication"
-          subtitle="Patients under active monitoring or medication treatment"
+          title="Active Monitoring"
+          subtitle="Patients under active monitoring"
           onSearch={setSearchQuery}
-          searchPlaceholder="Search by name, UPI, monitoring status, or doctor..."
+          searchPlaceholder="Search by name, UPI, status, or doctor..."
         />
 
         {/* Monitoring Table */}
@@ -202,9 +192,6 @@ const ActiveMonitoring = () => {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900 text-sm">{patient.name}</span>
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${getMonitoringStatusStyle(patient.monitoringStatus)}`}>
-                                  {patient.monitoringStatus}
-                                </span>
                               </div>
                               <div className="text-xs text-gray-600 mt-1">
                                 UPI: {patient.upi}
@@ -256,7 +243,7 @@ const ActiveMonitoring = () => {
       <GPPatientDetailsModal 
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
-        patient={selectedPatient}
+        patientId={selectedPatient}
       />
     </div>
   );

@@ -32,6 +32,56 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // Field-specific validation errors
+  const [fieldErrors, setFieldErrors] = useState({
+    email: '',
+    password: ''
+  });
+  
+  // Track if fields have been touched
+  const [touched, setTouched] = useState({
+    email: false,
+    password: false
+  });
+
+  // Validation functions
+  const validateEmail = (email) => {
+    if (!email || email.trim() === '') {
+      return 'Email is required';
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return 'Please enter a valid email address';
+    }
+    
+    return '';
+  };
+
+  const validatePassword = (password) => {
+    if (!password || password.trim() === '') {
+      return 'Password is required';
+    }
+    
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters long';
+    }
+    
+    return '';
+  };
+
+  const validateForm = () => {
+    const emailError = validateEmail(formData.email);
+    const passwordError = validatePassword(formData.password);
+    
+    setFieldErrors({
+      email: emailError,
+      password: passwordError
+    });
+    
+    return !emailError && !passwordError;
+  };
 
   // Check for success message from registration
   React.useEffect(() => {
@@ -44,17 +94,24 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Mark all fields as touched
+    setTouched({
+      email: true,
+      password: true
+    });
+    
+    // Validate form
+    if (!validateForm()) {
+      setError('Please fix the errors below before submitting');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
     setSuccessMessage('');
     
     try {
-      // Basic validation
-      if (!formData.email || !formData.password) {
-        setError('Please fill in all fields');
-        return;
-      }
-      
       // Call login API (Step 1: Send OTP)
       const response = await authService.login(formData.email, formData.password);
       
@@ -157,12 +214,54 @@ const Login = () => {
     setOtpData({ userId: null, email: '' });
     setOtpError(null);
     setError('');
+    setFieldErrors({ email: '', password: '' });
+    setTouched({ email: false, password: false });
   };
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
+    });
+    
+    // Validate field if it has been touched
+    if (touched[name]) {
+      let error = '';
+      if (name === 'email') {
+        error = validateEmail(value);
+      } else if (name === 'password') {
+        error = validatePassword(value);
+      }
+      
+      setFieldErrors({
+        ...fieldErrors,
+        [name]: error
+      });
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    
+    // Mark field as touched
+    setTouched({
+      ...touched,
+      [name]: true
+    });
+    
+    // Validate on blur
+    let error = '';
+    if (name === 'email') {
+      error = validateEmail(value);
+    } else if (name === 'password') {
+      error = validatePassword(value);
+    }
+    
+    setFieldErrors({
+      ...fieldErrors,
+      [name]: error
     });
   };
 
@@ -211,7 +310,7 @@ const Login = () => {
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+                  <Mail className={`h-5 w-5 ${fieldErrors.email && touched.email ? 'text-red-400' : 'text-gray-400'}`} />
                 </div>
                 <input
                   id="email"
@@ -220,10 +319,23 @@ const Login = () => {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors"
+                  onBlur={handleBlur}
+                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 transition-colors ${
+                    fieldErrors.email && touched.email
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                  }`}
                   placeholder="Enter your email address"
                 />
               </div>
+              {fieldErrors.email && touched.email && (
+                <p className="mt-1.5 text-sm text-red-600 flex items-center">
+                  <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
 
             {/* Password Input */}
@@ -233,7 +345,7 @@ const Login = () => {
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+                  <Lock className={`h-5 w-5 ${fieldErrors.password && touched.password ? 'text-red-400' : 'text-gray-400'}`} />
                 </div>
                 <input
                   id="password"
@@ -242,7 +354,12 @@ const Login = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors"
+                  onBlur={handleBlur}
+                  className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 transition-colors ${
+                    fieldErrors.password && touched.password
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                  }`}
                   placeholder="Enter your password"
                 />
                 <button
@@ -257,6 +374,14 @@ const Login = () => {
                   )}
                 </button>
               </div>
+              {fieldErrors.password && touched.password && (
+                <p className="mt-1.5 text-sm text-red-600 flex items-center">
+                  <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
 
 

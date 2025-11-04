@@ -51,8 +51,14 @@ const ReferredPatients = () => {
           priority: patient.priority || 'Normal',
           status: patient.carePathway || 'Pending Review',
           currentDoctor: patient.assignedUrologist || 'Not Assigned',
-          nextAppointment: 'Not Scheduled',
-          appointmentTime: ''
+          nextAppointment: patient.nextAppointmentDate 
+            ? new Date(patient.nextAppointmentDate).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+              })
+            : 'Not Scheduled',
+          appointmentTime: patient.nextAppointmentTime || ''
         }));
         setReferredPatients(formattedPatients);
       } else {
@@ -118,7 +124,7 @@ const ReferredPatients = () => {
 
   // Handle patient actions
   const handleViewDetails = (patient) => {
-    setSelectedPatient(patient.name);
+    setSelectedPatient(patient.id);
     setIsPatientDetailsModalOpen(true);
   };
 
@@ -240,7 +246,7 @@ const ReferredPatients = () => {
       <GPPatientDetailsModal 
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
-        patient={selectedPatient}
+        patientId={selectedPatient}
       />
     </div>
   );

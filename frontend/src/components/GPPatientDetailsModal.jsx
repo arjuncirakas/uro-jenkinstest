@@ -1,99 +1,188 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { useEscapeKey } from '../utils/useEscapeKey';
+import gpService from '../services/gpService';
+import { bookingService } from '../services/bookingService';
 
-const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
+const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [patientData, setPatientData] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [dischargeSummary, setDischargeSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Handle Escape key to close modal (read-only, no unsaved changes check)
   useEscapeKey(onClose, isOpen);
 
-  if (!isOpen || !patient) return null;
+  // Fetch patient data and appointments when modal opens
+  useEffect(() => {
+    if (isOpen && patientId) {
+      fetchPatientData();
+      fetchAppointments();
+      fetchDischargeSummary();
+    }
+  }, [isOpen, patientId]);
 
-  // Determine patient status based on patient name (in real app this would come from API)
-  const isActiveMonitoring = ['Robert Brown', 'Michael Wilson', 'David Miller', 'Emma Thompson', 'James Anderson'].includes(patient);
-  
-  // Sample patient data - in real app this would come from props or API
-  const patientData = {
-    name: patient || 'John Smith',
-    upi: 'URP2024001',
-    age: 65,
-    gender: 'Male',
-    dateOfBirth: '1959-03-15',
-    phone: '+61 412 345 678',
-    email: 'john.smith@email.com',
-    address: '123 Main Street, Sydney NSW 2000',
-    referringGP: 'Dr. Sarah Wilson',
-    referralDate: '2024-01-15',
-    initialPSA: 4.2,
-    currentPSA: 4.2,
-    lastPSADate: '2024-01-10',
-    status: isActiveMonitoring ? 'Active Monitoring' : 'Under Investigation',
-    priority: 'Normal',
-    assignedUrologist: 'Dr. Michael Chen',
-    nextAppointment: '2025-10-20',
-    appointmentTime: '10:30',
-    medicalHistory: 'Hypertension, Type 2 Diabetes',
-    currentMedications: 'Metformin 500mg BD, Lisinopril 10mg OD',
-    allergies: 'Penicillin',
-    emergencyContact: 'Jane Smith (Wife) - +61 412 345 679',
-    doctorNotes: isActiveMonitoring 
-      ? "Patient is stable on active surveillance protocol. PSA levels have remained consistent. Continue monitoring every 3 months. Patient understands the surveillance approach and is compliant with follow-up appointments."
-      : "Initial consultation completed. Patient referred for further investigations including MRI and possible biopsy. Patient understands the investigation pathway and next steps."
+  const fetchPatientData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await gpService.getPatientById(patientId);
+      if (response.success && response.data && response.data.patient) {
+        setPatientData(response.data.patient);
+      } else {
+        setError('Failed to load patient data');
+      }
+    } catch (err) {
+      console.error('Error fetching patient data:', err);
+      setError(err.message || 'Failed to load patient data');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Sample clinical notes
-  const clinicalNotes = [
-    {
-      id: 1,
-      date: '2024-01-15',
-      time: '14:30',
-      author: 'Dr. Michael Chen',
-      type: 'Initial Consultation',
-      content: 'Patient referred with elevated PSA of 4.2. Discussed investigation pathway. Patient understands need for further tests including MRI and possible biopsy. Next appointment scheduled for 2 weeks.',
-      priority: 'normal'
-    },
-    {
-      id: 2,
-      date: '2024-01-10',
-      time: '09:15',
-      author: 'Dr. Sarah Wilson (GP)',
-      type: 'Referral',
-      content: 'Patient presents with elevated PSA on routine screening. No urinary symptoms. Family history of prostate cancer in father. Referred for urology assessment.',
-      priority: 'normal'
+  const fetchAppointments = async () => {
+    try {
+      const response = await bookingService.getPatientAppointments(patientId);
+      if (response.success && response.data) {
+        // Get appointments array from response
+        const appointmentsArray = response.data.appointments || [];
+        setAppointments(appointmentsArray);
+        console.log('Fetched appointments:', appointmentsArray);
+      }
+    } catch (err) {
+      console.error('Error fetching appointments:', err);
+      // Don't show error to user for appointments, just log it
     }
-  ];
+  };
 
-  // Sample PSA history
-  const psaHistory = [
-    { date: '2024-01-10', value: 4.2, lab: 'Pathology Lab Sydney' },
-    { date: '2023-10-15', value: 3.8, lab: 'Pathology Lab Sydney' },
-    { date: '2023-07-20', value: 3.5, lab: 'Pathology Lab Sydney' }
-  ];
-
-  // Sample appointments
-  const appointments = [
-    {
-      id: 1,
-      date: '2025-10-20',
-      time: '10:30',
-      type: 'Follow-up Consultation',
-      doctor: 'Dr. Michael Chen',
-      status: 'Scheduled',
-      notes: 'Review investigation results'
-    },
-    {
-      id: 2,
-      date: '2024-01-15',
-      time: '14:30',
-      type: 'Initial Consultation',
-      doctor: 'Dr. Michael Chen',
-      status: 'Completed',
-      notes: 'Initial assessment and investigation planning'
+  const fetchDischargeSummary = async () => {
+    try {
+      const response = await gpService.getPatientById(patientId);
+      if (response.success && response.data && response.data.patient) {
+        // Check if patient has discharge summary
+        if (response.data.patient.status === 'Discharged' || response.data.patient.carePathway === 'Discharge') {
+          // Fetch discharge summary from API
+          const summaryResponse = await fetch(`/api/patients/${patientId}/discharge-summary`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          if (summaryResponse.ok) {
+            const summaryData = await summaryResponse.json();
+            if (summaryData.success && summaryData.data) {
+              setDischargeSummary(summaryData.data);
+              console.log('Fetched discharge summary:', summaryData.data);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching discharge summary:', err);
+      // Don't show error to user for discharge summary, just log it
     }
-  ];
+  };
+
+  if (!isOpen) return null;
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg p-8 max-w-md w-full">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+            <span className="ml-3 text-gray-600">Loading patient details...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg p-8 max-w-md w-full">
+          <div className="text-center">
+            <div className="text-red-500 text-lg mb-4">Error loading patient details</div>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={fetchPatientData}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+              >
+                Retry
+              </button>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!patientData) return null;
+
+  // Determine if patient is on Active Monitoring or Medication pathway
+  const isActiveMonitoring = patientData.carePathway === 'Active Monitoring' || patientData.carePathway === 'Medication';
+  
+  // Format patient data from API
+  const fullName = patientData.fullName || `${patientData.firstName || ''} ${patientData.lastName || ''}`.trim();
+  const formattedPhone = patientData.phone || 'Not provided';
+  const formattedEmail = patientData.email || 'Not provided';
+  
+  // Format full address with city, state, postcode
+  let formattedAddress = patientData.address || '';
+  if (patientData.city) formattedAddress += (formattedAddress ? ', ' : '') + patientData.city;
+  if (patientData.state) formattedAddress += (formattedAddress ? ', ' : '') + patientData.state;
+  if (patientData.postcode) formattedAddress += (formattedAddress ? ' ' : '') + patientData.postcode;
+  formattedAddress = formattedAddress || 'Not provided';
+  
+  const referralDate = patientData.referralDate ? new Date(patientData.referralDate).toLocaleDateString() : 'Not available';
+  const lastPSADate = patientData.initialPSADate ? new Date(patientData.initialPSADate).toLocaleDateString() : 'Not available';
+  
+  // Format emergency contact
+  const formattedEmergencyContact = patientData.emergencyContactName 
+    ? `${patientData.emergencyContactName}${patientData.emergencyContactRelationship ? ` (${patientData.emergencyContactRelationship})` : ''}${patientData.emergencyContactPhone ? ` - ${patientData.emergencyContactPhone}` : ''}`
+    : 'Not available';
+
+  // PSA history from API (if available)
+  const psaHistory = patientData.psaHistory || [];
+
+  // Find next upcoming appointment
+  const getNextAppointment = () => {
+    if (!appointments || appointments.length === 0) return null;
+    
+    const now = new Date();
+    const upcomingAppointments = appointments
+      .filter(apt => {
+        const aptDate = new Date(apt.appointment_date || apt.date);
+        return aptDate >= now && (apt.status === 'scheduled' || apt.status === 'confirmed');
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.appointment_date || a.date);
+        const dateB = new Date(b.appointment_date || b.date);
+        return dateA - dateB;
+      });
+    
+    return upcomingAppointments[0] || null;
+  };
+
+  const nextAppointment = getNextAppointment();
+  const nextAppointmentDate = nextAppointment 
+    ? new Date(nextAppointment.appointment_date || nextAppointment.date).toLocaleDateString()
+    : 'Not scheduled';
+  const nextAppointmentTime = nextAppointment ? (nextAppointment.appointment_time || nextAppointment.time) : '';
 
   const getPriorityBadge = (priority) => {
     const priorityClasses = {
@@ -114,11 +203,13 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
       'Pending Review': 'bg-yellow-100 text-yellow-700',
       'Under Investigation': 'bg-purple-100 text-purple-700',
       'Active Monitoring': 'bg-green-100 text-green-700',
+      'Active': 'bg-green-100 text-green-700',
       'Surgical Pathway': 'bg-blue-100 text-blue-700',
+      'Medication': 'bg-blue-100 text-blue-700',
     };
     
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusClasses[status]}`} aria-label={`Status: ${status}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusClasses[status] || 'bg-gray-100 text-gray-700'}`} aria-label={`Status: ${status}`}>
         {status}
       </span>
     );
@@ -149,7 +240,7 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-white">Patient Details</h3>
-              <p className="text-teal-50 text-sm mt-0.5">{patientData.name} • UPI: {patientData.upi}</p>
+              <p className="text-teal-50 text-sm mt-0.5">{fullName} • UPI: {patientData.upi}</p>
             </div>
           </div>
           <button
@@ -230,7 +321,7 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                    <p className="text-sm text-gray-900">{patientData.name}</p>
+                    <p className="text-sm text-gray-900">{fullName}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">UPI</label>
@@ -238,25 +329,25 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
-                    <p className="text-sm text-gray-900">{patientData.age} years</p>
+                    <p className="text-sm text-gray-900">{patientData.age ? `${patientData.age} years` : 'Not available'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                    <p className="text-sm text-gray-900">{patientData.gender}</p>
+                    <p className="text-sm text-gray-900">{patientData.gender || 'Not specified'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <p className="text-sm text-gray-900">{patientData.phone}</p>
+                    <p className="text-sm text-gray-900">{formattedPhone}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <p className="text-sm text-gray-900">{patientData.email}</p>
+                    <p className="text-sm text-gray-900">{formattedEmail}</p>
                   </div>
                 </div>
                 
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                  <p className="text-sm text-gray-900">{patientData.address}</p>
+                  <p className="text-sm text-gray-900">{formattedAddress}</p>
                 </div>
               </div>
 
@@ -275,27 +366,23 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Referring GP</label>
-                    <p className="text-sm text-gray-900">{patientData.referringGP}</p>
+                    <p className="text-sm text-gray-900">{patientData.referredByGP || (patientData.createdByName ? `Dr. ${patientData.createdByName}` : 'Not available')}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Referral Date</label>
-                    <p className="text-sm text-gray-900">{patientData.referralDate}</p>
+                    <p className="text-sm text-gray-900">{referralDate}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Current Status</label>
-                    <div className="mt-1">{getStatusBadge(patientData.status)}</div>
+                    <div className="mt-1">{getStatusBadge(patientData.status || patientData.carePathway || 'Pending Review')}</div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                    <div className="mt-1">{getPriorityBadge(patientData.priority)}</div>
+                    <div className="mt-1">{getPriorityBadge(patientData.priority || 'Normal')}</div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Urologist</label>
-                    <p className="text-sm text-gray-900">{patientData.assignedUrologist}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Next Appointment</label>
-                    <p className="text-sm text-gray-900">{patientData.nextAppointment} at {patientData.appointmentTime}</p>
+                    <p className="text-sm text-gray-900">{patientData.assignedUrologist || 'Not assigned'}</p>
                   </div>
                 </div>
               </div>
@@ -318,22 +405,32 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Initial PSA</label>
-                      <p className="text-sm text-gray-900">{patientData.initialPSA} ng/mL</p>
+                      <p className="text-sm text-gray-900">{patientData.initialPSA ? `${parseFloat(patientData.initialPSA).toFixed(2)} ng/mL` : 'Not available'}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Current PSA</label>
-                      <p className="text-sm text-gray-900">{patientData.currentPSA} ng/mL</p>
+                      <p className="text-sm text-gray-900">
+                        {patientData.latest_psa 
+                          ? `${parseFloat(patientData.latest_psa).toFixed(2)} ng/mL` 
+                          : patientData.initialPSA 
+                          ? `${parseFloat(patientData.initialPSA).toFixed(2)} ng/mL` 
+                          : 'Not available'}
+                      </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Last PSA Date</label>
-                      <p className="text-sm text-gray-900">{patientData.lastPSADate}</p>
+                      <p className="text-sm text-gray-900">
+                        {patientData.latest_psa_date 
+                          ? new Date(patientData.latest_psa_date).toLocaleDateString() 
+                          : lastPSADate}
+                      </p>
                     </div>
                   </div>
                 ) : (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Initial PSA Level</label>
-                    <p className="text-lg font-semibold text-gray-900">{patientData.initialPSA} ng/mL</p>
-                    <p className="text-sm text-gray-500 mt-1">Test Date: {patientData.lastPSADate}</p>
+                    <p className="text-lg font-semibold text-gray-900">{patientData.initialPSA ? `${parseFloat(patientData.initialPSA).toFixed(2)} ng/mL` : 'Not available'}</p>
+                    <p className="text-sm text-gray-500 mt-1">Test Date: {lastPSADate}</p>
                   </div>
                 )}
               </div>
@@ -352,7 +449,7 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                   </div>
                   
                   <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                    <p className="text-sm text-gray-700 leading-relaxed">{patientData.doctorNotes}</p>
+                    <p className="text-sm text-gray-700 leading-relaxed">{patientData.doctorNotes || patientData.notes || 'No notes available'}</p>
                   </div>
                 </div>
               )}
@@ -372,19 +469,19 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Medical History</label>
-                    <p className="text-sm text-gray-900">{patientData.medicalHistory}</p>
+                    <p className="text-sm text-gray-900">{patientData.medicalHistory || 'Not available'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Current Medications</label>
-                    <p className="text-sm text-gray-900">{patientData.currentMedications}</p>
+                    <p className="text-sm text-gray-900">{patientData.currentMedications || 'None recorded'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
-                    <p className="text-sm text-gray-900">{patientData.allergies}</p>
+                    <p className="text-sm text-gray-900">{patientData.allergies || 'None recorded'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact</label>
-                    <p className="text-sm text-gray-900">{patientData.emergencyContact}</p>
+                    <p className="text-sm text-gray-900">{formattedEmergencyContact}</p>
                   </div>
                 </div>
               </div>
@@ -398,26 +495,33 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <h3 className="text-lg font-semibold text-gray-900">PSA History</h3>
               </div>
               
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Date</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">PSA Level</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Laboratory</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {psaHistory.map((test, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">{test.date}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{test.value} ng/mL</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{test.lab}</td>
+              {psaHistory && psaHistory.length > 0 ? (
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Date</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">PSA Level</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Laboratory</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {psaHistory.map((test, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{test.date ? new Date(test.date).toLocaleDateString() : 'N/A'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">{test.value || test.psa || 'N/A'} {(test.value || test.psa) ? 'ng/mL' : ''}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{test.lab || test.laboratory || 'Not specified'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
+                  <IoAnalytics className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-500">No PSA history available</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -427,35 +531,60 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <h3 className="text-lg font-semibold text-gray-900">Appointments</h3>
               </div>
               
-              <div className="space-y-4">
-                {appointments.map((appointment) => (
-                  <div key={appointment.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <IoCalendar className="text-teal-600" />
-                        <div>
-                          <h4 className="font-medium text-gray-900">{appointment.type}</h4>
-                          <p className="text-sm text-gray-500">{appointment.doctor}</p>
+              {appointments && appointments.length > 0 ? (
+                <div className="space-y-4">
+                  {appointments.map((appointment, index) => {
+                    const aptDate = appointment.appointment_date || appointment.date;
+                    const aptTime = appointment.appointment_time || appointment.time;
+                    const aptStatus = appointment.status || 'pending';
+                    
+                    return (
+                      <div key={appointment.id || index} className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <IoCalendar className="text-teal-600 text-xl" />
+                            <div>
+                              <h4 className="font-medium text-gray-900">
+                                {appointment.appointment_type === 'urologist' ? 'Urologist Consultation' : 
+                                 appointment.appointment_type === 'investigation' ? 'Investigation' : 
+                                 appointment.type || 'Appointment'}
+                              </h4>
+                              <p className="text-sm text-gray-500">
+                                {appointment.doctor_name || appointment.urologist_name || 'Not assigned'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-gray-900 font-medium">
+                              {aptDate ? new Date(aptDate).toLocaleDateString() : 'Not scheduled'}
+                            </p>
+                            {aptTime && <p className="text-sm text-gray-500">{aptTime}</p>}
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full mt-1 ${
+                              aptStatus === 'scheduled' || aptStatus === 'confirmed'
+                                ? 'bg-blue-100 text-blue-700' 
+                                : aptStatus === 'completed'
+                                ? 'bg-green-100 text-green-700'
+                                : aptStatus === 'cancelled'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {aptStatus.charAt(0).toUpperCase() + aptStatus.slice(1)}
+                            </span>
+                          </div>
                         </div>
+                        {appointment.notes && (
+                          <p className="text-sm text-gray-600 mt-2">{appointment.notes}</p>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-900 font-medium">{appointment.date}</p>
-                        <p className="text-sm text-gray-500">{appointment.time}</p>
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          appointment.status === 'Scheduled' 
-                            ? 'bg-blue-100 text-blue-700' 
-                            : 'bg-green-100 text-green-700'
-                        }`}>
-                          {appointment.status}
-                        </span>
-                      </div>
-                    </div>
-                    {appointment.notes && (
-                      <p className="text-sm text-gray-600">{appointment.notes}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
+                  <IoCalendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-500">No appointments scheduled</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -465,61 +594,237 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <h3 className="text-lg font-semibold text-gray-900">Discharge Summary</h3>
               </div>
               
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <div className="space-y-6">
-                  {/* Patient Summary */}
-                  <div>
-                    <h4 className="text-base font-semibold text-gray-900 mb-3">Patient Summary</h4>
-                    <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                      <p className="text-sm text-gray-700 leading-relaxed">
-                        Patient {patientData.name} (UPI: {patientData.upi}) was under active surveillance for elevated PSA levels. 
-                        The patient has been stable throughout the monitoring period with consistent PSA levels. 
-                        Patient has been compliant with follow-up appointments and understands the surveillance protocol.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Treatment Summary */}
-                  <div>
-                    <h4 className="text-base font-semibold text-gray-900 mb-3">Treatment Summary</h4>
-                    <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                      <ul className="text-sm text-gray-700 space-y-2">
-                        <li>• Active surveillance protocol maintained</li>
-                        <li>• Regular PSA monitoring every 3 months</li>
-                        <li>• No progression of disease noted</li>
-                        <li>• Patient education provided regarding surveillance approach</li>
-                        <li>• No additional interventions required at this time</li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Follow-up Instructions */}
-                  <div>
-                    <h4 className="text-base font-semibold text-gray-900 mb-3">Follow-up Instructions</h4>
-                    <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                      <ul className="text-sm text-gray-700 space-y-2">
-                        <li>• Continue active surveillance protocol</li>
-                        <li>• Next PSA test scheduled for {patientData.nextAppointment}</li>
-                        <li>• Follow-up appointment with {patientData.assignedUrologist}</li>
-                        <li>• Contact urology department if any new symptoms develop</li>
-                        <li>• Maintain regular GP follow-up for general health</li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Discharge Date */}
-                  <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+              {dischargeSummary ? (
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <div className="space-y-6">
+                    {/* Patient Summary */}
                     <div>
-                      <p className="text-sm text-gray-600">Discharge Date:</p>
-                      <p className="text-sm font-medium text-gray-900">{new Date().toLocaleDateString()}</p>
+                      <h4 className="text-base font-semibold text-gray-900 mb-3">Clinical Summary</h4>
+                      <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                          {dischargeSummary.clinicalSummary || 'No clinical summary available'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Discharging Doctor:</p>
-                      <p className="text-sm font-medium text-gray-900">{patientData.assignedUrologist}</p>
+
+                    {/* Diagnosis */}
+                    {dischargeSummary.diagnosis && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 mb-3">Diagnosis</h4>
+                        <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                          <div className="space-y-2 text-sm text-gray-700">
+                            {typeof dischargeSummary.diagnosis === 'string' ? (
+                              <p>{dischargeSummary.diagnosis}</p>
+                            ) : (
+                              <>
+                                {dischargeSummary.diagnosis.primary && (
+                                  <div>
+                                    <span className="font-medium">Primary: </span>
+                                    {dischargeSummary.diagnosis.primary}
+                                  </div>
+                                )}
+                                {dischargeSummary.diagnosis.secondary && (
+                                  <div>
+                                    <span className="font-medium">Secondary: </span>
+                                    {dischargeSummary.diagnosis.secondary}
+                                  </div>
+                                )}
+                                {dischargeSummary.diagnosis.procedure && (
+                                  <div className="mt-2 pt-2 border-t border-gray-300">
+                                    <span className="font-medium">Procedure: </span>
+                                    {dischargeSummary.diagnosis.procedure}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Procedure Details - For Post-operative patients */}
+                    {dischargeSummary.procedure && (typeof dischargeSummary.procedure === 'object') && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 mb-3">Procedure Details</h4>
+                        <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            {dischargeSummary.procedure.name && (
+                              <div>
+                                <span className="font-medium text-gray-700">Procedure: </span>
+                                <span className="text-gray-900">{dischargeSummary.procedure.name}</span>
+                              </div>
+                            )}
+                            {dischargeSummary.procedure.date && (
+                              <div>
+                                <span className="font-medium text-gray-700">Date: </span>
+                                <span className="text-gray-900">{new Date(dischargeSummary.procedure.date).toLocaleDateString()}</span>
+                              </div>
+                            )}
+                            {dischargeSummary.procedure.surgeon && (
+                              <div>
+                                <span className="font-medium text-gray-700">Surgeon: </span>
+                                <span className="text-gray-900">{dischargeSummary.procedure.surgeon}</span>
+                              </div>
+                            )}
+                            {dischargeSummary.procedure.complications && (
+                              <div className="col-span-2">
+                                <span className="font-medium text-gray-700">Complications: </span>
+                                <span className="text-gray-900">{dischargeSummary.procedure.complications}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Medications */}
+                    {dischargeSummary.medications && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 mb-3">Discharge Medications</h4>
+                        <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                          <div className="space-y-2 text-sm text-gray-700">
+                            {typeof dischargeSummary.medications === 'string' ? (
+                              <p>{dischargeSummary.medications}</p>
+                            ) : (
+                              <>
+                                {dischargeSummary.medications.discharge && (
+                                  <div>
+                                    <span className="font-medium">Current Medications: </span>
+                                    {dischargeSummary.medications.discharge}
+                                  </div>
+                                )}
+                                {dischargeSummary.medications.changes && (
+                                  <div>
+                                    <span className="font-medium">Changes: </span>
+                                    {dischargeSummary.medications.changes}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Follow-up Instructions */}
+                    {dischargeSummary.followUp && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 mb-3">Follow-up Instructions</h4>
+                        <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                          <ul className="text-sm text-gray-700 space-y-2">
+                            {typeof dischargeSummary.followUp === 'string' ? (
+                              <li>• {dischargeSummary.followUp}</li>
+                            ) : (
+                              <>
+                                {/* Post-operative specific fields */}
+                                {dischargeSummary.followUp.immediateFollowUp && <li>• {dischargeSummary.followUp.immediateFollowUp}</li>}
+                                {dischargeSummary.followUp.woundCare && <li>• <strong>Wound Care:</strong> {dischargeSummary.followUp.woundCare}</li>}
+                                {dischargeSummary.followUp.activityRestrictions && <li>• <strong>Activity:</strong> {dischargeSummary.followUp.activityRestrictions}</li>}
+                                {dischargeSummary.followUp.postOpInstructions && <li>• {dischargeSummary.followUp.postOpInstructions}</li>}
+                                
+                                {/* Regular discharge fields */}
+                                {dischargeSummary.followUp.gpFollowUp && <li>• {dischargeSummary.followUp.gpFollowUp}</li>}
+                                {dischargeSummary.followUp.psaMonitoring && <li>• <strong>PSA Monitoring:</strong> {dischargeSummary.followUp.psaMonitoring}</li>}
+                                
+                                {/* Red flags - highlighted */}
+                                {dischargeSummary.followUp.redFlags && (
+                                  <li className="bg-red-50 border border-red-200 rounded p-2 mt-2">
+                                    <strong className="text-red-800">⚠️ Warning Signs:</strong>
+                                    <span className="text-red-700 ml-1">{dischargeSummary.followUp.redFlags}</span>
+                                  </li>
+                                )}
+                                
+                                {dischargeSummary.followUp.nextReview && <li>• <strong>Next Review:</strong> {dischargeSummary.followUp.nextReview}</li>}
+                              </>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* GP Actions */}
+                    {dischargeSummary.gpActions && Array.isArray(dischargeSummary.gpActions) && dischargeSummary.gpActions.length > 0 && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 mb-3">Actions for GP</h4>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
+                          <ul className="text-sm text-gray-700 space-y-2">
+                            {dischargeSummary.gpActions.map((action, index) => (
+                              <li key={index}>• {action}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Discharge Documents */}
+                    {dischargeSummary.documents && Array.isArray(dischargeSummary.documents) && dischargeSummary.documents.length > 0 && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 mb-3">Discharge Documents</h4>
+                        <div className="space-y-2">
+                          {dischargeSummary.documents.map((doc, index) => (
+                            <div key={doc.id || index} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="text-2xl">
+                                  {doc.type?.includes('pdf') ? '📄' : doc.type?.includes('image') ? '🖼️' : '📎'}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                                  <p className="text-xs text-gray-500">{doc.size}</p>
+                                </div>
+                              </div>
+                              <button
+                                className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
+                              >
+                                Download
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Discharge Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                      <div>
+                        <p className="text-sm text-gray-600">Discharge Date:</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {dischargeSummary.dischargeDate ? new Date(dischargeSummary.dischargeDate).toLocaleDateString() : 'Not recorded'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Discharge Time:</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {dischargeSummary.dischargeTime || 'Not recorded'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Length of Stay:</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {dischargeSummary.lengthOfStay ? `${dischargeSummary.lengthOfStay} days` : 'Not recorded'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Ward:</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {dischargeSummary.ward || 'Not recorded'}
+                        </p>
+                      </div>
+                      <div className="md:col-span-2">
+                        <p className="text-sm text-gray-600">Discharging Consultant:</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {dischargeSummary.consultantName || dischargeSummary.dischargedBy || patientData.assignedUrologist || 'Not recorded'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
+                  <IoDocument className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-500">No discharge summary available for this patient</p>
+                  <p className="text-sm text-gray-400 mt-2">Discharge summary will be created when patient is transferred to discharge pathway</p>
+                </div>
+              )}
             </div>
           )}
         </div>

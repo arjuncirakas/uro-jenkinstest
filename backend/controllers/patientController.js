@@ -345,7 +345,7 @@ export const getPatients = async (req, res) => {
     const countResult = await client.query(countQuery, queryParams);
     const total = parseInt(countResult.rows[0].total);
 
-    // Get patients with user info
+    // Get patients with user info and next appointment
     const patientsQuery = `
       SELECT 
         p.id, p.upi, p.first_name, p.last_name, p.gender, p.phone, p.email,
@@ -360,10 +360,22 @@ export const getPatients = async (req, res) => {
         u.first_name as created_by_first_name,
         u.last_name as created_by_last_name,
         gp.first_name as gp_first_name,
-        gp.last_name as gp_last_name
+        gp.last_name as gp_last_name,
+        next_apt.appointment_date as next_appointment_date,
+        next_apt.appointment_time as next_appointment_time,
+        next_apt.urologist_name as next_appointment_urologist
       FROM patients p
       LEFT JOIN users u ON p.created_by = u.id
       LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+      LEFT JOIN LATERAL (
+        SELECT appointment_date, appointment_time, urologist_name
+        FROM appointments
+        WHERE patient_id = p.id 
+        AND status IN ('scheduled', 'confirmed')
+        AND appointment_date >= CURRENT_DATE
+        ORDER BY appointment_date ASC, appointment_time ASC
+        LIMIT 1
+      ) next_apt ON true
       WHERE ${whereClause}
       ORDER BY p.${sortBy} ${sortOrder}
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
@@ -375,6 +387,36 @@ export const getPatients = async (req, res) => {
     // Format patient data
     const patients = patientsResult.rows.map(patient => {
       const age = new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear();
+      
+      // Format next appointment data
+      const nextAppointmentDate = patient.next_appointment_date 
+        ? new Date(patient.next_appointment_date).toISOString().split('T')[0]
+        : null;
+      const nextAppointmentTime = patient.next_appointment_time 
+        ? patient.next_appointment_time.substring(0, 5) // Format HH:MM
+        : null;
+      
+      // Calculate next review date (appointment date formatted for display)
+      const nextReview = nextAppointmentDate 
+        ? new Date(nextAppointmentDate).toLocaleDateString('en-GB', { 
+            day: '2-digit', 
+            month: 'short', 
+            year: 'numeric' 
+          })
+        : 'Not Scheduled';
+      
+      // Calculate monitoring status based on PSA level and care pathway
+      let monitoringStatus = 'Stable';
+      if (patient.care_pathway === 'Active Monitoring' || patient.care_pathway === 'Medication') {
+        const psaLevel = parseFloat(patient.initial_psa || 0);
+        if (psaLevel > 10) {
+          monitoringStatus = 'Needs Attention';
+        } else if (psaLevel > 4.0) {
+          monitoringStatus = 'Review Required';
+        } else {
+          monitoringStatus = 'Stable';
+        }
+      }
       
       return {
         id: patient.id,
@@ -412,7 +454,13 @@ export const getPatients = async (req, res) => {
           : 'Unknown',
         referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
         createdAt: patient.created_at,
-        updatedAt: patient.updated_at
+        updatedAt: patient.updated_at,
+        // New fields for appointments and monitoring
+        nextAppointmentDate,
+        nextAppointmentTime,
+        nextReview,
+        nextAppointmentUrologist: patient.next_appointment_urologist,
+        monitoringStatus
       };
     });
 
@@ -489,10 +537,22 @@ export const getNewPatients = async (req, res) => {
         u.role as created_by_role,
         gp.first_name as gp_first_name,
         gp.last_name as gp_last_name,
-        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+        next_apt.appointment_date as next_appointment_date,
+        next_apt.appointment_time as next_appointment_time,
+        next_apt.urologist_name as next_appointment_urologist
       FROM patients p
       LEFT JOIN users u ON p.created_by = u.id
       LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+      LEFT JOIN LATERAL (
+        SELECT appointment_date, appointment_time, urologist_name
+        FROM appointments
+        WHERE patient_id = p.id 
+        AND status IN ('scheduled', 'confirmed')
+        AND appointment_date >= CURRENT_DATE
+        ORDER BY appointment_date ASC, appointment_time ASC
+        LIMIT 1
+      ) next_apt ON true
       WHERE ${whereClause}
       ORDER BY p.created_at DESC
       LIMIT $${paramCount + 1}
@@ -526,6 +586,14 @@ export const getNewPatients = async (req, res) => {
         }
       }
 
+      // Format next appointment data
+      const nextAppointmentDate = patient.next_appointment_date 
+        ? new Date(patient.next_appointment_date).toISOString().split('T')[0]
+        : null;
+      const nextAppointmentTime = patient.next_appointment_time 
+        ? patient.next_appointment_time.substring(0, 5)
+        : null;
+      
       return {
         id: patient.id,
         upi: patient.upi,
@@ -547,7 +615,10 @@ export const getNewPatients = async (req, res) => {
         referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
         assignedUrologist: patient.assigned_urologist,
         createdAt: patient.created_at,
-        updatedAt: patient.updated_at
+        updatedAt: patient.updated_at,
+        nextAppointmentDate,
+        nextAppointmentTime,
+        nextAppointmentUrologist: patient.next_appointment_urologist
       };
       } catch (error) {
         console.error(`Error transforming patient ${index + 1}:`, error);
@@ -1296,6 +1367,9 @@ export const updatePatientPathway = async (req, res) => {
         // Don't fail the pathway update if auto-booking fails
       }
     }
+
+    // NOTE: Discharge summary is now created via separate API endpoint when urologist fills the discharge form
+    // This allows for comprehensive data entry with proper fields and document uploads
 
     // CREATE CLINICAL NOTE FOR PATHWAY TRANSFER (after auto-booking so we can include appointment details)
     if (userName && userRole) {

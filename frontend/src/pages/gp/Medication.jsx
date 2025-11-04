@@ -50,9 +50,12 @@ const Medication = () => {
           gender: patient.gender,
           latestPsa: patient.initialPSA || 0,
           lastPSADate: patient.initialPSADate?.split('T')[0] || patient.createdAt?.split('T')[0],
-          medicationStatus: 'On Medication',
+          medicationStatus: patient.monitoringStatus || 'On Medication',
           currentDoctor: patient.assignedUrologist || 'Not Assigned',
-          pathway: 'Medication'
+          pathway: patient.carePathway || 'Medication',
+          nextAppointmentDate: patient.nextAppointmentDate,
+          nextAppointmentTime: patient.nextAppointmentTime,
+          nextReview: patient.nextReview || 'Not Scheduled'
         }));
         setMedicationPatients(formattedPatients);
       } else {
@@ -90,7 +93,7 @@ const Medication = () => {
 
   // Handle patient actions
   const handleViewDetails = (patient) => {
-    setSelectedPatient(patient.name);
+    setSelectedPatient(patient.id);
     setIsPatientDetailsModalOpen(true);
   };
 
@@ -213,36 +216,13 @@ const Medication = () => {
           </div>
         </div>
 
-        {/* Summary Stats */}
-        {medicationPatients.length > 0 && (
-          <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-teal-600">{medicationPatients.length}</p>
-                <p className="text-sm text-gray-600">Total Patients</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">
-                  {medicationPatients.filter(p => p.latestPsa <= 4.0).length}
-                </p>
-                <p className="text-sm text-gray-600">Normal PSA</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-orange-600">
-                  {medicationPatients.filter(p => p.latestPsa > 4.0).length}
-                </p>
-                <p className="text-sm text-gray-600">Elevated PSA</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* GP Patient Details Modal */}
       <GPPatientDetailsModal 
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
-        patient={selectedPatient}
+        patientId={selectedPatient}
       />
     </div>
   );

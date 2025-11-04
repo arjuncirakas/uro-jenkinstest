@@ -77,6 +77,8 @@ export const getDischargeSummary = async (req, res) => {
  * POST /api/patients/:patientId/discharge-summary
  */
 export const createDischargeSummary = async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { patientId } = req.params;
     const {
@@ -94,35 +96,138 @@ export const createDischargeSummary = async (req, res) => {
       followUp,
       gpActions,
       dischargedBy,
-      documents
+      documents,
+      additionalNotes
     } = req.body;
     
     const userId = req.user.id;
     
-    // Insert discharge summary
-    const result = await pool.query(
-      `INSERT INTO discharge_summaries (
-        patient_id, admission_date, discharge_date, discharge_time,
-        length_of_stay, consultant_id, ward, diagnosis, procedure,
-        clinical_summary, investigations, medications, follow_up,
-        gp_actions, discharged_by, documents, created_by, updated_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17)
-      RETURNING *`,
-      [
-        patientId, admissionDate, dischargeDate, dischargeTime,
-        lengthOfStay, consultantId, ward,
-        JSON.stringify(diagnosis), JSON.stringify(procedure),
-        clinicalSummary, JSON.stringify(investigations),
-        JSON.stringify(medications), JSON.stringify(followUp),
-        JSON.stringify(gpActions), dischargedBy,
-        JSON.stringify(documents), userId
-      ]
+    // Validate required fields
+    if (!admissionDate || !dischargeDate || !clinicalSummary) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admission date, discharge date, and clinical summary are required'
+      });
+    }
+    
+    // Check if patient exists
+    const patientCheck = await client.query(
+      'SELECT id, upi, first_name, last_name FROM patients WHERE id = $1',
+      [patientId]
     );
+    
+    if (patientCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found'
+      });
+    }
+    
+    // Calculate length of stay if not provided
+    let calculatedLengthOfStay = lengthOfStay;
+    if (!calculatedLengthOfStay) {
+      const admitDate = new Date(admissionDate);
+      const disDate = new Date(dischargeDate);
+      calculatedLengthOfStay = Math.ceil((disDate - admitDate) / (1000 * 60 * 60 * 24));
+    }
+    
+    // Get consultant name if consultantId provided
+    let finalConsultantId = consultantId || userId;
+    
+    // Build comprehensive clinical summary with additional notes
+    const fullClinicalSummary = additionalNotes 
+      ? `${clinicalSummary}\n\nADDITIONAL NOTES:\n${additionalNotes}`
+      : clinicalSummary;
+    
+    // Check if discharge summary already exists for this patient
+    const existingCheck = await client.query(
+      'SELECT id FROM discharge_summaries WHERE patient_id = $1 AND is_deleted = false',
+      [patientId]
+    );
+    
+    let result;
+    
+    if (existingCheck.rows.length > 0) {
+      // Update existing discharge summary
+      result = await client.query(
+        `UPDATE discharge_summaries
+         SET admission_date = $1,
+             discharge_date = $2,
+             discharge_time = $3,
+             length_of_stay = $4,
+             consultant_id = $5,
+             ward = $6,
+             diagnosis = $7,
+             procedure = $8,
+             clinical_summary = $9,
+             investigations = $10,
+             medications = $11,
+             follow_up = $12,
+             gp_actions = $13,
+             discharged_by = $14,
+             documents = $15,
+             updated_by = $16,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE patient_id = $17 AND is_deleted = false
+         RETURNING *`,
+        [
+          admissionDate, dischargeDate, dischargeTime, calculatedLengthOfStay,
+          finalConsultantId, ward,
+          JSON.stringify(diagnosis), JSON.stringify(procedure),
+          fullClinicalSummary, JSON.stringify(investigations || []),
+          JSON.stringify(medications), JSON.stringify(followUp),
+          JSON.stringify(gpActions || []), dischargedBy || `Dr. ${req.user.first_name} ${req.user.last_name}`,
+          JSON.stringify(documents || []), userId, patientId
+        ]
+      );
+    } else {
+      // Insert new discharge summary
+      result = await client.query(
+        `INSERT INTO discharge_summaries (
+          patient_id, admission_date, discharge_date, discharge_time,
+          length_of_stay, consultant_id, ward, diagnosis, procedure,
+          clinical_summary, investigations, medications, follow_up,
+          gp_actions, discharged_by, documents, created_by, updated_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17)
+        RETURNING *`,
+        [
+          patientId, admissionDate, dischargeDate, dischargeTime,
+          calculatedLengthOfStay, finalConsultantId, ward,
+          JSON.stringify(diagnosis), JSON.stringify(procedure),
+          fullClinicalSummary, JSON.stringify(investigations || []),
+          JSON.stringify(medications), JSON.stringify(followUp),
+          JSON.stringify(gpActions || []), dischargedBy || `Dr. ${req.user.first_name} ${req.user.last_name}`,
+          JSON.stringify(documents || []), userId
+        ]
+      );
+    }
+    
+    const dischargeSummary = result.rows[0];
     
     res.status(201).json({
       success: true,
-      message: 'Discharge summary created successfully',
-      data: result.rows[0]
+      message: existingCheck.rows.length > 0 ? 'Discharge summary updated successfully' : 'Discharge summary created successfully',
+      data: {
+        id: dischargeSummary.id,
+        patientId: dischargeSummary.patient_id,
+        admissionDate: dischargeSummary.admission_date,
+        dischargeDate: dischargeSummary.discharge_date,
+        dischargeTime: dischargeSummary.discharge_time,
+        lengthOfStay: dischargeSummary.length_of_stay,
+        consultantId: dischargeSummary.consultant_id,
+        ward: dischargeSummary.ward,
+        diagnosis: dischargeSummary.diagnosis,
+        procedure: dischargeSummary.procedure,
+        clinicalSummary: dischargeSummary.clinical_summary,
+        investigations: dischargeSummary.investigations,
+        medications: dischargeSummary.medications,
+        followUp: dischargeSummary.follow_up,
+        gpActions: dischargeSummary.gp_actions,
+        dischargedBy: dischargeSummary.discharged_by,
+        documents: dischargeSummary.documents,
+        createdAt: dischargeSummary.created_at,
+        updatedAt: dischargeSummary.updated_at
+      }
     });
   } catch (error) {
     console.error('Error creating discharge summary:', error);
@@ -131,6 +236,8 @@ export const createDischargeSummary = async (req, res) => {
       message: 'Failed to create discharge summary',
       error: error.message
     });
+  } finally {
+    client.release();
   }
 };
 

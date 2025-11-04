@@ -8,7 +8,7 @@ const DailyAppointmentsList = ({
   onDateChange,
   onAppointmentClick
 }) => {
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'timeline'
+  const [viewMode, setViewMode] = useState('timeline'); // 'list' or 'timeline'
 
   // Helper function to convert 24-hour time to 12-hour format
   const convertTo12Hour = (time24) => {
@@ -167,19 +167,9 @@ const DailyAppointmentsList = ({
                       )}
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <FiClock className="w-4 h-4" />
-                        <span>{convertTo12Hour(appointment.time)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FiUser className="w-4 h-4" />
-                        <span>{appointment.duration} minutes</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FiPhone className="w-4 h-4" />
-                        <span>{appointment.phone}</span>
-                      </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <FiClock className="w-4 h-4" />
+                      <span>{convertTo12Hour(appointment.time)}</span>
                     </div>
                     
                     {appointment.notes && (

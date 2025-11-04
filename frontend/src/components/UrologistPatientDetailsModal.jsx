@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
-import { Plus, Upload, Trash } from 'lucide-react';
+import { Plus, Upload, Trash, Eye } from 'lucide-react';
 import SuccessModal from './SuccessModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddInvestigationModal from './AddInvestigationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
 import AddTestResultModal from './modals/AddTestResultModal';
 import AddInvestigationResultModal from './AddInvestigationResultModal';
+import DischargeSummaryModal from './DischargeSummaryModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { notesService } from '../services/notesService';
@@ -906,6 +907,62 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const handleTransfer = (transferType) => {
     setSelectedPathway(transferType);
     setIsPathwayModalOpen(true);
+  };
+  
+  // Handle discharge summary submission
+  const handleDischargeSummarySubmit = async (dischargeSummaryData) => {
+    try {
+      console.log('📋 Creating discharge summary:', dischargeSummaryData);
+      
+      // Create discharge summary via API
+      const response = await fetch(`/api/patients/${patient.id}/discharge-summary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(dischargeSummaryData)
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ Discharge summary created successfully');
+        
+        // Now proceed with pathway transfer
+        const pathwayPayload = {
+          pathway: selectedPathway,
+          reason: transferDetails.reason || 'Patient discharged',
+          notes: dischargeSummaryData.clinicalSummary || ''
+        };
+        
+        const pathwayRes = await patientService.updatePatientPathway(patient.id, pathwayPayload);
+        
+        if (pathwayRes.success) {
+          setSuccessModalTitle('Patient Discharged Successfully');
+          setSuccessModalMessage(`Discharge summary created and patient transferred to ${selectedPathway}.`);
+          setIsSuccessModalOpen(true);
+          setIsDischargeSummaryModalOpen(false);
+          
+          // Refresh patient data
+          if (onTransferSuccess) {
+            onTransferSuccess();
+          }
+          
+          // Close the main modal after a delay
+          setTimeout(() => {
+            onClose();
+          }, 1500);
+        } else {
+          alert('Failed to transfer patient pathway: ' + (pathwayRes.error || 'Unknown error'));
+        }
+      } else {
+        alert('Failed to create discharge summary: ' + (result.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error creating discharge summary:', error);
+      alert('An error occurred while creating discharge summary. Please try again.');
+    }
   };
   
   // Generate time slots for appointment booking
@@ -3103,6 +3160,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 </button>
                 <button
                   onClick={async () => {
+                    // Special handling for Discharge and Post-op Transfer - require discharge summary
+                    if (selectedPathway === 'Discharge' || selectedPathway === 'Post-op Transfer') {
+                      // Close pathway modal and open discharge summary modal
+                      setIsPathwayModalOpen(false);
+                      setIsDischargeSummaryModalOpen(true);
+                      return;
+                    }
+                    
                     // Basic validation based on pathway type
                     if (selectedPathway === 'Medication') {
                       const hasValidMedications = medicationDetails.medications.every(med => 
@@ -3641,6 +3706,18 @@ ${transferDetails.additionalNotes}` : ''}
         </div>
       )}
     </div>
+    
+    {/* Discharge Summary Modal */}
+    <DischargeSummaryModal
+      isOpen={isDischargeSummaryModalOpen}
+      onClose={() => {
+        setIsDischargeSummaryModalOpen(false);
+        setSelectedPathway('');
+      }}
+      onSubmit={handleDischargeSummarySubmit}
+      patient={patient}
+      pathway={selectedPathway}
+    />
     
     {/* Confirmation Modal */}
     <ConfirmModal

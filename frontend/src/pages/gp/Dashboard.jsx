@@ -80,8 +80,8 @@ const Dashboard = () => {
           age: patient.age,
           lastPSA: patient.initialPSA || 0,
           lastPSADate: patient.initialPSADate?.split('T')[0] || patient.createdAt?.split('T')[0],
-          nextReview: 'Not Scheduled',
-          status: patient.carePathway === 'Medication' ? 'On Medication' : 'Stable',
+          nextReview: patient.nextReview || 'Not Scheduled',
+          status: patient.carePathway === 'Medication' ? 'On Medication' : (patient.monitoringStatus || 'Stable'),
           pathway: patient.carePathway || 'Active Monitoring'
         }));
         setActiveMonitoringPatients(formattedMonitoring.slice(0, 3)); // Get last 3
@@ -125,15 +125,15 @@ const Dashboard = () => {
   };
 
   // Handle patient details modal
-  const handleViewPatient = (patientName) => {
-    setSelectedPatient(patientName);
+  const handleViewPatient = (patientId) => {
+    setSelectedPatient(patientId);
     setIsPatientDetailsModalOpen(true);
   };
 
   // Handle patient click from notification
   const handlePatientClickFromNotification = (patientName, patientId, metadata) => {
-    console.log('Notification clicked - navigating to patient:', patientName);
-    setSelectedPatient(patientName);
+    console.log('Notification clicked - navigating to patient:', patientName, 'ID:', patientId);
+    setSelectedPatient(patientId);
     setIsPatientDetailsModalOpen(true);
     setIsNotificationOpen(false); // Close notification modal
   };
@@ -185,9 +185,6 @@ const Dashboard = () => {
         <div className="mb-6 lg:mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
         <div className="pl-12 lg:pl-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">GP Dashboard</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              Welcome, Dr. {currentUser?.firstName || 'User'} {currentUser?.lastName || ''}
-            </p>
           </div>
           {/* Search Bar and Notification */}
           <div className="w-full lg:w-96 flex items-center gap-3">
@@ -295,7 +292,7 @@ const Dashboard = () => {
                             </td>
                             <td className="py-3 sm:py-4 px-3 sm:px-6">
                               <button
-                                onClick={() => handleViewPatient(referral.patient)}
+                                onClick={() => handleViewPatient(referral.patientId)}
                                 className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
                                 aria-label={`View details for ${referral.patient}`}
                               >
@@ -329,7 +326,7 @@ const Dashboard = () => {
                             </td>
                             <td className="py-3 sm:py-4 px-3 sm:px-6">
                               <button
-                                onClick={() => handleViewPatient(patient.patient)}
+                                onClick={() => handleViewPatient(patient.patientId)}
                                 className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
                                 aria-label={`View details for ${patient.patient}`}
                               >
@@ -384,7 +381,7 @@ const Dashboard = () => {
       <GPPatientDetailsModal 
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
-        patient={selectedPatient}
+        patientId={selectedPatient}
       />
     </div>
   );
