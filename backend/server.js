@@ -19,6 +19,7 @@ import notificationRoutes from './routes/notifications.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { initializeNotificationsTable } from './services/notificationService.js';
+import { corsOptions, validateCorsConfig, corsLoggingMiddleware } from './middleware/corsConfig.js';
 
 // Load environment variables
 dotenv.config();
@@ -55,14 +56,9 @@ app.use(helmet({
 // Apply rate limiting to all routes
 app.use(generalLimiter);
 
-// CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200
-}));
+// CORS configuration with enhanced logging
+app.use(cors(corsOptions));
+app.use(corsLoggingMiddleware);
 
 
 // Body parsing middleware
@@ -147,6 +143,16 @@ app.use(errorHandler);
 // Start server
 const startServer = async () => {
   try {
+    // Validate CORS configuration
+    const corsValid = validateCorsConfig();
+    if (!corsValid) {
+      console.error('❌ CORS configuration is invalid. Please check your environment variables.');
+      console.error('   Set FRONTEND_URL to your production frontend URL in .env file.');
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+    }
+    
     // Test database connection
     const dbConnected = await testConnection();
     if (!dbConnected) {
@@ -170,6 +176,7 @@ const startServer = async () => {
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
       console.log(`📝 API Documentation: http://localhost:${PORT}/api`);
+      console.log(`✅ Token refresh endpoint: http://localhost:${PORT}/api/auth/refresh-token`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

@@ -14,6 +14,7 @@
     "test-security": "node scripts/test-security.js",
     "test-email": "node scripts/test-email.js",
     "test-login-otp": "node scripts/test-login-otp.js",
+    "test-token-refresh": "node scripts/test-token-refresh.js",
     "rate-limit:enable": "node scripts/toggle-rate-limiting.js enable",
     "rate-limit:disable": "node scripts/toggle-rate-limiting.js disable",
     "rate-limit:status": "node scripts/toggle-rate-limiting.js status"
