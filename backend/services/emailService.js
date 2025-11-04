@@ -31,7 +31,7 @@ const createTransporter = () => {
   
   console.log(`📧 Creating SMTP transporter with config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT} (secure: ${process.env.SMTP_SECURE})`);
   
-  return nodemailer.createTransporter(config);
+  return nodemailer.createTransport(config);
 };
 
 // Verify SMTP connection
