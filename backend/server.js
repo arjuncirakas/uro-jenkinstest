@@ -27,7 +27,31 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Security middleware
+// Get allowed origins for CSP
+const getAllowedCSPOrigins = () => {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  if (isDevelopment) {
+    // In development, allow localhost origins
+    return [
+      "'self'",
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://127.0.0.1:5173",
+      "http://localhost:5000"
+    ];
+  }
+  
+  // In production, allow configured frontend URL
+  const origins = ["'self'"];
+  if (process.env.FRONTEND_URL) {
+    origins.push(process.env.FRONTEND_URL);
+  }
+  
+  return origins;
+};
+
+// Security middleware with environment-aware CSP
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -35,7 +59,7 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      connectSrc: getAllowedCSPOrigins(),
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
