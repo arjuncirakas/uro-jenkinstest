@@ -204,6 +204,70 @@ export const initializeDatabase = async () => {
       console.log('✅ Password setup tokens table already exists');
     }
 
+    // Create password_reset_tokens table
+    const passwordResetTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'password_reset_tokens'
+      );
+    `);
+    
+    if (!passwordResetTableExists.rows[0].exists) {
+      console.log('📋 Creating password_reset_tokens table...');
+      await client.query(`
+        CREATE TABLE password_reset_tokens (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          email VARCHAR(255) NOT NULL,
+          token VARCHAR(255) NOT NULL UNIQUE,
+          expires_at TIMESTAMP NOT NULL,
+          is_used BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_user_password_reset FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      `);
+      console.log('✅ Password reset tokens table created successfully');
+    } else {
+      console.log('✅ Password reset tokens table already exists');
+    }
+
+    // Create password_history table
+    const passwordHistoryTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'password_history'
+      );
+    `);
+    
+    if (!passwordHistoryTableExists.rows[0].exists) {
+      console.log('📋 Creating password_history table...');
+      await client.query(`
+        CREATE TABLE password_history (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          password_hash VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_user_password_history FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      `);
+      console.log('✅ Password history table created successfully');
+      
+      // Migrate existing user passwords to password history
+      console.log('🔄 Migrating existing user passwords to history...');
+      const result = await client.query(`
+        INSERT INTO password_history (user_id, password_hash, created_at)
+        SELECT id, password_hash, created_at
+        FROM users
+        WHERE password_hash IS NOT NULL
+        ON CONFLICT DO NOTHING
+      `);
+      console.log(`✅ Migrated ${result.rowCount} existing passwords to history!`);
+    } else {
+      console.log('✅ Password history table already exists');
+    }
+
     // Create index for better performance
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -243,6 +307,26 @@ export const initializeDatabase = async () => {
 
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_expires_at ON password_setup_tokens(expires_at);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens(user_id);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_history_user_id ON password_history(user_id);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_history_created_at ON password_history(user_id, created_at DESC);
     `);
 
     // Create patients table
