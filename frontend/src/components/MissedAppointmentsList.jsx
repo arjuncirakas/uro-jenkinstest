@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiMail, FiPhone, FiCalendar, FiClock, FiUser, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { FiMail, FiCalendar, FiClock, FiUser, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import SendReminderModal from './SendReminderModal';
 import emailService from '../services/emailService';
 import { bookingService } from '../services/bookingService';
@@ -379,7 +379,7 @@ const MissedAppointmentsList = ({
                             )}
                           </div>
                           
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-gray-600">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-600">
                             <div className="flex items-center gap-2">
                               <FiCalendar className="w-4 h-4" />
                               <span>{formatDate(appointment.missedDate || appointment.missed_date || appointment.date || appointment.appointment_date)}</span>
@@ -391,10 +391,6 @@ const MissedAppointmentsList = ({
                             <div className="flex items-center gap-2">
                               <FiUser className="w-4 h-4" />
                               <span>{appointment.duration || 30} min</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <FiPhone className="w-4 h-4" />
-                              <span>{appointment.phone || appointment.patient_phone || 'N/A'}</span>
                             </div>
                           </div>
                           

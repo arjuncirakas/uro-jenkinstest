@@ -317,7 +317,6 @@ const Login = () => {
                   name="email"
                   type="email"
                   required
-                  autoComplete="email"
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -353,7 +352,6 @@ const Login = () => {
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   required
-                  autoComplete="current-password"
                   value={formData.password}
                   onChange={handleChange}
                   onBlur={handleBlur}

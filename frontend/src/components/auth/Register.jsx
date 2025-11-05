@@ -313,7 +313,6 @@ const Register = () => {
                       id="firstName"
                       name="firstName"
                       type="text"
-                      autoComplete="given-name"
                       value={formData.firstName}
                       onChange={handleChange}
                       className={`block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
@@ -340,7 +339,6 @@ const Register = () => {
                       id="email"
                       name="email"
                       type="text"
-                      autoComplete="email"
                       value={formData.email}
                       onChange={handleChange}
                       className={`block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
@@ -367,7 +365,6 @@ const Register = () => {
                       id="organization"
                       name="organization"
                       type="text"
-                      autoComplete="organization"
                       value={formData.organization}
                       onChange={handleChange}
                       className={`block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
@@ -397,7 +394,6 @@ const Register = () => {
                       id="lastName"
                       name="lastName"
                       type="text"
-                      autoComplete="family-name"
                       value={formData.lastName}
                       onChange={handleChange}
                       className={`block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
@@ -424,7 +420,6 @@ const Register = () => {
                       id="phone"
                       name="phone"
                       type="tel"
-                      autoComplete="tel"
                       value={formData.phone}
                       onChange={handleChange}
                       className={`block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
@@ -485,7 +480,6 @@ const Register = () => {
                     id="password"
                     name="password"
                     type={showPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
                     value={formData.password}
                     onChange={handleChange}
                     className={`block w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
@@ -581,7 +575,6 @@ const Register = () => {
                     id="confirmPassword"
                     name="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     className={`block w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${

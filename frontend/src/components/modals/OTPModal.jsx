@@ -101,7 +101,6 @@ const OTPModal = ({
               className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               placeholder="000000"
               maxLength={6}
-              autoComplete="one-time-code"
               autoFocus
             />
           </div>
