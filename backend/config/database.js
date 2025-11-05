@@ -369,7 +369,6 @@ export const initializeDatabase = async () => {
           notes TEXT,
           status VARCHAR(20) DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive', 'Discharged')),
           created_by INTEGER REFERENCES users(id),
-          referred_by_gp_id INTEGER REFERENCES users(id),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -386,14 +385,6 @@ export const initializeDatabase = async () => {
       console.log('✅ Ensured patients.care_pathway columns');
     } catch (e) {
       console.log('⚠️  Ensuring care_pathway columns:', e.message);
-    }
-
-    // Ensure referred_by_gp_id column exists on patients
-    try {
-      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS referred_by_gp_id INTEGER REFERENCES users(id)`);
-      console.log('✅ Ensured patients.referred_by_gp_id column');
-    } catch (e) {
-      console.log('⚠️  Ensuring referred_by_gp_id column:', e.message);
     }
 
     // Create patient_notes table
@@ -435,10 +426,6 @@ export const initializeDatabase = async () => {
 
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patients_phone ON patients(phone);
-    `);
-
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_patients_referred_by_gp_id ON patients(referred_by_gp_id);
     `);
 
     // Create indexes for patient_notes table

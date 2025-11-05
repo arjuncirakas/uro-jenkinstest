@@ -133,35 +133,6 @@ const migrateDatabase = async () => {
       console.log('✅ Migration 2 already applied');
     }
 
-    // Migration 3: Add referred_by_gp_id column to patients table
-    const migration3 = '2024-01-02-add-referred-by-gp-id';
-    const migration3Exists = await client.query(
-      'SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)',
-      [migration3]
-    );
-
-    if (!migration3Exists.rows[0].exists) {
-      console.log('📋 Applying migration: Add referred_by_gp_id to patients table...');
-      
-      try {
-        await client.query(`
-          ALTER TABLE patients ADD COLUMN IF NOT EXISTS referred_by_gp_id INTEGER REFERENCES users(id);
-        `);
-        console.log('  ✅ Added referred_by_gp_id column to patients table');
-      } catch (err) {
-        console.log(`  ⚠️  Column addition: ${err.message}`);
-      }
-      
-      // Record migration
-      await client.query(
-        'INSERT INTO schema_migrations (version, description) VALUES ($1, $2)',
-        [migration3, 'Add referred_by_gp_id column to patients table']
-      );
-      console.log('✅ Migration 3 completed');
-    } else {
-      console.log('✅ Migration 3 already applied');
-    }
-
     // Create indexes
     console.log('📋 Creating/updating indexes...');
     const indexes = [
@@ -171,8 +142,7 @@ const migrateDatabase = async () => {
       'CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)',
       'CREATE INDEX IF NOT EXISTS idx_otp_verifications_email ON otp_verifications(email)',
       'CREATE INDEX IF NOT EXISTS idx_otp_verifications_user_id ON otp_verifications(user_id)',
-      'CREATE INDEX IF NOT EXISTS idx_otp_verifications_expires_at ON otp_verifications(expires_at)',
-      'CREATE INDEX IF NOT EXISTS idx_patients_referred_by_gp_id ON patients(referred_by_gp_id)'
+      'CREATE INDEX IF NOT EXISTS idx_otp_verifications_expires_at ON otp_verifications(expires_at)'
     ];
 
     for (const indexQuery of indexes) {
