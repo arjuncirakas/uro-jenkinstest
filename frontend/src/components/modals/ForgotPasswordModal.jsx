@@ -206,6 +206,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
                     id="email"
                     type="email"
                     required
+                    autoComplete="off"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors"
@@ -245,6 +246,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
                   id="otp"
                   type="text"
                   required
+                  autoComplete="off"
                   maxLength={6}
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
@@ -310,6 +312,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
                       id="newPassword"
                       type={showPassword ? 'text' : 'password'}
                       required
+                      autoComplete="off"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors"
@@ -338,6 +341,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
                       id="confirmPassword"
                       type={showConfirmPassword ? 'text' : 'password'}
                       required
+                      autoComplete="off"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors"
