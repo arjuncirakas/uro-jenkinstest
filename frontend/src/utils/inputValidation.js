@@ -1,7 +1,10 @@
 /**
  * Frontend Input Validation Utilities
  * Provides real-time validation for form inputs
+ * 
+ * Security: Uses DOMPurify for XSS protection
  */
+import DOMPurify from 'dompurify';
 
 // Validate name fields (only letters, spaces, hyphens, apostrophes)
 export const validateNameInput = (value) => {
@@ -91,15 +94,46 @@ export const validateFutureDate = (dateString) => {
   return date >= today;
 };
 
-// Sanitize input to prevent XSS
+// Sanitize input to prevent XSS - Using DOMPurify for robust protection
 export const sanitizeInput = (value) => {
   if (typeof value !== 'string') return value;
   
-  // Remove potentially dangerous characters
-  return value
-    .replace(/<script[^>]*>.*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, '')
-    .trim();
+  // Use DOMPurify to remove all HTML tags and dangerous content
+  const clean = DOMPurify.sanitize(value, {
+    ALLOWED_TAGS: [], // No HTML tags allowed
+    ALLOWED_ATTR: [], // No attributes allowed
+    KEEP_CONTENT: true, // Keep text content
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false
+  });
+  
+  return clean.trim();
+};
+
+// Sanitize HTML content - For cases where some HTML is allowed
+export const sanitizeHTML = (html, options = {}) => {
+  if (typeof html !== 'string') return html;
+  
+  const defaultOptions = {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 'span'],
+    ALLOWED_ATTR: ['href', 'title', 'class'],
+    ALLOW_DATA_ATTR: false,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    // Security: Block dangerous protocols
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+  };
+  
+  return DOMPurify.sanitize(html, { ...defaultOptions, ...options });
+};
+
+// Sanitize for rich text editors
+export const sanitizeRichText = (richText) => {
+  return DOMPurify.sanitize(richText, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre'],
+    ALLOWED_ATTR: ['href', 'title', 'target', 'rel'],
+    ALLOW_DATA_ATTR: false
+  });
 };
 
 // Validate required field
@@ -253,6 +287,7 @@ export const handleNumericInput = (value, currentValue, onChange) => {
   }
   return false;
 };
+
 
 
 

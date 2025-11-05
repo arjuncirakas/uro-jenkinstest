@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 // Load environment variables
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '../secure.env') });
+dotenv.config({ path: join(__dirname, '../.env') });
 
 /**
  * Token Refresh Diagnostic Tool
@@ -313,4 +313,5 @@ runDiagnostics().catch(error => {
   console.error('Diagnostic tool error:', error);
   process.exit(1);
 });
+
 

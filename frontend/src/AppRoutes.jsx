@@ -1,6 +1,9 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
+// Security
+import ProtectedRoute from './components/ProtectedRoute';
+
 // Layouts
 import UrologistLayout from './layouts/UrologistLayout';
 import GPLayout from './layouts/GPLayout';
@@ -11,6 +14,7 @@ import SuperadminLayout from './layouts/SuperadminLayout';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import SetupPassword from './pages/SetupPassword';
+import Unauthorized from './pages/Unauthorized';
 
 // Urologist Pages
 import UrologistDashboard from './pages/urologist/Dashboard';
@@ -42,13 +46,23 @@ import Doctors from './pages/superadmin/Doctors';
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Auth Routes */}
+      {/* Public Routes - No authentication required */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/setup-password" element={<SetupPassword />} />
+      <Route path="/unauthorized" element={<Unauthorized />} />
 
-      {/* Urologist Routes */}
-      <Route path="/urologist" element={<UrologistLayout />}>
+      {/* Protected Routes - Authentication + Role-based authorization required */}
+      
+      {/* Urologist Routes - Only accessible by urologists */}
+      <Route 
+        path="/urologist" 
+        element={
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <UrologistLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<Navigate to="/urologist/dashboard" replace />} />
         <Route path="dashboard" element={<UrologistDashboard />} />
         <Route path="patients" element={<Patients />} />
@@ -58,8 +72,15 @@ const AppRoutes = () => {
         <Route path="appointments" element={<Appointments />} />
       </Route>
 
-      {/* GP Routes */}
-      <Route path="/gp" element={<GPLayout />}>
+      {/* GP Routes - Only accessible by GPs */}
+      <Route 
+        path="/gp" 
+        element={
+          <ProtectedRoute allowedRoles={['gp']}>
+            <GPLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<Navigate to="/gp/dashboard" replace />} />
         <Route path="dashboard" element={<GPDashboard />} />
         <Route path="referred-patients" element={<GPReferredPatients />} />
@@ -67,8 +88,15 @@ const AppRoutes = () => {
         <Route path="medication" element={<GPMedication />} />
       </Route>
 
-      {/* Nurse Routes */}
-      <Route path="/nurse" element={<NurseLayout />}>
+      {/* Nurse Routes - Only accessible by urology nurses */}
+      <Route 
+        path="/nurse" 
+        element={
+          <ProtectedRoute allowedRoles={['urology_nurse']}>
+            <NurseLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<Navigate to="/nurse/opd-management" replace />} />
         <Route path="opd-management" element={<OPDManagement />} />
         <Route path="investigations" element={<InvestigationManagement />} />
@@ -79,14 +107,21 @@ const AppRoutes = () => {
         <Route path="followup" element={<PostOpFollowup />} />
       </Route>
 
-      {/* Superadmin Routes */}
-      <Route path="/superadmin" element={<SuperadminLayout />}>
+      {/* Superadmin Routes - Only accessible by superadmins */}
+      <Route 
+        path="/superadmin" 
+        element={
+          <ProtectedRoute allowedRoles={['superadmin']}>
+            <SuperadminLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
         <Route path="dashboard" element={<SuperadminDashboard />} />
         <Route path="users" element={<Users />} />
         <Route path="users/new" element={<AddUser />} />
-            <Route path="doctors" element={<Doctors />} />
-            <Route path="departments" element={<Departments />} />
+        <Route path="doctors" element={<Doctors />} />
+        <Route path="departments" element={<Departments />} />
       </Route>
 
       {/* Default Route - Redirect to Login */}

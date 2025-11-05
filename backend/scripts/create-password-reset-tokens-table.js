@@ -2,7 +2,7 @@ import pool from '../config/database.js';
 import dotenv from 'dotenv';
 
 // Load environment variables
-dotenv.config({ path: './secure.env' });
+dotenv.config();
 
 const createPasswordResetTokensTable = async () => {
   const client = await pool.connect();
@@ -55,6 +55,7 @@ const createPasswordResetTokensTable = async () => {
 };
 
 createPasswordResetTokensTable();
+
 
 
 

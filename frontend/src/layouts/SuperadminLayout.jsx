@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
   Users, 
@@ -11,12 +11,36 @@ import {
 } from 'lucide-react';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../services/authService.js';
+import tokenService from '../services/tokenService.js';
 
 const SuperadminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Proactive token refresh - check every 5 minutes
+  useEffect(() => {
+    const refreshTokenIfNeeded = async () => {
+      try {
+        // Check if token needs refresh (within 5 min of expiry)
+        if (tokenService.needsRefresh()) {
+          console.log('🔄 Proactively refreshing token...');
+          await authService.autoRefreshToken();
+        }
+      } catch (error) {
+        console.error('Token refresh check failed:', error);
+      }
+    };
+
+    // Check immediately on mount
+    refreshTokenIfNeeded();
+
+    // Then check every 5 minutes
+    const interval = setInterval(refreshTokenIfNeeded, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [navigate]);
 
   const handleLogout = async () => {
     try {

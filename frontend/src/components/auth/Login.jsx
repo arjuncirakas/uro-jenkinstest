@@ -11,8 +11,8 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [formData, setFormData] = useState({
-    email: 'doctor@hospital.com',
-    password: 'password123'
+    email: '',
+    password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [otpData, setOtpData] = useState({

@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
 // Load environment variables
-dotenv.config({ path: './secure.env' });
+dotenv.config();
 
 // Create SMTP transporter
 const createTransporter = () => {

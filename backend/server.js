@@ -32,26 +32,44 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
     },
   },
-  crossOriginEmbedderPolicy: false,
-  hsts: {
+  strictTransportSecurity: {
     maxAge: 31536000,
     includeSubDomains: true,
     preload: true
   },
-  noSniff: true,
+  contentTypeOptions: 'nosniff',
   xssFilter: true,
-  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "same-site" }
 }));
+
+// Additional security headers middleware
+app.use((req, res, next) => {
+  // Ensure HSTS header is set
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  // Ensure X-Content-Type-Options is set
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Additional security headers
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  next();
+});
 
 // Apply rate limiting to all routes
 app.use(generalLimiter);

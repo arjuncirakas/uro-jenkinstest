@@ -3,7 +3,7 @@ const { Pool } = pkg;
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 
-dotenv.config({ path: './secure.env' });
+dotenv.config();
 
 const pool = new Pool({
   user: process.env.DB_USER,
