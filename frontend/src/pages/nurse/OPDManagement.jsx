@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiEye, FiCalendar, FiClock, FiUser, FiX } from 'react-icons/fi';
+import { FiEye, FiCalendar, FiClock, FiUser } from 'react-icons/fi';
 import { IoChevronForward } from 'react-icons/io5';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import BookInvestigationModal from '../../components/BookInvestigationModal';
@@ -19,10 +19,8 @@ const OPDManagement = () => {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [isNoShowModalOpen, setIsNoShowModalOpen] = useState(false);
-  const [isNoShowConfirmModalOpen, setIsNoShowConfirmModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [selectedNoShowPatient, setSelectedNoShowPatient] = useState(null);
-  const [pendingNoShowAppointment, setPendingNoShowAppointment] = useState(null);
   const [selectedNoShowAppointmentId, setSelectedNoShowAppointmentId] = useState(null);
   const [selectedNoShowAppointmentType, setSelectedNoShowAppointmentType] = useState(null);
   
@@ -445,78 +443,6 @@ const OPDManagement = () => {
     setIsNoShowModalOpen(true);
   };
 
-  // Handle No Show for appointments
-  const handleNoShow = (appointment) => {
-    setPendingNoShowAppointment(appointment);
-    setIsNoShowConfirmModalOpen(true);
-  };
-
-  // Confirm No Show action
-  const confirmNoShow = async () => {
-    if (pendingNoShowAppointment) {
-      try {
-        // Call API to mark appointment as no-show
-        const noShowData = {
-          reason: 'No show',
-          notes: `Patient marked as no-show by nurse`,
-          type: pendingNoShowAppointment.type || activeAppointmentTab
-        };
-        
-        console.log('Sending no-show data:', {
-          appointmentId: pendingNoShowAppointment.id,
-          type: noShowData.type,
-          data: noShowData
-        });
-        
-        const result = await bookingService.markAsNoShow(pendingNoShowAppointment.id, noShowData);
-        
-        if (result.success) {
-          // Close confirmation modal
-          setIsNoShowConfirmModalOpen(false);
-          
-          // Open NoShowPatientModal with the appointment data
-          const appointmentType = pendingNoShowAppointment.type || activeAppointmentTab;
-          const patientData = {
-            id: pendingNoShowAppointment.patient_id,
-            name: pendingNoShowAppointment.patientName,
-            upi: pendingNoShowAppointment.upi,
-            age: pendingNoShowAppointment.age,
-            gender: pendingNoShowAppointment.gender,
-            psa: pendingNoShowAppointment.psa,
-            scheduledDate: pendingNoShowAppointment.appointmentDate,
-            scheduledTime: pendingNoShowAppointment.appointmentTime,
-            appointmentType: appointmentType,
-            doctorName: pendingNoShowAppointment.urologist // Include the doctor name for reschedule pre-selection
-          };
-          
-          setSelectedNoShowPatient(patientData);
-          setSelectedNoShowAppointmentId(pendingNoShowAppointment.id);
-          setSelectedNoShowAppointmentType(appointmentType);
-          setIsNoShowModalOpen(true);
-          setPendingNoShowAppointment(null);
-          
-          // Refresh appointment data to reflect the change
-          refreshAllData();
-          
-          // Show success message (you could add a toast notification here)
-          console.log('Patient successfully marked as no-show:', result.data);
-        } else {
-          console.error('Failed to mark patient as no-show:', result.error);
-          // You could add error handling/notification here
-        }
-      } catch (error) {
-        console.error('Error marking patient as no-show:', error);
-        // You could add error handling/notification here
-      }
-    }
-  };
-
-  // Cancel No Show action
-  const cancelNoShow = () => {
-    setPendingNoShowAppointment(null);
-    setIsNoShowConfirmModalOpen(false);
-  };
-
   const handleNoShowReschedule = async (patientId, rescheduleData) => {
     console.log('Rescheduling no-show patient:', patientId, rescheduleData);
     
@@ -717,14 +643,6 @@ const OPDManagement = () => {
                                 <FiEye className="w-3 h-3" />
                                 <span className="text-xs">View/Edit</span>
                               </button>
-                              <button
-                                onClick={() => handleNoShow(appointment)}
-                                className="px-1.5 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors flex items-center space-x-0.5"
-                                title="Mark as No Show"
-                              >
-                                <FiX className="w-3 h-3" />
-                                <span className="text-xs">No Show</span>
-                              </button>
                             </div>
                           </td>
                         </tr>
@@ -767,7 +685,7 @@ const OPDManagement = () => {
                       No investigation no-show patients
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                       {noShowPatients.filter(patient => patient.appointmentType === 'investigation').map((patient) => (
                         <div 
                           key={patient.id} 
@@ -825,7 +743,7 @@ const OPDManagement = () => {
                       No urologist no-show patients
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                       {noShowPatients.filter(patient => patient.appointmentType === 'urologist').map((patient) => (
                         <div 
                           key={patient.id} 
@@ -991,54 +909,6 @@ const OPDManagement = () => {
           refreshAllData();
         }}
       />
-
-      {/* No Show Confirmation Modal */}
-      {isNoShowConfirmModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Confirm No Show</h3>
-            </div>
-            <div className="px-6 py-4">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <FiX className="w-5 h-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    Mark {pendingNoShowAppointment?.patientName} as No Show?
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    This will transfer the patient to the No Show list
-                  </p>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-md p-3 mb-4">
-                <div className="text-xs text-gray-600">
-                  <div className="font-medium">Appointment Details:</div>
-                  <div>Date: {pendingNoShowAppointment && formatDate(pendingNoShowAppointment.appointmentDate)}</div>
-                  <div>Time: {pendingNoShowAppointment && formatTime(pendingNoShowAppointment.appointmentTime)}</div>
-                  <div>Urologist: {pendingNoShowAppointment?.urologist}</div>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
-              <button
-                onClick={cancelNoShow}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmNoShow}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                Confirm No Show
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* No Show Patient Modal */}
       <NoShowPatientModal 

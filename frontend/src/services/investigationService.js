@@ -149,6 +149,21 @@ export const investigationService = {
     }
   },
 
+  // Delete investigation request
+  deleteInvestigationRequest: async (requestId) => {
+    try {
+      const response = await apiClient.delete(`/investigation-requests/${requestId}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Error deleting investigation request:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
+  },
+
   // View/download investigation file
   viewFile: async (filePath) => {
     if (filePath) {

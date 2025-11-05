@@ -20,6 +20,7 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { initializeNotificationsTable } from './services/notificationService.js';
 import { corsOptions, validateCorsConfig, corsLoggingMiddleware } from './middleware/corsConfig.js';
+import { initAutoNoShowScheduler } from './schedulers/autoNoShowScheduler.js';
 
 // Load environment variables
 dotenv.config();
@@ -53,23 +54,7 @@ const getAllowedCSPOrigins = () => {
 
 // Security middleware with environment-aware CSP
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: getAllowedCSPOrigins(),
-      fontSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com", "data:"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-      upgradeInsecureRequests: [],
-    },
-  },
+  contentSecurityPolicy: false,
   strictTransportSecurity: {
     maxAge: 31536000,
     includeSubDomains: true,
@@ -211,6 +196,9 @@ const startServer = async () => {
     
     // Initialize notifications table
     await initializeNotificationsTable();
+    
+    // Initialize automatic no-show scheduler
+    initAutoNoShowScheduler();
 
     // Start the server
     app.listen(PORT, () => {
@@ -219,6 +207,7 @@ const startServer = async () => {
       console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
       console.log(`📝 API Documentation: http://localhost:${PORT}/api`);
       console.log(`✅ Token refresh endpoint: http://localhost:${PORT}/api/auth/refresh-token`);
+      console.log(`⏰ Auto no-show scheduler: Active (runs every hour)`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

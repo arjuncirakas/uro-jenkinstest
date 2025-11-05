@@ -763,6 +763,55 @@ export const getInvestigationRequests = async (req, res) => {
   }
 };
 
+// Delete investigation request
+export const deleteInvestigationRequest = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.id;
+
+    // Check if request exists
+    const requestCheck = await client.query(
+      'SELECT id, created_by FROM investigation_bookings WHERE id = $1',
+      [requestId]
+    );
+
+    if (requestCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Investigation request not found'
+      });
+    }
+
+    // Check if user is the creator (or admin/superadmin)
+    if (requestCheck.rows[0].created_by !== userId && 
+        !['superadmin', 'urologist'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete your own investigation requests'
+      });
+    }
+
+    // Delete from database
+    await client.query('DELETE FROM investigation_bookings WHERE id = $1', [requestId]);
+
+    res.json({
+      success: true,
+      message: 'Investigation request deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete investigation request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
 // Serve investigation files
 export const serveFile = async (req, res) => {
   try {

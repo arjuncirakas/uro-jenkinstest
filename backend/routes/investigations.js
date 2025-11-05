@@ -7,6 +7,7 @@ import {
   deleteInvestigationResult,
   createInvestigationRequest,
   getInvestigationRequests,
+  deleteInvestigationRequest,
   upload,
   serveFile
 } from '../controllers/investigationController.js';
@@ -31,6 +32,14 @@ router.get('/patients/:patientId/investigation-requests',
   authenticateToken,
   requireRole(['urologist', 'urology_nurse', 'gp']),
   getInvestigationRequests
+);
+
+// Delete investigation request
+router.delete('/investigation-requests/:requestId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'urology_nurse']),
+  deleteInvestigationRequest
 );
 
 // Add PSA result for a patient

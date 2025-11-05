@@ -664,6 +664,37 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     }
   };
 
+  // Handle deleting investigation request
+  const handleDeleteInvestigationRequest = async (requestId) => {
+    if (!confirm('Are you sure you want to delete this investigation request? This action cannot be undone.')) {
+      return;
+    }
+    
+    setDeletingInvestigation(requestId);
+    
+    try {
+      const result = await investigationService.deleteInvestigationRequest(requestId);
+      
+      if (result.success) {
+        // Remove from investigation requests list
+        setInvestigationRequests(prev => prev.filter(request => request.id !== requestId));
+        
+        // Show success message
+        setSuccessModalTitle('Investigation Request Deleted!');
+        setSuccessModalMessage('The investigation request has been successfully removed.');
+        setIsSuccessModalOpen(true);
+      } else {
+        setRequestsError(result.error || 'Failed to delete investigation request');
+        console.error('Error deleting investigation request:', result.error);
+      }
+    } catch (error) {
+      setRequestsError('Failed to delete investigation request');
+      console.error('Error deleting investigation request:', error);
+    } finally {
+      setDeletingInvestigation(null);
+    }
+  };
+
   // Handle Escape key with unsaved changes check
   const [showConfirmModal, closeConfirmModal] = useEscapeKey(onClose, isOpen, hasUnsavedChanges, handleSaveChanges);
 
@@ -727,109 +758,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     };
   })();
 
-  // Latest other test results - conditional based on patient category
-  const latestOtherTests = (() => {
-    // For new patients, show no other test results (only PSA)
-    if (patient?.category === 'new') {
-      return [];
-    }
-    
-    // For existing patients (surgical pathway, post-op followup), show full data
-    return [
-      {
-        id: 1,
-        testName: 'MRI Prostate',
-        date: '2024-08-15',
-        result: 'PI-RADS 3',
-        referenceRange: 'PI-RADS 1-5',
-        status: 'Intermediate',
-        statusColor: 'yellow',
-        notes: 'Intermediate suspicion lesion in peripheral zone. Consider biopsy.'
-      },
-      {
-        id: 2,
-        testName: 'Biopsy - Prostate',
-        date: '2024-08-10',
-        result: 'Gleason 3+3=6',
-        referenceRange: 'Gleason 6-10',
-        status: 'Low Risk',
-        statusColor: 'green',
-        notes: 'Low-grade prostate cancer. 2 of 12 cores positive.'
-      },
-      {
-        id: 3,
-        testName: 'TRUS (Transrectal Ultrasound)',
-        date: '2024-08-05',
-        result: 'Volume: 45cc',
-        referenceRange: 'N/A',
-        status: 'Normal',
-        statusColor: 'green',
-        notes: 'Prostate volume within normal range. No suspicious lesions detected.'
-      }
-    ];
-  })();
-
-  // Complete other tests history for modal - conditional based on patient category
-  const otherTestsHistory = (() => {
-    // For new patients, show no other test results (only PSA)
-    if (patient?.category === 'new') {
-      return [];
-    }
-    
-    // For existing patients (surgical pathway, post-op followup), show full history
-    return [
-      {
-        id: 1,
-        testName: 'MRI Prostate',
-        date: '2024-08-15',
-        result: 'PI-RADS 3',
-        referenceRange: 'PI-RADS 1-5',
-        status: 'Intermediate',
-        statusColor: 'yellow',
-        notes: 'Intermediate suspicion lesion in peripheral zone. Consider biopsy.'
-      },
-      {
-        id: 2,
-        testName: 'Biopsy - Prostate',
-        date: '2024-08-10',
-        result: 'Gleason 3+3=6',
-        referenceRange: 'Gleason 6-10',
-        status: 'Low Risk',
-        statusColor: 'green',
-        notes: 'Low-grade prostate cancer. 2 of 12 cores positive.'
-      },
-      {
-        id: 3,
-        testName: 'TRUS (Transrectal Ultrasound)',
-        date: '2024-08-05',
-        result: 'Volume: 45cc',
-        referenceRange: 'N/A',
-        status: 'Normal',
-        statusColor: 'green',
-        notes: 'Prostate volume within normal range. No suspicious lesions detected.'
-      },
-      {
-        id: 4,
-        testName: 'CT Scan - Pelvis',
-        date: '2024-07-20',
-        result: 'Normal',
-        referenceRange: 'N/A',
-        status: 'Normal',
-        statusColor: 'green',
-        notes: 'No evidence of lymph node enlargement or distant metastases.'
-      },
-      {
-        id: 5,
-        testName: 'Urinalysis',
-        date: '2024-07-15',
-        result: 'Normal',
-        referenceRange: 'N/A',
-        status: 'Normal',
-        statusColor: 'green',
-        notes: 'No signs of infection or blood in urine.'
-      }
-    ];
-  })();
+  // Note: Dummy test data removed - all test results are now fetched from API
+  // PSA results are stored in psaResults state
+  // Other test results are stored in otherTestResults state
+  // Investigation requests are stored in investigationRequests state
 
   const getStatusColor = (status) => {
     switch (status.toLowerCase()) {
@@ -947,16 +879,16 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-2xl font-bold">{patient.fullName || patient.name || 'Unknown Patient'}</h2>
+                <h2 className="text-2xl font-bold">{patient.patientName || patient.fullName || patient.name || 'Unknown Patient'}</h2>
                 <div className="text-right">
                   <div className="text-sm font-medium text-teal-800">Referred by</div>
-                  <div className="text-sm text-teal-700">{patient.referringDepartment || 'Dr. Sarah Johnson (GP)'}</div>
+                  <div className="text-sm text-teal-700">{patient.referringDepartment || patient.referringDoctor || 'Not Specified'}</div>
                 </div>
               </div>
               <div className="flex items-center space-x-4 text-teal-700">
-                <span>{patient.age || 'Unknown'}, {patient.gender || 'Unknown'}</span>
+                <span>{patient.age || '0'}, {patient.gender || 'Unknown'}</span>
                 <span>UPI: {patient.upi || 'Unknown'}</span>
-                <span>Phone: {patient.phone || 'Unknown'}</span>
+                <span>Phone: {patient.phone || patient.phoneNumber || 'Unknown'}</span>
               </div>
             </div>
             <button
@@ -1414,80 +1346,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           Retry
                         </button>
                       </div>
-                    ) : (investigationRequests.length > 0 || otherTestResults.length > 0) ? (
+                    ) : otherTestResults.length > 0 ? (
                       <div className="space-y-4">
-                        {/* Investigation Requests */}
-                        {investigationRequests.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-semibold text-purple-700 mb-3 flex items-center">
-                              <IoCalendar className="mr-2" />
-                              Pending Investigations
-                            </h4>
-                            {investigationRequests.map((request) => {
-                              const getRequestStatusColor = (status) => {
-                                switch (status?.toLowerCase()) {
-                                  case 'urgent':
-                                    return 'bg-red-100 text-red-700 border-red-200';
-                                  case 'scheduled':
-                                    return 'bg-blue-100 text-blue-700 border-blue-200';
-                                  case 'completed':
-                                    return 'bg-green-100 text-green-700 border-green-200';
-                                  case 'pending':
-                                    return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-                                  default:
-                                    return 'bg-gray-100 text-gray-700 border-gray-200';
-                                }
-                              };
-
-                              return (
-                                <div key={`request-${request.id}`} className="bg-purple-50 rounded-lg p-4 border border-purple-200 mb-3">
-                                  <div className="flex items-start justify-between mb-2">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <h5 className="font-semibold text-gray-900">{request.investigationName || request.investigation_name}</h5>
-                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${getRequestStatusColor(request.status)}`}>
-                                          {request.status?.toUpperCase() || 'PENDING'}
-                                        </span>
-                                      </div>
-                                      <div className="text-xs text-gray-600 mt-1">
-                                        <span className="font-medium">Scheduled:</span> {request.formattedDate || new Date(request.scheduledDate || request.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                      </div>
-                                      <div className="text-xs text-gray-600">
-                                        <span className="font-medium">Type:</span> <span className="capitalize">{request.investigationType || request.investigation_type}</span>
-                                      </div>
-                                      {request.notes && (
-                                        <div className="mt-2 text-xs text-gray-600">
-                                          <span className="font-medium">Notes:</span> {request.notes}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <button
-                                      onClick={() => {
-                                        console.log('Add Results clicked for request:', request);
-                                        // Will add modal here later
-                                      }}
-                                      className="ml-3 px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors font-medium whitespace-nowrap flex items-center gap-1"
-                                    >
-                                      <Upload className="w-3 h-3" />
-                                      Add Results
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* Completed Test Results */}
-                        {otherTestResults.length > 0 && (
-                          <div>
-                            {investigationRequests.length > 0 && (
-                              <h4 className="text-sm font-semibold text-teal-700 mb-3 flex items-center mt-6">
-                                <IoDocument className="mr-2" />
-                                Completed Results
-                              </h4>
-                            )}
-                            {otherTestResults.map((test) => (
+                        {/* Only Show Completed Test Results - Pending investigations and NO_SHOW entries are excluded */}
+                        {otherTestResults.map((test) => (
                               <div key={test.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
@@ -1571,8 +1433,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             )}
                               </div>
                             ))}
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="text-center py-8">
@@ -1580,12 +1440,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           <IoDocument className="text-xl text-gray-400" />
                         </div>
                         <h4 className="text-base font-medium text-gray-900 mb-1">No Test Results</h4>
-                        <p className="text-gray-500 text-sm">No investigation requests or test results have been recorded yet.</p>
+                        <p className="text-gray-500 text-sm">No completed test results have been recorded yet.</p>
                         <button
                           onClick={() => setIsAddTestModalOpen(true)}
                           className="mt-3 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
                         >
-                          Add First Test Result
+                          Add Test Result
                         </button>
                       </div>
                     )}
@@ -1788,11 +1648,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     <div>
                       <p className="text-xs font-medium text-gray-500 uppercase">Patient Name</p>
-                      <p className="text-sm font-semibold text-gray-900 mt-1">{patient.name}</p>
+                      <p className="text-sm font-semibold text-gray-900 mt-1">{patient.patientName || patient.name}</p>
                     </div>
                     <div>
                       <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
-                      <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn}</p>
+                      <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi}</p>
                     </div>
                     <div>
                       <p className="text-xs font-medium text-gray-500 uppercase">Admission Date</p>
@@ -2067,7 +1927,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold">PSA History</h2>
-                  <p className="text-teal-100 mt-1">PSA monitoring history for {patient.name}</p>
+                  <p className="text-teal-100 mt-1">PSA monitoring history for {patient.patientName || patient.name}</p>
                 </div>
                 <button
                   onClick={() => setIsPSAHistoryModalOpen(false)}
@@ -2334,7 +2194,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                   <IoClose className="text-xl" />
                 </button>
               </div>
-              <p className="text-teal-100 mt-1">for {patient.name}</p>
+              <p className="text-teal-100 mt-1">for {patient.patientName || patient.name}</p>
             </div>
 
             {/* Modal Content */}
@@ -2552,8 +2412,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs text-gray-500 uppercase font-medium mb-1">Patient</p>
-                    <p className="text-sm font-semibold text-gray-900">{patient.name}</p>
-                    <p className="text-xs text-gray-600">ID: {patient.patientId}</p>
+                    <p className="text-sm font-semibold text-gray-900">{patient.patientName || patient.name}</p>
+                    <p className="text-xs text-gray-600">ID: {patient.patientId || patient.upi}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase font-medium mb-1 text-right">Transferring to</p>
@@ -3309,10 +3169,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                     <h6 className="font-medium text-gray-900 mb-2">Patient Information</h6>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="font-medium">Name:</span> {patient.name}
+                        <span className="font-medium">Name:</span> {patient.patientName || patient.name}
                       </div>
                       <div>
-                        <span className="font-medium">ID:</span> {patient.patientId}
+                        <span className="font-medium">ID:</span> {patient.patientId || patient.upi}
                       </div>
                     </div>
                   </div>
