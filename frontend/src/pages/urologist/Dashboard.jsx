@@ -1161,6 +1161,11 @@ const UrologistDashboard = () => {
                         <h3 className="font-semibold text-gray-900 text-sm">Next MDT Discussion</h3>
                         <BsCalendar3 className="text-teal-600" />
                       </div>
+                      {mdtSchedules[0].patientName && (
+                        <div className="text-sm font-semibold text-teal-900 mb-2">
+                          {mdtSchedules[0].patientName}
+                        </div>
+                      )}
                       <div className="text-sm text-gray-700 font-medium mb-1">
                         {formatMdtDate(mdtSchedules[0].date)} at {mdtSchedules[0].time}
                       </div>
@@ -1260,6 +1265,11 @@ const UrologistDashboard = () => {
                                   {schedule.department}
                                 </span>
                               </div>
+                              {schedule.patientName && (
+                                <div className="text-xs font-semibold text-gray-800 mb-1">
+                                  {schedule.patientName}
+                                </div>
+                              )}
                               <div className="text-xs text-gray-600">
                                 {schedule.time} • {schedule.location}
                               </div>

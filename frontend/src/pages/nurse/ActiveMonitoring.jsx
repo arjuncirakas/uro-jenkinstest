@@ -37,20 +37,37 @@ const ActiveMonitoring = () => {
         });
         
         // Transform to match expected format
-        const transformedPatients = activeMonitoringPatients.map(patient => ({
-          id: patient.id,
-          name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
-          upi: patient.upi,
-          age: patient.age,
-          gender: patient.gender,
-          pathway: patient.carePathway || patient.care_pathway || patient.pathway || 'Active Monitoring',
-          latestPsa: patient.initialPSA || patient.initial_psa || '-',
-          nextAppointment: patient.nextAppointment || 'TBD',
-          monitoringStatus: patient.monitoringStatus || patient.monitoring_status || 'Stable',
-          lastCheckUp: patient.lastCheckUp || patient.last_check_up || '-',
-          currentDoctor: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
-          appointmentTime: patient.appointmentTime || patient.appointment_time || '-'
-        }));
+        const transformedPatients = activeMonitoringPatients.map(patient => {
+          // Format the next appointment date for display
+          const formatAppointmentDate = (dateStr) => {
+            if (!dateStr) return 'TBD';
+            try {
+              const date = new Date(dateStr);
+              return date.toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric' 
+              });
+            } catch {
+              return 'TBD';
+            }
+          };
+          
+          return {
+            id: patient.id,
+            name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+            upi: patient.upi,
+            age: patient.age,
+            gender: patient.gender,
+            pathway: patient.carePathway || patient.care_pathway || patient.pathway || 'Active Monitoring',
+            latestPsa: patient.initialPSA || patient.initial_psa || '-',
+            nextAppointment: patient.nextReview || formatAppointmentDate(patient.nextAppointmentDate) || 'TBD',
+            monitoringStatus: patient.monitoringStatus || patient.monitoring_status || 'Stable',
+            lastCheckUp: patient.lastCheckUp || patient.last_check_up || '-',
+            currentDoctor: patient.nextAppointmentUrologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
+            appointmentTime: patient.nextAppointmentTime || patient.appointment_time || '-'
+          };
+        });
         
         setMonitoringPatients(transformedPatients);
       } else {
@@ -105,10 +122,15 @@ const ActiveMonitoring = () => {
 
   // Get PSA styling and dot color
   const getPsaStyle = (psa) => {
-    if (psa > 4.0) {
-      return { textColor: 'text-orange-600', dotColor: 'bg-orange-500' };
+    const psaValue = parseFloat(psa);
+    if (isNaN(psaValue)) {
+      return { textColor: 'text-gray-900', dotColor: 'bg-gray-400' };
+    }
+    
+    if (psaValue > 4.0) {
+      return { textColor: 'text-gray-900', dotColor: 'bg-red-500' };
     } else {
-      return { textColor: 'text-green-600', dotColor: 'bg-green-500' };
+      return { textColor: 'text-gray-900', dotColor: 'bg-green-500' };
     }
   };
 
@@ -209,8 +231,8 @@ const ActiveMonitoring = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-2 h-2 rounded-full ${psaStyle.dotColor}`}></div>
+                          <div className="flex items-center">
+                            <div className={`w-2 h-2 ${psaStyle.dotColor} rounded-full mr-2`}></div>
                             <span className={`text-sm font-medium ${psaStyle.textColor}`}>
                               {patient.latestPsa} ng/mL
                             </span>

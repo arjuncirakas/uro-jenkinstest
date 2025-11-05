@@ -73,10 +73,15 @@ const PostOpFollowup = () => {
 
   // Get PSA styling and dot color
   const getPsaStyle = (psa) => {
-    if (psa > 4.0) {
-      return { textColor: 'text-orange-600', dotColor: 'bg-orange-500' };
+    const psaValue = parseFloat(psa);
+    if (isNaN(psaValue)) {
+      return { textColor: 'text-gray-900', dotColor: 'bg-gray-400' };
+    }
+    
+    if (psaValue > 4.0) {
+      return { textColor: 'text-gray-900', dotColor: 'bg-red-500' };
     } else {
-      return { textColor: 'text-green-600', dotColor: 'bg-green-500' };
+      return { textColor: 'text-gray-900', dotColor: 'bg-green-500' };
     }
   };
 

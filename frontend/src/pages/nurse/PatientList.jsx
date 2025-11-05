@@ -70,6 +70,21 @@ const PatientList = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
+  // Get PSA indicator color based on threshold
+  const getPSAColor = (psaValue) => {
+    const psa = parseFloat(psaValue);
+    if (isNaN(psa)) {
+      return { textColor: 'text-gray-900', dotColor: 'bg-gray-400' };
+    }
+    
+    // PSA threshold: >4 ng/mL is typically considered elevated
+    if (psa > 4) {
+      return { textColor: 'text-gray-900', dotColor: 'bg-red-500' }; // High risk - above threshold
+    } else {
+      return { textColor: 'text-gray-900', dotColor: 'bg-green-500' }; // Normal - below threshold
+    }
+  };
+
   // Determine patient pathway based on data from API
   const getPatientPathway = (patient) => {
     // Use the actual care pathway from the API
@@ -82,11 +97,15 @@ const PatientList = () => {
       case 'OPD Queue':
         return 'bg-blue-100 text-blue-800';
       case 'Active Surveillance':
+      case 'Active Monitoring':
         return 'bg-green-100 text-green-800';
       case 'Surgical Pathway':
         return 'bg-orange-100 text-orange-800';
       case 'Post-Op Follow-up':
         return 'bg-purple-100 text-purple-800';
+      case 'Medications':
+      case 'Medication':
+        return 'bg-indigo-100 text-indigo-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -243,18 +262,32 @@ const PatientList = () => {
                         </td>
                         <td className="py-4 px-4 text-gray-700 text-sm">
                           <div className="flex items-center">
-                            <div className="w-2 h-2 bg-orange-500 rounded-full mr-2"></div>
-                            <span>{patient.initialPSA || 0} ng/mL</span>
+                            <div className={`w-2 h-2 ${getPSAColor(patient.initialPSA).dotColor} rounded-full mr-2`}></div>
+                            <span className={getPSAColor(patient.initialPSA).textColor}>{patient.initialPSA || 0} ng/mL</span>
                           </div>
                         </td>
                         <td className="py-4 px-4 text-center">
-                          <button 
-                            onClick={() => handleUpdateAppointment(patient)}
-                            className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
-                          >
-                            <FiCalendar className="w-3 h-3" />
-                            <span>Book Appointment</span>
-                          </button>
+                          {patientPathway.toLowerCase() === 'medications' || 
+                           patientPathway.toLowerCase() === 'medication' ? (
+                            <span className="text-gray-400 text-xs">—</span>
+                          ) : patientPathway.toLowerCase() === 'active surveillance' || 
+                             patientPathway.toLowerCase() === 'active monitoring' ? (
+                            <button 
+                              onClick={() => handleUpdateAppointment(patient)}
+                              className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
+                            >
+                              <FiCalendar className="w-3 h-3" />
+                              <span>Update Appointment</span>
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => handleUpdateAppointment(patient)}
+                              className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
+                            >
+                              <FiCalendar className="w-3 h-3" />
+                              <span>Book Appointment</span>
+                            </button>
+                          )}
                         </td>
                         <td className="py-4 px-4 text-center">
                           <button 

@@ -10,6 +10,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
   const [selectedDoctorId, setSelectedDoctorId] = useState(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
+  const [surgeryType, setSurgeryType] = useState('');
   const [notes, setNotes] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [urologists, setUrologists] = useState([]);
@@ -74,11 +75,13 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     const originalDoctor = patient.surgeon || patient.assignedUrologist || patient.currentDoctor || '';
     const originalDate = patient.surgeryDate && patient.surgeryDate !== 'TBD' ? patient.surgeryDate : '';
     const originalTime = patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '';
+    const originalSurgeryType = patient.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '';
     const originalNotes = patient.notes || patient.appointmentNotes || '';
     
     return selectedDoctor !== originalDoctor ||
            selectedDate !== originalDate ||
            selectedTime !== originalTime ||
+           surgeryType !== originalSurgeryType ||
            notes !== originalNotes;
   };
 
@@ -129,10 +132,12 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       if (patient.hasSurgeryAppointment && patient.surgeryDate && patient.surgeryDate !== 'TBD') {
         setSelectedDate(patient.surgeryDate);
         setSelectedTime(patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '');
+        setSurgeryType(patient.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '');
       } else {
         // Default to today's date
         const today = new Date().toISOString().split('T')[0];
         setSelectedDate(today);
+        setSurgeryType('');
       }
       
       setNotes(patient.notes || '');
@@ -162,6 +167,12 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       return;
     }
 
+    // Validate surgery type for surgery appointments
+    if (appointmentType === 'surgery' && !surgeryType) {
+      setError('Please specify the surgery type');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -174,6 +185,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             newDate: selectedDate,
             newTime: selectedTime,
             newDoctorId: selectedDoctorId,
+            surgeryType: appointmentType === 'surgery' ? surgeryType : null,
             notes: notes
           }
         );
@@ -195,6 +207,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
           appointmentTime: selectedTime,
           urologistId: selectedDoctorId,
           urologistName: selectedDoctor,
+          surgeryType: appointmentType === 'surgery' ? surgeryType : null,
           notes: notes,
           appointmentType: appointmentType === 'surgery' ? 'surgery' : 'urologist'
         });
@@ -249,6 +262,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     }
     setSelectedDate(patient?.surgeryDate && patient.surgeryDate !== 'TBD' ? patient.surgeryDate : '');
     setSelectedTime(patient?.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '');
+    setSurgeryType(patient?.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '');
     setNotes(patient?.notes || '');
   };
 
@@ -283,7 +297,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       document.removeEventListener('keydown', handleKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, selectedDoctor, selectedDate, selectedTime, notes]);
+  }, [isOpen, selectedDoctor, selectedDate, selectedTime, surgeryType, notes]);
 
   if (!isOpen) return null;
 
@@ -386,6 +400,44 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               </div>
             </div>
           </div>
+
+          {/* Surgery Type Field (only for surgery appointments) */}
+          {appointmentType === 'surgery' && (
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                <FiFileText className="w-4 h-4 text-teal-600" />
+                Surgery Type
+                <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={surgeryType}
+                  onChange={(e) => setSurgeryType(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 appearance-none text-gray-900"
+                  required
+                >
+                  <option value="">Select surgery type...</option>
+                  <option value="Robot-assisted Laparoscopic Prostatectomy">Robot-assisted Laparoscopic Prostatectomy</option>
+                  <option value="Radical Prostatectomy">Radical Prostatectomy</option>
+                  <option value="Transurethral Resection of Prostate (TURP)">Transurethral Resection of Prostate (TURP)</option>
+                  <option value="Laparoscopic Partial Nephrectomy">Laparoscopic Partial Nephrectomy</option>
+                  <option value="Radical Nephrectomy">Radical Nephrectomy</option>
+                  <option value="Cystoscopy with Biopsy">Cystoscopy with Biopsy</option>
+                  <option value="Transurethral Resection of Bladder Tumor (TURBT)">Transurethral Resection of Bladder Tumor (TURBT)</option>
+                  <option value="Partial Cystectomy">Partial Cystectomy</option>
+                  <option value="Radical Cystectomy">Radical Cystectomy</option>
+                  <option value="Ureteroscopy">Ureteroscopy</option>
+                  <option value="Percutaneous Nephrolithotomy (PCNL)">Percutaneous Nephrolithotomy (PCNL)</option>
+                  <option value="Other">Other</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Date and Time Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

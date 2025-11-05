@@ -436,6 +436,7 @@ export const initializeDatabase = async () => {
           appointment_time TIME NOT NULL,
           urologist_id INTEGER REFERENCES users(id),
           urologist_name VARCHAR(100),
+          surgery_type VARCHAR(200),
           status VARCHAR(50) DEFAULT 'scheduled',
           notes TEXT,
           created_by INTEGER REFERENCES users(id),
@@ -446,6 +447,16 @@ export const initializeDatabase = async () => {
       console.log('✅ Appointments table created successfully');
     } else {
       console.log('✅ Appointments table already exists');
+      
+      // Add surgery_type column if it doesn't exist
+      try {
+        await client.query(`
+          ALTER TABLE appointments ADD COLUMN IF NOT EXISTS surgery_type VARCHAR(200);
+        `);
+        console.log('✅ Added surgery_type column to appointments table');
+      } catch (err) {
+        console.log(`⚠️  Surgery_type column might already exist: ${err.message}`);
+      }
     }
 
     // Create investigation_bookings table

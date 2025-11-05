@@ -12,7 +12,8 @@ export const bookUrologistAppointment = async (req, res) => {
       urologistId, 
       urologistName, 
       notes,
-      appointmentType 
+      appointmentType,
+      surgeryType 
     } = req.body;
     const userId = req.user.id;
     const userRole = req.user.role;
@@ -22,6 +23,14 @@ export const bookUrologistAppointment = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Appointment date, time, urologist ID, and urologist name are required'
+      });
+    }
+
+    // Validate surgery type if appointment is for surgery
+    if (appointmentType === 'surgery' && !surgeryType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Surgery type is required for surgery appointments'
       });
     }
 
@@ -73,8 +82,8 @@ export const bookUrologistAppointment = async (req, res) => {
     const appointmentQuery = await client.query(
       `INSERT INTO appointments (
         patient_id, appointment_type, appointment_date, appointment_time, 
-        urologist_id, urologist_name, notes, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        urologist_id, urologist_name, surgery_type, notes, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *`,
       [
         patientId, 
@@ -83,6 +92,7 @@ export const bookUrologistAppointment = async (req, res) => {
         appointmentTime, 
         urologistId, 
         urologistName, 
+        surgeryType || null, 
         notes || '', 
         userId
       ]
@@ -110,6 +120,7 @@ export const bookUrologistAppointment = async (req, res) => {
         appointmentTime: newAppointment.appointment_time,
         urologistId: newAppointment.urologist_id,
         urologistName: newAppointment.urologist_name,
+        surgeryType: newAppointment.surgery_type,
         status: newAppointment.status,
         notes: newAppointment.notes,
         createdAt: newAppointment.created_at,
@@ -293,6 +304,7 @@ export const getPatientAppointments = async (req, res) => {
         appointment_time,
         urologist_id,
         urologist_name,
+        surgery_type,
         status,
         notes,
         created_at,
@@ -320,6 +332,7 @@ export const getPatientAppointments = async (req, res) => {
       appointmentTime: row.appointment_time,
       urologistId: row.urologist_id,
       urologistName: row.urologist_name,
+      surgeryType: row.surgery_type,
       status: row.status,
       notes: row.notes,
       createdAt: row.created_at,
@@ -1279,7 +1292,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
   
   try {
     const { appointmentId } = req.params;
-    const { newDate, newTime, newDoctorId, appointmentType } = req.body;
+    const { newDate, newTime, newDoctorId, appointmentType, surgeryType } = req.body;
 
     if (!newDate || !newTime || !newDoctorId) {
       return res.status(400).json({
@@ -1386,13 +1399,14 @@ export const rescheduleNoShowAppointment = async (req, res) => {
               appointment_time = $2, 
               urologist_id = $3,
               urologist_name = $4,
+              surgery_type = $5,
               status = 'scheduled',
-              notes = COALESCE(notes, '') || '\n' || $5,
+              notes = COALESCE(notes, '') || '\n' || $6,
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $6
+          WHERE id = $7
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, newDoctorId, doctorName, notesText, appointmentId];
+        updateParams = [newDate, newTime, newDoctorId, doctorName, surgeryType || null, notesText, appointmentId];
       } else {
         updateQuery = `
           UPDATE appointments 
@@ -1400,12 +1414,13 @@ export const rescheduleNoShowAppointment = async (req, res) => {
               appointment_time = $2, 
               urologist_id = $3,
               urologist_name = $4,
+              surgery_type = $5,
               status = 'scheduled',
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $5
+          WHERE id = $6
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, newDoctorId, doctorName, appointmentId];
+        updateParams = [newDate, newTime, newDoctorId, doctorName, surgeryType || null, appointmentId];
       }
       
       const updateResult = await client.query(updateQuery, updateParams);

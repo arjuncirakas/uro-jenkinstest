@@ -64,9 +64,9 @@ const Surgery = () => {
                 upi: patient.upi,
                 age: patient.age,
                 gender: patient.gender,
-                surgeryType: surgeryAppointment?.surgeryType || patient.surgeryType || patient.surgery_type || 'TBD',
-                surgeryDate: surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || 'TBD',
-                surgeryTime: surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || 'TBD',
+                surgeryType: surgeryAppointment?.surgeryType || patient.surgeryType || patient.surgery_type || null,
+                surgeryDate: surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || null,
+                surgeryTime: surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || null,
                 surgeon: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 riskCategory: patient.priority === 'urgent' || patient.priority === 'high' ? 'High Risk' : 'Normal',
                 hasSurgeryAppointment: hasSurgeryAppointment,
@@ -81,9 +81,9 @@ const Surgery = () => {
                 upi: patient.upi,
                 age: patient.age,
                 gender: patient.gender,
-                surgeryType: patient.surgeryType || patient.surgery_type || 'TBD',
-                surgeryDate: patient.surgeryDate || patient.surgery_date || 'TBD',
-                surgeryTime: patient.surgeryTime || patient.surgery_time || 'TBD',
+                surgeryType: patient.surgeryType || patient.surgery_type || null,
+                surgeryDate: patient.surgeryDate || patient.surgery_date || null,
+                surgeryTime: patient.surgeryTime || patient.surgery_time || null,
                 surgeon: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 riskCategory: patient.priority === 'urgent' || patient.priority === 'high' ? 'High Risk' : 'Normal',
                 hasSurgeryAppointment: false,
@@ -112,6 +112,48 @@ const Surgery = () => {
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    
+    try {
+      const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) return '';
+      
+      // Format as "Nov 10, 2025"
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return '';
+    }
+  };
+
+  // Format time for display
+  const formatTime = (timeString) => {
+    if (!timeString) return '';
+    
+    try {
+      // Handle different time formats (HH:MM:SS, HH:MM)
+      const timeParts = timeString.split(':');
+      if (timeParts.length < 2) return '';
+      
+      let hours = parseInt(timeParts[0]);
+      const minutes = timeParts[1];
+      
+      // Convert to 12-hour format with AM/PM
+      const period = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12; // Convert 0 to 12 for midnight, 13-23 to 1-11
+      
+      return `${hours}:${minutes} ${period}`;
+    } catch (error) {
+      return '';
+    }
   };
 
   // Get risk category styling
@@ -208,13 +250,24 @@ const Surgery = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-gray-700 text-sm">
-                          <div className="font-medium">{patient.surgeryType}</div>
-                          <div className="text-xs text-gray-600">
-                            {patient.surgeryDate} at {patient.surgeryTime}
+                          <div className="font-medium text-gray-900">
+                            {patient.surgeryType || ''}
                           </div>
-                          <div className="text-xs text-gray-600 mt-1">
-                            Surgeon: {patient.surgeon}
-                          </div>
+                          {(formatDate(patient.surgeryDate) || formatTime(patient.surgeryTime)) && (
+                            <div className="text-xs text-gray-600 mt-1">
+                              {formatDate(patient.surgeryDate) && (
+                                <span className="font-medium">{formatDate(patient.surgeryDate)}</span>
+                              )}
+                              {formatTime(patient.surgeryTime) && (
+                                <> at <span className="font-medium">{formatTime(patient.surgeryTime)}</span></>
+                              )}
+                            </div>
+                          )}
+                          {patient.surgeon && patient.surgeon !== 'Unassigned' && (
+                            <div className="text-xs text-gray-600 mt-1">
+                              <span className="text-gray-500">Surgeon:</span> <span className="font-medium text-gray-700">{patient.surgeon}</span>
+                            </div>
+                          )}
                         </td>
                         <td className="py-4 px-4">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getRiskStyle(patient.riskCategory)}`}>
@@ -233,10 +286,10 @@ const Surgery = () => {
                         <td className="py-4 px-4">
                           <button 
                             onClick={() => handleUpdateAppointment(patient)}
-                            className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1"
+                            className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center space-x-1"
                           >
                             <FiCalendar className="w-3 h-3" />
-                            <span>{patient.hasSurgeryAppointment ? 'Update Appointment' : 'Book Appointment'}</span>
+                            <span>{patient.hasSurgeryAppointment ? 'Update Surgery' : 'Schedule Surgery'}</span>
                           </button>
                         </td>
                       </tr>

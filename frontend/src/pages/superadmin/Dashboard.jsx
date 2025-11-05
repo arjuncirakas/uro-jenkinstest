@@ -62,18 +62,18 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {/* Total Users */}
-        <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
+        <div className="bg-white overflow-hidden rounded-md border border-gray-200">
           <div className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Total Users</p>
-                <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.totalUsers}</p>
+                <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Total Users</p>
+                <p className="mt-3 text-4xl font-bold text-gray-900">{stats.totalUsers}</p>
               </div>
               <div className="flex-shrink-0">
-                <div className="bg-teal-500 rounded-lg p-3">
-                  <Users className="h-6 w-6 text-white" />
+                <div className="bg-teal-500 rounded-md p-3">
+                  <Users className="h-7 w-7 text-white" />
                 </div>
               </div>
             </div>
@@ -81,16 +81,16 @@ const Dashboard = () => {
         </div>
 
         {/* Active Users */}
-        <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
+        <div className="bg-white overflow-hidden rounded-md border border-gray-200">
           <div className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Active Users</p>
-                <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.activeUsers}</p>
+                <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Active Users</p>
+                <p className="mt-3 text-4xl font-bold text-gray-900">{stats.activeUsers}</p>
               </div>
               <div className="flex-shrink-0">
-                <div className="bg-teal-600 rounded-lg p-3">
-                  <Activity className="h-6 w-6 text-white" />
+                <div className="bg-teal-500 rounded-md p-3">
+                  <Activity className="h-7 w-7 text-white" />
                 </div>
               </div>
             </div>
@@ -98,16 +98,16 @@ const Dashboard = () => {
         </div>
 
         {/* Pending Users */}
-        <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
+        <div className="bg-white overflow-hidden rounded-md border border-gray-200">
           <div className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">Pending Setup</p>
-                <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.pendingUsers}</p>
+                <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Pending Setup</p>
+                <p className="mt-3 text-4xl font-bold text-gray-900">{stats.pendingUsers}</p>
               </div>
               <div className="flex-shrink-0">
-                <div className="bg-teal-400 rounded-lg p-3">
-                  <AlertCircle className="h-6 w-6 text-white" />
+                <div className="bg-teal-500 rounded-md p-3">
+                  <AlertCircle className="h-7 w-7 text-white" />
                 </div>
               </div>
             </div>

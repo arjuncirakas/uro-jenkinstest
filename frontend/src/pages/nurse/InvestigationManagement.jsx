@@ -63,6 +63,18 @@ const InvestigationManagement = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
+  // Get PSA color based on threshold
+  const getPSAColor = (psaValue) => {
+    const psa = parseFloat(psaValue);
+    if (isNaN(psa)) return { dotColor: 'bg-gray-400', textColor: 'text-gray-900' };
+    
+    if (psa > 4) {
+      return { dotColor: 'bg-red-500', textColor: 'text-gray-900' };
+    } else {
+      return { dotColor: 'bg-green-500', textColor: 'text-gray-900' };
+    }
+  };
+
   // Get status icon for investigation procedures
   const getStatusIcon = (status) => {
     switch (status) {
@@ -149,16 +161,6 @@ const InvestigationManagement = () => {
               <h2 className="text-base sm:text-lg font-semibold text-gray-900">
                 All Investigations ({filteredInvestigations.length})
               </h2>
-              <button
-                onClick={fetchInvestigations}
-                disabled={loadingInvestigations}
-                className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-              >
-                <svg className={`w-3 h-3 ${loadingInvestigations ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Refresh</span>
-              </button>
               <div className="flex flex-wrap gap-4">
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-teal-100 rounded-full flex items-center justify-center">
@@ -264,8 +266,8 @@ const InvestigationManagement = () => {
                               UPI: {investigation.upi} • {investigation.age} • {investigation.gender}
                             </div>
                             <div className="flex items-center mt-0.5">
-                              <div className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-1 flex-shrink-0"></div>
-                              <span className="text-xs text-orange-600">PSA: {investigation.psa}</span>
+                              <div className={`w-1.5 h-1.5 ${getPSAColor(investigation.psa).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
+                              <span className={`text-xs ${getPSAColor(investigation.psa).textColor}`}>PSA: {investigation.psa}</span>
                             </div>
                           </div>
                         </div>

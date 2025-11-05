@@ -537,23 +537,16 @@ export const getNewPatients = async (req, res) => {
         u.role as created_by_role,
         gp.first_name as gp_first_name,
         gp.last_name as gp_last_name,
-        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-        next_apt.appointment_date as next_appointment_date,
-        next_apt.appointment_time as next_appointment_time,
-        next_apt.urologist_name as next_appointment_urologist
+        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
       FROM patients p
       LEFT JOIN users u ON p.created_by = u.id
       LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
-      LEFT JOIN LATERAL (
-        SELECT appointment_date, appointment_time, urologist_name
-        FROM appointments
-        WHERE patient_id = p.id 
-        AND status IN ('scheduled', 'confirmed')
-        AND appointment_date >= CURRENT_DATE
-        ORDER BY appointment_date ASC, appointment_time ASC
-        LIMIT 1
-      ) next_apt ON true
       WHERE ${whereClause}
+      AND NOT EXISTS (
+        SELECT 1 FROM appointments a
+        WHERE a.patient_id = p.id 
+        AND a.status IN ('scheduled', 'confirmed')
+      )
       ORDER BY p.created_at DESC
       LIMIT $${paramCount + 1}
     `;
@@ -586,14 +579,6 @@ export const getNewPatients = async (req, res) => {
         }
       }
 
-      // Format next appointment data
-      const nextAppointmentDate = patient.next_appointment_date 
-        ? new Date(patient.next_appointment_date).toISOString().split('T')[0]
-        : null;
-      const nextAppointmentTime = patient.next_appointment_time 
-        ? patient.next_appointment_time.substring(0, 5)
-        : null;
-      
       return {
         id: patient.id,
         upi: patient.upi,
@@ -615,10 +600,7 @@ export const getNewPatients = async (req, res) => {
         referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
         assignedUrologist: patient.assigned_urologist,
         createdAt: patient.created_at,
-        updatedAt: patient.updated_at,
-        nextAppointmentDate,
-        nextAppointmentTime,
-        nextAppointmentUrologist: patient.next_appointment_urologist
+        updatedAt: patient.updated_at
       };
       } catch (error) {
         console.error(`Error transforming patient ${index + 1}:`, error);
