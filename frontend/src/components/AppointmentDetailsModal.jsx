@@ -113,11 +113,6 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose }) => {
                   <span className="text-sm text-gray-600">Time:</span>
                   <span className="text-sm font-medium text-gray-900">{formatTime(appointment.time)}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <FiClock className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm text-gray-600">Duration:</span>
-                  <span className="text-sm font-medium text-gray-900">{appointment.duration} minutes</span>
-                </div>
               </div>
             </div>
 
