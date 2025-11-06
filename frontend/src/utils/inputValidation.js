@@ -95,8 +95,10 @@ export const validateFutureDate = (dateString) => {
 };
 
 // Sanitize input to prevent XSS - Using DOMPurify for robust protection
-export const sanitizeInput = (value) => {
+export const sanitizeInput = (value, options = {}) => {
   if (typeof value !== 'string') return value;
+  
+  const { preserveWhitespace = false } = options;
   
   // Use DOMPurify to remove all HTML tags and dangerous content
   const clean = DOMPurify.sanitize(value, {
@@ -107,7 +109,8 @@ export const sanitizeInput = (value) => {
     RETURN_DOM_FRAGMENT: false
   });
   
-  return clean.trim();
+  // For textarea fields, preserve whitespace including leading/trailing spaces
+  return preserveWhitespace ? clean : clean.trim();
 };
 
 // Sanitize HTML content - For cases where some HTML is allowed
