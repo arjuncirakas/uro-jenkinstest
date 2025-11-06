@@ -86,6 +86,8 @@ const PostOpFollowup = () => {
   };
 
   // Filter patients based on search query
+  // NOTE: This search only filters within Post-op Transfer/Post-op Followup pathway patients
+  // The postOpPatients array is already pre-filtered to only include patients from these pathways
   const filteredPatients = postOpPatients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -111,7 +113,7 @@ const PostOpFollowup = () => {
           title="Post-Op Follow-up"
           subtitle="Patients recovering from surgical procedures"
           onSearch={setSearchQuery}
-          searchPlaceholder="Search by name, UPI, or recovery status..."
+          searchPlaceholder="Search by name"
         />
 
         {/* Post-Op Follow-up Table */}

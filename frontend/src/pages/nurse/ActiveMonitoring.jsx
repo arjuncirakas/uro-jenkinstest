@@ -135,6 +135,8 @@ const ActiveMonitoring = () => {
   };
 
   // Filter patients based on search query
+  // NOTE: This search only filters within Active Monitoring/Active Surveillance pathway patients
+  // The monitoringPatients array is already pre-filtered to only include patients from this pathway
   const filteredPatients = monitoringPatients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -162,7 +164,7 @@ const ActiveMonitoring = () => {
             title="Active Monitoring"
             subtitle="Patients under active surveillance monitoring"
             onSearch={setSearchQuery}
-            searchPlaceholder="Search by name, UPI, or monitoring status..."
+            searchPlaceholder="Search by name"
           />
         </div>
       </div>

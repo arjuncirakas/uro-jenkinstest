@@ -134,6 +134,13 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       if (!isValid) return; // Don't update if invalid characters
     }
     
+    // Postcode field - only allow digits (no letters)
+    if (name === 'postcode') {
+      const postcodeRegex = /^\d*$/;
+      isValid = postcodeRegex.test(value);
+      if (!isValid) return; // Don't update if invalid characters
+    }
+    
     // Sanitize text inputs to prevent XSS
     if (typeof value === 'string') {
       sanitizedValue = sanitizeInput(value);

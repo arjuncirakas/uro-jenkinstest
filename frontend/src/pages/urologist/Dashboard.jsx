@@ -743,7 +743,7 @@ const UrologistDashboard = () => {
           {/* Search Bar and Notification */}
           <div className="w-full lg:w-96 flex items-center gap-3">
             <GlobalPatientSearch 
-              placeholder="Quick Access to Patient Records"
+              placeholder="Search by name"
               onPatientSelect={(patient) => {
                 console.log('Urologist Dashboard: Patient selected:', patient);
                 // Determine category based on care pathway

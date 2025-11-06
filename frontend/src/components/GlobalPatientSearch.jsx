@@ -27,7 +27,7 @@ const GlobalPatientSearch = ({ placeholder = "Search patients by name, UPI, or s
 
   // Search with debounce
   useEffect(() => {
-    if (searchQuery.trim().length < 2) {
+    if (searchQuery.trim().length < 1) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -42,9 +42,27 @@ const GlobalPatientSearch = ({ placeholder = "Search patients by name, UPI, or s
     debounceTimer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const result = await patientService.searchPatients(searchQuery, 10);
+        const result = await patientService.searchPatients(searchQuery, 20);
         if (result.success) {
-          setSuggestions(result.data || []);
+          const allResults = result.data || [];
+          const query = searchQuery.toLowerCase().trim();
+          
+          // Sort results: prioritize "starts with" matches
+          const sortedResults = allResults.sort((a, b) => {
+            const aName = (a.name || '').toLowerCase();
+            const bName = (b.name || '').toLowerCase();
+            const aStartsWith = aName.startsWith(query);
+            const bStartsWith = bName.startsWith(query);
+            
+            // Prioritize exact starts-with matches
+            if (aStartsWith && !bStartsWith) return -1;
+            if (!aStartsWith && bStartsWith) return 1;
+            
+            // If both start with query or neither, sort alphabetically
+            return aName.localeCompare(bName);
+          }).slice(0, 10); // Limit to 10 results
+          
+          setSuggestions(sortedResults);
           setShowSuggestions(true);
         }
       } catch (error) {

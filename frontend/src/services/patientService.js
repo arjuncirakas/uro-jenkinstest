@@ -215,7 +215,7 @@ export const patientService = {
 
   // Search patients (autocomplete)
   searchPatients: async (query, limit = 10) => {
-    if (!query || query.trim().length < 2) {
+    if (!query || query.trim().length < 1) {
       return {
         success: true,
         data: [],

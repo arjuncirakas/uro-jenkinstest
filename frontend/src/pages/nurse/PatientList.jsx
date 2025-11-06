@@ -113,6 +113,8 @@ const PatientList = () => {
 
 
   // Filter patients based on search query and urologist selection
+  // NOTE: This page shows ALL patients across ALL pathways (no pathway restriction)
+  // Search will find patients from any pathway (Active Monitoring, Surgery, Post-op, etc.)
   const filteredPatients = patients.filter(patient => {
     const patientPathway = getPatientPathway(patient);
     const patientUrologist = patient.assignedUrologist || 'Unassigned';
@@ -145,7 +147,7 @@ const PatientList = () => {
           title="Patient List"
           subtitle="All patients under urology care"
           onSearch={setSearchQuery}
-          searchPlaceholder="Search by name, UPI, pathway, or urologist..."
+          searchPlaceholder="Search by name"
         />
 
         {/* Filter Controls */}

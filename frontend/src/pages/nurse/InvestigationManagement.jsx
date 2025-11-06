@@ -151,7 +151,7 @@ const InvestigationManagement = () => {
           title="Investigation Management"
           subtitle="Track and manage all patient investigations and their status"
           onSearch={setSearchQuery}
-          searchPlaceholder="Search patients by name, UPI, or urologist"
+          searchPlaceholder="Search by name"
         />
 
         {/* Investigations Table */}

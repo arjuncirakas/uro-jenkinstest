@@ -352,7 +352,7 @@ export const deleteUser = async (req, res) => {
 
     // Check if user exists
     const existingUser = await client.query(
-      'SELECT id, email FROM users WHERE id = $1 AND role != \'superadmin\'',
+      'SELECT id, email, first_name, last_name, role FROM users WHERE id = $1 AND role != \'superadmin\'',
       [id]
     );
 
@@ -363,16 +363,42 @@ export const deleteUser = async (req, res) => {
       });
     }
 
-    // Delete user (cascade will handle related records)
+    const user = existingUser.rows[0];
+    console.log(`🗑️  Deleting user: ${user.first_name} ${user.last_name} (${user.email}) - Role: ${user.role}`);
+
+    // Check how many patients this user created (for logging purposes)
+    const patientCount = await client.query(
+      'SELECT COUNT(*) as count FROM patients WHERE created_by = $1',
+      [id]
+    );
+    
+    if (patientCount.rows[0].count > 0) {
+      console.log(`📊 User has created ${patientCount.rows[0].count} patient(s). These records will be preserved.`);
+    }
+
+    // Delete user (foreign keys with SET NULL will preserve patient records)
     await client.query('DELETE FROM users WHERE id = $1', [id]);
+
+    console.log(`✅ User deleted successfully. Patient records preserved.`);
 
     res.json({
       success: true,
-      message: 'User deleted successfully'
+      message: 'User deleted successfully. Patient records have been preserved.'
     });
 
   } catch (error) {
-    console.error('Delete user error:', error);
+    console.error('❌ Delete user error:', error);
+    console.error('Error code:', error.code);
+    console.error('Error detail:', error.detail);
+    
+    // Check for foreign key constraint errors
+    if (error.code === '23503') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete user due to existing references. Please run the database migration script first: npm run fix-user-constraints'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Internal server error'

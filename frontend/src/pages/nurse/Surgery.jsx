@@ -169,6 +169,8 @@ const Surgery = () => {
   };
 
   // Filter patients based on search query
+  // NOTE: This search only filters within Surgery Pathway patients
+  // The surgeryPatients array is already pre-filtered to only include patients from Surgery Pathway
   const filteredPatients = surgeryPatients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -194,7 +196,7 @@ const Surgery = () => {
           title="Surgery"
           subtitle="Patients scheduled for surgical procedures"
           onSearch={setSearchQuery}
-          searchPlaceholder="Search by name, UPI, or surgery type..."
+          searchPlaceholder="Search by name"
         />
 
         {/* Surgery Table */}
@@ -286,7 +288,7 @@ const Surgery = () => {
                         <td className="py-4 px-4">
                           <button 
                             onClick={() => handleUpdateAppointment(patient)}
-                            className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center space-x-1"
+                            className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1"
                           >
                             <FiCalendar className="w-3 h-3" />
                             <span>{patient.hasSurgeryAppointment ? 'Update Surgery' : 'Schedule Surgery'}</span>

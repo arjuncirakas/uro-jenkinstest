@@ -145,7 +145,7 @@ const Patients = () => {
           {/* Search Bar and Notification */}
           <div className="w-full lg:w-96 flex items-center gap-3">
             <GlobalPatientSearch 
-              placeholder="Search patients..."
+              placeholder="Search by name"
               onPatientSelect={(patient) => {
                 console.log('Patients page: Patient selected:', patient);
                 // Determine category based on care pathway

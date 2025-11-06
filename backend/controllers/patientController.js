@@ -1538,7 +1538,7 @@ export const searchPatients = async (req, res) => {
   try {
     const { query, limit = 10 } = req.query;
     
-    if (!query || query.trim().length < 2) {
+    if (!query || query.trim().length < 1) {
       return res.json({
         success: true,
         message: 'Query too short',

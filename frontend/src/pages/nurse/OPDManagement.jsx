@@ -12,8 +12,6 @@ import { bookingService } from '../../services/bookingService';
 const OPDManagement = () => {
   // State for tracking active tabs
   const [activeAppointmentTab, setActiveAppointmentTab] = useState('investigation');
-  // State for search query
-  const [searchQuery, setSearchQuery] = useState('');
   // State for modals
   const [isInvestigationModalOpen, setIsInvestigationModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -485,8 +483,7 @@ const OPDManagement = () => {
         <NurseHeader 
           title="OPD Management"
           subtitle="Track patients in OPD queue and manage consultation flow"
-          onSearch={setSearchQuery}
-          searchPlaceholder="Search patients by name, UPI, or status"
+          searchPlaceholder="Search by name"
         />
 
         {/* Main Layout Grid - 3 columns like urologist dashboard */}
@@ -810,20 +807,13 @@ const OPDManagement = () => {
                     </div>
                   ) : (
                     newPatients.map((patient) => (
-                      <div key={patient.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div key={patient.id} className="relative flex items-start justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors min-h-[140px]">
                         <div className="flex items-start space-x-3 flex-1">
                           <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                             {getInitials(patient.name)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div className="font-medium text-gray-900 text-sm">{patient.name}</div>
-                              {patient.referredByGP && (
-                                <span className="px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 text-xs rounded-full font-medium">
-                                  GP Referral
-                                </span>
-                              )}
-                            </div>
+                            <div className="font-medium text-gray-900 text-sm mb-1">{patient.name}</div>
                             <div className="text-xs text-gray-600 mb-1">
                               UPI: {patient.upi} • Age: {patient.age} • {patient.gender}
                             </div>
@@ -846,25 +836,32 @@ const OPDManagement = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-col space-y-1 ml-3 flex-shrink-0">
-                          <button
-                            onClick={() => handleViewEdit(patient)}
-                            className="px-3 py-1.5 bg-white text-teal-600 text-xs rounded-md border border-teal-600 hover:bg-teal-50 transition-colors whitespace-nowrap"
-                          >
-                            View
-                          </button>
-                          <button
-                            onClick={() => handleBookInvestigation(patient)}
-                            className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors whitespace-nowrap"
-                          >
-                            Book Investigation
-                          </button>
-                          <button
-                            onClick={() => handleBookUrologist(patient)}
-                            className="px-3 py-1.5 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors whitespace-nowrap"
-                          >
-                            Book Urologist
-                          </button>
+                        <div className="flex flex-col ml-3 flex-shrink-0">
+                          <div className="flex flex-col space-y-1">
+                            <button
+                              onClick={() => handleViewEdit(patient)}
+                              className="px-3 py-1.5 bg-white text-teal-600 text-xs rounded-md border border-teal-600 hover:bg-teal-50 transition-colors whitespace-nowrap w-full"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => handleBookInvestigation(patient)}
+                              className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors whitespace-nowrap w-full"
+                            >
+                              Book Investigation
+                            </button>
+                            <button
+                              onClick={() => handleBookUrologist(patient)}
+                              className="px-3 py-1.5 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors whitespace-nowrap w-full"
+                            >
+                              Book Urologist
+                            </button>
+                          </div>
+                          {patient.referredByGP && (
+                            <div className="absolute bottom-3 right-3 px-2 py-1 bg-green-50 text-green-700 text-xs rounded font-medium text-center whitespace-nowrap">
+                              GP Referral
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))

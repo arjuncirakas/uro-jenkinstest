@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { IoNotificationsOutline } from 'react-icons/io5';
+import { FiSearch } from 'react-icons/fi';
 import NotificationModal from '../NotificationModal';
 import GlobalPatientSearch from '../GlobalPatientSearch';
 import NursePatientDetailsModal from '../NursePatientDetailsModal';
 
-const NurseHeader = ({ title, subtitle, searchPlaceholder = "Search patients by name, UPI, or status" }) => {
+const NurseHeader = ({ 
+  title, 
+  subtitle, 
+  searchPlaceholder = "Search patients by name, UPI, or status",
+  onSearch = null, // If provided, uses local search instead of global search
+  useLocalSearch = false // Flag to indicate if this page uses local filtering
+}) => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -27,6 +34,9 @@ const NurseHeader = ({ title, subtitle, searchPlaceholder = "Search patients by 
     setNotificationCount(count);
   };
 
+  // Determine if we should use local search or global search
+  const shouldUseLocalSearch = onSearch !== null || useLocalSearch;
+
   return (
     <>
       {/* Header */}
@@ -37,10 +47,24 @@ const NurseHeader = ({ title, subtitle, searchPlaceholder = "Search patients by 
         </div>
         {/* Search Bar and Notification */}
         <div className="w-full lg:w-96 flex items-center gap-3">
-          <GlobalPatientSearch 
-            placeholder={searchPlaceholder}
-            onPatientSelect={handlePatientSelect}
-          />
+          {shouldUseLocalSearch && onSearch ? (
+            // Local search input - filters the current page's patient list
+            <div className="relative flex-1">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder={searchPlaceholder}
+                onChange={(e) => onSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+              />
+            </div>
+          ) : (
+            // Global search - searches all patients across all pathways
+            <GlobalPatientSearch 
+              placeholder={searchPlaceholder}
+              onPatientSelect={handlePatientSelect}
+            />
+          )}
           {/* Notification Icon */}
           <div className="relative">
             <button 

@@ -45,9 +45,9 @@ export const validateEmail = (email) => {
   return emailRegex.test(email);
 };
 
-// Validate postcode (alphanumeric, spaces, hyphens)
+// Validate postcode (only digits - no letters allowed)
 export const validatePostcode = (value) => {
-  const postcodeRegex = /^[a-zA-Z0-9\s-]*$/;
+  const postcodeRegex = /^\d*$/;
   return postcodeRegex.test(value);
 };
 
