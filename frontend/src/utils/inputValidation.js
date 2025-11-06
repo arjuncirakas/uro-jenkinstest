@@ -20,7 +20,7 @@ export const validatePhoneInput = (value) => {
   return phoneRegex.test(value);
 };
 
-// Format phone number as user types
+
 export const formatPhoneNumber = (value) => {
   // Remove all non-digit characters
   const cleaned = value.replace(/\D/g, '');
