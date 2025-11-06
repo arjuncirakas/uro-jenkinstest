@@ -37,42 +37,13 @@ export const getAllowedOrigins = () => {
  * Enhanced CORS options with better logging
  */
 export const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = getAllowedOrigins();
-    
-    // Allow requests with no origin (e.g., mobile apps, Postman, same-origin)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // If allowedOrigins is false, only allow same-origin
-    if (allowedOrigins === false) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`ℹ️  CORS: Allowing origin in dev mode: ${origin}`);
-        return callback(null, true);
-      }
-      
-      console.warn(`❌ CORS: Blocked request from ${origin} - FRONTEND_URL not configured`);
-      return callback(new Error('Not allowed by CORS'), false);
-    }
-    
-    // Check if origin is in allowed list
-    const isAllowed = Array.isArray(allowedOrigins) 
-      ? allowedOrigins.includes(origin)
-      : allowedOrigins === origin;
-    
-    if (isAllowed) {
-      console.log(`✅ CORS: Allowed request from ${origin}`);
-      return callback(null, true);
-    } else {
-      console.warn(`❌ CORS: Blocked request from ${origin}`);
-      console.warn(`   Allowed origins: ${JSON.stringify(allowedOrigins)}`);
-      return callback(new Error('Not allowed by CORS'), false);
-    }
-  },
+  // TEMPORARY: Allow all origins for development/testing
+  // TODO: Remove this and restore proper origin checking before final deployment
+  origin: '*',
   
-  // Allow credentials (cookies, authorization headers)
-  credentials: true,
+  // NOTE: credentials must be false when using origin: '*'
+  // If you need credentials, use specific origins instead
+  credentials: false,
   
   // Allowed methods
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
