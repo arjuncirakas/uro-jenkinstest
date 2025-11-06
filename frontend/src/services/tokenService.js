@@ -146,7 +146,7 @@ class TokenService {
           throw new Error('No refresh token available');
         }
 
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
         const refreshUrl = `${apiUrl}/auth/refresh-token`;
         console.log('🔄 [Token Service] Attempting refresh at:', refreshUrl);
 
