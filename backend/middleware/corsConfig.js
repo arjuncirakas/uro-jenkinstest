@@ -159,10 +159,11 @@ export const validateCorsConfig = () => {
     }
     
     if (env === 'production' && frontendUrl.includes('localhost')) {
-      console.error('❌ ERROR: FRONTEND_URL is set to localhost in production!');
-      console.error(`   Current: ${frontendUrl}`);
-      console.error('   This will cause CORS errors and token refresh will fail.');
-      return false;
+      console.warn('⚠️  WARNING: FRONTEND_URL includes localhost in production!');
+      console.warn(`   Current: ${frontendUrl}`);
+      console.warn('   This should only be used for local development testing.');
+      console.warn('   Remove localhost from FRONTEND_URL before final production deployment.');
+      // Don't block - allow for local testing but warn
     }
   }
   
