@@ -1579,7 +1579,7 @@ export const getAvailableTimeSlots = async (req, res) => {
   const client = await pool.connect();
   try {
     const { doctorId } = req.params;
-    const { date, type = 'urologist' } = req.query;
+    const { date, type = 'urologist', timezoneOffset } = req.query;
 
     if (!date) {
       return res.status(400).json({
@@ -1670,19 +1670,29 @@ export const getAvailableTimeSlots = async (req, res) => {
       console.log(`Booked investigation times: ${JSON.stringify(bookedTimes)}`);
 
       // Check if the selected date is today to disable past time slots
-      // Use server's local time instead of UTC to properly compare dates
+      // Use client's timezone offset if provided, otherwise use server time
       const now = new Date();
-      const today = now.getFullYear() + '-' + 
-                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(now.getDate()).padStart(2, '0');
+      
+      // Apply timezone offset from client if provided (in minutes, e.g., -330 for IST)
+      let currentDateTime = now;
+      if (timezoneOffset) {
+        const offsetMinutes = parseInt(timezoneOffset);
+        // timezoneOffset is negative of getTimezoneOffset(), so we subtract it
+        currentDateTime = new Date(now.getTime() - (offsetMinutes * 60 * 1000));
+        console.log(`[getAvailableTimeSlots] Using client timezone offset: ${offsetMinutes} minutes`);
+      }
+      
+      const today = currentDateTime.getFullYear() + '-' + 
+                    String(currentDateTime.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(currentDateTime.getDate()).padStart(2, '0');
       const isToday = date === today;
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+      const currentHour = currentDateTime.getHours();
+      const currentMinute = currentDateTime.getMinutes();
 
       console.log(`[getAvailableTimeSlots] Date comparison - Today: ${today}, Selected: ${date}, IsToday: ${isToday}`);
-      console.log(`[getAvailableTimeSlots] Current server time: ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
+      console.log(`[getAvailableTimeSlots] Current time (adjusted): ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
       console.log(`[getAvailableTimeSlots] Server timezone offset: ${now.getTimezoneOffset() / 60} hours from UTC`);
-      console.log(`[getAvailableTimeSlots] Full server datetime: ${now.toString()}`);
+      console.log(`[getAvailableTimeSlots] Full datetime: ${currentDateTime.toString()}`);
 
       // Create available slots array
       const availableSlots = allSlots.map(time => {
@@ -1743,34 +1753,44 @@ export const getAvailableTimeSlots = async (req, res) => {
     console.log(`[getAvailableTimeSlots] Booked times: ${JSON.stringify(bookedTimes)}`);
 
     // Check if the selected date is today to disable past time slots
-    // Use server's local time instead of UTC to properly compare dates
-    const now = new Date();
-    const today = now.getFullYear() + '-' + 
-                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                  String(now.getDate()).padStart(2, '0');
-    const isToday = date === today;
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+    // Use client's timezone offset if provided, otherwise use server time
+    const nowUro = new Date();
+    
+    // Apply timezone offset from client if provided (in minutes, e.g., -330 for IST)
+    let currentDateTimeUro = nowUro;
+    if (timezoneOffset) {
+      const offsetMinutes = parseInt(timezoneOffset);
+      // timezoneOffset is negative of getTimezoneOffset(), so we subtract it
+      currentDateTimeUro = new Date(nowUro.getTime() - (offsetMinutes * 60 * 1000));
+      console.log(`[getAvailableTimeSlots] Using client timezone offset: ${offsetMinutes} minutes`);
+    }
+    
+    const todayUro = currentDateTimeUro.getFullYear() + '-' + 
+                     String(currentDateTimeUro.getMonth() + 1).padStart(2, '0') + '-' + 
+                     String(currentDateTimeUro.getDate()).padStart(2, '0');
+    const isTodayUro = date === todayUro;
+    const currentHourUro = currentDateTimeUro.getHours();
+    const currentMinuteUro = currentDateTimeUro.getMinutes();
 
-    console.log(`[getAvailableTimeSlots] Date comparison - Today: ${today}, Selected: ${date}, IsToday: ${isToday}`);
-    console.log(`[getAvailableTimeSlots] Current server time: ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
-    console.log(`[getAvailableTimeSlots] Server timezone offset: ${now.getTimezoneOffset() / 60} hours from UTC`);
-    console.log(`[getAvailableTimeSlots] Full server datetime: ${now.toString()}`);
+    console.log(`[getAvailableTimeSlots] Date comparison - Today: ${todayUro}, Selected: ${date}, IsToday: ${isTodayUro}`);
+    console.log(`[getAvailableTimeSlots] Current time (adjusted): ${currentHourUro}:${String(currentMinuteUro).padStart(2, '0')}`);
+    console.log(`[getAvailableTimeSlots] Server timezone offset: ${nowUro.getTimezoneOffset() / 60} hours from UTC`);
+    console.log(`[getAvailableTimeSlots] Full datetime: ${currentDateTimeUro.toString()}`);
 
     // Create available slots array
     const availableSlots = allSlots.map(time => {
       const isBooked = bookedTimes.includes(time);
       let isPastTime = false;
       
-      if (isToday) {
+      if (isTodayUro) {
         // For today, check if the time slot has already passed
         const [slotHour, slotMinute] = time.split(':').map(Number);
         const slotTimeInMinutes = slotHour * 60 + slotMinute;
-        const currentTimeInMinutes = currentHour * 60 + currentMinute;
+        const currentTimeInMinutes = currentHourUro * 60 + currentMinuteUro;
         isPastTime = slotTimeInMinutes <= currentTimeInMinutes;
         
         if (isPastTime) {
-          console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
+          console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHourUro}:${String(currentMinuteUro).padStart(2, '0')})`);
         }
       }
       

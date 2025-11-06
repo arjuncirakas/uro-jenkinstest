@@ -231,8 +231,15 @@ export const bookingService = {
   // Get available time slots for a doctor on a specific date
   getAvailableTimeSlots: async (doctorId, date, appointmentType = 'urologist') => {
     try {
+      // Get client's timezone offset in minutes (e.g., -330 for IST)
+      const timezoneOffset = new Date().getTimezoneOffset();
+      
       const response = await apiClient.get(`/booking/doctors/${doctorId}/available-slots`, {
-        params: { date, type: appointmentType }
+        params: { 
+          date, 
+          type: appointmentType,
+          timezoneOffset // Send client timezone to backend
+        }
       });
       return { success: true, data: response.data.data };
     } catch (error) {
