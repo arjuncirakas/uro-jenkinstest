@@ -455,21 +455,62 @@ export const getAvailableUrologists = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const result = await client.query(
+    // Get urologists from doctors table (Urology department)
+    const doctorsTableResult = await client.query(
+      `SELECT 
+        d.id, 
+        d.first_name, 
+        d.last_name, 
+        d.email, 
+        d.phone,
+        d.specialization,
+        dept.name as department_name
+       FROM doctors d
+       LEFT JOIN departments dept ON d.department_id = dept.id
+       WHERE d.is_active = true 
+       AND (d.specialization ILIKE '%urology%' OR dept.name ILIKE '%urology%')
+       ORDER BY d.first_name, d.last_name`
+    );
+
+    console.log(`[getAvailableUrologists] Found ${doctorsTableResult.rows.length} urologists from doctors table`);
+
+    // Also get urologists from users table for backwards compatibility
+    const usersTableResult = await client.query(
       `SELECT id, first_name, last_name, email, phone, role
        FROM users 
        WHERE role = 'urologist' AND is_active = true
        ORDER BY first_name, last_name`
     );
 
-    const urologists = result.rows.map(row => ({
+    console.log(`[getAvailableUrologists] Found ${usersTableResult.rows.length} urologists from users table`);
+
+    // Create urologists array from doctors table
+    const urologistsFromTable = doctorsTableResult.rows.map(row => ({
+      id: row.id,
+      name: `${row.first_name} ${row.last_name}`,
+      email: row.email,
+      phone: row.phone,
+      role: 'urologist',
+      specialization: row.specialization || row.department_name || 'Urology',
+      department: row.department_name,
+      source: 'doctors_table'
+    }));
+
+    // Create urologists array from users table
+    const urologistsFromUsers = usersTableResult.rows.map(row => ({
       id: row.id,
       name: `${row.first_name} ${row.last_name}`,
       email: row.email,
       phone: row.phone,
       role: row.role,
-      specialization: 'Urologist'
+      specialization: 'Urologist',
+      source: 'users_table'
     }));
+
+    // Combine both lists (doctors table takes priority)
+    const urologists = [...urologistsFromTable, ...urologistsFromUsers];
+
+    console.log(`[getAvailableUrologists] Total urologists available: ${urologists.length}`);
 
     res.json({
       success: true,
@@ -496,39 +537,77 @@ export const getAvailableDoctors = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    // Get all users with doctor roles (remove is_active filter for now)
-    const result = await client.query(
+    // Get all doctors from the doctors table (where actual doctor records are stored)
+    const doctorsTableResult = await client.query(
+      `SELECT 
+        d.id, 
+        d.first_name, 
+        d.last_name, 
+        d.email, 
+        d.phone, 
+        d.specialization,
+        dept.name as department_name
+       FROM doctors d
+       LEFT JOIN departments dept ON d.department_id = dept.id
+       WHERE d.is_active = true 
+       ORDER BY d.specialization, d.first_name, d.last_name`
+    );
+
+    console.log(`[getAvailableDoctors] Found ${doctorsTableResult.rows.length} doctors from doctors table`);
+
+    // Also get users with doctor roles for backwards compatibility
+    const usersTableResult = await client.query(
       `SELECT id, first_name, last_name, email, phone, role
        FROM users 
        WHERE role IN ('urologist', 'radiologist', 'pathologist', 'oncologist') 
+       AND is_active = true
        ORDER BY role, first_name, last_name`
     );
 
+    console.log(`[getAvailableDoctors] Found ${usersTableResult.rows.length} doctors from users table`);
+
+    // Create doctors array from doctors table
+    const doctorsFromTable = doctorsTableResult.rows.map(row => ({
+      id: row.id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      name: `${row.first_name} ${row.last_name}`,
+      email: row.email,
+      phone: row.phone,
+      role: 'doctor', // Generic role
+      specialization: row.specialization || row.department_name || 'Doctor',
+      department: row.department_name,
+      available: true,
+      source: 'doctors_table' // Track source for debugging
+    }));
+
+    // Create doctors array from users table
+    const doctorsFromUsers = usersTableResult.rows.map(row => ({
+      id: row.id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      name: `${row.first_name} ${row.last_name}`,
+      email: row.email,
+      phone: row.phone,
+      role: row.role,
+      specialization: getSpecializationFromRole(row.role),
+      available: true,
+      source: 'users_table' // Track source for debugging
+    }));
+
+    // Combine both lists (doctors table takes priority)
+    const allDoctors = [...doctorsFromTable, ...doctorsFromUsers];
+
+    console.log(`[getAvailableDoctors] Total doctors available: ${allDoctors.length}`);
+
     // If no doctors found, return empty array with success message
-    if (result.rows.length === 0) {
+    if (allDoctors.length === 0) {
       return res.json({
         success: true,
         message: 'No doctors found. Please register some doctors first.',
         data: []
       });
     }
-
-    // Create doctors array
-    const allDoctors = result.rows.map(row => {
-      const doctor = {
-        id: row.id,
-        first_name: row.first_name,
-        last_name: row.last_name,
-        name: `${row.first_name} ${row.last_name}`,
-        email: row.email,
-        phone: row.phone,
-        role: row.role,
-        specialization: getSpecializationFromRole(row.role),
-        available: true
-      };
-
-      return doctor;
-    });
 
     res.json({
       success: true,
