@@ -71,8 +71,6 @@ const AddUser = () => {
       case 'lastName':
         if (!value.trim()) {
           error = 'Last name is required';
-        } else if (value.trim().length < 2) {
-          error = 'Last name must be at least 2 characters';
         } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
           error = 'Last name can only contain letters and spaces';
         }
@@ -291,6 +289,7 @@ const AddUser = () => {
                         type="text"
                         value={formData.firstName}
                         onChange={handleChange}
+                        autoComplete="given-name"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                         }`}
@@ -320,6 +319,7 @@ const AddUser = () => {
                         type="text"
                         value={formData.lastName}
                         onChange={handleChange}
+                        autoComplete="family-name"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                         }`}
@@ -349,6 +349,7 @@ const AddUser = () => {
                         type="email"
                         value={formData.email}
                         onChange={handleChange}
+                        autoComplete="email"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                         }`}
@@ -378,6 +379,7 @@ const AddUser = () => {
                         type="tel"
                         value={formData.phone}
                         onChange={handleChange}
+                        autoComplete="tel"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                         }`}
@@ -407,6 +409,7 @@ const AddUser = () => {
                         type="text"
                         value={formData.organization}
                         onChange={handleChange}
+                        autoComplete="organization"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.organization ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
                         }`}
