@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FiEye, FiCalendar } from 'react-icons/fi';
+import { FiEye, FiCalendar, FiTrash2 } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
+import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import { patientService } from '../../services/patientService';
 
 const PatientList = () => {
@@ -10,7 +11,10 @@ const PatientList = () => {
   const [selectedUrologist, setSelectedUrologist] = useState('all');
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [isUpdateAppointmentModalOpen, setIsUpdateAppointmentModalOpen] = useState(false);
+  const [isDeleteConfirmModalOpen, setIsDeleteConfirmModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientToDelete, setPatientToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // API state
   const [patients, setPatients] = useState([]);
@@ -140,6 +144,43 @@ const PatientList = () => {
     setIsUpdateAppointmentModalOpen(true);
   };
 
+  const handleDeleteClick = (patient) => {
+    setPatientToDelete(patient);
+    setIsDeleteConfirmModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!patientToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const result = await patientService.deletePatient(patientToDelete.id);
+      
+      if (result.success) {
+        // Remove patient from the list or refresh the list
+        setPatients(prevPatients => prevPatients.filter(p => p.id !== patientToDelete.id));
+        setIsDeleteConfirmModalOpen(false);
+        setPatientToDelete(null);
+        
+        // Optionally show a success message
+        console.log('Patient deleted successfully');
+      } else {
+        console.error('Failed to delete patient:', result.error);
+        alert(`Failed to delete patient: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting patient:', error);
+      alert('An error occurred while deleting the patient');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setIsDeleteConfirmModalOpen(false);
+    setPatientToDelete(null);
+  };
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-4 sm:p-6 lg:p-8">
@@ -202,12 +243,13 @@ const PatientList = () => {
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PSA LEVEL</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">BOOK APPOINTMENT</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">ACTIONS</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">DELETE</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-8">
+                    <td colSpan="7" className="text-center py-8">
                       <div className="flex items-center justify-center space-x-2">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
                         <span className="text-gray-600 text-sm">Loading patients...</span>
@@ -216,7 +258,7 @@ const PatientList = () => {
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-8">
+                    <td colSpan="7" className="text-center py-8">
                       <div className="text-center">
                         <div className="text-red-600 text-sm mb-2">{error}</div>
                         <button
@@ -230,7 +272,7 @@ const PatientList = () => {
                   </tr>
                 ) : filteredPatients.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-8 text-gray-500 text-sm">
+                    <td colSpan="7" className="text-center py-8 text-gray-500 text-sm">
                       {searchQuery ? 'No patients found matching your search' : 'No patients found'}
                     </td>
                   </tr>
@@ -300,6 +342,15 @@ const PatientList = () => {
                             <span>View Details</span>
                           </button>
                         </td>
+                        <td className="py-4 px-4 text-center">
+                          <button 
+                            onClick={() => handleDeleteClick(patient)}
+                            className="p-2 bg-red-50 text-red-600 rounded-md border border-red-200 hover:bg-red-100 transition-colors mx-auto"
+                            title="Delete Patient"
+                          >
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
@@ -322,6 +373,19 @@ const PatientList = () => {
         isOpen={isUpdateAppointmentModalOpen}
         onClose={() => setIsUpdateAppointmentModalOpen(false)}
         patient={selectedPatient}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDeleteConfirmModalOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Patient"
+        message={`Are you sure you want to delete ${patientToDelete?.fullName || 'this patient'}? This will mark the patient as inactive and they will no longer appear in the active patient list.`}
+        confirmText="Delete Patient"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={isDeleting}
       />
     </div>
   );
