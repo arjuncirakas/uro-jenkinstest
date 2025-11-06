@@ -140,16 +140,23 @@ const Users = () => {
   };
 
   const handleFilterChange = useCallback((filterType, value) => {
+    // Update the filter in the Redux store
     dispatch(setFilters({ [filterType]: value }));
+    
+    // Create the new filters object with the updated value
+    const newFilters = {
+      role: filterType === 'role' ? value : filters.role || '',
+      search: filterType === 'search' ? value : filters.search || '',
+      status: filterType === 'status' ? value : filters.status || ''
+    };
+    
     // Refetch users with new filters
     dispatch(getAllUsers({
       page: 1,
       limit: 10,
-      role: filterType === 'role' ? value : filters.role,
-      search: filterType === 'search' ? value : filters.search,
-      status: filterType === 'status' ? value : filters.status
+      ...newFilters
     }));
-  }, [dispatch, filters.role, filters.search, filters.status]);
+  }, [dispatch, filters]);
 
   const handleClearFilters = useCallback(() => {
     dispatch(clearFilters());
