@@ -431,9 +431,12 @@ export const refreshToken = async (req, res) => {
   
   try {
     const { refreshToken } = req.body;
+    
+    console.log('🔄 Token refresh attempt received');
 
     // Verify refresh token
     const decoded = verifyRefreshToken(refreshToken);
+    console.log(`🔄 Token decoded for user ID: ${decoded.id}`);
 
     // Check if refresh token exists in database and is not revoked
     const result = await client.query(
@@ -481,6 +484,8 @@ export const refreshToken = async (req, res) => {
       [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
     );
 
+    console.log(`✅ Token refreshed successfully for user ${user.id} (${user.email})`);
+
     res.json({
       success: true,
       message: 'Token refreshed successfully',
@@ -491,7 +496,8 @@ export const refreshToken = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Refresh token error:', error);
+    console.error('❌ Refresh token error:', error.message);
+    console.error('Error type:', error.name);
     
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return res.status(401).json({

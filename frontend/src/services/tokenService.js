@@ -146,7 +146,11 @@ class TokenService {
           throw new Error('No refresh token available');
         }
 
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh-token`, {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const refreshUrl = `${apiUrl}/auth/refresh-token`;
+        console.log('🔄 [Token Service] Attempting refresh at:', refreshUrl);
+
+        const response = await fetch(refreshUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -154,16 +158,21 @@ class TokenService {
           body: JSON.stringify({ refreshToken })
         });
 
+        console.log('🔄 [Token Service] Refresh response status:', response.status);
+
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data) {
             this.setTokens(data.data.accessToken, data.data.refreshToken);
+            console.log('✅ [Token Service] Tokens updated successfully');
             return true;
           }
         }
+        const errorText = await response.text();
+        console.error('❌ [Token Service] Refresh failed:', response.status, errorText);
         throw new Error('Token refresh failed');
       } catch (error) {
-        console.error('Proactive token refresh failed:', error);
+        console.error('❌ [Token Service] Proactive token refresh error:', error);
         this.clearAuth();
         return false;
       }

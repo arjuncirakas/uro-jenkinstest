@@ -9,10 +9,17 @@ class TokenRefreshManager {
 
   // Start periodic token refresh check
   start() {
+    console.log('🚀 [Token Refresh Manager] Starting - will check every 4 minutes');
     // Check every 4 minutes (tokens expire in 15 minutes, refresh 5 minutes before)
     this.refreshInterval = setInterval(async () => {
       await this.checkAndRefresh();
     }, 4 * 60 * 1000); // 4 minutes
+    
+    // Run initial check after 10 seconds
+    setTimeout(async () => {
+      console.log('🔄 [Token Refresh Manager] Running initial check...');
+      await this.checkAndRefresh();
+    }, 10000);
   }
 
   // Stop periodic token refresh check
@@ -31,18 +38,24 @@ class TokenRefreshManager {
       this.isRefreshing = true;
       
       // Only refresh if user is authenticated and token needs refresh
-      if (tokenService.isAuthenticated() && tokenService.needsRefresh()) {
-        console.log('Proactively refreshing token...');
-        const success = await tokenService.refreshIfNeeded();
-        
-        if (!success) {
-          console.warn('Proactive token refresh failed, user will be logged out on next API call');
+      if (tokenService.isAuthenticated()) {
+        if (tokenService.needsRefresh()) {
+          console.log('🔄 [Token Refresh Manager] Token needs refresh - attempting proactive refresh...');
+          const success = await tokenService.refreshIfNeeded();
+          
+          if (!success) {
+            console.warn('⚠️ [Token Refresh Manager] Proactive token refresh failed, user will be logged out on next API call');
+          } else {
+            console.log('✅ [Token Refresh Manager] Token refreshed successfully');
+          }
         } else {
-          console.log('Token refreshed successfully');
+          console.log('✓ [Token Refresh Manager] Token is still valid, no refresh needed');
         }
+      } else {
+        console.log('ℹ️ [Token Refresh Manager] User not authenticated, skipping refresh check');
       }
     } catch (error) {
-      console.error('Error during proactive token refresh:', error);
+      console.error('❌ [Token Refresh Manager] Error during proactive token refresh:', error);
     } finally {
       this.isRefreshing = false;
     }
