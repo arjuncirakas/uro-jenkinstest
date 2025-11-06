@@ -47,18 +47,29 @@ export const bookUrologistAppointment = async (req, res) => {
       });
     }
 
-    // Check if urologist exists
-    const urologistCheck = await client.query(
-      'SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = $2',
-      [urologistId, 'urologist']
+    // Check if urologist exists - try doctors table first, then users table
+    let urologistCheck = await client.query(
+      'SELECT id, first_name, last_name, specialization FROM doctors WHERE id = $1 AND is_active = true',
+      [urologistId]
     );
 
+    // If not found in doctors table, try users table
     if (urologistCheck.rows.length === 0) {
+      urologistCheck = await client.query(
+        'SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role = $2',
+        [urologistId, 'urologist']
+      );
+    }
+
+    if (urologistCheck.rows.length === 0) {
+      console.error(`[bookUrologistAppointment] Urologist not found with ID: ${urologistId}`);
       return res.status(404).json({
         success: false,
         message: 'Urologist not found'
       });
     }
+
+    console.log(`[bookUrologistAppointment] Found urologist: ${urologistCheck.rows[0].first_name} ${urologistCheck.rows[0].last_name}`);
 
     // Check for conflicting appointments
     const conflictCheck = await client.query(
@@ -1398,11 +1409,22 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       });
     }
 
-    // Check if doctor exists
-    const doctorQuery = `SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = 'urologist'`;
-    const doctorResult = await client.query(doctorQuery, [newDoctorId]);
+    // Check if doctor exists - try doctors table first, then users table
+    let doctorResult = await client.query(
+      `SELECT id, first_name, last_name, specialization FROM doctors WHERE id = $1 AND is_active = true`,
+      [newDoctorId]
+    );
+    
+    // If not found in doctors table, try users table
+    if (doctorResult.rows.length === 0) {
+      doctorResult = await client.query(
+        `SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = 'urologist'`,
+        [newDoctorId]
+      );
+    }
     
     if (doctorResult.rows.length === 0) {
+      console.error(`[rescheduleNoShowAppointment] Doctor not found with ID: ${newDoctorId}`);
       return res.status(404).json({
         success: false,
         message: 'Doctor not found'
@@ -1411,6 +1433,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
     const doctor = doctorResult.rows[0];
     const doctorName = `${doctor.first_name} ${doctor.last_name}`;
+    console.log(`[rescheduleNoShowAppointment] Found doctor: ${doctorName}`);
 
     // Start transaction
     await client.query('BEGIN');
@@ -1574,19 +1597,39 @@ export const getAvailableTimeSlots = async (req, res) => {
       });
     }
 
-    // Check if doctor exists (support all doctor roles)
-    const doctorQuery = `SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ('urologist', 'radiologist', 'pathologist', 'oncologist')`;
-    const doctorResult = await client.query(doctorQuery, [doctorId]);
+    // Check if doctor exists - try doctors table first, then users table
+    let doctor = null;
+    let doctorSource = null;
     
-    if (doctorResult.rows.length === 0) {
+    // Try doctors table first
+    const doctorsTableQuery = `SELECT id, first_name, last_name, specialization FROM doctors WHERE id = $1 AND is_active = true`;
+    const doctorsTableResult = await client.query(doctorsTableQuery, [doctorId]);
+    
+    if (doctorsTableResult.rows.length > 0) {
+      doctor = doctorsTableResult.rows[0];
+      doctorSource = 'doctors_table';
+      console.log(`[getAvailableTimeSlots] Found doctor in doctors table: ${doctor.first_name} ${doctor.last_name} (${doctor.specialization})`);
+    } else {
+      // Try users table for backwards compatibility
+      const usersTableQuery = `SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ('urologist', 'radiologist', 'pathologist', 'oncologist')`;
+      const usersTableResult = await client.query(usersTableQuery, [doctorId]);
+      
+      if (usersTableResult.rows.length > 0) {
+        doctor = usersTableResult.rows[0];
+        doctorSource = 'users_table';
+        console.log(`[getAvailableTimeSlots] Found doctor in users table: ${doctor.first_name} ${doctor.last_name} (${doctor.role})`);
+      }
+    }
+    
+    if (!doctor) {
+      console.error(`[getAvailableTimeSlots] Doctor not found with ID: ${doctorId}`);
       return res.status(404).json({
         success: false,
         message: 'Doctor not found'
       });
     }
 
-    const doctor = doctorResult.rows[0];
-    console.log(`Checking availability for doctor: ${doctor.first_name} ${doctor.last_name} (${doctor.role})`);
+    console.log(`[getAvailableTimeSlots] Checking availability for doctor: ${doctor.first_name} ${doctor.last_name} from ${doctorSource}`);
 
     // Generate all possible time slots (9:00 AM to 5:00 PM, 30-minute intervals)
     const allSlots = [];
