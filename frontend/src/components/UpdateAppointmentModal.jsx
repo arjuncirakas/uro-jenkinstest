@@ -17,6 +17,8 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   // Fetch available urologists
   useEffect(() => {
@@ -58,11 +60,33 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     }
   }, [isOpen]);
 
-  const timeSlots = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
-  ];
+  // Fetch available time slots when doctor and date are selected
+  useEffect(() => {
+    const fetchAvailableSlots = async () => {
+      if (!selectedDoctorId || !selectedDate) {
+        setAvailableSlots([]);
+        return;
+      }
+
+      setLoadingSlots(true);
+      try {
+        const result = await bookingService.getAvailableTimeSlots(selectedDoctorId, selectedDate, 'urologist');
+        if (result.success) {
+          setAvailableSlots(result.data || []);
+        } else {
+          console.error('Failed to fetch available slots:', result.error);
+          setAvailableSlots([]);
+        }
+      } catch (error) {
+        console.error('Error fetching available slots:', error);
+        setAvailableSlots([]);
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    fetchAvailableSlots();
+  }, [selectedDoctorId, selectedDate]);
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -485,20 +509,41 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               Available Time Slots
             </label>
             <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
-              {timeSlots.map((time) => (
-                <button
-                  key={time}
-                  type="button"
-                  onClick={() => setSelectedTime(time)}
-                  className={`px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${
-                    selectedTime === time
-                      ? 'bg-teal-600 text-white border-teal-600 shadow-sm scale-105'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-teal-300 hover:bg-teal-50'
-                  }`}
-                >
-                  {time}
-                </button>
-              ))}
+              {loadingSlots ? (
+                <div className="col-span-6 flex items-center justify-center py-8">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-600"></div>
+                    <span className="text-gray-600 text-sm">Loading time slots...</span>
+                  </div>
+                </div>
+              ) : !availableSlots || availableSlots.length === 0 ? (
+                <div className="col-span-6 text-center py-8 text-gray-500 text-sm">
+                  {selectedDoctorId && selectedDate ? 'No time slots available' : 'Please select a doctor and date'}
+                </div>
+              ) : (
+                availableSlots.map((slot) => {
+                  const isAvailable = slot.available;
+                  const isSelected = selectedTime === slot.time;
+                  
+                  return (
+                    <button
+                      key={slot.time}
+                      type="button"
+                      onClick={() => isAvailable && setSelectedTime(slot.time)}
+                      disabled={!isAvailable}
+                      className={`px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${
+                        isSelected
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-sm scale-105'
+                          : isAvailable
+                          ? 'bg-white text-gray-700 border-gray-200 hover:border-teal-300 hover:bg-teal-50'
+                          : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
+                      }`}
+                    >
+                      {slot.time}
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 
