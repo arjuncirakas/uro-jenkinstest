@@ -1641,156 +1641,102 @@ export const getAvailableTimeSlots = async (req, res) => {
     }
 
     // Get existing appointments for this doctor on this date
-    let appointmentsQuery;
-    if (type === 'investigation') {
-      // For investigations, check ALL investigation bookings for this date
-      // regardless of which doctor - we want to prevent any time slot conflicts
-      appointmentsQuery = `
-        SELECT ib.scheduled_time, ib.status, ib.investigation_name,
-               p.first_name || ' ' || p.last_name as patient_name
-        FROM investigation_bookings ib
-        JOIN patients p ON ib.patient_id = p.id
-        WHERE ib.scheduled_date = $1
-        AND ib.status NOT IN ('cancelled', 'no_show')
-      `;
-      const appointmentsResult = await client.query(appointmentsQuery, [date]);
-      console.log(`Found ${appointmentsResult.rows.length} existing investigation appointments on ${date}`);
-      
-      const bookedTimes = appointmentsResult.rows.map(row => {
-        const timeValue = row.scheduled_time;
-        const status = row.status;
-        const patientName = row.patient_name;
-        const investigationName = row.investigation_name;
-        // Convert TIME format (HH:MM:SS) to HH:MM format for comparison
-        const formattedTime = timeValue ? timeValue.substring(0, 5) : null;
-        console.log(`Booked time: ${timeValue} (${status}) for ${patientName} - ${investigationName} -> ${formattedTime}`);
-        return formattedTime;
-      }).filter(time => time !== null);
-      
-      console.log(`Booked investigation times: ${JSON.stringify(bookedTimes)}`);
-
-      // Check if the selected date is today to disable past time slots
-      // Use client's timezone offset if provided, otherwise use server time
-      const now = new Date();
-      
-      // Apply timezone offset from client if provided (in minutes, e.g., -330 for IST)
-      let currentDateTime = now;
-      if (timezoneOffset) {
-        const offsetMinutes = parseInt(timezoneOffset);
-        // timezoneOffset is negative of getTimezoneOffset(), so we subtract it
-        currentDateTime = new Date(now.getTime() - (offsetMinutes * 60 * 1000));
-        console.log(`[getAvailableTimeSlots] Using client timezone offset: ${offsetMinutes} minutes`);
-      }
-      
-      const today = currentDateTime.getFullYear() + '-' + 
-                    String(currentDateTime.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(currentDateTime.getDate()).padStart(2, '0');
-      const isToday = date === today;
-      const currentHour = currentDateTime.getHours();
-      const currentMinute = currentDateTime.getMinutes();
-
-      console.log(`[getAvailableTimeSlots] Date comparison - Today: ${today}, Selected: ${date}, IsToday: ${isToday}`);
-      console.log(`[getAvailableTimeSlots] Current time (adjusted): ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
-      console.log(`[getAvailableTimeSlots] Server timezone offset: ${now.getTimezoneOffset() / 60} hours from UTC`);
-      console.log(`[getAvailableTimeSlots] Full datetime: ${currentDateTime.toString()}`);
-
-      // Create available slots array
-      const availableSlots = allSlots.map(time => {
-        const isBooked = bookedTimes.includes(time);
-        let isPastTime = false;
-        
-        if (isToday) {
-          // For today, check if the time slot has already passed
-          const [slotHour, slotMinute] = time.split(':').map(Number);
-          const slotTimeInMinutes = slotHour * 60 + slotMinute;
-          const currentTimeInMinutes = currentHour * 60 + currentMinute;
-          isPastTime = slotTimeInMinutes <= currentTimeInMinutes;
-          
-          if (isPastTime) {
-            console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHour}:${currentMinute})`);
-          }
-        }
-        
-        return {
-          time,
-          available: !isBooked && !isPastTime
-        };
-      });
-
-      const availableCount = availableSlots.filter(s => s.available).length;
-      const unavailableCount = availableSlots.filter(s => !s.available).length;
-      console.log(`[getAvailableTimeSlots] Available: ${availableCount}, Unavailable: ${unavailableCount} out of ${allSlots.length} total`);
-
-      res.json({
-        success: true,
-        data: availableSlots
-      });
-      return;
-    } else {
-      // For urologist appointments, check direct appointments
-      appointmentsQuery = `
-        SELECT a.appointment_time, a.status
-        FROM appointments a
-        WHERE a.urologist_id = $1 
-        AND a.appointment_date = $2
-        AND a.status NOT IN ('cancelled', 'no_show')
-      `;
-    }
-
-    // Handle urologist appointments
-    const appointmentsResult = await client.query(appointmentsQuery, [doctorId, date]);
-    console.log(`[getAvailableTimeSlots] Found ${appointmentsResult.rows.length} existing appointments for doctor ${doctorId} on ${date}`);
+    // CRITICAL: Check BOTH investigation_bookings AND appointments tables
+    // to prevent double-booking the same doctor at the same time
     
-    const bookedTimes = appointmentsResult.rows.map(row => {
-      const timeValue = row.appointment_time;
-      const status = row.status;
-      // Convert TIME format (HH:MM:SS) to HH:MM format for comparison
+    console.log(`[getAvailableTimeSlots] Checking bookings for doctor ${doctorId} on ${date}`);
+    
+    // Query 1: Check investigation bookings for this doctor
+    const investigationQuery = `
+      SELECT ib.scheduled_time, ib.status, ib.investigation_name,
+             p.first_name || ' ' || p.last_name as patient_name
+      FROM investigation_bookings ib
+      JOIN patients p ON ib.patient_id = p.id
+      WHERE ib.scheduled_date = $1
+      AND ib.status NOT IN ('cancelled', 'no_show')
+    `;
+    
+    // Query 2: Check urologist appointments for this doctor
+    const appointmentsQuery = `
+      SELECT a.appointment_time, a.status,
+             p.first_name || ' ' || p.last_name as patient_name
+      FROM appointments a
+      JOIN patients p ON a.patient_id = p.id
+      WHERE a.urologist_id = $1
+      AND a.appointment_date = $2
+      AND a.status NOT IN ('cancelled', 'no_show')
+    `;
+    
+    // Execute both queries
+    const investigationResult = await client.query(investigationQuery, [date]);
+    const appointmentsResult = await client.query(appointmentsQuery, [doctorId, date]);
+    
+    console.log(`[getAvailableTimeSlots] Found ${investigationResult.rows.length} investigation bookings on ${date}`);
+    console.log(`[getAvailableTimeSlots] Found ${appointmentsResult.rows.length} urologist appointments for doctor ${doctorId} on ${date}`);
+    
+    // Combine booked times from both tables
+    const bookedTimesFromInvestigations = investigationResult.rows.map(row => {
+      const timeValue = row.scheduled_time;
       const formattedTime = timeValue ? timeValue.substring(0, 5) : null;
-      console.log(`[getAvailableTimeSlots] Booked time: ${timeValue} (${status}) -> ${formattedTime}`);
+      if (formattedTime) {
+        console.log(`[getAvailableTimeSlots] Investigation booked: ${formattedTime} - ${row.investigation_name} for ${row.patient_name}`);
+      }
       return formattedTime;
     }).filter(time => time !== null);
     
-    console.log(`[getAvailableTimeSlots] Booked times: ${JSON.stringify(bookedTimes)}`);
+    const bookedTimesFromAppointments = appointmentsResult.rows.map(row => {
+      const timeValue = row.appointment_time;
+      const formattedTime = timeValue ? timeValue.substring(0, 5) : null;
+      if (formattedTime) {
+        console.log(`[getAvailableTimeSlots] Urologist appointment booked: ${formattedTime} for ${row.patient_name}`);
+      }
+      return formattedTime;
+    }).filter(time => time !== null);
+    
+    // Merge both arrays and remove duplicates
+    const bookedTimes = [...new Set([...bookedTimesFromInvestigations, ...bookedTimesFromAppointments])];
+    
+    console.log(`[getAvailableTimeSlots] Total booked times (combined): ${JSON.stringify(bookedTimes)}`);
 
     // Check if the selected date is today to disable past time slots
     // Use client's timezone offset if provided, otherwise use server time
-    const nowUro = new Date();
+    const now = new Date();
     
     // Apply timezone offset from client if provided (in minutes, e.g., -330 for IST)
-    let currentDateTimeUro = nowUro;
+    let currentDateTime = now;
     if (timezoneOffset) {
       const offsetMinutes = parseInt(timezoneOffset);
       // timezoneOffset is negative of getTimezoneOffset(), so we subtract it
-      currentDateTimeUro = new Date(nowUro.getTime() - (offsetMinutes * 60 * 1000));
+      currentDateTime = new Date(now.getTime() - (offsetMinutes * 60 * 1000));
       console.log(`[getAvailableTimeSlots] Using client timezone offset: ${offsetMinutes} minutes`);
     }
     
-    const todayUro = currentDateTimeUro.getFullYear() + '-' + 
-                     String(currentDateTimeUro.getMonth() + 1).padStart(2, '0') + '-' + 
-                     String(currentDateTimeUro.getDate()).padStart(2, '0');
-    const isTodayUro = date === todayUro;
-    const currentHourUro = currentDateTimeUro.getHours();
-    const currentMinuteUro = currentDateTimeUro.getMinutes();
+    const today = currentDateTime.getFullYear() + '-' + 
+                  String(currentDateTime.getMonth() + 1).padStart(2, '0') + '-' + 
+                  String(currentDateTime.getDate()).padStart(2, '0');
+    const isToday = date === today;
+    const currentHour = currentDateTime.getHours();
+    const currentMinute = currentDateTime.getMinutes();
 
-    console.log(`[getAvailableTimeSlots] Date comparison - Today: ${todayUro}, Selected: ${date}, IsToday: ${isTodayUro}`);
-    console.log(`[getAvailableTimeSlots] Current time (adjusted): ${currentHourUro}:${String(currentMinuteUro).padStart(2, '0')}`);
-    console.log(`[getAvailableTimeSlots] Server timezone offset: ${nowUro.getTimezoneOffset() / 60} hours from UTC`);
-    console.log(`[getAvailableTimeSlots] Full datetime: ${currentDateTimeUro.toString()}`);
+    console.log(`[getAvailableTimeSlots] Date comparison - Today: ${today}, Selected: ${date}, IsToday: ${isToday}`);
+    console.log(`[getAvailableTimeSlots] Current time (adjusted): ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
+    console.log(`[getAvailableTimeSlots] Server timezone offset: ${now.getTimezoneOffset() / 60} hours from UTC`);
+    console.log(`[getAvailableTimeSlots] Full datetime: ${currentDateTime.toString()}`);
 
     // Create available slots array
     const availableSlots = allSlots.map(time => {
       const isBooked = bookedTimes.includes(time);
       let isPastTime = false;
       
-      if (isTodayUro) {
+      if (isToday) {
         // For today, check if the time slot has already passed
         const [slotHour, slotMinute] = time.split(':').map(Number);
         const slotTimeInMinutes = slotHour * 60 + slotMinute;
-        const currentTimeInMinutes = currentHourUro * 60 + currentMinuteUro;
+        const currentTimeInMinutes = currentHour * 60 + currentMinute;
         isPastTime = slotTimeInMinutes <= currentTimeInMinutes;
         
         if (isPastTime) {
-          console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHourUro}:${String(currentMinuteUro).padStart(2, '0')})`);
+          console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
         }
       }
       
