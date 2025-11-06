@@ -1670,11 +1670,19 @@ export const getAvailableTimeSlots = async (req, res) => {
       console.log(`Booked investigation times: ${JSON.stringify(bookedTimes)}`);
 
       // Check if the selected date is today to disable past time slots
-      const today = new Date().toISOString().split('T')[0];
+      // Use server's local time instead of UTC to properly compare dates
+      const now = new Date();
+      const today = now.getFullYear() + '-' + 
+                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(now.getDate()).padStart(2, '0');
       const isToday = date === today;
-      const currentTime = new Date();
-      const currentHour = currentTime.getHours();
-      const currentMinute = currentTime.getMinutes();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      console.log(`[getAvailableTimeSlots] Date comparison - Today: ${today}, Selected: ${date}, IsToday: ${isToday}`);
+      console.log(`[getAvailableTimeSlots] Current server time: ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
+      console.log(`[getAvailableTimeSlots] Server timezone offset: ${now.getTimezoneOffset() / 60} hours from UTC`);
+      console.log(`[getAvailableTimeSlots] Full server datetime: ${now.toString()}`);
 
       // Create available slots array
       const availableSlots = allSlots.map(time => {
@@ -1687,6 +1695,10 @@ export const getAvailableTimeSlots = async (req, res) => {
           const slotTimeInMinutes = slotHour * 60 + slotMinute;
           const currentTimeInMinutes = currentHour * 60 + currentMinute;
           isPastTime = slotTimeInMinutes <= currentTimeInMinutes;
+          
+          if (isPastTime) {
+            console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHour}:${currentMinute})`);
+          }
         }
         
         return {
@@ -1695,7 +1707,9 @@ export const getAvailableTimeSlots = async (req, res) => {
         };
       });
 
-      console.log(`Available slots count: ${availableSlots.filter(s => s.available).length} out of ${allSlots.length}`);
+      const availableCount = availableSlots.filter(s => s.available).length;
+      const unavailableCount = availableSlots.filter(s => !s.available).length;
+      console.log(`[getAvailableTimeSlots] Available: ${availableCount}, Unavailable: ${unavailableCount} out of ${allSlots.length} total`);
 
       res.json({
         success: true,
@@ -1715,25 +1729,33 @@ export const getAvailableTimeSlots = async (req, res) => {
 
     // Handle urologist appointments
     const appointmentsResult = await client.query(appointmentsQuery, [doctorId, date]);
-    console.log(`Found ${appointmentsResult.rows.length} existing appointments for doctor ${doctorId} on ${date}`);
+    console.log(`[getAvailableTimeSlots] Found ${appointmentsResult.rows.length} existing appointments for doctor ${doctorId} on ${date}`);
     
     const bookedTimes = appointmentsResult.rows.map(row => {
       const timeValue = row.appointment_time;
       const status = row.status;
       // Convert TIME format (HH:MM:SS) to HH:MM format for comparison
       const formattedTime = timeValue ? timeValue.substring(0, 5) : null;
-      console.log(`Booked time: ${timeValue} (${status}) -> ${formattedTime}`);
+      console.log(`[getAvailableTimeSlots] Booked time: ${timeValue} (${status}) -> ${formattedTime}`);
       return formattedTime;
     }).filter(time => time !== null);
     
-    console.log(`Booked times: ${JSON.stringify(bookedTimes)}`);
+    console.log(`[getAvailableTimeSlots] Booked times: ${JSON.stringify(bookedTimes)}`);
 
     // Check if the selected date is today to disable past time slots
-    const today = new Date().toISOString().split('T')[0];
+    // Use server's local time instead of UTC to properly compare dates
+    const now = new Date();
+    const today = now.getFullYear() + '-' + 
+                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                  String(now.getDate()).padStart(2, '0');
     const isToday = date === today;
-    const currentTime = new Date();
-    const currentHour = currentTime.getHours();
-    const currentMinute = currentTime.getMinutes();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    console.log(`[getAvailableTimeSlots] Date comparison - Today: ${today}, Selected: ${date}, IsToday: ${isToday}`);
+    console.log(`[getAvailableTimeSlots] Current server time: ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
+    console.log(`[getAvailableTimeSlots] Server timezone offset: ${now.getTimezoneOffset() / 60} hours from UTC`);
+    console.log(`[getAvailableTimeSlots] Full server datetime: ${now.toString()}`);
 
     // Create available slots array
     const availableSlots = allSlots.map(time => {
@@ -1746,6 +1768,10 @@ export const getAvailableTimeSlots = async (req, res) => {
         const slotTimeInMinutes = slotHour * 60 + slotMinute;
         const currentTimeInMinutes = currentHour * 60 + currentMinute;
         isPastTime = slotTimeInMinutes <= currentTimeInMinutes;
+        
+        if (isPastTime) {
+          console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
+        }
       }
       
       return {
@@ -1753,6 +1779,10 @@ export const getAvailableTimeSlots = async (req, res) => {
         available: !isBooked && !isPastTime
       };
     });
+
+    const availableCount = availableSlots.filter(s => s.available).length;
+    const unavailableCount = availableSlots.filter(s => !s.available).length;
+    console.log(`[getAvailableTimeSlots] Available: ${availableCount}, Unavailable: ${unavailableCount} out of ${allSlots.length} total`);
 
     res.json({
       success: true,
