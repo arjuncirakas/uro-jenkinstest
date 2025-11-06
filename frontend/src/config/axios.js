@@ -1,8 +1,11 @@
 import axios from 'axios';
 
 // Base URL for API
-// const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const BASE_URL = 'https://uroprep.ahimsa.global/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
+
+// Log the API URL being used
+console.log('🌐 [Axios Config] API Base URL:', BASE_URL);
+console.log('🌐 [Axios Config] VITE_API_URL:', import.meta.env.VITE_API_URL);
 
 // Create axios instance
 const apiClient = axios.create({
