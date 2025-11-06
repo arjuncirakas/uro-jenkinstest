@@ -58,9 +58,78 @@ const InvestigationManagement = () => {
     };
   }, []);
 
+  // Listen for investigation booked events to refresh data
+  useEffect(() => {
+    const handleInvestigationBooked = (event) => {
+      console.log('Investigation booked event received:', event.detail);
+      // Show brief loading indicator and refresh investigations data
+      setLoadingInvestigations(true);
+      fetchInvestigations();
+    };
+
+    window.addEventListener('investigationBooked', handleInvestigationBooked);
+    
+    return () => {
+      window.removeEventListener('investigationBooked', handleInvestigationBooked);
+    };
+  }, []);
+
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  };
+
+  // Format date for display (DD/MM/YYYY format)
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    try {
+      let date;
+      if (typeof dateString === 'string') {
+        // If it's already in YYYY-MM-DD format, parse it directly
+        if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = dateString.split('-');
+          date = new Date(year, month - 1, day);
+        } else {
+          date = new Date(dateString);
+        }
+      } else {
+        date = new Date(dateString);
+      }
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date:', dateString);
+        return dateString;
+      }
+      
+      // Format as DD/MM/YYYY
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (error) {
+      console.error('Date formatting error:', error, 'Input:', dateString);
+      return dateString;
+    }
+  };
+
+  // Format time for display (HH:MM AM/PM format)
+  const formatTime = (timeString) => {
+    if (!timeString) return '';
+    try {
+      // If timeString is already in HH:MM format, convert to 12-hour format
+      if (timeString.match(/^\d{2}:\d{2}$/)) {
+        const [hours, minutes] = timeString.split(':');
+        const hour24 = parseInt(hours, 10);
+        const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+        const ampm = hour24 >= 12 ? 'PM' : 'AM';
+        return `${hour12}:${minutes} ${ampm}`;
+      }
+      return timeString;
+    } catch (error) {
+      console.error('Time formatting error:', error, 'Input:', timeString);
+      return timeString;
+    }
   };
 
   // Get PSA color based on threshold
@@ -273,8 +342,8 @@ const InvestigationManagement = () => {
                         </div>
                       </td>
                       <td className="py-3 px-3 text-gray-700 text-xs">
-                        <div className="font-medium">{investigation.appointmentDate}</div>
-                        <div className="text-xs text-gray-500">{investigation.appointmentTime}</div>
+                        <div className="font-medium">{formatDate(investigation.appointmentDate)}</div>
+                        <div className="text-xs text-gray-500">{formatTime(investigation.appointmentTime)}</div>
                       </td>
                       <td className="py-3 px-3 text-gray-700 text-xs">
                         <div className="truncate">{investigation.urologist}</div>

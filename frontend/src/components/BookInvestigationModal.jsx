@@ -143,6 +143,11 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       if (result.success) {
         console.log('Investigation Booked:', result.data);
         
+        // Dispatch event to notify other components to refresh
+        window.dispatchEvent(new CustomEvent('investigationBooked', {
+          detail: { patientId: patient.id, investigationData: result.data }
+        }));
+        
         // Call success callback
         if (onSuccess) {
           onSuccess(result.data);

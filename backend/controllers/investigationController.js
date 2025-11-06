@@ -427,61 +427,95 @@ export const getAllInvestigations = async (req, res) => {
   try {
     const { testType, status } = req.query; // Optional filters
     
-    // Build query to get all investigations with patient details
+    // Build query to get all patients with investigation bookings
+    // This includes both patients with scheduled investigations and those with results
     let query = `
-      SELECT 
-        ir.id,
-        ir.patient_id,
+      SELECT DISTINCT
+        p.id as patient_id,
         p.first_name,
         p.last_name,
         p.upi,
         EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
         p.gender,
         p.initial_psa as psa,
-        ir.test_type,
-        ir.test_name,
-        ir.test_date,
-        ir.result,
-        ir.reference_range,
-        ir.status,
-        ir.notes,
-        ir.file_path,
-        ir.file_name,
-        ir.author_name,
-        ir.author_role,
-        ir.created_at,
-        ir.updated_at,
-        -- Get appointment details if available
-        COALESCE(a.appointment_date, ib.scheduled_date) as appointment_date,
-        COALESCE(a.appointment_time, ib.scheduled_time) as appointment_time,
-        COALESCE(a.urologist_name, ib.investigation_name) as urologist
-      FROM investigation_results ir
-      JOIN patients p ON ir.patient_id = p.id
-      LEFT JOIN appointments a ON ir.patient_id = a.patient_id AND a.appointment_type = 'urologist'
-      LEFT JOIN investigation_bookings ib ON ir.patient_id = ib.patient_id
+        -- Get investigation booking details (primary source for investigation management)
+        ib.scheduled_date as appointment_date,
+        ib.scheduled_time as appointment_time,
+        ib.investigation_name as urologist,
+        ib.created_at as booking_created_at
+      FROM patients p
+      INNER JOIN investigation_bookings ib ON p.id = ib.patient_id 
+        AND ib.status IN ('scheduled', 'confirmed', 'completed')
+      WHERE ib.id IS NOT NULL
+      ORDER BY ib.created_at DESC
     `;
     
-    const queryParams = [];
-    let whereConditions = [];
+    const result = await client.query(query);
     
-    // Add filters
-    if (testType) {
-      whereConditions.push(`(ir.test_type = $${queryParams.length + 1} OR ir.test_name = $${queryParams.length + 1})`);
-      queryParams.push(testType);
+    // Get all investigation results to determine test status
+    let resultsQuery = { rows: [] };
+    
+    if (result.rows.length > 0) {
+      resultsQuery = await client.query(`
+        SELECT 
+          patient_id,
+          test_type,
+          test_name
+        FROM investigation_results
+        WHERE patient_id = ANY($1)
+      `, [result.rows.map(r => r.patient_id)]);
     }
     
-    if (status) {
-      whereConditions.push(`ir.status = $${queryParams.length + 1}`);
-      queryParams.push(status);
-    }
+    // Create a map of patient test results
+    const patientResults = {};
+    resultsQuery.rows.forEach(row => {
+      if (!patientResults[row.patient_id]) {
+        patientResults[row.patient_id] = {
+          mri: false,
+          biopsy: false,
+          trus: false
+        };
+      }
+      const testType = (row.test_type || row.test_name || '').toLowerCase();
+      if (testType === 'mri') {
+        patientResults[row.patient_id].mri = true;
+      } else if (testType === 'biopsy') {
+        patientResults[row.patient_id].biopsy = true;
+      } else if (testType === 'trus') {
+        patientResults[row.patient_id].trus = true;
+      }
+    });
     
-    if (whereConditions.length > 0) {
-      query += ` WHERE ${whereConditions.join(' AND ')}`;
-    }
+    // Helper function to format date
+    const formatDate = (dateValue) => {
+      if (!dateValue) return null;
+      try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) return null;
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      } catch (error) {
+        console.error('Date formatting error:', error);
+        return null;
+      }
+    };
     
-    query += ` ORDER BY ir.test_date DESC, ir.created_at DESC`;
-    
-    const result = await client.query(query, queryParams);
+    // Helper function to format time
+    const formatTime = (timeValue) => {
+      if (!timeValue) return null;
+      try {
+        // If it's already in HH:MM format, return as is
+        if (typeof timeValue === 'string' && timeValue.match(/^\d{2}:\d{2}/)) {
+          return timeValue.substring(0, 5); // Return HH:MM
+        }
+        return timeValue;
+      } catch (error) {
+        console.error('Time formatting error:', error);
+        return null;
+      }
+    };
     
     // Group results by patient and determine test status
     const patientTests = {};
@@ -489,6 +523,8 @@ export const getAllInvestigations = async (req, res) => {
     result.rows.forEach(row => {
       const patientId = row.patient_id;
       if (!patientTests[patientId]) {
+        const results = patientResults[patientId] || { mri: false, biopsy: false, trus: false };
+        
         patientTests[patientId] = {
           id: patientId,
           patientName: `${row.first_name} ${row.last_name}`,
@@ -496,24 +532,14 @@ export const getAllInvestigations = async (req, res) => {
           age: row.age,
           gender: row.gender,
           psa: row.psa,
-          appointmentDate: row.appointment_date,
-          appointmentTime: row.appointment_time,
-          urologist: row.urologist,
-          mri: 'pending',
-          biopsy: 'pending',
-          trus: 'pending',
-          lastUpdated: row.updated_at || row.created_at
+          appointmentDate: formatDate(row.appointment_date),
+          appointmentTime: formatTime(row.appointment_time),
+          urologist: row.urologist || 'Not Assigned',
+          mri: results.mri ? 'completed' : 'pending',
+          biopsy: results.biopsy ? 'completed' : 'pending',
+          trus: results.trus ? 'completed' : 'pending',
+          lastUpdated: row.booking_created_at
         };
-      }
-      
-      // Update test status based on test type
-      const testType = (row.test_type || row.test_name || '').toLowerCase();
-      if (testType === 'mri') {
-        patientTests[patientId].mri = 'completed';
-      } else if (testType === 'biopsy') {
-        patientTests[patientId].biopsy = 'completed';
-      } else if (testType === 'trus') {
-        patientTests[patientId].trus = 'completed';
       }
     });
     

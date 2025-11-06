@@ -547,6 +547,11 @@ export const getNewPatients = async (req, res) => {
         WHERE a.patient_id = p.id 
         AND a.status IN ('scheduled', 'confirmed')
       )
+      AND NOT EXISTS (
+        SELECT 1 FROM investigation_bookings ib
+        WHERE ib.patient_id = p.id 
+        AND ib.status IN ('scheduled', 'confirmed')
+      )
       ORDER BY p.created_at DESC
       LIMIT $${paramCount + 1}
     `;
