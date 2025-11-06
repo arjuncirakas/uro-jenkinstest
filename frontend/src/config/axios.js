@@ -52,7 +52,21 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Handle 401 errors (unauthorized)
+    // Don't try to refresh token for auth endpoints (login, register, etc.)
+    const isAuthEndpoint = originalRequest.url?.includes('/auth/login') || 
+                           originalRequest.url?.includes('/auth/register') ||
+                           originalRequest.url?.includes('/auth/verify') ||
+                           originalRequest.url?.includes('/auth/forgot-password') ||
+                           originalRequest.url?.includes('/auth/reset-password') ||
+                           originalRequest.url?.includes('/auth/refresh-token');
+    
+    // Skip token refresh for auth endpoints - let them handle their own errors
+    if (isAuthEndpoint && error.response?.status === 401) {
+      console.log('🔐 Auth endpoint error - skipping token refresh, letting component handle it');
+      return Promise.reject(error);
+    }
+    
+    // Handle 401 errors (unauthorized) - but NOT for auth endpoints
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       

@@ -245,6 +245,15 @@ export const sendPasswordSetupEmail = async (to, firstName, token) => {
   try {
     const transporter = createTransporter();
     
+    // Get frontend URL - if multiple URLs are set (comma-separated), use the first one (production)
+    const getFrontendUrl = () => {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      // If multiple URLs are comma-separated (for CORS), take the first one
+      return frontendUrl.split(',')[0].trim();
+    };
+    
+    const frontendUrl = getFrontendUrl();
+    
     const mailOptions = {
       from: {
         name: 'Urology Patient Management System',
@@ -261,7 +270,7 @@ export const sendPasswordSetupEmail = async (to, firstName, token) => {
             </p>
             <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <p style="color: #333; font-size: 14px; margin-bottom: 15px;">Click the button below to set up your password:</p>
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/setup-password?token=${token}" 
+              <a href="${frontendUrl}/setup-password?token=${token}" 
                  style="display: inline-block; background-color: #14b8a6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
                 Set Up Password
               </a>
@@ -272,12 +281,12 @@ export const sendPasswordSetupEmail = async (to, firstName, token) => {
             <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
             <p style="color: #999; font-size: 12px;">
               If the button doesn't work, copy and paste this link into your browser:<br>
-              ${process.env.FRONTEND_URL || 'http://localhost:5173'}/setup-password?token=${token}
+              ${frontendUrl}/setup-password?token=${token}
             </p>
           </div>
         </div>
       `,
-      text: `Welcome to UroPrep, ${firstName}! Your account has been created. Please set up your password by visiting: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/setup-password?token=${token}`
+      text: `Welcome to UroPrep, ${firstName}! Your account has been created. Please set up your password by visiting: ${frontendUrl}/setup-password?token=${token}`
     };
 
     const result = await transporter.sendMail(mailOptions);

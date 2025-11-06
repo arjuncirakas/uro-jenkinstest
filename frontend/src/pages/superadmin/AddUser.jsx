@@ -87,8 +87,27 @@ const AddUser = () => {
       case 'phone':
         if (!value.trim()) {
           error = 'Phone number is required';
-        } else if (!/^[\+]?[1-9][\d]{0,15}$/.test(value.replace(/[\s\-\(\)]/g, ''))) {
-          error = 'Please enter a valid phone number';
+        } else {
+          // Remove spaces, hyphens, parentheses for validation
+          const cleanedPhone = value.replace(/[\s\-\(\)]/g, '');
+          // Remove optional + prefix for digit count
+          const digitsOnly = cleanedPhone.replace(/^\+/, '');
+          
+          // Check if it contains only valid characters (digits, +, spaces, hyphens, parentheses)
+          if (!/^[\+\d\s\-\(\)]+$/.test(value)) {
+            error = 'Phone number can only contain digits, spaces, hyphens, parentheses, and + symbol';
+          }
+          // Check digit count (must be between 8 and 12)
+          else if (digitsOnly.length < 8) {
+            error = 'Phone number must be at least 8 digits';
+          }
+          else if (digitsOnly.length > 12) {
+            error = 'Phone number cannot exceed 12 digits';
+          }
+          // Check valid format (optional +, then digits)
+          else if (!/^[\+]?[1-9][\d]{7,11}$/.test(cleanedPhone)) {
+            error = 'Please enter a valid phone number (8-12 digits)';
+          }
         }
         break;
       case 'organization':

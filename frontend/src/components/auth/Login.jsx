@@ -141,13 +141,18 @@ const Login = () => {
           }, 1000);
         } else {
           // Unexpected response format
-          setError('Unexpected response from server');
+          setModalMessage('Unexpected response from server. Please try again.');
+          setShowFailureModal(true);
         }
       } else {
-        setError(response.message || 'Login failed. Please check your credentials and try again.');
+        // Login failed - show modal with error message
+        setModalMessage(response.message || 'Invalid email or password. Please check your credentials and try again.');
+        setShowFailureModal(true);
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials and try again.');
+      // Network or other error - show modal
+      setModalMessage(err.message || 'Login failed. Please check your credentials and try again.');
+      setShowFailureModal(true);
     } finally {
       setIsLoading(false);
     }
@@ -454,12 +459,19 @@ const Login = () => {
       {/* Failure Modal */}
       <FailureModal
         isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
+        onClose={() => {
+          setShowFailureModal(false);
+          setError('');
+          setModalMessage('');
+        }}
         title="Login Failed"
         message={modalMessage}
         onRetry={() => {
           setShowFailureModal(false);
-          setShowOTPModal(true);
+          setError('');
+          setModalMessage('');
+          // Focus back on email input
+          document.getElementById('email')?.focus();
         }}
       />
 

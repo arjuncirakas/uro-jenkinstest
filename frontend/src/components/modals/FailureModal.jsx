@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, AlertCircle, RefreshCw } from 'lucide-react';
 
 const FailureModal = ({ 
@@ -9,11 +9,40 @@ const FailureModal = ({
   onRetry = null,
   showRetry = true
 }) => {
+  // Prevent ESC key from closing the modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        // User must explicitly click Close or Try Again button
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
+  const handleBackdropClick = (e) => {
+    // Prevent closing when clicking outside - user must explicitly close or retry
+    e.stopPropagation();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <div 
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={handleBackdropClick}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">

@@ -215,6 +215,8 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log(`🔐 Login attempt for: ${email}`);
+
     // Find user by email
     const result = await client.query(
       'SELECT id, email, password_hash, first_name, last_name, role, is_active, is_verified FROM users WHERE email = $1',
@@ -222,6 +224,7 @@ export const login = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      console.log(`❌ Login failed: User not found - ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -232,6 +235,7 @@ export const login = async (req, res) => {
 
     // Check if account is active
     if (!user.is_active) {
+      console.log(`❌ Login failed: Account deactivated - ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Account is deactivated'
@@ -240,6 +244,7 @@ export const login = async (req, res) => {
 
     // Check if account is verified
     if (!user.is_verified) {
+      console.log(`❌ Login failed: Account not verified - ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Account not verified. Please verify your email first.'
@@ -250,11 +255,14 @@ export const login = async (req, res) => {
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!isPasswordValid) {
+      console.log(`❌ Login failed: Invalid password - ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
     }
+
+    console.log(`✅ Password verified for: ${email}`);
 
     // Generate and store OTP for login verification
     const otpResult = await storeOTP(user.id, email, 'login_verification');

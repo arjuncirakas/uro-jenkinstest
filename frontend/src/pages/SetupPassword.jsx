@@ -5,8 +5,8 @@ import authService from '../services/authService.js';
 
 const SetupPassword = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [token, setToken] = useState(null);
   
   const [formData, setFormData] = useState({
     password: '',
@@ -20,16 +20,39 @@ const SetupPassword = () => {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Handle token securely - get from URL, store in sessionStorage, then clear URL
   useEffect(() => {
-    console.log('SetupPassword component mounted with token:', token);
-    if (!token) {
-      console.log('No token found, showing error modal');
-      setErrorMessage('Invalid or missing setup token');
-      setShowErrorModal(true);
+    const urlToken = searchParams.get('token');
+    const storedToken = sessionStorage.getItem('setupToken');
+    
+    if (urlToken) {
+      // Store token in sessionStorage
+      sessionStorage.setItem('setupToken', urlToken);
+      setToken(urlToken);
+      
+      // Clear token from URL to hide it from address bar
+      console.log('🔒 Token received and stored securely, clearing from URL...');
+      navigate('/setup-password', { replace: true });
+    } else if (storedToken) {
+      // Use token from sessionStorage if URL doesn't have it
+      setToken(storedToken);
+      console.log('🔒 Using token from secure storage');
     } else {
-      console.log('Token found, component should render normally');
+      // No token available
+      console.log('❌ No token found');
+      setErrorMessage('Invalid or missing setup token. Please use the link from your email.');
+      setShowErrorModal(true);
     }
-  }, [token]);
+  }, [searchParams, navigate]);
+
+  // Cleanup token when component unmounts or on successful setup
+  useEffect(() => {
+    return () => {
+      if (showSuccessModal) {
+        sessionStorage.removeItem('setupToken');
+      }
+    };
+  }, [showSuccessModal]);
 
   // Password strength calculation
   const calculatePasswordStrength = (password) => {
@@ -152,12 +175,16 @@ const SetupPassword = () => {
 
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
+    // Clear token from storage on success
+    sessionStorage.removeItem('setupToken');
     navigate('/login');
   };
 
   const handleErrorModalClose = () => {
     setShowErrorModal(false);
     if (!token) {
+      // Clear token and redirect if no valid token
+      sessionStorage.removeItem('setupToken');
       navigate('/login');
     }
   };
