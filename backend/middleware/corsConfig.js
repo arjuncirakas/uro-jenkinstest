@@ -35,14 +35,15 @@ export const getAllowedOrigins = () => {
 
 /**
  * Enhanced CORS options with better logging
+ * TEMPORARY: Using "*" to allow all origins globally
+ * TODO: Restore proper origin checking before final deployment
  */
 export const corsOptions = {
-  // TEMPORARY: Allow all origins for development/testing
-  // TODO: Remove this and restore proper origin checking before final deployment
-  origin: '*',
+  // Allow all origins globally (temporary for deployment)
+  origin: "*",
   
-  // NOTE: credentials must be false when using origin: '*'
-  // If you need credentials, use specific origins instead
+  // Note: credentials must be false when using "*" origin
+  // If you need credentials later, you'll need to specify allowed origins instead of "*"
   credentials: false,
   
   // Allowed methods

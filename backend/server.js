@@ -64,7 +64,8 @@ app.use(helmet({
   xssFilter: true,
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "same-site" }
+  // Allow cross-origin resources to work with CORS "*" configuration
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // Additional security headers middleware
