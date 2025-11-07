@@ -35,16 +35,26 @@ export const getAllowedOrigins = () => {
 
 /**
  * Enhanced CORS options with better logging
- * TEMPORARY: Using "*" to allow all origins globally
+ * TEMPORARY: Allow all origins globally (returns specific origin to support credentials)
  * TODO: Restore proper origin checking before final deployment
  */
 export const corsOptions = {
-  // Allow all origins globally (temporary for deployment)
-  origin: "*",
+  // Allow all origins by returning the requesting origin dynamically
+  // This allows credentials to work (browser requires specific origin, not "*")
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, server-to-server)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // TEMPORARY: Allow all origins - return the requesting origin
+    // This satisfies the browser's requirement for credentials mode
+    console.log(`✅ CORS: Allowing origin (global access): ${origin}`);
+    return callback(null, origin);
+  },
   
-  // Note: credentials must be false when using "*" origin
-  // If you need credentials later, you'll need to specify allowed origins instead of "*"
-  credentials: false,
+  // Enable credentials to work with withCredentials: true from frontend
+  credentials: true,
   
   // Allowed methods
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
