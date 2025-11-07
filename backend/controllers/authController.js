@@ -687,10 +687,10 @@ export const resetPassword = async (req, res) => {
     const { resetToken, newPassword } = req.body;
 
     // Validate password
-    if (!newPassword || newPassword.length < 8) {
+    if (!newPassword || newPassword.length < 14) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 8 characters long'
+        message: 'Password must be at least 14 characters long'
       });
     }
 

@@ -416,10 +416,10 @@ export const setupPassword = async (req, res) => {
     const { token, password } = req.body;
 
     // Validate password
-    if (!password || password.length < 8) {
+    if (!password || password.length < 14) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 8 characters long'
+        message: 'Password must be at least 14 characters long'
       });
     }
 

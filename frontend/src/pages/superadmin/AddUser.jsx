@@ -32,6 +32,7 @@ const AddUser = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdUser, setCreatedUser] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -45,6 +46,9 @@ const AddUser = () => {
   
   useEffect(() => {
     if (error && !showSuccessModal && !isLoading) {
+      // Extract error message - handle both string and object formats
+      const message = typeof error === 'string' ? error : (error?.message || 'An error occurred while creating the user.');
+      setErrorMessage(message);
       setShowErrorModal(true);
     }
   }, [error, showSuccessModal, isLoading]);
@@ -86,6 +90,10 @@ const AddUser = () => {
         if (!value.trim()) {
           error = 'Phone number is required';
         } else {
+          // First check if it contains any alphabets - this should be caught by validatePhoneInput, but double-check
+          if (/[a-zA-Z]/.test(value)) {
+            error = 'Phone number cannot contain letters. Please enter only digits (8-12 numbers).';
+          }
           // Remove spaces, hyphens, parentheses for validation
           const cleanedPhone = value.replace(/[\s\-\(\)]/g, '');
           // Remove optional + prefix for digit count
@@ -93,18 +101,18 @@ const AddUser = () => {
           
           // Check if it contains only valid characters (digits, +, spaces, hyphens, parentheses)
           if (!/^[\+\d\s\-\(\)]+$/.test(value)) {
-            error = 'Phone number can only contain digits, spaces, hyphens, parentheses, and + symbol';
+            error = 'Phone number can only contain digits (0-9), spaces, hyphens, parentheses, and + symbol. Letters are not allowed.';
           }
           // Check digit count (must be between 8 and 12)
           else if (digitsOnly.length < 8) {
-            error = 'Phone number must be at least 8 digits';
+            error = 'Phone number must contain at least 8 digits. Please enter 8 to 12 numbers.';
           }
           else if (digitsOnly.length > 12) {
-            error = 'Phone number cannot exceed 12 digits';
+            error = 'Phone number cannot exceed 12 digits. Please enter 8 to 12 numbers.';
           }
-          // Check valid format (optional +, then digits)
+          // Check valid format (optional +, then digits starting with 1-9)
           else if (!/^[\+]?[1-9][\d]{7,11}$/.test(cleanedPhone)) {
-            error = 'Please enter a valid phone number (8-12 digits)';
+            error = 'Please enter a valid phone number. Must be 8 to 12 digits and cannot start with 0.';
           }
         }
         break;
@@ -136,9 +144,17 @@ const AddUser = () => {
     }
     
     // Phone field - only allow digits, spaces, hyphens, parentheses, plus
+    // Strictly block alphabets
     if (name === 'phone') {
       isValid = validatePhoneInput(value);
-      if (!isValid) return; // Don't update if invalid characters
+      if (!isValid) {
+        // Show immediate error for invalid characters (especially alphabets)
+        setErrors(prev => ({
+          ...prev,
+          phone: 'Phone number cannot contain letters. Please enter only digits (8-12 numbers).'
+        }));
+        return; // Don't update if invalid characters
+      }
     }
     
     // Sanitize text inputs to prevent XSS
@@ -181,6 +197,7 @@ const AddUser = () => {
     dispatch(clearError());
     setShowErrorModal(false);
     setShowSuccessModal(false);
+    setErrorMessage('');
     
     // Validate form
     if (!validateForm()) {
@@ -209,17 +226,25 @@ const AddUser = () => {
         setShowErrorModal(false); // Ensure error modal is closed
         dispatch(clearError()); // Clear any Redux error state
       } else if (result.type.endsWith('/rejected')) {
-        // Handle rejected action
+        // Handle rejected action - extract error message from result
+        const rejectedError = result.payload || result.error || 'Failed to create user. Please try again.';
+        const message = typeof rejectedError === 'string' ? rejectedError : (rejectedError?.message || 'Failed to create user. Please try again.');
+        setErrorMessage(message);
         setShowSuccessModal(false); // Ensure success modal is closed
         setShowErrorModal(true);
       } else {
         // Handle case where action is fulfilled but not successful
         console.error('Create user action fulfilled but not successful:', result.payload);
+        const message = result.payload?.message || 'User creation failed. Please check all fields and try again.';
+        setErrorMessage(message);
         setShowSuccessModal(false);
         setShowErrorModal(true);
       }
     } catch (error) {
       console.error('Error creating user:', error);
+      // Extract error message from caught error
+      const message = error?.message || error?.toString() || 'An unexpected error occurred while creating the user. Please try again.';
+      setErrorMessage(message);
       setShowSuccessModal(false); // Ensure success modal is closed
       setShowErrorModal(true);
     }
@@ -232,6 +257,7 @@ const AddUser = () => {
 
   const handleErrorModalClose = () => {
     setShowErrorModal(false);
+    setErrorMessage('');
     dispatch(clearError());
   };
 
@@ -502,7 +528,7 @@ const AddUser = () => {
       <ErrorModal
         isOpen={showErrorModal}
         onClose={handleErrorModalClose}
-        error={error}
+        message={errorMessage || (typeof error === 'string' ? error : error?.message) || 'An error occurred while creating the user. Please check all fields and try again.'}
         title="Create User Error"
       />
     </div>

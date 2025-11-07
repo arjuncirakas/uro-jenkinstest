@@ -63,7 +63,7 @@ const SetupPassword = () => {
       number: /(?=.*\d)/.test(password),
       special: /(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(password),
       noSpaces: !/\s/.test(password),
-      minLength: password.length >= 8
+      minLength: password.length >= 14
     };
     
     Object.values(requirements).forEach(met => {
@@ -80,8 +80,8 @@ const SetupPassword = () => {
       case 'password':
         if (!value) {
           error = 'Password is required';
-        } else if (value.length < 8) {
-          error = 'Password must be at least 8 characters long';
+        } else if (value.length < 14) {
+          error = 'Password must be at least 14 characters long';
         } else if (!/(?=.*[a-z])/.test(value)) {
           error = 'Password must contain at least one lowercase letter';
         } else if (!/(?=.*[A-Z])/.test(value)) {
@@ -204,11 +204,11 @@ const SetupPassword = () => {
       <div className="max-w-md w-full">
         {/* Logo and Header */}
         <div className="text-center mb-6">
-          <div className="mx-auto h-16 w-16 bg-gradient-to-br from-teal-800 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg mb-4">
+          <div className="mx-auto flex items-center justify-center mb-4">
             <img 
-              src="/urologo2.png" 
-              alt="UroPrep Logo" 
-              className="h-10 w-10 object-contain"
+              src="/rdshgdsr.png" 
+              alt="Uro - Urology Care System" 
+              className="h-20 w-auto object-contain"
             />
           </div>
           <h2 className="text-2xl font-bold text-gray-900">
@@ -283,7 +283,7 @@ const SetupPassword = () => {
                       number: 'Number',
                       special: 'Special character',
                       noSpaces: 'No spaces',
-                      minLength: 'At least 8 characters'
+                      minLength: 'At least 14 characters'
                     };
                   
                     return (

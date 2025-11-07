@@ -74,8 +74,8 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
     setError('');
 
     // Validation
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters long');
+    if (newPassword.length < 14) {
+      setError('Password must be at least 14 characters long');
       return;
     }
 
@@ -363,7 +363,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onSuccess }) => {
                   <ul className="text-xs text-gray-600 space-y-1">
                     <li className="flex items-center">
                       <span className="mr-2">•</span>
-                      At least 8 characters
+                      At least 14 characters
                     </li>
                     <li className="flex items-center">
                       <span className="mr-2">•</span>

@@ -684,10 +684,6 @@ const Register = () => {
         onClose={() => setShowFailureModal(false)}
         title="Registration Failed"
         message={modalMessage}
-        onRetry={() => {
-          setShowFailureModal(false);
-          setShowOTPModal(true);
-        }}
       />
     </div>
   );

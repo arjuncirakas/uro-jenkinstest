@@ -48,6 +48,8 @@ const ChangePasswordModal = ({
       case 'newPassword':
         if (!value) {
           error = 'New password is required';
+        } else if (value.length < 14) {
+          error = 'Password must be at least 14 characters long';
         } else if (!/(?=.*[a-z])/.test(value)) {
           error = 'Password must contain at least one lowercase letter';
         } else if (!/(?=.*[A-Z])/.test(value)) {

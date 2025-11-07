@@ -14,9 +14,11 @@ export const validateNameInput = (value) => {
 };
 
 // Validate phone number (only digits, spaces, hyphens, parentheses, plus sign)
+// Strictly blocks alphabets and special characters
 export const validatePhoneInput = (value) => {
-  // Allow digits, spaces, hyphens, parentheses, plus sign
-  const phoneRegex = /^[0-9\s\-()+ ]*$/;
+  // Only allow digits (0-9), spaces, hyphens (-), parentheses (), and plus sign (+)
+  // Explicitly block all alphabets (a-z, A-Z) and other special characters
+  const phoneRegex = /^[\d\s\-()+]*$/;
   return phoneRegex.test(value);
 };
 

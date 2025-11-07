@@ -84,8 +84,8 @@ export const validateRegistrationInput = [
     .escape(),
     
   body('password')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters long')
+    .isLength({ min: 14 })
+    .withMessage('Password must be at least 14 characters long')
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
     .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
     .custom((value) => {
