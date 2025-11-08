@@ -474,7 +474,7 @@ const Users = () => {
                       value={selectedDepartment}
                       onChange={(e) => handleFilterChange('department_id', e.target.value)}
                       disabled={loadingDepartments}
-                      className={`block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none ${
+                      className={`block w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
                         loadingDepartments ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
@@ -485,6 +485,11 @@ const Users = () => {
                         </option>
                       ))}
                     </select>
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
               )}

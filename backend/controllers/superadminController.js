@@ -267,15 +267,13 @@ export const getAllUsers = async (req, res) => {
     
     // Also filter users with role 'doctor' by department_id if provided
     if (role === 'doctor' && department_id && department_id !== '' && deptParamIndex !== null) {
-      // For users with role 'doctor', we need to join with doctors table to filter by department
-      // Use the same parameter index that was used for the doctor filter
-      userWhereConditions.push(`(
-        role != 'doctor' OR 
-        EXISTS (
-          SELECT 1 FROM doctors doc 
-          WHERE doc.email = u.email 
-          AND doc.department_id = $${deptParamIndex}
-        )
+      // For users with role 'doctor', we need to filter by department
+      // Only include doctors that have a matching department_id in the doctors table
+      // Since we already filtered by role='doctor', we just need to check the department
+      userWhereConditions.push(`EXISTS (
+        SELECT 1 FROM doctors doc 
+        WHERE doc.email = u.email 
+        AND doc.department_id = $${deptParamIndex}
       )`);
     }
 
