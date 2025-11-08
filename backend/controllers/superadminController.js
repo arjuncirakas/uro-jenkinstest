@@ -235,9 +235,6 @@ export const getAllUsers = async (req, res) => {
       }
     }
 
-    const userWhereClause = userWhereConditions.join(' AND ');
-    const doctorWhereClause = doctorWhereConditions.join(' AND ');
-
     // Build role filter for doctors based on department
     let doctorRoleFilter = '';
     let departmentFilter = '';
@@ -276,6 +273,10 @@ export const getAllUsers = async (req, res) => {
         AND doc.department_id = $${deptParamIndex}
       )`);
     }
+
+    // Build WHERE clauses AFTER all conditions are added
+    const userWhereClause = userWhereConditions.join(' AND ');
+    const doctorWhereClause = doctorWhereConditions.join(' AND ');
 
     // Build UNION query to combine users and doctors
     // Only include doctors that don't already have user accounts (to avoid duplicates)
@@ -407,6 +408,101 @@ export const getAllUsers = async (req, res) => {
 
   } catch (error) {
     console.error('Get all users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Filter users with department support (superadmin only)
+export const filterUsers = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { role, department_id, status, search } = req.query;
+    
+    // Build base query - get users with role 'doctor' and join with doctors table
+    let query = `
+      SELECT DISTINCT
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.organization,
+        u.role,
+        u.is_active,
+        u.is_verified,
+        u.created_at,
+        u.last_login_at,
+        dept.name as department_name,
+        d.department_id
+      FROM users u
+      LEFT JOIN doctors d ON u.email = d.email AND u.role = 'doctor'
+      LEFT JOIN departments dept ON d.department_id = dept.id
+      WHERE u.role != 'superadmin'
+    `;
+    
+    const params = [];
+    let paramIndex = 1;
+    
+    // Add role filter
+    if (role && role.trim() !== '') {
+      query += ` AND u.role = $${paramIndex}`;
+      params.push(role.trim());
+      paramIndex++;
+    }
+    
+    // Add department filter - CRITICAL: Only apply when role is 'doctor'
+    if (role === 'doctor' && department_id && department_id.trim() !== '') {
+      query += ` AND d.department_id = $${paramIndex}`;
+      params.push(parseInt(department_id.trim(), 10));
+      paramIndex++;
+    }
+    
+    // Add status filter
+    if (status && status.trim() !== '' && status.trim() !== 'all') {
+      const statusValue = status.trim().toLowerCase();
+      if (statusValue === 'pending') {
+        query += ` AND u.is_verified = false`;
+      } else if (statusValue === 'active') {
+        query += ` AND u.is_verified = true AND u.is_active = true`;
+      } else if (statusValue === 'inactive') {
+        query += ` AND u.is_verified = true AND u.is_active = false`;
+      }
+    }
+    
+    // Add search filter
+    if (search && search.trim() !== '') {
+      const searchClean = search.trim().replace(/\s+/g, '');
+      const searchPattern = `${searchClean}%`;
+      query += ` AND (
+        CONCAT(u.first_name, u.last_name) ILIKE $${paramIndex} OR 
+        CONCAT(u.first_name, ' ', u.last_name) ILIKE $${paramIndex} OR 
+        u.first_name ILIKE $${paramIndex} OR 
+        u.email ILIKE $${paramIndex}
+      )`;
+      params.push(searchPattern);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY u.created_at DESC`;
+    
+    const result = await client.query(query, params);
+    
+    res.json({
+      success: true,
+      data: {
+        users: result.rows,
+        count: result.rows.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('Filter users error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

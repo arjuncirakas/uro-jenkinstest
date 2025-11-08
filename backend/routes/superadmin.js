@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
   getAllUsers,
+  filterUsers,
   getUserById,
   createUser,
   updateUser,
@@ -56,6 +57,7 @@ router.get('/dashboard-stats', generalLimiter, getDashboardStats);
 
 // User management routes
 router.get('/users', generalLimiter, getAllUsers);
+router.get('/users/filter', generalLimiter, filterUsers);
 router.post('/users', generalLimiter, createUser);
 router.get('/users/:id', generalLimiter, getUserById);
 router.put('/users/:id', generalLimiter, updateUser);

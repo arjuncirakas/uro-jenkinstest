@@ -14,6 +14,11 @@ class SuperadminService {
   // Get all users with pagination and filters
   async getAllUsers(params = {}) {
     try {
+      // If filtering by department with role 'doctor', use the dedicated filter endpoint
+      if (params.role === 'doctor' && params.department_id && String(params.department_id).trim() !== '') {
+        return this.filterUsers(params);
+      }
+      
       const queryParams = new URLSearchParams();
       
       // Always include page and limit
@@ -39,6 +44,47 @@ class SuperadminService {
       return response.data;
     } catch (error) {
       console.error('❌ Frontend getAllUsers - Error:', error);
+      throw handleApiError(error);
+    }
+  }
+
+  // Filter users with department support
+  async filterUsers(params = {}) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      // Only add filters if they have non-empty values
+      if (params.role && String(params.role).trim() !== '') {
+        queryParams.append('role', String(params.role).trim());
+      }
+      if (params.search && String(params.search).trim() !== '') {
+        queryParams.append('search', String(params.search).trim());
+      }
+      if (params.status && String(params.status).trim() !== '' && String(params.status).trim() !== 'all') {
+        queryParams.append('status', String(params.status).trim().toLowerCase());
+      }
+      if (params.department_id && String(params.department_id).trim() !== '') {
+        queryParams.append('department_id', String(params.department_id).trim());
+      }
+
+      const queryString = queryParams.toString();
+      const response = await apiClient.get(`/superadmin/users/filter?${queryString}`);
+      
+      // Format response to match getAllUsers format
+      return {
+        success: response.data.success,
+        data: {
+          users: response.data.data.users,
+          pagination: {
+            currentPage: 1,
+            totalPages: 1,
+            totalUsers: response.data.data.count,
+            limit: response.data.data.count
+          }
+        }
+      };
+    } catch (error) {
+      console.error('❌ Frontend filterUsers - Error:', error);
       throw handleApiError(error);
     }
   }
