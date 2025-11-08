@@ -433,56 +433,75 @@ export const filterUsers = async (req, res) => {
     const filterByDepartment = role && role.trim() === 'doctor' && department_id && department_id.trim() !== '';
     const deptId = filterByDepartment ? parseInt(department_id.trim(), 10) : null;
     
-    // Build base query - use INNER JOIN when filtering by department to ensure doctor record exists
-    let joinType = filterByDepartment ? 'INNER' : 'LEFT';
+    // When filtering by department, start from doctors table (source of truth for departments)
+    // Otherwise, start from users table
+    let query;
     
-    let query = `
-      SELECT DISTINCT
-        u.id,
-        u.email,
-        u.first_name,
-        u.last_name,
-        u.phone,
-        u.organization,
-        u.role,
-        u.is_active,
-        u.is_verified,
-        u.created_at,
-        u.last_login_at,
-        dept.name as department_name,
-        d.department_id
-      FROM users u
-      ${joinType} JOIN doctors d ON u.email = d.email
-      LEFT JOIN departments dept ON d.department_id = dept.id
-      WHERE u.role != 'superadmin'
-    `;
-    
-    // Add role filter
-    if (role && role.trim() !== '') {
-      query += ` AND u.role = $${paramIndex}`;
-      params.push(role.trim());
-      paramIndex++;
-    }
-    
-    // Add department filter - CRITICAL: Only apply when role is 'doctor'
     if (filterByDepartment && !isNaN(deptId)) {
-      query += ` AND d.department_id = $${paramIndex}`;
+      // Start from doctors table when filtering by department
+      query = `
+        SELECT DISTINCT
+          COALESCE(u.id, d.id + 1000000) as id,
+          COALESCE(u.email, d.email) as email,
+          COALESCE(u.first_name, d.first_name) as first_name,
+          COALESCE(u.last_name, d.last_name) as last_name,
+          COALESCE(u.phone, d.phone) as phone,
+          u.organization,
+          COALESCE(u.role, 'doctor') as role,
+          COALESCE(u.is_active, d.is_active) as is_active,
+          COALESCE(u.is_verified, false) as is_verified,
+          COALESCE(u.created_at, d.created_at) as created_at,
+          u.last_login_at,
+          dept.name as department_name,
+          d.department_id
+        FROM doctors d
+        LEFT JOIN users u ON d.email = u.email AND u.role = 'doctor'
+        LEFT JOIN departments dept ON d.department_id = dept.id
+        WHERE d.department_id = $${paramIndex}
+      `;
       params.push(deptId);
       paramIndex++;
       console.log('🔍 Added department filter:', deptId);
-    } else if (filterByDepartment) {
-      console.error('❌ Invalid department_id:', department_id);
+    } else {
+      // Start from users table when not filtering by department
+      query = `
+        SELECT DISTINCT
+          u.id,
+          u.email,
+          u.first_name,
+          u.last_name,
+          u.phone,
+          u.organization,
+          u.role,
+          u.is_active,
+          u.is_verified,
+          u.created_at,
+          u.last_login_at,
+          dept.name as department_name,
+          d.department_id
+        FROM users u
+        LEFT JOIN doctors d ON u.email = d.email
+        LEFT JOIN departments dept ON d.department_id = dept.id
+        WHERE u.role != 'superadmin'
+      `;
+      
+      // Add role filter
+      if (role && role.trim() !== '') {
+        query += ` AND u.role = $${paramIndex}`;
+        params.push(role.trim());
+        paramIndex++;
+      }
     }
     
     // Add status filter
     if (status && status.trim() !== '' && status.trim() !== 'all') {
       const statusValue = status.trim().toLowerCase();
       if (statusValue === 'pending') {
-        query += ` AND u.is_verified = false`;
+        query += ` AND COALESCE(u.is_verified, false) = false`;
       } else if (statusValue === 'active') {
-        query += ` AND u.is_verified = true AND u.is_active = true`;
+        query += ` AND COALESCE(u.is_verified, false) = true AND COALESCE(u.is_active, true) = true`;
       } else if (statusValue === 'inactive') {
-        query += ` AND u.is_verified = true AND u.is_active = false`;
+        query += ` AND COALESCE(u.is_verified, false) = true AND COALESCE(u.is_active, true) = false`;
       }
     }
     
@@ -491,16 +510,16 @@ export const filterUsers = async (req, res) => {
       const searchClean = search.trim().replace(/\s+/g, '');
       const searchPattern = `${searchClean}%`;
       query += ` AND (
-        CONCAT(u.first_name, u.last_name) ILIKE $${paramIndex} OR 
-        CONCAT(u.first_name, ' ', u.last_name) ILIKE $${paramIndex} OR 
-        u.first_name ILIKE $${paramIndex} OR 
-        u.email ILIKE $${paramIndex}
+        CONCAT(COALESCE(u.first_name, d.first_name), COALESCE(u.last_name, d.last_name)) ILIKE $${paramIndex} OR 
+        CONCAT(COALESCE(u.first_name, d.first_name), ' ', COALESCE(u.last_name, d.last_name)) ILIKE $${paramIndex} OR 
+        COALESCE(u.first_name, d.first_name) ILIKE $${paramIndex} OR 
+        COALESCE(u.email, d.email) ILIKE $${paramIndex}
       )`;
       params.push(searchPattern);
       paramIndex++;
     }
     
-    query += ` ORDER BY u.created_at DESC`;
+    query += ` ORDER BY created_at DESC`;
     
     console.log('🔍 Final query:', query);
     console.log('🔍 Query params:', params);
