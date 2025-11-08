@@ -168,6 +168,7 @@ export const getAllUsers = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const role = req.query.role ? String(req.query.role).trim() : null;
     const search = req.query.search ? String(req.query.search).trim() : null;
+    const department_id = req.query.department_id ? String(req.query.department_id).trim() : null;
     
     // Handle status parameter - it must be explicitly checked
     let status = null;
@@ -239,6 +240,8 @@ export const getAllUsers = async (req, res) => {
 
     // Build role filter for doctors based on department
     let doctorRoleFilter = '';
+    let departmentFilter = '';
+    let deptParamIndex = null;
     if (role && role !== '') {
       if (role === 'urologist') {
         doctorRoleFilter = `AND (LOWER(dept.name) LIKE '%urology%' OR dept.name IS NULL)`;
@@ -249,10 +252,31 @@ export const getAllUsers = async (req, res) => {
       } else if (role === 'doctor') {
         // Include all doctors when filtering by 'doctor' role
         doctorRoleFilter = ``;
+        // Add department filter if provided
+        if (department_id && department_id !== '') {
+          deptParamIndex = paramIndex;
+          departmentFilter = `AND d.department_id = $${paramIndex}`;
+          queryParams.push(parseInt(department_id, 10));
+          paramIndex++;
+        }
       } else {
         // For other roles, don't include doctors
         doctorRoleFilter = `AND 1=0`;
       }
+    }
+    
+    // Also filter users with role 'doctor' by department_id if provided
+    if (role === 'doctor' && department_id && department_id !== '' && deptParamIndex !== null) {
+      // For users with role 'doctor', we need to join with doctors table to filter by department
+      // Use the same parameter index that was used for the doctor filter
+      userWhereConditions.push(`(
+        role != 'doctor' OR 
+        EXISTS (
+          SELECT 1 FROM doctors doc 
+          WHERE doc.email = u.email 
+          AND doc.department_id = $${deptParamIndex}
+        )
+      )`);
     }
 
     // Build UNION query to combine users and doctors
@@ -317,6 +341,7 @@ export const getAllUsers = async (req, res) => {
             AND u6.role != 'superadmin'
           )
           ${doctorRoleFilter}
+          ${departmentFilter}
       )
     `;
 

@@ -19,8 +19,10 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { getAllUsers, deleteUser, resendPasswordSetup, setFilters, clearFilters } from '../../store/slices/superadminSlice';
+import { doctorsService } from '../../services/doctorsService';
 import ErrorModal from '../../components/modals/ErrorModal';
 import SuccessModal from '../../components/modals/SuccessModal';
+import { Building2 } from 'lucide-react';
 
 const Users = () => {
   const navigate = useNavigate();
@@ -39,7 +41,34 @@ const Users = () => {
   const searchTimeoutRef = useRef(null);
   const [frontendPage, setFrontendPage] = useState(1);
   const [frontendPageSize] = useState(10);
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState(filters.department_id || '');
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   
+  // Fetch departments when role is doctor
+  useEffect(() => {
+    if (filters.role === 'doctor') {
+      const fetchDepartments = async () => {
+        setLoadingDepartments(true);
+        try {
+          const response = await doctorsService.getAllDepartments({ is_active: true });
+          if (response.success) {
+            setDepartments(response.data);
+          }
+        } catch (err) {
+          console.error('Error fetching departments:', err);
+        } finally {
+          setLoadingDepartments(false);
+        }
+      };
+      fetchDepartments();
+    } else {
+      // Clear department selection when role is not doctor
+      setSelectedDepartment('');
+      dispatch(setFilters({ department_id: '' }));
+    }
+  }, [filters.role, dispatch]);
+
   // Frontend filtering as fallback - ALWAYS applied to ensure correct filtering
   const filteredUsers = useMemo(() => {
     let filtered = [...allUsers];
@@ -56,6 +85,13 @@ const Users = () => {
     // Apply role filter on frontend as fallback
     if (filters.role && filters.role.trim() !== '') {
       filtered = filtered.filter(user => user.role === filters.role.trim());
+    }
+    
+    // Apply department filter when role is doctor
+    if (filters.role === 'doctor' && selectedDepartment && selectedDepartment.trim() !== '') {
+      // Note: This will filter doctors by department_id if the user data includes it
+      // For now, we'll need to fetch doctor data separately or include department info in user data
+      // This is a placeholder - you may need to enhance the backend to return department info with users
     }
     
     // Apply search filter on frontend - ALWAYS use "starts with" (NOT includes)
@@ -87,7 +123,7 @@ const Users = () => {
     }
     
     return filtered;
-  }, [allUsers, filters.status, filters.role, searchValue]);
+  }, [allUsers, filters.status, filters.role, searchValue, selectedDepartment]);
   
   // Apply frontend pagination to filtered results
   const paginatedUsers = useMemo(() => {
@@ -103,7 +139,7 @@ const Users = () => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setFrontendPage(1);
-  }, [filters.status, filters.role, searchValue]);
+  }, [filters.status, filters.role, searchValue, selectedDepartment]);
 
   // Sync searchValue with filters when filters change externally (e.g., clear filters)
   useEffect(() => {
@@ -259,6 +295,12 @@ const Users = () => {
       return;
     }
     
+    // If role changes, clear department filter if not doctor
+    if (filterType === 'role' && cleanValue !== 'doctor') {
+      setSelectedDepartment('');
+      dispatch(setFilters({ department_id: '' }));
+    }
+    
     // For role and status, reload users from backend (but load all, frontend will filter)
     const newFilters = {
       page: 1,
@@ -270,6 +312,18 @@ const Users = () => {
       if (cleanValue) newFilters.role = cleanValue;
     } else if (filters.role && filters.role.trim() !== '') {
       newFilters.role = filters.role.trim();
+    }
+    
+    // Add department filter when role is doctor
+    if (filterType === 'department_id') {
+      if (cleanValue) {
+        newFilters.department_id = cleanValue;
+        setSelectedDepartment(cleanValue);
+      } else {
+        setSelectedDepartment('');
+      }
+    } else if (filters.role === 'doctor' && selectedDepartment) {
+      newFilters.department_id = selectedDepartment;
     }
     
     // Add status filter - CRITICAL: Use the new value directly, not from Redux state
@@ -285,15 +339,20 @@ const Users = () => {
     // searchValue is handled separately by frontend filtering
     
     // Update the filter in the Redux store
-    dispatch(setFilters({ [filterType]: cleanValue }));
+    if (filterType === 'department_id') {
+      dispatch(setFilters({ department_id: cleanValue }));
+    } else {
+      dispatch(setFilters({ [filterType]: cleanValue }));
+    }
     
     // Refetch users with new filters (without showing full-page loader)
     dispatch(getAllUsers(newFilters));
-  }, [dispatch, filters]);
+  }, [dispatch, filters, selectedDepartment]);
 
   const handleClearFilters = useCallback(() => {
     dispatch(clearFilters());
     setSearchValue('');
+    setSelectedDepartment('');
     // Reload all users (frontend will handle filtering)
     dispatch(getAllUsers({
       page: 1,
@@ -357,7 +416,7 @@ const Users = () => {
             </h3>
           </div>
           <div className="p-4 sm:p-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${filters.role === 'doctor' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
               {/* Search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -390,9 +449,38 @@ const Users = () => {
                   <option value="">All Roles</option>
                   <option value="gp">General Practitioner</option>
                   <option value="urology_nurse">Urology Nurse</option>
-                  <option value="urologist">Urologist</option>
+                  <option value="doctor">Doctor</option>
                 </select>
               </div>
+
+              {/* Department Filter - Only show when role is doctor */}
+              {filters.role === 'doctor' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Department
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Building2 className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <select
+                      value={selectedDepartment}
+                      onChange={(e) => handleFilterChange('department_id', e.target.value)}
+                      disabled={loadingDepartments}
+                      className={`block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none ${
+                        loadingDepartments ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <option value="">All Departments</option>
+                      {departments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Status Filter */}
               <div>

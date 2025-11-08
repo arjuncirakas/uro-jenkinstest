@@ -100,7 +100,8 @@ const initialState = {
   filters: {
     search: '',
     role: '',
-    status: ''
+    status: '',
+    department_id: ''
   }
 };
 
@@ -118,7 +119,8 @@ const superadminSlice = createSlice({
       state.filters = {
         search: '',
         role: '',
-        status: ''
+        status: '',
+        department_id: ''
       };
     },
     setPagination: (state, action) => {
