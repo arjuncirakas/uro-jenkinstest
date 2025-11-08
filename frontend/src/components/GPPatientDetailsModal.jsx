@@ -3,7 +3,7 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { useEscapeKey } from '../utils/useEscapeKey';
-import gpService from '../services/gpService';
+import { patientService } from '../services/patientService';
 import { bookingService } from '../services/bookingService';
 
 const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
@@ -30,9 +30,9 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await gpService.getPatientById(patientId);
-      if (response.success && response.data && response.data.patient) {
-        setPatientData(response.data.patient);
+      const response = await patientService.getPatientById(patientId);
+      if (response.success && response.data) {
+        setPatientData(response.data);
       } else {
         setError('Failed to load patient data');
       }
@@ -61,10 +61,10 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
 
   const fetchDischargeSummary = async () => {
     try {
-      const response = await gpService.getPatientById(patientId);
-      if (response.success && response.data && response.data.patient) {
+      const response = await patientService.getPatientById(patientId);
+      if (response.success && response.data) {
         // Check if patient has discharge summary
-        if (response.data.patient.status === 'Discharged' || response.data.patient.carePathway === 'Discharge') {
+        if (response.data.status === 'Discharged' || response.data.carePathway === 'Discharge') {
           // Fetch discharge summary from API
           const summaryResponse = await fetch(`/api/patients/${patientId}/discharge-summary`, {
             headers: {

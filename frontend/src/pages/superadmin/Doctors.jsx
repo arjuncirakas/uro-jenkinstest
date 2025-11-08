@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, User, Search, Filter, Mail, Phone, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, Edit2, Trash2, User, Search, Filter, Mail, Phone, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { doctorsService } from '../../services/doctorsService';
 import SuccessModal from '../../components/SuccessModal';
 import ConfirmModal from '../../components/ConfirmModal';
+import { validatePhoneInput, validateNameInput, validateEmail } from '../../utils/inputValidation';
 
 const Doctors = () => {
-  const [doctors, setDoctors] = useState([]);
+  const [allDoctors, setAllDoctors] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchValue, setSearchValue] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [frontendPage, setFrontendPage] = useState(1);
+  const [frontendPageSize] = useState(10);
+  const searchTimeoutRef = useRef(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -22,87 +27,224 @@ const Doctors = () => {
     last_name: '',
     email: '',
     phone: '',
-    department_id: ''
+    department_id: '',
+    is_active: true
   });
+  const [formErrors, setFormErrors] = useState({});
 
-  // Fetch doctors and departments
-  const fetchDoctorsAndDepartments = async () => {
-    setLoading(true);
-    setError(null);
+  // Fetch departments on initial load (only once)
+  const fetchDepartments = async () => {
     try {
-      console.log('Fetching doctors and departments...');
-      const [doctorsResponse, departmentsResponse] = await Promise.all([
-        doctorsService.getAllDoctors({ is_active: true }),
-        doctorsService.getAllDepartments({ is_active: true })
-      ]);
-      
-      console.log('Doctors response:', doctorsResponse);
-      console.log('Departments response:', departmentsResponse);
-      
-      if (doctorsResponse.success) {
-        console.log('Setting doctors:', doctorsResponse.data);
-        setDoctors(doctorsResponse.data);
-      } else {
-        console.error('Failed to fetch doctors:', doctorsResponse);
-        setError('Failed to fetch doctors');
-      }
-      
+      const departmentsResponse = await doctorsService.getAllDepartments({ is_active: true });
       if (departmentsResponse.success) {
         setDepartments(departmentsResponse.data);
       }
     } catch (err) {
-      setError('Failed to fetch doctors and departments');
-      console.error('Error fetching data:', err);
+      console.error('Error fetching departments:', err);
+    }
+  };
+
+  // Fetch doctors with backend filtering
+  const fetchDoctors = async (departmentId = null) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = { is_active: true };
+      if (departmentId && departmentId.trim() !== '') {
+        params.department_id = departmentId;
+      }
+      
+      const doctorsResponse = await doctorsService.getAllDoctors(params);
+      
+      if (doctorsResponse.success) {
+        setAllDoctors(doctorsResponse.data);
+      } else {
+        setError('Failed to fetch doctors');
+      }
+    } catch (err) {
+      setError('Failed to fetch doctors');
+      console.error('Error fetching doctors:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Initial load - fetch departments and all doctors
   useEffect(() => {
-    fetchDoctorsAndDepartments();
+    fetchDepartments();
+    fetchDoctors();
   }, []);
 
-  // Handle form input changes
+  // Fetch doctors when department filter changes (backend filtering)
+  useEffect(() => {
+    fetchDoctors(selectedDepartment);
+  }, [selectedDepartment]);
+
+  // Debounced search - update searchValue after 300ms
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchValue(searchTerm);
+      setFrontendPage(1); // Reset to page 1 when search changes
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Validate phone number (8-12 digits)
+  const validatePhone = (phone) => {
+    if (!phone) return '';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length < 8) {
+      return 'Phone number must be at least 8 digits';
+    }
+    if (cleaned.length > 12) {
+      return 'Phone number must not exceed 12 digits';
+    }
+    return '';
+  };
+
+  // Validate field
+  const validateField = (name, value) => {
+    let error = '';
+    
+    switch (name) {
+      case 'first_name':
+        if (!value || !value.trim()) {
+          error = 'First name is required';
+        } else if (!validateNameInput(value)) {
+          error = 'First name can only contain letters, spaces, hyphens, and apostrophes';
+        }
+        break;
+      case 'last_name':
+        if (!value || !value.trim()) {
+          error = 'Last name is required';
+        } else if (!validateNameInput(value)) {
+          error = 'Last name can only contain letters, spaces, hyphens, and apostrophes';
+        }
+        break;
+      case 'department_id':
+        if (!value || !value.trim()) {
+          error = 'Department is required';
+        }
+        break;
+      case 'email':
+        if (!value || !value.trim()) {
+          error = 'Email is required';
+        } else if (!validateEmail(value)) {
+          error = 'Please enter a valid email address';
+        }
+        break;
+      case 'phone':
+        if (!value || !value.trim()) {
+          error = 'Phone number is required';
+        } else if (!validatePhoneInput(value)) {
+          error = 'Phone number can only contain digits, spaces, hyphens, parentheses, and plus sign';
+        } else {
+          error = validatePhone(value);
+        }
+        break;
+      default:
+        break;
+    }
+    
+    return error;
+  };
+
+  // Handle form input changes with validation
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Block invalid characters for phone
+    if (name === 'phone' && value && !validatePhoneInput(value)) {
+      return;
+    }
+    
+    // Block invalid characters for names
+    if ((name === 'first_name' || name === 'last_name') && value && !validateNameInput(value)) {
+      return;
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // Validate field on change
+    const error = validateField(name, value);
+    setFormErrors(prev => ({
+      ...prev,
+      [name]: error
+    }));
+  };
+
+  // Handle field blur with validation
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const error = validateField(name, value);
+    setFormErrors(prev => ({
+      ...prev,
+      [name]: error
+    }));
+  };
+
+  // Validate entire form
+  const validateForm = () => {
+    const errors = {};
+    
+    errors.first_name = validateField('first_name', formData.first_name);
+    errors.last_name = validateField('last_name', formData.last_name);
+    errors.department_id = validateField('department_id', formData.department_id);
+    errors.email = validateField('email', formData.email);
+    errors.phone = validateField('phone', formData.phone);
+    
+    setFormErrors(errors);
+    
+    // Check if there are any errors
+    return !Object.values(errors).some(error => error !== '');
   };
 
   // Handle add doctor
   const handleAddDoctor = async () => {
-    if (!formData.first_name || !formData.last_name || !formData.department_id) {
-      setError('First name, last name, and department are required');
+    if (!validateForm()) {
+      setError('Please fix the errors in the form');
       return;
     }
 
     try {
-      console.log('Creating doctor with data:', formData);
       const response = await doctorsService.createDoctor(formData);
-      console.log('Create doctor response:', response);
       
       if (response.success) {
         setSuccessMessage('Doctor added successfully');
         setShowSuccessModal(true);
         setShowAddModal(false);
         resetForm();
-        console.log('Calling fetchDoctorsAndDepartments after successful creation...');
-        fetchDoctorsAndDepartments();
+        fetchDoctors(selectedDepartment);
       } else {
         setError(response.error || 'Failed to add doctor');
       }
     } catch (err) {
-      setError('Failed to add doctor');
+      setError(err.response?.data?.error || 'Failed to add doctor');
       console.error('Error adding doctor:', err);
     }
   };
 
   // Handle edit doctor
   const handleEditDoctor = async () => {
-    if (!formData.first_name || !formData.last_name || !formData.department_id) {
-      setError('First name, last name, and department are required');
+    if (!validateForm()) {
+      setError('Please fix the errors in the form');
+      return;
+    }
+
+    if (!selectedDoctor || !selectedDoctor.id) {
+      setError('Doctor information is missing');
       return;
     }
 
@@ -114,12 +256,12 @@ const Doctors = () => {
         setShowEditModal(false);
         resetForm();
         setSelectedDoctor(null);
-        fetchDoctorsAndDepartments();
+        fetchDoctors(selectedDepartment);
       } else {
         setError(response.error || 'Failed to update doctor');
       }
     } catch (err) {
-      setError('Failed to update doctor');
+      setError(err.response?.data?.error || 'Failed to update doctor');
       console.error('Error updating doctor:', err);
     }
   };
@@ -133,7 +275,7 @@ const Doctors = () => {
         setShowSuccessModal(true);
         setShowDeleteModal(false);
         setSelectedDoctor(null);
-        fetchDoctorsAndDepartments();
+        fetchDoctors(selectedDepartment);
       } else {
         setError(response.error || 'Failed to delete doctor');
       }
@@ -146,13 +288,29 @@ const Doctors = () => {
   // Open edit modal
   const openEditModal = (doctor) => {
     setSelectedDoctor(doctor);
+    
+    // Find department_id - convert to string if it exists, or find by department_name
+    let departmentId = '';
+    if (doctor.department_id !== null && doctor.department_id !== undefined) {
+      departmentId = String(doctor.department_id);
+    } else if (doctor.department_name) {
+      // If department_id is missing, try to find it by department_name
+      const foundDept = departments.find(dept => dept.name === doctor.department_name);
+      if (foundDept) {
+        departmentId = String(foundDept.id);
+      }
+    }
+    
     setFormData({
-      first_name: doctor.first_name,
-      last_name: doctor.last_name,
+      first_name: doctor.first_name || '',
+      last_name: doctor.last_name || '',
       email: doctor.email || '',
       phone: doctor.phone || '',
-      department_id: doctor.department_id || ''
+      department_id: departmentId,
+      is_active: doctor.is_active !== undefined ? doctor.is_active : true
     });
+    setFormErrors({});
+    setError(null);
     setShowEditModal(true);
   };
 
@@ -169,8 +327,10 @@ const Doctors = () => {
       last_name: '',
       email: '',
       phone: '',
-      department_id: ''
+      department_id: '',
+      is_active: true
     });
+    setFormErrors({});
     setSelectedDoctor(null);
     setError(null);
   };
@@ -183,17 +343,44 @@ const Doctors = () => {
     resetForm();
   };
 
-  // Filter doctors based on search term and department
-  const filteredDoctors = doctors.filter(doctor => {
-    const matchesSearch = 
-      doctor.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doctor.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doctor.department_name?.toLowerCase().includes(searchTerm.toLowerCase());
+  // Frontend filtering - only for search (department filtering is done by backend)
+  const filteredDoctors = useMemo(() => {
+    let filtered = [...allDoctors];
     
-    const matchesDepartment = !selectedDepartment || doctor.department_id == selectedDepartment;
+    // Apply search filter - using "starts with" instead of "includes"
+    if (searchValue && searchValue.trim() !== '') {
+      const searchLower = searchValue.trim().toLowerCase();
+      filtered = filtered.filter(doctor => {
+        const firstName = (doctor.first_name || '').toLowerCase();
+        const lastName = (doctor.last_name || '').toLowerCase();
+        const fullName = `${firstName}${lastName}`.toLowerCase();
+        const fullNameWithSpace = `${firstName} ${lastName}`.toLowerCase();
+        const departmentName = (doctor.department_name || '').toLowerCase();
+        const email = (doctor.email || '').toLowerCase();
+        
+        return (
+          firstName.startsWith(searchLower) ||
+          fullName.startsWith(searchLower) ||
+          fullNameWithSpace.startsWith(searchLower) ||
+          departmentName.startsWith(searchLower) ||
+          email.startsWith(searchLower)
+        );
+      });
+    }
     
-    return matchesSearch && matchesDepartment;
-  });
+    return filtered;
+  }, [allDoctors, searchValue]);
+
+  // Apply frontend pagination to filtered results
+  const paginatedDoctors = useMemo(() => {
+    const startIndex = (frontendPage - 1) * frontendPageSize;
+    const endIndex = startIndex + frontendPageSize;
+    return filteredDoctors.slice(startIndex, endIndex);
+  }, [filteredDoctors, frontendPage, frontendPageSize]);
+
+  // Calculate pagination info
+  const totalFilteredDoctors = filteredDoctors.length;
+  const totalFrontendPages = Math.ceil(totalFilteredDoctors / frontendPageSize);
 
   return (
     <div className="space-y-6">
@@ -245,7 +432,7 @@ const Doctors = () => {
           </div>
           <div className="flex items-center text-sm text-gray-500">
             <Filter className="h-4 w-4 mr-1" />
-            {filteredDoctors.length} of {doctors.length} doctors
+            {filteredDoctors.length} of {allDoctors.length} doctors
           </div>
         </div>
       </div>
@@ -277,8 +464,9 @@ const Doctors = () => {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
           </div>
         ) : filteredDoctors.length > 0 ? (
-          <ul className="divide-y divide-gray-200">
-            {filteredDoctors.map((doctor) => (
+          <>
+            <ul className="divide-y divide-gray-200">
+              {paginatedDoctors.map((doctor) => (
               <li key={doctor.id}>
                 <div className="px-4 py-4 flex items-center justify-between hover:bg-gray-50">
                   <div className="flex items-center">
@@ -328,8 +516,64 @@ const Doctors = () => {
                   </div>
                 </div>
               </li>
-            ))}
-          </ul>
+              ))}
+            </ul>
+            {/* Pagination Controls */}
+            {totalFrontendPages > 1 && (
+              <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => setFrontendPage(prev => Math.max(1, prev - 1))}
+                    disabled={frontendPage === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setFrontendPage(prev => Math.min(totalFrontendPages, prev + 1))}
+                    disabled={frontendPage === totalFrontendPages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      Showing <span className="font-medium">{(frontendPage - 1) * frontendPageSize + 1}</span> to{' '}
+                      <span className="font-medium">
+                        {Math.min(frontendPage * frontendPageSize, totalFilteredDoctors)}
+                      </span>{' '}
+                      of <span className="font-medium">{totalFilteredDoctors}</span> results
+                    </p>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                      <button
+                        onClick={() => setFrontendPage(prev => Math.max(1, prev - 1))}
+                        disabled={frontendPage === 1}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Previous</span>
+                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                      <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                        Page {frontendPage} of {totalFrontendPages}
+                      </span>
+                      <button
+                        onClick={() => setFrontendPage(prev => Math.min(totalFrontendPages, prev + 1))}
+                        disabled={frontendPage === totalFrontendPages}
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Next</span>
+                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-12">
             <User className="mx-auto h-12 w-12 text-gray-400" />
@@ -360,6 +604,11 @@ const Doctors = () => {
               <h3 className="text-lg font-medium text-gray-900">Add New Doctor</h3>
             </div>
             <div className="px-6 py-4 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -370,9 +619,16 @@ const Doctors = () => {
                     name="first_name"
                     value={formData.first_name}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
+                    required
                     placeholder="John"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                      formErrors.first_name ? 'border-red-300' : 'border-gray-300'
+                    }`}
                   />
+                  {formErrors.first_name && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.first_name}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -383,9 +639,16 @@ const Doctors = () => {
                     name="last_name"
                     value={formData.last_name}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
+                    required
                     placeholder="Smith"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                      formErrors.last_name ? 'border-red-300' : 'border-gray-300'
+                    }`}
                   />
+                  {formErrors.last_name && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.last_name}</p>
+                  )}
                 </div>
               </div>
               <div>
@@ -396,7 +659,11 @@ const Doctors = () => {
                   name="department_id"
                   value={formData.department_id}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  onBlur={handleBlur}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                    formErrors.department_id ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 >
                   <option value="">Select Department</option>
                   {departments.map((dept) => (
@@ -405,32 +672,49 @@ const Doctors = () => {
                     </option>
                   ))}
                 </select>
+                {formErrors.department_id && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.department_id}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                  Email *
                 </label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
+                  onBlur={handleBlur}
+                  required
                   placeholder="john.smith@hospital.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                    formErrors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 />
+                {formErrors.email && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone
+                  Phone *
                 </label>
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  placeholder="+1 (555) 123-4567"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  onBlur={handleBlur}
+                  required
+                  placeholder="8889876545 (8-12 digits)"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                    formErrors.phone ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 />
+                {formErrors.phone && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
+                )}
               </div>
             </div>
             <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
@@ -442,9 +726,10 @@ const Doctors = () => {
               </button>
               <button
                 onClick={handleAddDoctor}
-                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 border border-transparent rounded-md hover:bg-teal-700"
+                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 border border-transparent rounded-md hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || Object.values(formErrors).some(error => error !== '')}
               >
-                Add Doctor
+                {loading ? 'Adding...' : 'Add Doctor'}
               </button>
             </div>
           </div>
@@ -459,6 +744,11 @@ const Doctors = () => {
               <h3 className="text-lg font-medium text-gray-900">Edit Doctor</h3>
             </div>
             <div className="px-6 py-4 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -469,9 +759,16 @@ const Doctors = () => {
                     name="first_name"
                     value={formData.first_name}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
+                    required
                     placeholder="John"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                      formErrors.first_name ? 'border-red-300' : 'border-gray-300'
+                    }`}
                   />
+                  {formErrors.first_name && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.first_name}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -482,9 +779,16 @@ const Doctors = () => {
                     name="last_name"
                     value={formData.last_name}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
+                    required
                     placeholder="Smith"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                      formErrors.last_name ? 'border-red-300' : 'border-gray-300'
+                    }`}
                   />
+                  {formErrors.last_name && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.last_name}</p>
+                  )}
                 </div>
               </div>
               <div>
@@ -495,7 +799,11 @@ const Doctors = () => {
                   name="department_id"
                   value={formData.department_id}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  onBlur={handleBlur}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                    formErrors.department_id ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 >
                   <option value="">Select Department</option>
                   {departments.map((dept) => (
@@ -504,32 +812,49 @@ const Doctors = () => {
                     </option>
                   ))}
                 </select>
+                {formErrors.department_id && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.department_id}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                  Email *
                 </label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
+                  onBlur={handleBlur}
+                  required
                   placeholder="john.smith@hospital.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                    formErrors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 />
+                {formErrors.email && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone
+                  Phone *
                 </label>
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  placeholder="+1 (555) 123-4567"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  onBlur={handleBlur}
+                  required
+                  placeholder="8889876545 (8-12 digits)"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
+                    formErrors.phone ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 />
+                {formErrors.phone && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
+                )}
               </div>
             </div>
             <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
@@ -541,9 +866,10 @@ const Doctors = () => {
               </button>
               <button
                 onClick={handleEditDoctor}
-                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 border border-transparent rounded-md hover:bg-teal-700"
+                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 border border-transparent rounded-md hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || Object.values(formErrors).some(error => error !== '')}
               >
-                Update Doctor
+                {loading ? 'Updating...' : 'Update Doctor'}
               </button>
             </div>
           </div>
@@ -565,7 +891,7 @@ const Doctors = () => {
         onClose={() => {
           setShowSuccessModal(false);
           // Refresh data when modal closes as backup
-          fetchDoctorsAndDepartments();
+          fetchDoctors(selectedDepartment);
         }}
         title="Success"
         message={successMessage}

@@ -1,5 +1,8 @@
 import pool from '../config/database.js';
 import { validationResult } from 'express-validator';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { sendPasswordSetupEmail } from '../services/emailService.js';
 
 // Get all doctors
 export const getAllDoctors = async (req, res) => {
@@ -13,6 +16,7 @@ export const getAllDoctors = async (req, res) => {
         d.last_name,
         d.email,
         d.phone,
+        d.department_id,
         d.specialization,
         d.is_active,
         d.created_at,
@@ -60,6 +64,7 @@ export const getDoctorById = async (req, res) => {
         d.last_name,
         d.email,
         d.phone,
+        d.department_id,
         d.specialization,
         d.is_active,
         d.created_at,
@@ -92,12 +97,17 @@ export const getDoctorById = async (req, res) => {
 
 // Create new doctor
 export const createDoctor = async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN'); // Start transaction
+    
     console.log('Creating doctor with data:', req.body);
     
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log('Validation errors:', errors.array());
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
         error: 'Validation failed',
@@ -107,36 +117,132 @@ export const createDoctor = async (req, res) => {
     
     const { first_name, last_name, email, phone, department_id } = req.body;
     
-    // Get department name to use as specialization
-    let specialization = null;
-    if (department_id) {
-      const deptResult = await pool.query('SELECT name FROM departments WHERE id = $1', [department_id]);
-      if (deptResult.rows.length > 0) {
-        specialization = deptResult.rows[0].name;
+    // Check if user already exists in users table
+    const existingUser = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        success: false,
+        error: 'User with this email already exists'
+      });
+    }
+    
+    // Check if phone number is already in use (if provided)
+    if (phone) {
+      const existingPhone = await client.query(
+        'SELECT id FROM users WHERE phone = $1',
+        [phone]
+      );
+      
+      if (existingPhone.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          error: 'Phone number is already in use'
+        });
       }
     }
     
-    console.log('Doctor data to insert:', { first_name, last_name, email, phone, department_id, specialization });
+    // Get department name to use as specialization
+    let specialization = null;
+    let departmentName = null;
+    if (department_id) {
+      const deptResult = await client.query('SELECT name FROM departments WHERE id = $1', [department_id]);
+      if (deptResult.rows.length > 0) {
+        specialization = deptResult.rows[0].name;
+        departmentName = deptResult.rows[0].name;
+      }
+    }
     
-    const result = await pool.query(`
+    // Determine role based on department name (default to 'urologist' for urology departments)
+    let role = 'urologist'; // Default role
+    if (departmentName) {
+      const deptNameLower = departmentName.toLowerCase();
+      if (deptNameLower.includes('urology')) {
+        role = 'urologist';
+      } else if (deptNameLower.includes('general') || deptNameLower.includes('gp')) {
+        role = 'gp';
+      } else if (deptNameLower.includes('nurse')) {
+        role = 'urology_nurse';
+      }
+    }
+    
+    console.log('Doctor data to insert:', { first_name, last_name, email, phone, department_id, specialization, role });
+    
+    // Insert into doctors table
+    const doctorResult = await client.query(`
       INSERT INTO doctors (first_name, last_name, email, phone, department_id, specialization)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `, [first_name, last_name, email, phone, department_id, specialization]);
     
-    console.log('Doctor created successfully:', result.rows[0]);
+    console.log('Doctor created successfully:', doctorResult.rows[0]);
+    
+    // Generate a temporary password (will be changed on first login)
+    const tempPassword = crypto.randomBytes(12).toString('hex');
+    const saltRounds = 12;
+    const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
+    
+    // Insert into users table (not verified yet, will be activated after password setup)
+    const userResult = await client.query(`
+      INSERT INTO users (email, password_hash, first_name, last_name, phone, role, is_active, is_verified) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+      RETURNING id, email, first_name, last_name, phone, role, created_at`,
+      [email, passwordHash, first_name, last_name, phone, role, false, false]
+    );
+    
+    const newUser = userResult.rows[0];
+    
+    // Generate password setup token
+    const setupToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    // Store password setup token
+    await client.query(
+      'INSERT INTO password_setup_tokens (user_id, email, token, expires_at) VALUES ($1, $2, $3, $4)',
+      [newUser.id, email, setupToken, expiresAt]
+    );
+    
+    // Send password setup email
+    let emailSent = false;
+    try {
+      const emailResult = await sendPasswordSetupEmail(email, first_name, setupToken);
+      emailSent = emailResult.success;
+    } catch (emailError) {
+      console.error('Error sending password setup email:', emailError);
+      // Don't fail the entire operation if email fails
+    }
+    
+    await client.query('COMMIT'); // Commit transaction
     
     res.status(201).json({
       success: true,
-      message: 'Doctor created successfully',
-      data: result.rows[0]
+      message: emailSent 
+        ? 'Doctor created successfully. Password setup email sent.'
+        : 'Doctor created successfully but email sending failed. Please contact support.',
+      data: {
+        doctor: doctorResult.rows[0],
+        user: {
+          userId: newUser.id,
+          email: newUser.email,
+          firstName: newUser.first_name,
+          lastName: newUser.last_name,
+          role: newUser.role,
+          emailSent
+        }
+      }
     });
   } catch (error) {
+    await client.query('ROLLBACK'); // Rollback transaction on error
     console.error('Error creating doctor:', error);
     if (error.code === '23505') { // Unique constraint violation
       res.status(409).json({
         success: false,
-        error: 'Doctor with this email already exists'
+        error: 'Doctor with this email or phone already exists'
       });
     } else {
       res.status(500).json({
@@ -144,14 +250,21 @@ export const createDoctor = async (req, res) => {
         error: 'Failed to create doctor'
       });
     }
+  } finally {
+    client.release();
   }
 };
 
 // Update doctor
 export const updateDoctor = async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN'); // Start transaction
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
         error: 'Validation failed',
@@ -162,30 +275,111 @@ export const updateDoctor = async (req, res) => {
     const { id } = req.params;
     const { first_name, last_name, email, phone, department_id, is_active } = req.body;
     
-    // Get department name to use as specialization
-    let specialization = null;
-    if (department_id) {
-      const deptResult = await pool.query('SELECT name FROM departments WHERE id = $1', [department_id]);
-      if (deptResult.rows.length > 0) {
-        specialization = deptResult.rows[0].name;
+    // Get existing doctor to preserve is_active if not provided
+    const existingDoctor = await client.query('SELECT email, is_active FROM doctors WHERE id = $1', [id]);
+    if (existingDoctor.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: 'Doctor not found'
+      });
+    }
+    
+    const oldEmail = existingDoctor.rows[0].email;
+    const finalIsActive = is_active !== undefined ? is_active : existingDoctor.rows[0].is_active;
+    
+    // Check if email is being changed and if new email already exists
+    if (email && email !== oldEmail) {
+      const existingUser = await client.query(
+        'SELECT id FROM users WHERE email = $1',
+        [email]
+      );
+      
+      if (existingUser.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          error: 'User with this email already exists'
+        });
       }
     }
     
-    const result = await pool.query(`
+    // Check if phone is being changed and if new phone already exists
+    if (phone) {
+      const existingPhone = await client.query(
+        'SELECT id FROM users WHERE phone = $1 AND email != $2',
+        [phone, email || oldEmail]
+      );
+      
+      if (existingPhone.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          error: 'Phone number is already in use'
+        });
+      }
+    }
+    
+    // Get department name to use as specialization
+    let specialization = null;
+    let departmentName = null;
+    if (department_id) {
+      const deptResult = await client.query('SELECT name FROM departments WHERE id = $1', [department_id]);
+      if (deptResult.rows.length > 0) {
+        specialization = deptResult.rows[0].name;
+        departmentName = deptResult.rows[0].name;
+      }
+    }
+    
+    // Determine role based on department name (default to 'urologist')
+    let role = 'urologist';
+    if (departmentName) {
+      const deptNameLower = departmentName.toLowerCase();
+      if (deptNameLower.includes('urology')) {
+        role = 'urologist';
+      } else if (deptNameLower.includes('general') || deptNameLower.includes('gp')) {
+        role = 'gp';
+      } else if (deptNameLower.includes('nurse')) {
+        role = 'urology_nurse';
+      }
+    }
+    
+    // Update doctors table
+    const result = await client.query(`
       UPDATE doctors 
       SET first_name = $1, last_name = $2, email = $3, phone = $4, 
           department_id = $5, specialization = $6, is_active = $7,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $8
       RETURNING *
-    `, [first_name, last_name, email, phone, department_id, specialization, is_active, id]);
+    `, [first_name, last_name, email, phone, department_id, specialization, finalIsActive, id]);
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Doctor not found'
-      });
+    // Update corresponding user in users table if it exists
+    const userUpdateResult = await client.query(`
+      UPDATE users 
+      SET first_name = $1, last_name = $2, email = $3, phone = $4, role = $5, is_active = $6,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE email = $7
+      RETURNING id
+    `, [first_name, last_name, email, phone, role, finalIsActive, oldEmail]);
+    
+    // If user doesn't exist, create it (in case doctor was created before this feature)
+    if (userUpdateResult.rows.length === 0 && email) {
+      // Generate a temporary password
+      const tempPassword = crypto.randomBytes(12).toString('hex');
+      const saltRounds = 12;
+      const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
+      
+      // Insert into users table
+      await client.query(`
+        INSERT INTO users (email, password_hash, first_name, last_name, phone, role, is_active, is_verified) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+        RETURNING id`,
+        [email, passwordHash, first_name, last_name, phone, role, finalIsActive, false]
+      );
     }
+    
+    await client.query('COMMIT'); // Commit transaction
     
     res.json({
       success: true,
@@ -193,11 +387,12 @@ export const updateDoctor = async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
+    await client.query('ROLLBACK'); // Rollback transaction on error
     console.error('Error updating doctor:', error);
     if (error.code === '23505') { // Unique constraint violation
       res.status(409).json({
         success: false,
-        error: 'Doctor with this email already exists'
+        error: 'Doctor with this email or phone already exists'
       });
     } else {
       res.status(500).json({
@@ -205,6 +400,8 @@ export const updateDoctor = async (req, res) => {
         error: 'Failed to update doctor'
       });
     }
+  } finally {
+    client.release();
   }
 };
 

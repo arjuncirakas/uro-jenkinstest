@@ -151,11 +151,17 @@ const Departments = () => {
     resetForm();
   };
 
-  // Filter departments based on search term
-  const filteredDepartments = departments.filter(dept =>
-    dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (dept.description && dept.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter departments based on search term - using "starts with" instead of "includes"
+  const filteredDepartments = departments.filter(dept => {
+    if (!searchTerm.trim()) return true;
+    
+    const searchLower = searchTerm.trim().toLowerCase();
+    const name = (dept.name || '').toLowerCase();
+    const description = (dept.description || '').toLowerCase();
+    
+    // Match if name or description starts with search term
+    return name.startsWith(searchLower) || description.startsWith(searchLower);
+  });
 
   return (
     <div className="space-y-6">

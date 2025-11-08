@@ -4,7 +4,7 @@ import { IoChevronForward, IoNotificationsOutline } from 'react-icons/io5';
 import { BsCalendar3 } from 'react-icons/bs';
 import NotificationModal from '../../components/NotificationModal';
 import GPPatientDetailsModal from '../../components/GPPatientDetailsModal';
-import gpService from '../../services/gpService';
+import { gpService } from '../../services/gpService';
 import authService from '../../services/authService';
 
 const Dashboard = () => {

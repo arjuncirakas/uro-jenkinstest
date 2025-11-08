@@ -241,15 +241,15 @@ const superadminSlice = createSlice({
       })
       
       // Resend Password Setup
+      // Note: We don't set isLoading here to avoid showing full-page loader
+      // Loading state is handled locally in the component with resendingUserId
       .addCase(resendPasswordSetup.pending, (state) => {
-        state.isLoading = true;
         state.error = null;
       })
       .addCase(resendPasswordSetup.fulfilled, (state) => {
-        state.isLoading = false;
+        // No state changes needed - component handles success locally
       })
       .addCase(resendPasswordSetup.rejected, (state, action) => {
-        state.isLoading = false;
         state.error = action.payload;
       });
   },

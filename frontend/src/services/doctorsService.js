@@ -4,7 +4,18 @@ export const doctorsService = {
   // Get all doctors
   async getAllDoctors(params = {}) {
     try {
-      const response = await axios.get('/doctors', { params });
+      // Build query string manually to ensure department_id is included
+      const queryParams = new URLSearchParams();
+      if (params.is_active !== undefined) {
+        queryParams.append('is_active', params.is_active);
+      }
+      if (params.department_id) {
+        queryParams.append('department_id', params.department_id);
+      }
+      
+      const queryString = queryParams.toString();
+      const url = `/doctors${queryString ? `?${queryString}` : ''}`;
+      const response = await axios.get(url);
       return response.data;
     } catch (error) {
       console.error('Error fetching doctors:', error);

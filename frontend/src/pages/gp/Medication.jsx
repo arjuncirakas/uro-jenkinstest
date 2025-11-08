@@ -3,7 +3,7 @@ import { FiEye, FiCalendar } from 'react-icons/fi';
 import { FaPills } from 'react-icons/fa';
 import GPHeader from '../../components/layout/GPHeader';
 import GPPatientDetailsModal from '../../components/GPPatientDetailsModal';
-import gpService from '../../services/gpService';
+import { gpService } from '../../services/gpService';
 
 const Medication = () => {
   const [searchQuery, setSearchQuery] = useState('');

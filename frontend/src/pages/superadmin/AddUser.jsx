@@ -18,6 +18,7 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { createUser, clearError } from '../../store/slices/superadminSlice';
 import ErrorModal from '../../components/modals/ErrorModal';
 import SuccessModal from '../../components/modals/SuccessModal';
+import { doctorsService } from '../../services/doctorsService';
 import { 
   validateNameInput, 
   validatePhoneInput,
@@ -40,9 +41,12 @@ const AddUser = () => {
     email: '',
     phone: '',
     organization: '',
-    role: 'urology_nurse'
+    role: 'urology_nurse',
+    department_id: ''
   });
   const [errors, setErrors] = useState({});
+  const [departments, setDepartments] = useState([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   
   useEffect(() => {
     if (error && !showSuccessModal && !isLoading) {
@@ -53,13 +57,31 @@ const AddUser = () => {
     }
   }, [error, showSuccessModal, isLoading]);
 
+  // Fetch departments on component mount
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      setLoadingDepartments(true);
+      try {
+        const response = await doctorsService.getAllDepartments({ is_active: true });
+        if (response.success) {
+          setDepartments(response.data);
+        }
+      } catch (err) {
+        console.error('Error fetching departments:', err);
+      } finally {
+        setLoadingDepartments(false);
+      }
+    };
+    fetchDepartments();
+  }, []);
+
   const roleIcons = {
     gp: <Activity className="h-4 w-4" />,
     urology_nurse: <Stethoscope className="h-4 w-4" />,
-    urologist: <UserCircle className="h-4 w-4" />
+    doctor: <UserCircle className="h-4 w-4" />
   };
 
-  const validateField = (name, value) => {
+  const validateField = (name, value, formDataToValidate = formData) => {
     let error = '';
     
     switch (name) {
@@ -123,6 +145,11 @@ const AddUser = () => {
           error = 'Organization name must be at least 2 characters';
         }
         break;
+      case 'department_id':
+        if (formDataToValidate.role === 'doctor' && !value) {
+          error = 'Department is required when role is Doctor';
+        }
+        break;
       default:
         break;
     }
@@ -162,13 +189,26 @@ const AddUser = () => {
       sanitizedValue = sanitizeInput(value);
     }
     
-    setFormData({
+    // If role changes, reset department_id if not doctor
+    const updatedFormData = {
       ...formData,
       [name]: sanitizedValue
-    });
+    };
+    
+    if (name === 'role' && value !== 'doctor') {
+      updatedFormData.department_id = '';
+      // Clear department error if role is not doctor
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.department_id;
+        return newErrors;
+      });
+    }
+    
+    setFormData(updatedFormData);
     
     // Validate field and update errors
-    const error = validateField(name, sanitizedValue);
+    const error = validateField(name, sanitizedValue, updatedFormData);
     setErrors(prev => ({
       ...prev,
       [name]: error
@@ -205,7 +245,15 @@ const AddUser = () => {
     }
 
     try {
-      const result = await dispatch(createUser(formData));
+      // Prepare data for submission - convert department_id to number if present
+      const submitData = {
+        ...formData,
+        department_id: formData.role === 'doctor' && formData.department_id 
+          ? parseInt(formData.department_id, 10) 
+          : undefined
+      };
+      
+      const result = await dispatch(createUser(submitData));
       
       console.log('Create user result:', result);
       
@@ -470,7 +518,7 @@ const AddUser = () => {
                       >
                         <option value="gp">General Practitioner</option>
                         <option value="urology_nurse">Urology Clinical Nurse</option>
-                        <option value="urologist">Urologist</option>
+                        <option value="doctor">Doctor</option>
                       </select>
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                         <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -479,6 +527,48 @@ const AddUser = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Department - Only show when role is doctor */}
+                  {formData.role === 'doctor' && (
+                    <div>
+                      <label htmlFor="department_id" className="block text-sm font-medium text-gray-700 mb-2">
+                        Department <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Building2 className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <select
+                          id="department_id"
+                          name="department_id"
+                          value={formData.department_id}
+                          onChange={handleChange}
+                          disabled={loadingDepartments}
+                          className={`block w-full pl-10 pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
+                            errors.department_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                          } ${loadingDepartments ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <option value="">Select Department</option>
+                          {departments.map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                      {errors.department_id && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <XCircle className="h-4 w-4 mr-1" />
+                          {errors.department_id}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Submit Buttons */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   Plus, 
   Search, 
@@ -12,7 +12,9 @@ import {
   AlertCircle,
   XCircle,
   UserPlus,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
@@ -23,25 +25,115 @@ import SuccessModal from '../../components/modals/SuccessModal';
 const Users = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { users, pagination, isLoading, error, filters } = useAppSelector((state) => state.superadmin);
+  const { users: allUsers, pagination, isLoading, error, filters } = useAppSelector((state) => state.superadmin);
+  
+  // State declarations - must be before useMemo
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [resendingUserId, setResendingUserId] = useState(null);
-  const [showResendLoading, setShowResendLoading] = useState(false);
-
-  // Load users on component mount
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [searchValue, setSearchValue] = useState(filters.search || '');
+  const searchTimeoutRef = useRef(null);
+  const [frontendPage, setFrontendPage] = useState(1);
+  const [frontendPageSize] = useState(10);
+  
+  // Frontend filtering as fallback - ALWAYS applied to ensure correct filtering
+  const filteredUsers = useMemo(() => {
+    let filtered = [...allUsers];
+    
+    // Apply status filter on frontend as fallback
+    if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
+      const statusFilter = filters.status.trim().toLowerCase();
+      filtered = filtered.filter(user => {
+        const userStatus = user.isVerified ? (user.isActive ? 'active' : 'inactive') : 'pending';
+        return userStatus === statusFilter;
+      });
+    }
+    
+    // Apply role filter on frontend as fallback
+    if (filters.role && filters.role.trim() !== '') {
+      filtered = filtered.filter(user => user.role === filters.role.trim());
+    }
+    
+    // Apply search filter on frontend - ALWAYS use "starts with" (NOT includes)
+    if (searchValue && searchValue.trim() !== '') {
+      const searchLower = searchValue.trim().toLowerCase();
+      const beforeCount = filtered.length;
+      filtered = filtered.filter(user => {
+        const email = (user.email || '').toLowerCase();
+        const firstName = (user.firstName || '').toLowerCase().trim();
+        const lastName = (user.lastName || '').toLowerCase().trim();
+        // Merge first name and last name together and check if it starts with search term
+        const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+        // Also check without space (in case user types "peterparker")
+        const fullNameNoSpace = `${firstName}${lastName}`.toLowerCase();
+        
+        // STRICT "starts with" logic - check merged first+last name, first name, and email
+        // Priority: 
+        // 1. Full name (first + last merged) starts with search term
+        // 2. First name starts with search term
+        // 3. Email starts with search term
+        const matchesFullName = fullName.startsWith(searchLower);
+        const matchesFullNameNoSpace = fullNameNoSpace.startsWith(searchLower);
+        const matchesFirstName = firstName.startsWith(searchLower);
+        const matchesEmail = email.startsWith(searchLower);
+        
+        const matches = matchesFullName || matchesFullNameNoSpace || matchesFirstName || matchesEmail;
+        return matches;
+      });
+    }
+    
+    return filtered;
+  }, [allUsers, filters.status, filters.role, searchValue]);
+  
+  // Apply frontend pagination to filtered results
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (frontendPage - 1) * frontendPageSize;
+    const endIndex = startIndex + frontendPageSize;
+    return filteredUsers.slice(startIndex, endIndex);
+  }, [filteredUsers, frontendPage, frontendPageSize]);
+  
+  // Calculate pagination info
+  const totalFilteredUsers = filteredUsers.length;
+  const totalFrontendPages = Math.ceil(totalFilteredUsers / frontendPageSize);
+  
+  // Reset to page 1 when filters change
   useEffect(() => {
-    console.log('Users component mounted, dispatching getAllUsers');
-    dispatch(getAllUsers({
+    setFrontendPage(1);
+  }, [filters.status, filters.role, searchValue]);
+
+  // Sync searchValue with filters when filters change externally (e.g., clear filters)
+  useEffect(() => {
+    if (filters.search === '' && searchValue !== '') {
+      setSearchValue('');
+    }
+  }, [filters.search]);
+
+  // Load ALL users on component mount for frontend filtering (don't rely on backend search)
+  useEffect(() => {
+    setIsInitialLoad(true);
+    
+    // Load ALL users without search filter - we'll do filtering on frontend
+    const initialFilters = {
       page: 1,
-      limit: 10,
-      role: '',
-      search: '',
-      status: ''
-    }));
+      limit: 10000 // Load a very large number to get all users
+    };
+    
+    // Only add role and status filters (not search - we filter that on frontend)
+    if (filters.role && filters.role.trim() !== '') {
+      initialFilters.role = filters.role.trim();
+    }
+    if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
+      initialFilters.status = filters.status.trim().toLowerCase();
+    }
+    
+    setSearchValue(filters.search || '');
+    dispatch(getAllUsers(initialFilters)).finally(() => {
+      setIsInitialLoad(false);
+    });
   }, [dispatch]);
 
   // Handle error modal
@@ -55,7 +147,8 @@ const Users = () => {
     const roleMap = {
       'urologist': 'Urologist',
       'gp': 'General Practitioner',
-      'urology_nurse': 'Urology Nurse'
+      'urology_nurse': 'Urology Nurse',
+      'doctor': 'Doctor'
     };
     return roleMap[role] || role;
   };
@@ -112,22 +205,18 @@ const Users = () => {
 
   const handleResendPasswordSetup = async (user) => {
     setResendingUserId(user.id);
-    setShowResendLoading(true);
     
     try {
       const result = await dispatch(resendPasswordSetup(user.id));
       
       if (result.type.endsWith('/fulfilled')) {
-        setShowResendLoading(false);
         setSuccessMessage(`Password setup email has been resent successfully to ${user.email}`);
         setShowSuccessModal(true);
       } else {
-        setShowResendLoading(false);
         setShowErrorModal(true);
       }
     } catch (error) {
       console.error('Error resending password setup:', error);
-      setShowResendLoading(false);
       setShowErrorModal(true);
     } finally {
       setResendingUserId(null);
@@ -139,37 +228,84 @@ const Users = () => {
     setSuccessMessage('');
   };
 
+  // Frontend-only search - no backend calls for search, just update filter state
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Only update filter state - frontend filtering will handle the rest
+    if (!isInitialLoad) {
+      searchTimeoutRef.current = setTimeout(() => {
+        dispatch(setFilters({ search: searchValue }));
+      }, 300); // 300ms debounce for faster response
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchValue, isInitialLoad, dispatch]);
+
   const handleFilterChange = useCallback((filterType, value) => {
-    // Update the filter in the Redux store
-    dispatch(setFilters({ [filterType]: value }));
+    const cleanValue = value ? String(value).trim() : '';
     
-    // Create the new filters object with the updated value
+    // For search, update local state only - frontend filtering handles the rest
+    if (filterType === 'search') {
+      setSearchValue(cleanValue);
+      dispatch(setFilters({ [filterType]: cleanValue }));
+      return;
+    }
+    
+    // For role and status, reload users from backend (but load all, frontend will filter)
     const newFilters = {
-      role: filterType === 'role' ? value : filters.role || '',
-      search: filterType === 'search' ? value : filters.search || '',
-      status: filterType === 'status' ? value : filters.status || ''
+      page: 1,
+      limit: 10000 // Load all users, frontend will filter
     };
     
-    // Refetch users with new filters
-    dispatch(getAllUsers({
-      page: 1,
-      limit: 10,
-      ...newFilters
-    }));
+    // Add role filter
+    if (filterType === 'role') {
+      if (cleanValue) newFilters.role = cleanValue;
+    } else if (filters.role && filters.role.trim() !== '') {
+      newFilters.role = filters.role.trim();
+    }
+    
+    // Add status filter - CRITICAL: Use the new value directly, not from Redux state
+    if (filterType === 'status') {
+      if (cleanValue && cleanValue !== 'all') {
+        newFilters.status = cleanValue.toLowerCase();
+      }
+    } else if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
+      newFilters.status = filters.status.trim().toLowerCase();
+    }
+    
+    // Don't add search to backend filters - frontend handles search
+    // searchValue is handled separately by frontend filtering
+    
+    // Update the filter in the Redux store
+    dispatch(setFilters({ [filterType]: cleanValue }));
+    
+    // Refetch users with new filters (without showing full-page loader)
+    dispatch(getAllUsers(newFilters));
   }, [dispatch, filters]);
 
   const handleClearFilters = useCallback(() => {
     dispatch(clearFilters());
+    setSearchValue('');
+    // Reload all users (frontend will handle filtering)
     dispatch(getAllUsers({
       page: 1,
-      limit: 10,
+      limit: 10000,
       role: '',
-      search: '',
       status: ''
+      // Don't send search - frontend handles it
     }));
   }, [dispatch]);
 
-  if (isLoading) {
+  // Only show full-page loader on initial load
+  if (isLoading && isInitialLoad) {
     return (
       <div className="h-full overflow-y-auto">
         <div className="p-4 sm:p-6 lg:p-8">
@@ -233,8 +369,8 @@ const Users = () => {
                   </div>
                   <input
                     type="text"
-                    value={filters.search}
-                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
                     placeholder="Search users..."
                   />
@@ -290,13 +426,19 @@ const Users = () => {
 
         {/* Users Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-              Users ({users.length})
+              Users ({totalFilteredUsers})
             </h3>
+            {isLoading && !isInitialLoad && (
+              <div className="flex items-center text-sm text-gray-500">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <span>Filtering...</span>
+              </div>
+            )}
           </div>
           
-          {users.length === 0 ? (
+          {paginatedUsers.length === 0 && !isLoading ? (
             <div className="text-center py-12">
               <UserPlus className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No users found</h3>
@@ -326,15 +468,12 @@ const Users = () => {
                       Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Login
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => {
+                  {paginatedUsers.map((user) => {
                     const StatusIcon = getStatusIcon(user.status);
                     return (
                       <tr key={user.id} className="hover:bg-gray-50">
@@ -362,9 +501,6 @@ const Users = () => {
                             {user.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDate(user.lastLoginAt)}
-                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center space-x-2">
                             <button
@@ -374,11 +510,16 @@ const Users = () => {
                               title="Resend Password Setup Email"
                             >
                               {resendingUserId === user.id ? (
-                                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                                  <span className="text-xs font-medium">Sending...</span>
+                                </>
                               ) : (
-                                <Mail className="h-4 w-4 mr-1.5" />
+                                <>
+                                  <Mail className="h-4 w-4 mr-1.5" />
+                                  <span className="text-xs font-medium">Resend Mail</span>
+                                </>
                               )}
-                              <span className="text-xs font-medium">Resend Mail</span>
                             </button>
                             <button
                               onClick={() => handleDeleteUser(user)}
@@ -395,6 +536,91 @@ const Users = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          
+          {/* Frontend Pagination Controls */}
+          {totalFrontendPages > 1 && (
+            <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => setFrontendPage(prev => Math.max(1, prev - 1))}
+                  disabled={frontendPage === 1}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setFrontendPage(prev => Math.min(totalFrontendPages, prev + 1))}
+                  disabled={frontendPage === totalFrontendPages}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{(frontendPage - 1) * frontendPageSize + 1}</span> to{' '}
+                    <span className="font-medium">
+                      {Math.min(frontendPage * frontendPageSize, totalFilteredUsers)}
+                    </span>{' '}
+                    of <span className="font-medium">{totalFilteredUsers}</span> results
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={() => setFrontendPage(prev => Math.max(1, prev - 1))}
+                      disabled={frontendPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">Previous</span>
+                      <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    {Array.from({ length: totalFrontendPages }, (_, i) => i + 1).map((pageNum) => {
+                      // Show first page, last page, current page, and pages around current
+                      if (
+                        pageNum === 1 ||
+                        pageNum === totalFrontendPages ||
+                        (pageNum >= frontendPage - 1 && pageNum <= frontendPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setFrontendPage(pageNum)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              frontendPage === pageNum
+                                ? 'z-10 bg-teal-50 border-teal-500 text-teal-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      } else if (pageNum === frontendPage - 2 || pageNum === frontendPage + 2) {
+                        return (
+                          <span
+                            key={pageNum}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
+                          >
+                            ...
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+                    <button
+                      onClick={() => setFrontendPage(prev => Math.min(totalFrontendPages, prev + 1))}
+                      disabled={frontendPage === totalFrontendPages}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">Next</span>
+                      <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </nav>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -437,34 +663,6 @@ const Users = () => {
               >
                 Delete
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Loading Modal for Resend Password */}
-      {showResendLoading && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-r from-teal-600 to-teal-700 rounded-full flex items-center justify-center">
-                  <Mail className="w-8 h-8 text-white" />
-                </div>
-                <div className="absolute inset-0 rounded-full border-4 border-teal-200 animate-ping"></div>
-              </div>
-              <div className="text-center">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Sending Email...
-                </h3>
-                <p className="text-gray-600">
-                  Please wait while we resend the password setup email.
-                </p>
-              </div>
-              <div className="flex items-center space-x-2 text-teal-600">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm font-medium">Processing...</span>
-              </div>
             </div>
           </div>
         </div>

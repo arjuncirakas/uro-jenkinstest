@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FiEye, FiCalendar } from 'react-icons/fi';
 import GPHeader from '../../components/layout/GPHeader';
 import GPPatientDetailsModal from '../../components/GPPatientDetailsModal';
-import gpService from '../../services/gpService';
+import { gpService } from '../../services/gpService';
 
 const ReferredPatients = () => {
   const [searchQuery, setSearchQuery] = useState('');

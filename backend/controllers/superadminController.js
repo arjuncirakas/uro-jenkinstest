@@ -8,14 +8,26 @@ export const createUser = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { email, firstName, lastName, phone, organization, role } = req.body;
+    await client.query('BEGIN'); // Start transaction
+    
+    const { email, firstName, lastName, phone, organization, role, department_id } = req.body;
 
     // Validate role
-    const allowedRoles = ['urologist', 'gp', 'urology_nurse'];
+    const allowedRoles = ['urologist', 'gp', 'urology_nurse', 'doctor'];
     if (!allowedRoles.includes(role)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse'
+        message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse, doctor'
+      });
+    }
+
+    // Validate department_id is provided when role is doctor
+    if (role === 'doctor' && !department_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Department is required when role is doctor'
       });
     }
 
@@ -26,6 +38,7 @@ export const createUser = async (req, res) => {
     );
 
     if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({
         success: false,
         message: 'User with this email already exists'
@@ -40,6 +53,7 @@ export const createUser = async (req, res) => {
       );
       
       if (existingPhone.rows.length > 0) {
+        await client.query('ROLLBACK');
         return res.status(409).json({
           success: false,
           message: 'Phone number is already in use'
@@ -51,6 +65,45 @@ export const createUser = async (req, res) => {
     const tempPassword = crypto.randomBytes(12).toString('hex');
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
+
+    // If role is doctor, create doctor record first
+    let doctorId = null;
+    if (role === 'doctor' && department_id) {
+      // Validate department exists
+      const deptResult = await client.query('SELECT id, name FROM departments WHERE id = $1 AND is_active = true', [department_id]);
+      if (deptResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid department ID'
+        });
+      }
+
+      const specialization = deptResult.rows[0].name;
+
+      // Check if doctor already exists with this email
+      const existingDoctor = await client.query(
+        'SELECT id FROM doctors WHERE email = $1',
+        [email]
+      );
+
+      if (existingDoctor.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          message: 'Doctor with this email already exists'
+        });
+      }
+
+      // Insert into doctors table
+      const doctorResult = await client.query(`
+        INSERT INTO doctors (first_name, last_name, email, phone, department_id, specialization)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id
+      `, [firstName, lastName, email, phone, department_id, specialization]);
+
+      doctorId = doctorResult.rows[0].id;
+    }
 
     // Insert new user (not verified yet, will be activated after password setup)
     const result = await client.query(
@@ -75,6 +128,8 @@ export const createUser = async (req, res) => {
     // Send password setup email
     const emailResult = await sendPasswordSetupEmail(email, firstName, setupToken);
 
+    await client.query('COMMIT'); // Commit transaction
+
     res.status(201).json({
       success: true,
       message: emailResult.success 
@@ -86,11 +141,13 @@ export const createUser = async (req, res) => {
         firstName: newUser.first_name,
         lastName: newUser.last_name,
         role: newUser.role,
-        emailSent: emailResult.success
+        emailSent: emailResult.success,
+        doctorId: doctorId || null
       }
     });
 
   } catch (error) {
+    await client.query('ROLLBACK'); // Rollback transaction on error
     console.error('Create user error:', error);
     res.status(500).json({
       success: false,
@@ -101,62 +158,205 @@ export const createUser = async (req, res) => {
   }
 };
 
-// Get all users (superadmin only)
+// Get all users (superadmin only) - includes users and doctors
 export const getAllUsers = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { page = 1, limit = 10, role, search } = req.query;
+    // Extract and parse query parameters - CRITICAL: Handle status correctly
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const role = req.query.role ? String(req.query.role).trim() : null;
+    const search = req.query.search ? String(req.query.search).trim() : null;
+    
+    // Handle status parameter - it must be explicitly checked
+    let status = null;
+    if (req.query.hasOwnProperty('status') && req.query.status !== undefined && req.query.status !== null) {
+      const statusValue = String(req.query.status).trim();
+      if (statusValue !== '' && statusValue.toLowerCase() !== 'all') {
+        status = statusValue.toLowerCase();
+      }
+    }
+    
     const offset = (page - 1) * limit;
 
-    let query = `
-      SELECT id, email, first_name, last_name, phone, organization, role, 
-             is_active, is_verified, created_at, last_login_at
-      FROM users 
-      WHERE role != 'superadmin'
-    `;
+    // Build query parameters
     const queryParams = [];
-    let paramCount = 0;
+    let paramIndex = 1;
+    let searchParamIndex = null;
+    let searchPattern = null;
+
+    // Build WHERE conditions for users table
+    let userWhereConditions = ["role != 'superadmin'"];
+    let doctorWhereConditions = ["1=1"]; // Always true base condition
 
     // Add role filter
-    if (role) {
-      paramCount++;
-      query += ` AND role = $${paramCount}`;
+    if (role && role !== '') {
+      userWhereConditions.push(`role = $${paramIndex}`);
+      // For doctors, we need to check if their department matches the role
+      // We'll handle this in the UNION query by checking department name
       queryParams.push(role);
+      paramIndex++;
     }
 
     // Add search filter
-    if (search) {
-      paramCount++;
-      query += ` AND (first_name ILIKE $${paramCount} OR last_name ILIKE $${paramCount} OR email ILIKE $${paramCount})`;
-      queryParams.push(`%${search}%`);
+    if (search && search !== '') {
+      const searchClean = search.trim().replace(/\s+/g, '');
+      searchPattern = `${searchClean}%`;
+      searchParamIndex = paramIndex;
+      
+      const searchCondition = `(
+        CONCAT(first_name, last_name) ILIKE $${paramIndex} OR 
+        CONCAT(first_name, ' ', last_name) ILIKE $${paramIndex} OR 
+        first_name ILIKE $${paramIndex} OR 
+        email ILIKE $${paramIndex}
+      )`;
+      userWhereConditions.push(searchCondition);
+      doctorWhereConditions.push(searchCondition);
+      queryParams.push(searchPattern);
+      paramIndex++;
     }
 
-    // Add ordering and pagination
-    query += ` ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
-    queryParams.push(parseInt(limit), offset);
-
-    const result = await client.query(query, queryParams);
-
-    // Get total count for pagination
-    let countQuery = 'SELECT COUNT(*) FROM users WHERE role != \'superadmin\'';
-    const countParams = [];
-    let countParamCount = 0;
-
-    if (role) {
-      countParamCount++;
-      countQuery += ` AND role = $${countParamCount}`;
-      countParams.push(role);
+    // Add status filter
+    if (status) {
+      if (status === 'pending') {
+        userWhereConditions.push(`is_verified = false`);
+        // Doctors without user accounts are considered pending (all doctors in UNION are pending)
+        // No additional filter needed since we only include doctors without user accounts
+      } else if (status === 'active') {
+        userWhereConditions.push(`is_verified = true AND is_active = true`);
+        // Active doctors: is_active = true (doctors without user accounts)
+        doctorWhereConditions.push(`d.is_active = true`);
+      } else if (status === 'inactive') {
+        userWhereConditions.push(`is_verified = true AND is_active = false`);
+        // Inactive doctors: is_active = false (doctors without user accounts)
+        doctorWhereConditions.push(`d.is_active = false`);
+      }
     }
 
-    if (search) {
-      countParamCount++;
-      countQuery += ` AND (first_name ILIKE $${countParamCount} OR last_name ILIKE $${countParamCount} OR email ILIKE $${countParamCount})`;
-      countParams.push(`%${search}%`);
+    const userWhereClause = userWhereConditions.join(' AND ');
+    const doctorWhereClause = doctorWhereConditions.join(' AND ');
+
+    // Build role filter for doctors based on department
+    let doctorRoleFilter = '';
+    if (role && role !== '') {
+      if (role === 'urologist') {
+        doctorRoleFilter = `AND (LOWER(dept.name) LIKE '%urology%' OR dept.name IS NULL)`;
+      } else if (role === 'gp') {
+        doctorRoleFilter = `AND (LOWER(dept.name) LIKE '%general%' OR LOWER(dept.name) LIKE '%gp%')`;
+      } else if (role === 'urology_nurse') {
+        doctorRoleFilter = `AND LOWER(dept.name) LIKE '%nurse%'`;
+      } else if (role === 'doctor') {
+        // Include all doctors when filtering by 'doctor' role
+        doctorRoleFilter = ``;
+      } else {
+        // For other roles, don't include doctors
+        doctorRoleFilter = `AND 1=0`;
+      }
     }
+
+    // Build UNION query to combine users and doctors
+    // Only include doctors that don't already have user accounts (to avoid duplicates)
+    const unionQuery = `
+      (
+        SELECT 
+          u.id,
+          u.email,
+          u.first_name,
+          u.last_name,
+          u.phone,
+          u.organization,
+          u.role,
+          u.is_active,
+          u.is_verified,
+          u.created_at,
+          u.last_login_at
+        FROM users u
+        WHERE ${userWhereClause}
+      )
+      UNION ALL
+      (
+        SELECT 
+          d.id + 1000000 as id, -- Offset to avoid ID conflicts with users
+          d.email,
+          d.first_name,
+          d.last_name,
+          d.phone,
+          NULL as organization,
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 FROM users u3 
+              WHERE u3.email = d.email 
+              AND u3.role = 'doctor'
+            ) THEN 'doctor'
+            WHEN LOWER(dept.name) LIKE '%urology%' THEN 'urologist'
+            WHEN LOWER(dept.name) LIKE '%general%' OR LOWER(dept.name) LIKE '%gp%' THEN 'gp'
+            WHEN LOWER(dept.name) LIKE '%nurse%' THEN 'urology_nurse'
+            ELSE 'doctor'
+          END as role,
+          d.is_active,
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 FROM users u4 
+              WHERE u4.email = d.email 
+              AND u4.role = 'doctor'
+              AND u4.is_verified = true
+            ) THEN true
+            ELSE false
+          END as is_verified,
+          d.created_at,
+          NULL as last_login_at
+        FROM doctors d
+        LEFT JOIN departments dept ON d.department_id = dept.id
+        WHERE ${doctorWhereClause}
+          -- Only include doctors that don't have user accounts (to avoid duplicates)
+          -- Doctors with user accounts are already included in the users table query above
+          AND NOT EXISTS (
+            SELECT 1 FROM users u6 
+            WHERE u6.email = d.email 
+            AND u6.role != 'superadmin'
+          )
+          ${doctorRoleFilter}
+      )
+    `;
+
+    // Build order by clause
+    let orderByClause = 'ORDER BY created_at DESC';
+    if (search && search !== '' && searchParamIndex !== null) {
+      orderByClause = `ORDER BY 
+        CASE 
+          WHEN CONCAT(first_name, ' ', last_name) ILIKE $${searchParamIndex} THEN 1
+          WHEN CONCAT(first_name, last_name) ILIKE $${searchParamIndex} THEN 2
+          WHEN first_name ILIKE $${searchParamIndex} THEN 3
+          WHEN email ILIKE $${searchParamIndex} THEN 4
+          ELSE 5
+        END,
+        created_at DESC`;
+    }
+
+    // Final query with pagination
+    const finalQuery = `
+      SELECT * FROM (
+        ${unionQuery}
+      ) combined_users
+      ${orderByClause}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    
+    queryParams.push(limit, offset);
+
+    const result = await client.query(finalQuery, queryParams);
+
+    // Build count query
+    const countQuery = `
+      SELECT COUNT(*) as total FROM (
+        ${unionQuery}
+      ) combined_users
+    `;
+    const countParams = queryParams.slice(0, -2); // Remove limit and offset
 
     const countResult = await client.query(countQuery, countParams);
-    const totalUsers = parseInt(countResult.rows[0].count);
+    const totalUsers = parseInt(countResult.rows[0].total);
 
     res.json({
       success: true,
@@ -232,11 +432,11 @@ export const updateUser = async (req, res) => {
 
     // Validate role if provided
     if (role) {
-      const allowedRoles = ['urologist', 'gp', 'urology_nurse'];
+      const allowedRoles = ['urologist', 'gp', 'urology_nurse', 'doctor'];
       if (!allowedRoles.includes(role)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse'
+          message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse, doctor'
         });
       }
     }
@@ -364,7 +564,6 @@ export const deleteUser = async (req, res) => {
     }
 
     const user = existingUser.rows[0];
-    console.log(`🗑️  Deleting user: ${user.first_name} ${user.last_name} (${user.email}) - Role: ${user.role}`);
 
     // Check how many patients this user created (for logging purposes)
     const patientCount = await client.query(
@@ -372,14 +571,8 @@ export const deleteUser = async (req, res) => {
       [id]
     );
     
-    if (patientCount.rows[0].count > 0) {
-      console.log(`📊 User has created ${patientCount.rows[0].count} patient(s). These records will be preserved.`);
-    }
-
     // Delete user (foreign keys with SET NULL will preserve patient records)
     await client.query('DELETE FROM users WHERE id = $1', [id]);
-
-    console.log(`✅ User deleted successfully. Patient records preserved.`);
 
     res.json({
       success: true,

@@ -69,7 +69,7 @@ const migrateDatabase = async () => {
         `);
         await client.query(`
           ALTER TABLE users ADD CONSTRAINT users_role_check 
-          CHECK (role IN ('urologist', 'gp', 'urology_nurse'));
+          CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse', 'doctor'));
         `);
         console.log('  ✅ Updated role constraint');
       } catch (err) {

@@ -1,8 +1,8 @@
 import express from 'express';
 import { 
-  createUser,
   getAllUsers,
   getUserById,
+  createUser,
   updateUser,
   deleteUser,
   setupPassword,
@@ -41,8 +41,8 @@ router.get('/', generalLimiter, (req, res) => {
     message: 'Superadmin API',
     endpoints: {
       dashboardStats: 'GET /api/superadmin/dashboard-stats',
-      createUser: 'POST /api/superadmin/users',
       getAllUsers: 'GET /api/superadmin/users',
+      createUser: 'POST /api/superadmin/users',
       getUserById: 'GET /api/superadmin/users/:id',
       updateUser: 'PUT /api/superadmin/users/:id',
       deleteUser: 'DELETE /api/superadmin/users/:id',
@@ -55,8 +55,8 @@ router.get('/', generalLimiter, (req, res) => {
 router.get('/dashboard-stats', generalLimiter, getDashboardStats);
 
 // User management routes
-router.post('/users', generalLimiter, createUser);
 router.get('/users', generalLimiter, getAllUsers);
+router.post('/users', generalLimiter, createUser);
 router.get('/users/:id', generalLimiter, getUserById);
 router.put('/users/:id', generalLimiter, updateUser);
 router.delete('/users/:id', generalLimiter, deleteUser);

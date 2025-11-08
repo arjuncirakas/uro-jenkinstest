@@ -96,8 +96,8 @@ export const validateRegistrationInput = [
     }),
     
   body('role')
-    .isIn(['urologist', 'gp', 'urology_nurse'])
-    .withMessage('Role must be one of: urologist, gp, urology_nurse'),
+    .isIn(['urologist', 'gp', 'urology_nurse', 'doctor'])
+    .withMessage('Role must be one of: urologist, gp, urology_nurse, doctor'),
     
   // Check for validation errors
   (req, res, next) => {

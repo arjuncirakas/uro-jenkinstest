@@ -12,6 +12,7 @@
     "create-superadmin": "node scripts/create-superadmin.js",
     "migrate-db": "node scripts/migrate-database.js",
     "fix-user-constraints": "node scripts/fix-user-deletion-constraints.js",
+    "update-role-constraint": "node scripts/update-role-constraint.js",
     "test-security": "node scripts/test-security.js",
     "test-email": "node scripts/test-email.js",
     "test-login-otp": "node scripts/test-login-otp.js",

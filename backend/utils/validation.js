@@ -57,10 +57,10 @@ export const registerSchema = Joi.object({
       'string.max': 'Organization name must not exceed 255 characters'
     }),
   role: Joi.string()
-    .valid('urologist', 'gp', 'urology_nurse')
+    .valid('urologist', 'gp', 'urology_nurse', 'doctor')
     .required()
     .messages({
-      'any.only': 'Role must be one of: urologist, gp, urology_nurse',
+      'any.only': 'Role must be one of: urologist, gp, urology_nurse, doctor',
       'any.required': 'Role is required'
     })
 });

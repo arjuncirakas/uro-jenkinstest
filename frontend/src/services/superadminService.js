@@ -16,15 +16,26 @@ class SuperadminService {
     try {
       const queryParams = new URLSearchParams();
       
-      if (params.page) queryParams.append('page', params.page);
-      if (params.limit) queryParams.append('limit', params.limit);
-      if (params.role) queryParams.append('role', params.role);
-      if (params.search) queryParams.append('search', params.search);
-      if (params.status) queryParams.append('status', params.status);
+      // Always include page and limit
+      queryParams.append('page', params.page || 1);
+      queryParams.append('limit', params.limit || 10);
+      
+      // Only add filters if they have non-empty values
+      if (params.role && String(params.role).trim() !== '') {
+        queryParams.append('role', String(params.role).trim());
+      }
+      if (params.search && String(params.search).trim() !== '') {
+        queryParams.append('search', String(params.search).trim());
+      }
+      if (params.status && String(params.status).trim() !== '' && String(params.status).trim() !== 'all') {
+        queryParams.append('status', String(params.status).trim().toLowerCase());
+      }
 
-      const response = await apiClient.get(`/superadmin/users?${queryParams.toString()}`);
+      const queryString = queryParams.toString();
+      const response = await apiClient.get(`/superadmin/users?${queryString}`);
       return response.data;
     } catch (error) {
+      console.error('❌ Frontend getAllUsers - Error:', error);
       throw handleApiError(error);
     }
   }

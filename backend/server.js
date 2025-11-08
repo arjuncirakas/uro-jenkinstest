@@ -16,6 +16,8 @@ import bookingRoutes from './routes/booking.js';
 import mdtRoutes from './routes/mdt.js';
 import doctorsRoutes from './routes/doctors.js';
 import notificationRoutes from './routes/notifications.js';
+import gpRoutes from './routes/gp.js';
+import nursesRoutes from './routes/nurses.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { initializeNotificationsTable } from './services/notificationService.js';
@@ -161,6 +163,8 @@ app.use('/api/appointments', (req, res) => {
 });
 app.use('/api', mdtRoutes);
 app.use('/api', doctorsRoutes);
+app.use('/api/gp', gpRoutes);
+app.use('/api/nurses', nursesRoutes);
 
 // 404 handler
 app.use(notFound);
