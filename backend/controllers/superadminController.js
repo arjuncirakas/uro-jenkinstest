@@ -424,7 +424,18 @@ export const filterUsers = async (req, res) => {
   try {
     const { role, department_id, status, search } = req.query;
     
-    // Build base query - get users with role 'doctor' and join with doctors table
+    console.log('🔍 Filter users - params:', { role, department_id, status, search });
+    
+    const params = [];
+    let paramIndex = 1;
+    
+    // Determine if we need to filter by department
+    const filterByDepartment = role && role.trim() === 'doctor' && department_id && department_id.trim() !== '';
+    const deptId = filterByDepartment ? parseInt(department_id.trim(), 10) : null;
+    
+    // Build base query - use INNER JOIN when filtering by department to ensure doctor record exists
+    let joinType = filterByDepartment ? 'INNER' : 'LEFT';
+    
     let query = `
       SELECT DISTINCT
         u.id,
@@ -441,13 +452,10 @@ export const filterUsers = async (req, res) => {
         dept.name as department_name,
         d.department_id
       FROM users u
-      LEFT JOIN doctors d ON u.email = d.email AND u.role = 'doctor'
+      ${joinType} JOIN doctors d ON u.email = d.email
       LEFT JOIN departments dept ON d.department_id = dept.id
       WHERE u.role != 'superadmin'
     `;
-    
-    const params = [];
-    let paramIndex = 1;
     
     // Add role filter
     if (role && role.trim() !== '') {
@@ -457,10 +465,13 @@ export const filterUsers = async (req, res) => {
     }
     
     // Add department filter - CRITICAL: Only apply when role is 'doctor'
-    if (role === 'doctor' && department_id && department_id.trim() !== '') {
+    if (filterByDepartment && !isNaN(deptId)) {
       query += ` AND d.department_id = $${paramIndex}`;
-      params.push(parseInt(department_id.trim(), 10));
+      params.push(deptId);
       paramIndex++;
+      console.log('🔍 Added department filter:', deptId);
+    } else if (filterByDepartment) {
+      console.error('❌ Invalid department_id:', department_id);
     }
     
     // Add status filter
@@ -491,7 +502,12 @@ export const filterUsers = async (req, res) => {
     
     query += ` ORDER BY u.created_at DESC`;
     
+    console.log('🔍 Final query:', query);
+    console.log('🔍 Query params:', params);
+    
     const result = await client.query(query, params);
+    
+    console.log('🔍 Query result count:', result.rows.length);
     
     res.json({
       success: true,

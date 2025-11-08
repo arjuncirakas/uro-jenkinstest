@@ -63,8 +63,10 @@ class SuperadminService {
       if (params.status && String(params.status).trim() !== '' && String(params.status).trim() !== 'all') {
         queryParams.append('status', String(params.status).trim().toLowerCase());
       }
-      if (params.department_id && String(params.department_id).trim() !== '') {
-        queryParams.append('department_id', String(params.department_id).trim());
+      // Only add department_id if it's not empty and not "All Departments"
+      const deptId = params.department_id ? String(params.department_id).trim() : '';
+      if (deptId !== '' && deptId !== 'all') {
+        queryParams.append('department_id', deptId);
       }
 
       const queryString = queryParams.toString();
