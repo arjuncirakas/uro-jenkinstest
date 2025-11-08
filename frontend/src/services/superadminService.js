@@ -30,6 +30,9 @@ class SuperadminService {
       if (params.status && String(params.status).trim() !== '' && String(params.status).trim() !== 'all') {
         queryParams.append('status', String(params.status).trim().toLowerCase());
       }
+      if (params.department_id && String(params.department_id).trim() !== '') {
+        queryParams.append('department_id', String(params.department_id).trim());
+      }
 
       const queryString = queryParams.toString();
       const response = await apiClient.get(`/superadmin/users?${queryString}`);

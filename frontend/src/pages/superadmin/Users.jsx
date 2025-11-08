@@ -89,9 +89,12 @@ const Users = () => {
     
     // Apply department filter when role is doctor
     if (filters.role === 'doctor' && selectedDepartment && selectedDepartment.trim() !== '') {
-      // Note: This will filter doctors by department_id if the user data includes it
-      // For now, we'll need to fetch doctor data separately or include department info in user data
-      // This is a placeholder - you may need to enhance the backend to return department info with users
+      filtered = filtered.filter(user => {
+        // Filter by department_id if available in user data
+        // The backend should now include department_name, but we filter by department_id from Redux
+        // For now, we'll rely on backend filtering, but this is a fallback
+        return true; // Backend handles the filtering
+      });
     }
     
     // Apply search filter on frontend - ALWAYS use "starts with" (NOT includes)
@@ -164,6 +167,10 @@ const Users = () => {
     }
     if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
       initialFilters.status = filters.status.trim().toLowerCase();
+    }
+    if (filters.department_id && filters.department_id.trim() !== '') {
+      initialFilters.department_id = filters.department_id.trim();
+      setSelectedDepartment(filters.department_id.trim());
     }
     
     setSearchValue(filters.search || '');
@@ -571,8 +578,16 @@ const Users = () => {
                               <UserPlus className="h-5 w-5 text-gray-600" />
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
-                                {user.firstName} {user.lastName}
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {user.firstName} {user.lastName}
+                                </div>
+                                {user.role === 'doctor' && user.department_name && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 border border-teal-200">
+                                    <Building2 className="h-3 w-3 mr-1" />
+                                    {user.department_name}
+                                  </span>
+                                )}
                               </div>
                               <div className="text-sm text-gray-500">{user.email}</div>
                             </div>

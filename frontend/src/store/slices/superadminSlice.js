@@ -172,7 +172,8 @@ const superadminSlice = createSlice({
           isVerified: user.is_verified,
           status: user.is_verified ? (user.is_active ? 'active' : 'inactive') : 'pending',
           createdAt: user.created_at,
-          lastLoginAt: user.last_login_at
+          lastLoginAt: user.last_login_at,
+          department_name: user.department_name || null
         }));
         state.pagination = payload.pagination;
       })

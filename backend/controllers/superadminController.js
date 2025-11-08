@@ -294,7 +294,17 @@ export const getAllUsers = async (req, res) => {
           u.is_active,
           u.is_verified,
           u.created_at,
-          u.last_login_at
+          u.last_login_at,
+          CASE 
+            WHEN u.role = 'doctor' THEN (
+              SELECT dept.name 
+              FROM doctors doc 
+              LEFT JOIN departments dept ON doc.department_id = dept.id
+              WHERE doc.email = u.email
+              LIMIT 1
+            )
+            ELSE NULL
+          END as department_name
         FROM users u
         WHERE ${userWhereClause}
       )
@@ -329,7 +339,8 @@ export const getAllUsers = async (req, res) => {
             ELSE false
           END as is_verified,
           d.created_at,
-          NULL as last_login_at
+          NULL as last_login_at,
+          dept.name as department_name
         FROM doctors d
         LEFT JOIN departments dept ON d.department_id = dept.id
         WHERE ${doctorWhereClause}
