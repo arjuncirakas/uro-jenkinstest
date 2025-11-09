@@ -10,7 +10,8 @@ const ConfirmModal = ({
   confirmText = "Save Changes", 
   cancelText = "Cancel", 
   confirmButtonClass = "bg-blue-600 hover:bg-blue-700",
-  showSaveButton = true
+  showSaveButton = true,
+  isDeleteModal = false
 }) => {
   if (!isOpen) return null;
 
@@ -53,7 +54,7 @@ const ConfirmModal = ({
           >
             {cancelText}
           </button>
-          {showSaveButton && (
+          {showSaveButton && !isDeleteModal && (
             <button
               onClick={() => onConfirm(false)}
               className="px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
@@ -62,7 +63,7 @@ const ConfirmModal = ({
             </button>
           )}
           <button
-            onClick={() => onConfirm(true)}
+            onClick={() => isDeleteModal ? onConfirm() : onConfirm(true)}
             className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${confirmButtonClass}`}
           >
             {confirmText}

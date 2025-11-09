@@ -121,7 +121,7 @@ const Dashboard = () => {
           <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <button
-              onClick={() => navigate('/superadmin/users/new')}
+              onClick={() => window.dispatchEvent(new CustomEvent('openAddUserModal'))}
               className="bg-white p-5 rounded-lg border border-gray-300 hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <div className="flex flex-col items-center text-center">
@@ -234,7 +234,7 @@ const Dashboard = () => {
                 <p className="mt-1 text-sm text-gray-500">Get started by creating a new user.</p>
                 <div className="mt-6">
                   <button
-                    onClick={() => navigate('/superadmin/users/new')}
+                    onClick={() => window.dispatchEvent(new CustomEvent('openAddUserModal'))}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
                   >
                     <UserPlus className="h-4 w-4 mr-2" />

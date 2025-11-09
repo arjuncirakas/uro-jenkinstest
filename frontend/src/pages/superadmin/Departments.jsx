@@ -19,6 +19,14 @@ const Departments = () => {
     name: '',
     description: ''
   });
+  const [errors, setErrors] = useState({
+    name: '',
+    description: ''
+  });
+  const [touched, setTouched] = useState({
+    name: false,
+    description: false
+  });
 
   // Fetch departments
   const fetchDepartments = async () => {
@@ -43,6 +51,42 @@ const Departments = () => {
     fetchDepartments();
   }, []);
 
+  // Validation functions
+  const validateName = (name) => {
+    if (!name || !name.trim()) {
+      return 'Department name is required';
+    }
+    if (name.trim().length < 2) {
+      return 'Department name must be at least 2 characters';
+    }
+    if (name.trim().length > 100) {
+      return 'Department name must not exceed 100 characters';
+    }
+    // Check for special characters (allow letters, numbers, spaces, hyphens, and apostrophes)
+    const nameRegex = /^[a-zA-Z0-9\s\-']+$/;
+    if (!nameRegex.test(name.trim())) {
+      return 'Department name can only contain letters, numbers, spaces, hyphens, and apostrophes';
+    }
+    return '';
+  };
+
+  const validateDescription = (description) => {
+    if (description && description.length > 500) {
+      return 'Description must not exceed 500 characters';
+    }
+    return '';
+  };
+
+  // Validate all fields
+  const validateForm = () => {
+    const newErrors = {
+      name: validateName(formData.name),
+      description: validateDescription(formData.description)
+    };
+    setErrors(newErrors);
+    return !newErrors.name && !newErrors.description;
+  };
+
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -50,14 +94,60 @@ const Departments = () => {
       ...prev,
       [name]: value
     }));
+
+    // Validate on change if field has been touched
+    if (touched[name]) {
+      if (name === 'name') {
+        setErrors(prev => ({
+          ...prev,
+          name: validateName(value)
+        }));
+      } else if (name === 'description') {
+        setErrors(prev => ({
+          ...prev,
+          description: validateDescription(value)
+        }));
+      }
+    }
+  };
+
+  // Handle field blur
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setTouched(prev => ({
+      ...prev,
+      [name]: true
+    }));
+
+    // Validate on blur
+    if (name === 'name') {
+      setErrors(prev => ({
+        ...prev,
+        name: validateName(value)
+      }));
+    } else if (name === 'description') {
+      setErrors(prev => ({
+        ...prev,
+        description: validateDescription(value)
+      }));
+    }
   };
 
   // Handle add department
   const handleAddDepartment = async () => {
-    if (!formData.name.trim()) {
-      setError('Department name is required');
+    // Mark all fields as touched
+    setTouched({
+      name: true,
+      description: true
+    });
+
+    // Validate form
+    if (!validateForm()) {
+      setError('Please fix the errors in the form');
       return;
     }
+
+    setError(null);
 
     try {
       const response = await doctorsService.createDepartment(formData);
@@ -66,22 +156,36 @@ const Departments = () => {
         setShowSuccessModal(true);
         setShowAddModal(false);
         setFormData({ name: '', description: '' });
+        setErrors({ name: '', description: '' });
+        setTouched({ name: false, description: false });
+        setError(null);
         fetchDepartments();
       } else {
-        setError(response.error || 'Failed to create department');
+        setError(response.error || response.message || 'Failed to create department');
       }
     } catch (err) {
-      setError('Failed to create department');
+      // Handle error response from API
+      const errorMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to create department';
+      setError(errorMessage);
       console.error('Error creating department:', err);
     }
   };
 
   // Handle edit department
   const handleEditDepartment = async () => {
-    if (!formData.name.trim()) {
-      setError('Department name is required');
+    // Mark all fields as touched
+    setTouched({
+      name: true,
+      description: true
+    });
+
+    // Validate form
+    if (!validateForm()) {
+      setError('Please fix the errors in the form');
       return;
     }
+
+    setError(null);
 
     try {
       const response = await doctorsService.updateDepartment(selectedDepartment.id, formData);
@@ -90,6 +194,8 @@ const Departments = () => {
         setShowSuccessModal(true);
         setShowEditModal(false);
         setFormData({ name: '', description: '' });
+        setErrors({ name: '', description: '' });
+        setTouched({ name: false, description: false });
         setSelectedDepartment(null);
         fetchDepartments();
       } else {
@@ -139,6 +245,8 @@ const Departments = () => {
   // Reset form
   const resetForm = () => {
     setFormData({ name: '', description: '' });
+    setErrors({ name: '', description: '' });
+    setTouched({ name: false, description: false });
     setSelectedDepartment(null);
     setError(null);
   };
@@ -148,6 +256,7 @@ const Departments = () => {
     setShowAddModal(false);
     setShowEditModal(false);
     setShowDeleteModal(false);
+    setError(null);
     resetForm();
   };
 
@@ -174,7 +283,10 @@ const Departments = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            setError(null);
+            setShowAddModal(true);
+          }}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -282,7 +394,10 @@ const Departments = () => {
             {!searchTerm && (
               <div className="mt-6">
                 <button
-                  onClick={() => setShowAddModal(true)}
+                  onClick={() => {
+            setError(null);
+            setShowAddModal(true);
+          }}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -303,31 +418,69 @@ const Departments = () => {
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="add-name" className="block text-sm font-medium text-gray-700 mb-1">
                   Department Name *
                 </label>
                 <input
+                  id="add-name"
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
+                  onBlur={handleBlur}
                   placeholder="e.g., Cardiology"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                    touched.name && errors.name
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                  }`}
                 />
+                {touched.name && errors.name && (
+                  <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                )}
+                {touched.name && !errors.name && formData.name && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.name.trim().length}/100 characters
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="add-description" className="block text-sm font-medium text-gray-700 mb-1">
                   Description
                 </label>
                 <textarea
+                  id="add-description"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
+                  onBlur={handleBlur}
                   placeholder="Brief description of the department..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                    touched.description && errors.description
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                  }`}
                 />
+                {touched.description && errors.description && (
+                  <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+                )}
+                {touched.description && !errors.description && formData.description && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.description.length}/500 characters
+                  </p>
+                )}
               </div>
+              
+              {/* Error Message Display */}
+              {error && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-800 flex items-center">
+                    <span className="mr-2">⚠️</span>
+                    {error}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
               <button
@@ -338,7 +491,12 @@ const Departments = () => {
               </button>
               <button
                 onClick={handleAddDepartment}
-                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 border border-transparent rounded-md hover:bg-teal-700"
+                disabled={touched.name && errors.name ? true : false}
+                className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md ${
+                  touched.name && errors.name
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-teal-600 hover:bg-teal-700'
+                }`}
               >
                 Add Department
               </button>
@@ -356,30 +514,58 @@ const Departments = () => {
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-1">
                   Department Name *
                 </label>
                 <input
+                  id="edit-name"
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
+                  onBlur={handleBlur}
                   placeholder="e.g., Cardiology"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                    touched.name && errors.name
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                  }`}
                 />
+                {touched.name && errors.name && (
+                  <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                )}
+                {touched.name && !errors.name && formData.name && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.name.trim().length}/100 characters
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 mb-1">
                   Description
                 </label>
                 <textarea
+                  id="edit-description"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
+                  onBlur={handleBlur}
                   placeholder="Brief description of the department..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                    touched.description && errors.description
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                  }`}
                 />
+                {touched.description && errors.description && (
+                  <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+                )}
+                {touched.description && !errors.description && formData.description && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.description.length}/500 characters
+                  </p>
+                )}
               </div>
             </div>
             <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
@@ -391,7 +577,12 @@ const Departments = () => {
               </button>
               <button
                 onClick={handleEditDepartment}
-                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 border border-transparent rounded-md hover:bg-teal-700"
+                disabled={touched.name && errors.name ? true : false}
+                className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md ${
+                  touched.name && errors.name
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-teal-600 hover:bg-teal-700'
+                }`}
               >
                 Update Department
               </button>
@@ -407,6 +598,11 @@ const Departments = () => {
         onCancel={() => setShowDeleteModal(false)}
         title="Delete Department"
         message={`Are you sure you want to delete "${selectedDepartment?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        showSaveButton={false}
+        isDeleteModal={true}
       />
 
       {/* Success Modal */}
