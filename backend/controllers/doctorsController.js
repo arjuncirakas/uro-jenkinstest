@@ -465,9 +465,14 @@ export const getAllDepartments = async (req, res) => {
 
 // Create new department
 export const createDepartment = async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN'); // Start transaction
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
         error: 'Validation failed',
@@ -477,11 +482,30 @@ export const createDepartment = async (req, res) => {
     
     const { name, description } = req.body;
     
-    const result = await pool.query(`
-      INSERT INTO departments (name, description)
-      VALUES ($1, $2)
+    // Check if there's already a department with the same name (case-insensitive)
+    const existingDept = await client.query(`
+      SELECT id, name 
+      FROM departments 
+      WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))
+      LIMIT 1
+    `, [name]);
+    
+    if (existingDept.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        success: false,
+        error: 'Department with this name already exists'
+      });
+    }
+    
+    // Create a new department
+    const result = await client.query(`
+      INSERT INTO departments (name, description, is_active)
+      VALUES ($1, $2, true)
       RETURNING *
-    `, [name, description]);
+    `, [name.trim(), description]);
+    
+    await client.query('COMMIT');
     
     res.status(201).json({
       success: true,
@@ -489,6 +513,7 @@ export const createDepartment = async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error creating department:', error);
     if (error.code === '23505') { // Unique constraint violation
       res.status(409).json({
@@ -501,6 +526,8 @@ export const createDepartment = async (req, res) => {
         error: 'Failed to create department'
       });
     }
+  } finally {
+    client.release();
   }
 };
 
@@ -554,35 +581,63 @@ export const updateDepartment = async (req, res) => {
   }
 };
 
-// Delete department (soft delete)
+// Delete department (hard delete - completely remove from database)
 export const deleteDepartment = async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN'); // Start transaction
+    
     const { id } = req.params;
     
-    const result = await pool.query(`
-      UPDATE departments 
-      SET is_active = false, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING *
+    // First check if department exists
+    const checkResult = await client.query(`
+      SELECT id, name FROM departments WHERE id = $1
     `, [id]);
     
-    if (result.rows.length === 0) {
+    if (checkResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         error: 'Department not found'
       });
     }
     
+    // Check if there are any doctors associated with this department
+    const doctorsCheck = await client.query(`
+      SELECT COUNT(*) as count FROM doctors WHERE department_id = $1
+    `, [id]);
+    
+    if (parseInt(doctorsCheck.rows[0].count) > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete department. There are doctors associated with this department. Please remove or reassign doctors first.'
+      });
+    }
+    
+    // Delete the department completely from the database
+    const result = await client.query(`
+      DELETE FROM departments 
+      WHERE id = $1
+      RETURNING *
+    `, [id]);
+    
+    await client.query('COMMIT');
+    
     res.json({
       success: true,
       message: 'Department deleted successfully'
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error deleting department:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to delete department'
     });
+  } finally {
+    client.release();
   }
 };
 
