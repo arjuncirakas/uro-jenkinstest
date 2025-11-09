@@ -316,17 +316,7 @@ export const getAllUsers = async (req, res) => {
           d.last_name,
           d.phone,
           NULL as organization,
-          CASE 
-            WHEN EXISTS (
-              SELECT 1 FROM users u3 
-              WHERE u3.email = d.email 
-              AND u3.role = 'doctor'
-            ) THEN 'doctor'
-            WHEN LOWER(dept.name) LIKE '%urology%' THEN 'urologist'
-            WHEN LOWER(dept.name) LIKE '%general%' OR LOWER(dept.name) LIKE '%gp%' THEN 'gp'
-            WHEN LOWER(dept.name) LIKE '%nurse%' THEN 'urology_nurse'
-            ELSE 'doctor'
-          END as role,
+          'doctor' as role, -- Always set role as 'doctor' for doctors from doctors table
           d.is_active,
           CASE 
             WHEN EXISTS (
