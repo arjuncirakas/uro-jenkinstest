@@ -1,6 +1,9 @@
 // Global error handling middleware
 export const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  console.error('[Error Handler] Error:', err);
+  console.error('[Error Handler] Error stack:', err.stack);
+  console.error('[Error Handler] Request path:', req.path);
+  console.error('[Error Handler] Request method:', req.method);
 
   // Default error
   let error = {
@@ -72,11 +75,29 @@ export const errorHandler = (err, req, res, next) => {
     };
   }
 
-  res.status(error.statusCode).json({
-    success: error.success,
-    message: error.message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
+  // Ensure response hasn't been sent
+  if (!res.headersSent) {
+    // Ensure CORS headers are set even in error responses
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    }
+    
+    res.status(error.statusCode).json({
+      success: error.success,
+      message: error.message,
+      ...(process.env.NODE_ENV === 'development' && { 
+        stack: err.stack,
+        error: err.message,
+        code: err.code
+      })
+    });
+  } else {
+    console.error('[Error Handler] Response already sent, cannot send error response');
+  }
 };
 
 // 404 handler

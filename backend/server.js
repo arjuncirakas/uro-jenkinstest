@@ -83,12 +83,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply rate limiting to all routes
-app.use(generalLimiter);
-
-// CORS configuration with enhanced logging
+// CORS configuration with enhanced logging (before rate limiting)
 app.use(cors(corsOptions));
 app.use(corsLoggingMiddleware);
+
+// Explicit OPTIONS handler to ensure preflight requests always succeed (before rate limiting)
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  res.status(200).end();
+});
+
+// Apply rate limiting to all routes (after CORS)
+app.use(generalLimiter);
 
 
 // Body parsing middleware
@@ -222,14 +235,27 @@ const startServer = async () => {
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
-  console.error('Unhandled Promise Rejection:', err);
-  process.exit(1);
+  console.error('❌ [Unhandled Promise Rejection]', err);
+  console.error('❌ [Unhandled Promise Rejection] Stack:', err.stack);
+  console.error('❌ [Unhandled Promise Rejection] Promise:', promise);
+  // Don't exit immediately - log and let the server continue
+  // Only exit in production if it's a critical error
+  if (process.env.NODE_ENV === 'production' && err.code === 'ECONNREFUSED') {
+    console.error('❌ Critical database connection error. Exiting...');
+    process.exit(1);
+  }
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  process.exit(1);
+  console.error('❌ [Uncaught Exception]', err);
+  console.error('❌ [Uncaught Exception] Stack:', err.stack);
+  // For uncaught exceptions, we should exit as they indicate a serious problem
+  // But log first to help debug
+  setTimeout(() => {
+    console.error('❌ Exiting due to uncaught exception...');
+    process.exit(1);
+  }, 1000);
 });
 
 // Graceful shutdown

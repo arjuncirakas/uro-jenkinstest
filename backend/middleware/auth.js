@@ -15,10 +15,37 @@ export const authenticateToken = async (req, res, next) => {
     }
 
     // Verify the token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (jwtError) {
+      if (jwtError.name === 'JsonWebTokenError') {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token'
+        });
+      }
+      if (jwtError.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          message: 'Token expired'
+        });
+      }
+      throw jwtError;
+    }
     
     // Get user from database to ensure they still exist and are active
-    const client = await pool.connect();
+    let client;
+    try {
+      client = await pool.connect();
+    } catch (dbError) {
+      console.error('[Auth Middleware] Database connection error:', dbError);
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection failed. Please try again later.'
+      });
+    }
+
     try {
       const result = await client.query(
         'SELECT id, email, first_name, last_name, role, is_active FROM users WHERE id = $1',
@@ -51,28 +78,33 @@ export const authenticateToken = async (req, res, next) => {
       };
 
       next();
+    } catch (queryError) {
+      console.error('[Auth Middleware] Database query error:', queryError);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
     } finally {
-      client.release();
+      if (client) {
+        client.release();
+      }
     }
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
+    // JWT errors are already handled above
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      // Already handled, but just in case
       return res.status(401).json({
         success: false,
-        message: 'Invalid token'
-      });
-    }
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired'
+        message: error.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token'
       });
     }
 
-    console.error('Auth middleware error:', error);
+    console.error('[Auth Middleware] Unexpected error:', error);
+    console.error('[Auth Middleware] Error stack:', error.stack);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -80,35 +112,47 @@ export const authenticateToken = async (req, res, next) => {
 // Middleware to check user role
 export const requireRole = (roles) => {
   return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
+    try {
+      if (!req.user) {
+        console.warn('[RequireRole] No user in request object');
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
+
+      // Normalize roles: treat 'doctor' as 'urologist' for permission checks
+      // Doctors registered under urology department should have same access as urologists
+      const userRole = req.user.role;
+      const normalizedRoles = [...roles];
+      
+      // If 'urologist' is in allowed roles, also allow 'doctor'
+      if (roles.includes('urologist') && !normalizedRoles.includes('doctor')) {
+        normalizedRoles.push('doctor');
+      }
+      // If 'doctor' is in allowed roles, also allow 'urologist'
+      if (roles.includes('doctor') && !normalizedRoles.includes('urologist')) {
+        normalizedRoles.push('urologist');
+      }
+
+      if (!normalizedRoles.includes(userRole)) {
+        console.warn(`[RequireRole] User role "${userRole}" not in allowed roles:`, normalizedRoles);
+        return res.status(403).json({
+          success: false,
+          message: 'Insufficient permissions'
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error('[RequireRole] Error:', error);
+      console.error('[RequireRole] Error stack:', error.stack);
+      return res.status(500).json({
         success: false,
-        message: 'Authentication required'
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
-
-    // Normalize roles: treat 'doctor' as 'urologist' for permission checks
-    // Doctors registered under urology department should have same access as urologists
-    const userRole = req.user.role;
-    const normalizedRoles = [...roles];
-    
-    // If 'urologist' is in allowed roles, also allow 'doctor'
-    if (roles.includes('urologist') && !normalizedRoles.includes('doctor')) {
-      normalizedRoles.push('doctor');
-    }
-    // If 'doctor' is in allowed roles, also allow 'urologist'
-    if (roles.includes('doctor') && !normalizedRoles.includes('urologist')) {
-      normalizedRoles.push('urologist');
-    }
-
-    if (!normalizedRoles.includes(userRole)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Insufficient permissions'
-      });
-    }
-
-    next();
   };
 };
 
