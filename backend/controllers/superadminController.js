@@ -68,6 +68,8 @@ export const createUser = async (req, res) => {
 
     // If role is doctor, create doctor record first
     let doctorId = null;
+    let finalRole = role; // Default to the role from request
+    
     if (role === 'doctor' && department_id) {
       // Validate department exists
       const deptResult = await client.query('SELECT id, name FROM departments WHERE id = $1 AND is_active = true', [department_id]);
@@ -80,6 +82,13 @@ export const createUser = async (req, res) => {
       }
 
       const specialization = deptResult.rows[0].name;
+      const departmentName = deptResult.rows[0].name;
+
+      // If department is urology, change role from 'doctor' to 'urologist'
+      if (departmentName && departmentName.toLowerCase().includes('urology')) {
+        finalRole = 'urologist';
+        console.log(`[createUser] Department is urology, changing role from 'doctor' to 'urologist'`);
+      }
 
       // Check if doctor already exists with this email
       const existingDoctor = await client.query(
@@ -106,11 +115,12 @@ export const createUser = async (req, res) => {
     }
 
     // Insert new user (not verified yet, will be activated after password setup)
+    // Use finalRole which may have been changed from 'doctor' to 'urologist' if department is urology
     const result = await client.query(
       `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-      [email, passwordHash, firstName, lastName, phone, organization, role, false, false]
+      [email, passwordHash, firstName, lastName, phone, organization, finalRole, false, false]
     );
 
     const newUser = result.rows[0];

@@ -42,6 +42,7 @@ import Users from './pages/superadmin/Users';
 import AddUser from './pages/superadmin/AddUser';
 import Departments from './pages/superadmin/Departments';
 import Doctors from './pages/superadmin/Doctors';
+import Nurses from './pages/superadmin/Nurses';
 
 const AppRoutes = () => {
   return (
@@ -54,11 +55,11 @@ const AppRoutes = () => {
 
       {/* Protected Routes - Authentication + Role-based authorization required */}
       
-      {/* Urologist Routes - Only accessible by urologists and doctors */}
+      {/* Urologist Routes - Only accessible by urologists */}
       <Route 
         path="/urologist" 
         element={
-          <ProtectedRoute allowedRoles={['urologist', 'doctor']}>
+          <ProtectedRoute allowedRoles={['urologist']}>
             <UrologistLayout />
           </ProtectedRoute>
         }
@@ -121,6 +122,7 @@ const AppRoutes = () => {
         <Route path="users" element={<Users />} />
         <Route path="users/new" element={<AddUser />} />
         <Route path="doctors" element={<Doctors />} />
+        <Route path="nurses" element={<Nurses />} />
         <Route path="departments" element={<Departments />} />
       </Route>
 

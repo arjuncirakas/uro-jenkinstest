@@ -23,7 +23,10 @@ router.use(authenticateToken);
 router.use(requireRole(['superadmin']));
 
 // Get all Nurses
-router.get('/', generalLimiter, getAllNurses);
+router.get('/', generalLimiter, (req, res, next) => {
+  console.log('📋 GET /api/nurses - Request received');
+  next();
+}, getAllNurses);
 
 // Get Nurse by ID
 router.get('/:id', 

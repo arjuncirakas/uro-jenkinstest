@@ -7,22 +7,18 @@ import {
   X,
   BarChart3,
   Building2,
-  User
+  User,
+  Stethoscope
 } from 'lucide-react';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../services/authService.js';
 import tokenService from '../services/tokenService.js';
-import AddUserModal from '../components/modals/AddUserModal';
-import { useAppDispatch } from '../store/hooks';
-import { getAllUsers } from '../store/slices/superadminSlice';
 
 const SuperadminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useAppDispatch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
 
   // Proactive token refresh - check every 5 minutes
   useEffect(() => {
@@ -62,8 +58,9 @@ const SuperadminLayout = () => {
   const navigation = [
     { name: 'Dashboard', href: '/superadmin/dashboard', icon: BarChart3 },
     { name: 'All Users', href: '/superadmin/users', icon: Users },
-    // { name: 'Add User', href: '#', icon: UserPlus, onClick: () => setShowAddUserModal(true) },
-    // { name: 'Doctors', href: '/superadmin/doctors', icon: User },
+    { name: 'Add User', href: '/superadmin/users/new', icon: UserPlus },
+    { name: 'Doctors', href: '/superadmin/doctors', icon: User },
+    { name: 'Nurses', href: '/superadmin/nurses', icon: Stethoscope },
     { name: 'Departments', href: '/superadmin/departments', icon: Building2 },
   ];
 
@@ -71,29 +68,9 @@ const SuperadminLayout = () => {
     return location.pathname === path;
   };
 
-  const handleLinkClick = (item) => {
+  const handleLinkClick = () => {
     setSidebarOpen(false);
-    if (item.onClick) {
-      item.onClick();
-    }
   };
-
-  const handleUserAdded = () => {
-    // Refresh users list when a new user is added
-    dispatch(getAllUsers({ page: 1, limit: 10000 }));
-  };
-
-  // Listen for custom event to open modal from child components
-  useEffect(() => {
-    const handleOpenAddUserModal = () => {
-      setShowAddUserModal(true);
-    };
-
-    window.addEventListener('openAddUserModal', handleOpenAddUserModal);
-    return () => {
-      window.removeEventListener('openAddUserModal', handleOpenAddUserModal);
-    };
-  }, []);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -147,37 +124,21 @@ const SuperadminLayout = () => {
           <ul className="space-y-1">
             {navigation.map((item) => {
               const Icon = item.icon;
-              const isActive = item.href !== '#' && isCurrentPath(item.href);
               return (
                 <li key={item.name}>
-                  {item.onClick ? (
-                    <button
-                      onClick={() => handleLinkClick(item)}
-                      className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all w-full text-left ${
-                        isActive
-                          ? 'bg-teal-50 text-teal-700'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
-                      title={isCollapsed ? item.name : ''}
-                    >
-                      <Icon className={`text-xl ${isCollapsed ? '' : 'mr-4'} ${isActive ? 'text-teal-600' : 'text-gray-500'}`} />
-                      {!isCollapsed && <span className="font-medium text-base">{item.name}</span>}
-                    </button>
-                  ) : (
-                    <Link
-                      to={item.href}
-                      onClick={() => handleLinkClick(item)}
-                      className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${
-                        isActive
-                          ? 'bg-teal-50 text-teal-700'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
-                      title={isCollapsed ? item.name : ''}
-                    >
-                      <Icon className={`text-xl ${isCollapsed ? '' : 'mr-4'} ${isActive ? 'text-teal-600' : 'text-gray-500'}`} />
-                      {!isCollapsed && <span className="font-medium text-base">{item.name}</span>}
-                    </Link>
-                  )}
+                  <Link
+                    to={item.href}
+                    onClick={handleLinkClick}
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${
+                      isCurrentPath(item.href)
+                        ? 'bg-teal-50 text-teal-700'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title={isCollapsed ? item.name : ''}
+                  >
+                    <Icon className={`text-xl ${isCollapsed ? '' : 'mr-4'} ${isCurrentPath(item.href) ? 'text-teal-600' : 'text-gray-500'}`} />
+                    {!isCollapsed && <span className="font-medium text-base">{item.name}</span>}
+                  </Link>
                 </li>
               );
             })}
@@ -224,13 +185,6 @@ const SuperadminLayout = () => {
           </div>
         </main>
       </div>
-
-      {/* Add User Modal */}
-      <AddUserModal
-        isOpen={showAddUserModal}
-        onClose={() => setShowAddUserModal(false)}
-        onUserAdded={handleUserAdded}
-      />
     </div>
   );
 };
