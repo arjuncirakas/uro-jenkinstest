@@ -134,6 +134,7 @@ const Login = () => {
             const roleRoutes = {
               superadmin: '/superadmin/dashboard',
               urologist: '/urologist/dashboard',
+              doctor: '/urologist/dashboard', // Doctors use the same routes as urologists
               gp: '/gp/dashboard',
               urology_nurse: '/nurse/opd-management'
             };
@@ -179,7 +180,9 @@ const Login = () => {
         setTimeout(() => {
           const userRole = response.data.user.role;
           const roleRoutes = {
+            superadmin: '/superadmin/dashboard',
             urologist: '/urologist/dashboard',
+            doctor: '/urologist/dashboard', // Doctors use the same routes as urologists
             gp: '/gp/dashboard',
             urology_nurse: '/nurse/opd-management'
           };

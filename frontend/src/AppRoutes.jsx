@@ -54,11 +54,11 @@ const AppRoutes = () => {
 
       {/* Protected Routes - Authentication + Role-based authorization required */}
       
-      {/* Urologist Routes - Only accessible by urologists */}
+      {/* Urologist Routes - Only accessible by urologists and doctors */}
       <Route 
         path="/urologist" 
         element={
-          <ProtectedRoute allowedRoles={['urologist']}>
+          <ProtectedRoute allowedRoles={['urologist', 'doctor']}>
             <UrologistLayout />
           </ProtectedRoute>
         }

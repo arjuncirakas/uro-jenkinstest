@@ -251,6 +251,7 @@ class AuthService {
     const roleRoutes = {
       superadmin: '/superadmin/dashboard',
       urologist: '/urologist/dashboard',
+      doctor: '/urologist/dashboard', // Doctors use the same routes as urologists
       gp: '/gp/dashboard',
       urology_nurse: '/nurse/opd-management'
     };
@@ -268,6 +269,7 @@ class AuthService {
     const accessRules = {
       superadmin: ['/superadmin', '/dashboard', '/profile'],
       urologist: ['/urologist', '/dashboard', '/profile'],
+      doctor: ['/urologist', '/dashboard', '/profile'], // Doctors have same access as urologists
       gp: ['/gp', '/dashboard', '/profile'],
       urology_nurse: ['/nurse', '/dashboard', '/profile']
     };
