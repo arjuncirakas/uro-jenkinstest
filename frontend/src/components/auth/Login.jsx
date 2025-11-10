@@ -114,9 +114,10 @@ const Login = () => {
     try {
       // Call login API (Step 1: Send OTP)
       const response = await authService.login(formData.email, formData.password);
+      console.log('🔍 Login response:', response);
       
       if (response.success) {
-        if (response.data.requiresOTPVerification) {
+        if (response.data && response.data.requiresOTPVerification) {
           // Show OTP modal for verification
           setOtpData({
             userId: response.data.userId,
@@ -124,21 +125,18 @@ const Login = () => {
           });
           setShowOTPModal(true);
           setSuccessMessage(response.message);
-        } else if (response.data.user && response.data.accessToken) {
-          // Direct login successful (like superadmin)
+        } else if (response.data && response.data.user && response.data.accessToken) {
+          // Direct login successful (tokens already stored by authService)
+          console.log('✅ Direct login successful, user role:', response.data.user.role);
           setSuccessMessage('Login successful! Redirecting to your dashboard...');
+          
+          // Use authService to get the correct route for the user's role
+          const dashboardRoute = authService.getRoleRoutes();
+          console.log('📍 Navigating to:', dashboardRoute);
           
           // Navigate to appropriate dashboard based on user role
           setTimeout(() => {
-            const userRole = response.data.user.role;
-            const roleRoutes = {
-              superadmin: '/superadmin/dashboard',
-              urologist: '/urologist/dashboard',
-              doctor: '/urologist/dashboard', // Doctors use the same routes as urologists
-              gp: '/gp/dashboard',
-              urology_nurse: '/nurse/opd-management'
-            };
-            navigate(roleRoutes[userRole] || '/urologist/dashboard');
+            navigate(dashboardRoute);
           }, 1000);
         } else {
           // Unexpected response format
@@ -176,17 +174,14 @@ const Login = () => {
         setModalMessage('Login successful! Redirecting to your dashboard...');
         setShowSuccessModal(true);
 
+        // Use authService to get the correct route for the user's role
+        const dashboardRoute = authService.getRoleRoutes();
+        console.log('✅ OTP login successful, user role:', response.data.user.role);
+        console.log('📍 Navigating to:', dashboardRoute);
+
         // Navigate to appropriate dashboard based on user role
         setTimeout(() => {
-          const userRole = response.data.user.role;
-          const roleRoutes = {
-            superadmin: '/superadmin/dashboard',
-            urologist: '/urologist/dashboard',
-            doctor: '/urologist/dashboard', // Doctors use the same routes as urologists
-            gp: '/gp/dashboard',
-            urology_nurse: '/nurse/opd-management'
-          };
-          navigate(roleRoutes[userRole] || '/urologist/dashboard');
+          navigate(dashboardRoute);
         }, 1500);
       } else {
         throw new Error(response.message || 'Invalid OTP. Please try again.');

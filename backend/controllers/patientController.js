@@ -1131,7 +1131,7 @@ export const updatePatientPathway = async (req, res) => {
       if (userQuery.rows.length > 0) {
         userInfo = userQuery.rows[0];
         userName = `${userInfo.first_name} ${userInfo.last_name}`;
-        userRole = userInfo.role === 'urologist' ? 'Urologist' : 
+        userRole = (userInfo.role === 'urologist' || userInfo.role === 'doctor') ? 'Urologist' : 
                    userInfo.role === 'urology_nurse' ? 'Nurse' : 
                    userInfo.role === 'gp' ? 'GP' : 
                    userInfo.role === 'admin' ? 'Admin' : 'User';
@@ -1241,7 +1241,7 @@ export const updatePatientPathway = async (req, res) => {
         if (patientData.assigned_urologist) {
           const assignedUrologistQuery = await client.query(
             `SELECT id, first_name, last_name FROM users 
-             WHERE role = 'urologist' 
+             WHERE role IN ('urologist', 'doctor') 
              AND CONCAT(first_name, ' ', last_name) = $1 
              LIMIT 1`,
             [patientData.assigned_urologist]
@@ -1650,9 +1650,9 @@ export const getPatientsDueForReview = async (req, res) => {
     
     console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for user ${userId}`);
     
-    // For urologists, get appointments assigned to them
+    // For urologists/doctors, get appointments assigned to them
     // For nurses, get all appointments in the department
-    const appointmentsQuery = userRole === 'urologist' 
+    const appointmentsQuery = (userRole === 'urologist' || userRole === 'doctor') 
       ? `SELECT 
           a.id,
           a.patient_id,
@@ -1697,7 +1697,7 @@ export const getPatientsDueForReview = async (req, res) => {
          AND a.status IN ('scheduled', 'confirmed')
          ORDER BY a.appointment_date, a.appointment_time`;
     
-    const queryParams = userRole === 'urologist' 
+    const queryParams = (userRole === 'urologist' || userRole === 'doctor')
       ? [startDateStr, endDateStr, userId]
       : [startDateStr, endDateStr];
     

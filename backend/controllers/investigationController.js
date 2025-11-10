@@ -810,9 +810,9 @@ export const deleteInvestigationRequest = async (req, res) => {
       });
     }
 
-    // Check if user is the creator (or admin/superadmin)
+    // Check if user is the creator (or admin/superadmin/urologist/doctor)
     if (requestCheck.rows[0].created_by !== userId && 
-        !['superadmin', 'urologist'].includes(req.user.role)) {
+        !['superadmin', 'urologist', 'doctor'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'You can only delete your own investigation requests'

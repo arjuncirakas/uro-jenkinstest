@@ -489,7 +489,7 @@ export const getAvailableUrologists = async (req, res) => {
     const usersTableResult = await client.query(
       `SELECT id, first_name, last_name, email, phone, role
        FROM users 
-       WHERE role = 'urologist' AND is_active = true
+       WHERE role IN ('urologist', 'doctor') AND is_active = true
        ORDER BY first_name, last_name`
     );
 
@@ -570,7 +570,7 @@ export const getAvailableDoctors = async (req, res) => {
     const usersTableResult = await client.query(
       `SELECT id, first_name, last_name, email, phone, role
        FROM users 
-       WHERE role IN ('urologist', 'radiologist', 'pathologist', 'oncologist') 
+       WHERE role IN ('urologist', 'doctor', 'radiologist', 'pathologist', 'oncologist') 
        AND is_active = true
        ORDER BY role, first_name, last_name`
     );
@@ -1047,7 +1047,7 @@ export const markAppointmentAsNoShow = async (req, res) => {
     const user = userQuery.rows[0];
     const userName = `${user.first_name} ${user.last_name}`;
     const userRole = user.role === 'urology_nurse' ? 'Nurse' : 
-                    user.role === 'urologist' ? 'Urologist' : 
+                    (user.role === 'urologist' || user.role === 'doctor') ? 'Urologist' : 
                     user.role === 'admin' ? 'Admin' : 'User';
     
     let appointmentQuery, updateQuery, appointment, updateResult;
@@ -1229,7 +1229,7 @@ export const addNoShowNote = async (req, res) => {
     
     const authorName = `${user.first_name} ${user.last_name}`;
     const authorRole = user.role === 'urology_nurse' ? 'Nurse' : 
-                      user.role === 'urologist' ? 'Urologist' : 
+                      (user.role === 'urologist' || user.role === 'doctor') ? 'Urologist' : 
                       user.role === 'admin' ? 'Admin' : 'User';
     
     const noteResult = await client.query(noteQuery, [
@@ -1346,8 +1346,8 @@ export const removeNoShowNote = async (req, res) => {
 
     const note = noteResult.rows[0];
     
-    // Check if user can delete the note (author or admin)
-    if (note.author_id !== userId && !['admin', 'urologist'].includes(note.role)) {
+    // Check if user can delete the note (author or admin/urologist/doctor)
+    if (note.author_id !== userId && !['admin', 'urologist', 'doctor'].includes(note.role)) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to delete this note'
@@ -1418,7 +1418,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
     // If not found in doctors table, try users table
     if (doctorResult.rows.length === 0) {
       doctorResult = await client.query(
-        `SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = 'urologist'`,
+        `SELECT id, first_name, last_name FROM users WHERE id = $1 AND role IN ('urologist', 'doctor')`,
         [newDoctorId]
       );
     }
@@ -1611,7 +1611,7 @@ export const getAvailableTimeSlots = async (req, res) => {
       console.log(`[getAvailableTimeSlots] Found doctor in doctors table: ${doctor.first_name} ${doctor.last_name} (${doctor.specialization})`);
     } else {
       // Try users table for backwards compatibility
-      const usersTableQuery = `SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ('urologist', 'radiologist', 'pathologist', 'oncologist')`;
+      const usersTableQuery = `SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ('urologist', 'doctor', 'radiologist', 'pathologist', 'oncologist')`;
       const usersTableResult = await client.query(usersTableQuery, [doctorId]);
       
       if (usersTableResult.rows.length > 0) {
