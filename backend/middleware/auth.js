@@ -3,22 +3,33 @@ import pool from '../config/database.js';
 
 // Middleware to verify JWT token
 export const authenticateToken = async (req, res, next) => {
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n🔐 [Auth ${requestId}] Starting authentication`);
+  console.log(`🔐 [Auth ${requestId}] Method: ${req.method}, Path: ${req.path}`);
+  console.log(`🔐 [Auth ${requestId}] Origin: ${req.headers.origin || 'none'}`);
+  
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
+      console.log(`❌ [Auth ${requestId}] No token provided`);
       return res.status(401).json({
         success: false,
         message: 'Access token required'
       });
     }
+    
+    console.log(`✅ [Auth ${requestId}] Token found, length: ${token.length}`);
 
     // Verify the token
     let decoded;
     try {
+      console.log(`🔐 [Auth ${requestId}] Verifying JWT token...`);
       decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log(`✅ [Auth ${requestId}] Token verified, userId: ${decoded.userId}`);
     } catch (jwtError) {
+      console.error(`❌ [Auth ${requestId}] JWT verification failed:`, jwtError.name, jwtError.message);
       if (jwtError.name === 'JsonWebTokenError') {
         return res.status(401).json({
           success: false,
@@ -37,9 +48,12 @@ export const authenticateToken = async (req, res, next) => {
     // Get user from database to ensure they still exist and are active
     let client;
     try {
+      console.log(`🔐 [Auth ${requestId}] Connecting to database...`);
       client = await pool.connect();
+      console.log(`✅ [Auth ${requestId}] Database connection successful`);
     } catch (dbError) {
-      console.error('[Auth Middleware] Database connection error:', dbError);
+      console.error(`❌ [Auth ${requestId}] Database connection error:`, dbError.message);
+      console.error(`❌ [Auth ${requestId}] Database error stack:`, dbError.stack);
       return res.status(503).json({
         success: false,
         message: 'Database connection failed. Please try again later.'
@@ -47,12 +61,14 @@ export const authenticateToken = async (req, res, next) => {
     }
 
     try {
+      console.log(`🔐 [Auth ${requestId}] Querying user with id: ${decoded.userId}`);
       const result = await client.query(
         'SELECT id, email, first_name, last_name, role, is_active FROM users WHERE id = $1',
         [decoded.userId]
       );
 
       if (result.rows.length === 0) {
+        console.log(`❌ [Auth ${requestId}] User not found in database`);
         return res.status(401).json({
           success: false,
           message: 'User not found'
@@ -60,8 +76,10 @@ export const authenticateToken = async (req, res, next) => {
       }
 
       const user = result.rows[0];
+      console.log(`✅ [Auth ${requestId}] User found: ${user.email}, role: ${user.role}, active: ${user.is_active}`);
       
       if (!user.is_active) {
+        console.log(`❌ [Auth ${requestId}] User account is deactivated`);
         return res.status(401).json({
           success: false,
           message: 'Account is deactivated'
@@ -77,15 +95,18 @@ export const authenticateToken = async (req, res, next) => {
         role: user.role
       };
 
+      console.log(`✅ [Auth ${requestId}] Authentication successful, proceeding to next middleware`);
       next();
     } catch (queryError) {
-      console.error('[Auth Middleware] Database query error:', queryError);
+      console.error(`❌ [Auth ${requestId}] Database query error:`, queryError.message);
+      console.error(`❌ [Auth ${requestId}] Query error stack:`, queryError.stack);
       return res.status(500).json({
         success: false,
         message: 'Internal server error'
       });
     } finally {
       if (client) {
+        console.log(`🔐 [Auth ${requestId}] Releasing database connection`);
         client.release();
       }
     }
@@ -99,8 +120,8 @@ export const authenticateToken = async (req, res, next) => {
       });
     }
 
-    console.error('[Auth Middleware] Unexpected error:', error);
-    console.error('[Auth Middleware] Error stack:', error.stack);
+    console.error(`❌ [Auth ${requestId}] Unexpected error:`, error.message);
+    console.error(`❌ [Auth ${requestId}] Error stack:`, error.stack);
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -112,9 +133,14 @@ export const authenticateToken = async (req, res, next) => {
 // Middleware to check user role
 export const requireRole = (roles) => {
   return (req, res, next) => {
+    const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`\n🔒 [RequireRole ${requestId}] Checking role permissions`);
+    console.log(`🔒 [RequireRole ${requestId}] Path: ${req.path}, Method: ${req.method}`);
+    console.log(`🔒 [RequireRole ${requestId}] Required roles:`, roles);
+    
     try {
       if (!req.user) {
-        console.warn('[RequireRole] No user in request object');
+        console.warn(`❌ [RequireRole ${requestId}] No user in request object`);
         return res.status(401).json({
           success: false,
           message: 'Authentication required'
@@ -124,6 +150,7 @@ export const requireRole = (roles) => {
       // Normalize roles: treat 'doctor' as 'urologist' for permission checks
       // Doctors registered under urology department should have same access as urologists
       const userRole = req.user.role;
+      console.log(`🔒 [RequireRole ${requestId}] User role: ${userRole}`);
       const normalizedRoles = [...roles];
       
       // If 'urologist' is in allowed roles, also allow 'doctor'
@@ -135,14 +162,17 @@ export const requireRole = (roles) => {
         normalizedRoles.push('urologist');
       }
 
+      console.log(`🔒 [RequireRole ${requestId}] Normalized allowed roles:`, normalizedRoles);
+
       if (!normalizedRoles.includes(userRole)) {
-        console.warn(`[RequireRole] User role "${userRole}" not in allowed roles:`, normalizedRoles);
+        console.warn(`❌ [RequireRole ${requestId}] User role "${userRole}" not in allowed roles:`, normalizedRoles);
         return res.status(403).json({
           success: false,
           message: 'Insufficient permissions'
         });
       }
 
+      console.log(`✅ [RequireRole ${requestId}] Role check passed, proceeding to controller`);
       next();
     } catch (error) {
       console.error('[RequireRole] Error:', error);

@@ -490,10 +490,28 @@ export const getPatients = async (req, res) => {
 
 // Get new patients (recently added, status = 'Active')
 export const getNewPatients = async (req, res) => {
-  const client = await pool.connect();
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n👥 [getNewPatients ${requestId}] Starting`);
+  console.log(`👥 [getNewPatients ${requestId}] User:`, req.user?.id, req.user?.role);
+  
+  let client;
+  try {
+    console.log(`👥 [getNewPatients ${requestId}] Connecting to database...`);
+    client = await pool.connect();
+    console.log(`✅ [getNewPatients ${requestId}] Database connection successful`);
+  } catch (dbError) {
+    console.error(`❌ [getNewPatients ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getNewPatients ${requestId}] Error stack:`, dbError.stack);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection failed',
+      error: 'Service temporarily unavailable'
+    });
+  }
   
   try {
     const { limit = 20 } = req.query;
+    console.log(`👥 [getNewPatients ${requestId}] Processing with limit: ${limit}`);
 
     // Build WHERE clause for GP filtering
     let whereConditions = ['p.status = $1'];
@@ -646,16 +664,21 @@ export const getNewPatients = async (req, res) => {
       count: transformedPatients.length
     });
   } catch (error) {
-    console.error('Error fetching new patients:', error);
-    console.error('Error stack:', error.stack);
-    console.error('User info:', { id: req.user?.id, role: req.user?.role });
+    console.error(`❌ [getNewPatients ${requestId}] Error occurred:`, error.message);
+    console.error(`❌ [getNewPatients ${requestId}] Error stack:`, error.stack);
+    console.error(`❌ [getNewPatients ${requestId}] User info:`, { id: req.user?.id, role: req.user?.role });
+    console.error(`❌ [getNewPatients ${requestId}] Error code:`, error.code);
+    console.error(`❌ [getNewPatients ${requestId}] Error name:`, error.name);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch new patients',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    client.release();
+    if (client) {
+      console.log(`👥 [getNewPatients ${requestId}] Releasing database connection`);
+      client.release();
+    }
   }
 };
 
@@ -1634,11 +1657,29 @@ export const searchPatients = async (req, res) => {
 
 // Get patients due for review (7-14 days window)
 export const getPatientsDueForReview = async (req, res) => {
-  const client = await pool.connect();
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n👥 [getPatientsDueForReview ${requestId}] Starting`);
+  console.log(`👥 [getPatientsDueForReview ${requestId}] User:`, req.user?.id, req.user?.role);
+  
+  let client;
+  try {
+    console.log(`👥 [getPatientsDueForReview ${requestId}] Connecting to database...`);
+    client = await pool.connect();
+    console.log(`✅ [getPatientsDueForReview ${requestId}] Database connection successful`);
+  } catch (dbError) {
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Error stack:`, dbError.stack);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection failed',
+      error: 'Service temporarily unavailable'
+    });
+  }
   
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
+    console.log(`👥 [getPatientsDueForReview ${requestId}] Processing for userId: ${userId}, role: ${userRole}`);
     
     // Calculate date range for 7-14 days from now
     const today = new Date();
@@ -1779,15 +1820,20 @@ export const getPatientsDueForReview = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[getPatientsDueForReview] Error:', error);
-    console.error('[getPatientsDueForReview] Error stack:', error.stack);
-    console.error('[getPatientsDueForReview] User info:', { id: userId, role: userRole });
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Error occurred:`, error.message);
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Error stack:`, error.stack);
+    console.error(`❌ [getPatientsDueForReview ${requestId}] User info:`, { id: userId, role: userRole });
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Error code:`, error.code);
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Error name:`, error.name);
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch patients due for review',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    client.release();
+    if (client) {
+      console.log(`👥 [getPatientsDueForReview ${requestId}] Releasing database connection`);
+      client.release();
+    }
   }
 };

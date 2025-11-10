@@ -640,11 +640,29 @@ export const getAvailableDoctors = async (req, res) => {
 
 // Get today's appointments
 export const getTodaysAppointments = async (req, res) => {
-  const client = await pool.connect();
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n📅 [getTodaysAppointments ${requestId}] Starting`);
+  console.log(`📅 [getTodaysAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
+  
+  let client;
+  try {
+    console.log(`📅 [getTodaysAppointments ${requestId}] Connecting to database...`);
+    client = await pool.connect();
+    console.log(`✅ [getTodaysAppointments ${requestId}] Database connection successful`);
+  } catch (dbError) {
+    console.error(`❌ [getTodaysAppointments ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error stack:`, dbError.stack);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection failed',
+      error: 'Service temporarily unavailable'
+    });
+  }
   
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
+    console.log(`📅 [getTodaysAppointments ${requestId}] Processing for userId: ${userId}, role: ${userRole}`);
     const { type } = req.query; // 'investigation' or 'urologist'
     
     console.log(`[getTodaysAppointments] User ID: ${userId}, Role: ${userRole}, Type: ${type}`);
@@ -927,10 +945,12 @@ export const getTodaysAppointments = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('[getTodaysAppointments] Error:', error);
-    console.error('[getTodaysAppointments] Error stack:', error.stack);
-    console.error('[getTodaysAppointments] User info:', { id: req.user?.id, role: req.user?.role });
-    console.error('[getTodaysAppointments] Query params:', req.query);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error occurred:`, error.message);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error stack:`, error.stack);
+    console.error(`❌ [getTodaysAppointments ${requestId}] User info:`, { id: req.user?.id, role: req.user?.role });
+    console.error(`❌ [getTodaysAppointments ${requestId}] Query params:`, req.query);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error code:`, error.code);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error name:`, error.name);
     
     res.status(500).json({
       success: false,
@@ -938,7 +958,10 @@ export const getTodaysAppointments = async (req, res) => {
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    client.release();
+    if (client) {
+      console.log(`📅 [getTodaysAppointments ${requestId}] Releasing database connection`);
+      client.release();
+    }
   }
 };
 
@@ -1827,10 +1850,29 @@ export const getAvailableTimeSlots = async (req, res) => {
 
 // Get all appointments for calendar view
 export const getAllAppointments = async (req, res) => {
-  const client = await pool.connect();
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n📅 [getAllAppointments ${requestId}] Starting`);
+  console.log(`📅 [getAllAppointments ${requestId}] Query params:`, req.query);
+  console.log(`📅 [getAllAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
+  
+  let client;
+  try {
+    console.log(`📅 [getAllAppointments ${requestId}] Connecting to database...`);
+    client = await pool.connect();
+    console.log(`✅ [getAllAppointments ${requestId}] Database connection successful`);
+  } catch (dbError) {
+    console.error(`❌ [getAllAppointments ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getAllAppointments ${requestId}] Error stack:`, dbError.stack);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection failed',
+      error: 'Service temporarily unavailable'
+    });
+  }
   
   try {
     const { startDate, endDate, urologistId } = req.query;
+    console.log(`📅 [getAllAppointments ${requestId}] Processing query with startDate: ${startDate}, endDate: ${endDate}, urologistId: ${urologistId}`);
     
     const queryParams = [];
     
@@ -2016,16 +2058,21 @@ export const getAllAppointments = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Get all appointments error:', error);
-    console.error('Error stack:', error.stack);
-    console.error('Request params:', { startDate, endDate, urologistId });
-    console.error('User info:', { id: req.user?.id, role: req.user?.role });
+    console.error(`❌ [getAllAppointments ${requestId}] Error occurred:`, error.message);
+    console.error(`❌ [getAllAppointments ${requestId}] Error stack:`, error.stack);
+    console.error(`❌ [getAllAppointments ${requestId}] Request params:`, { startDate, endDate, urologistId });
+    console.error(`❌ [getAllAppointments ${requestId}] User info:`, { id: req.user?.id, role: req.user?.role });
+    console.error(`❌ [getAllAppointments ${requestId}] Error code:`, error.code);
+    console.error(`❌ [getAllAppointments ${requestId}] Error name:`, error.name);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    client.release();
+    if (client) {
+      console.log(`📅 [getAllAppointments ${requestId}] Releasing database connection`);
+      client.release();
+    }
   }
 };

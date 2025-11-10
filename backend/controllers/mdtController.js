@@ -474,12 +474,29 @@ export const getMDTMeetingById = async (req, res) => {
 
 // Get MDT meetings for current authenticated user (creator or team member)
 export const getMyMDTMeetings = async (req, res) => {
-  const client = await pool.connect();
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n📋 [getMyMDTMeetings ${requestId}] Starting`);
+  console.log(`📋 [getMyMDTMeetings ${requestId}] User:`, req.user?.id, req.user?.role);
+  
+  let client;
+  try {
+    console.log(`📋 [getMyMDTMeetings ${requestId}] Connecting to database...`);
+    client = await pool.connect();
+    console.log(`✅ [getMyMDTMeetings ${requestId}] Database connection successful`);
+  } catch (dbError) {
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Error stack:`, dbError.stack);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection failed',
+      error: 'Service temporarily unavailable'
+    });
+  }
+  
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
-
-    console.log(`[getMyMDTMeetings] User ID: ${userId}, Role: ${userRole}`);
+    console.log(`📋 [getMyMDTMeetings ${requestId}] Processing for userId: ${userId}, role: ${userRole}`);
 
     const meetings = await client.query(
       `SELECT 
@@ -560,16 +577,21 @@ export const getMyMDTMeetings = async (req, res) => {
       data: { meetings: meetingsWithMembers, count: meetingsWithMembers.length }
     });
   } catch (error) {
-    console.error('Get my MDT meetings error:', error);
-    console.error('Error stack:', error.stack);
-    console.error('User info:', { id: req.user?.id, role: req.user?.role });
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Error occurred:`, error.message);
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Error stack:`, error.stack);
+    console.error(`❌ [getMyMDTMeetings ${requestId}] User info:`, { id: req.user?.id, role: req.user?.role });
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Error code:`, error.code);
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Error name:`, error.name);
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    client.release();
+    if (client) {
+      console.log(`📋 [getMyMDTMeetings ${requestId}] Releasing database connection`);
+      client.release();
+    }
   }
 };
 
