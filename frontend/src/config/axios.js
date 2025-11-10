@@ -20,11 +20,13 @@ const apiClient = axios.create({
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
-    // Get token from localStorage
+    // Get token from localStorage (always read fresh on each request)
     const token = localStorage.getItem('accessToken');
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn(`[Axios] Request to ${config.url} - No token found in localStorage`);
     }
     
     // Add request timestamp for debugging
@@ -33,6 +35,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('[Axios] Request interceptor error:', error);
     return Promise.reject(error);
   }
 );

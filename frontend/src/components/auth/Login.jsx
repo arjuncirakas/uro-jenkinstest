@@ -128,6 +128,31 @@ const Login = () => {
         } else if (response.data && response.data.user && response.data.accessToken) {
           // Direct login successful (tokens already stored by authService)
           console.log('✅ Direct login successful, user role:', response.data.user.role);
+          
+          // Verify tokens are set before navigation
+          const token = authService.isAuthenticated();
+          const user = authService.getCurrentUser();
+          console.log('🔐 Token set:', !!token, 'User loaded:', !!user);
+          
+          if (!token || !user) {
+            console.error('❌ Tokens not properly set, retrying...');
+            // Wait a bit more for token to be set
+            setTimeout(() => {
+              const retryToken = authService.isAuthenticated();
+              const retryUser = authService.getCurrentUser();
+              if (retryToken && retryUser) {
+                setSuccessMessage('Login successful! Redirecting to your dashboard...');
+                const dashboardRoute = authService.getRoleRoutes();
+                console.log('📍 Navigating to:', dashboardRoute);
+                navigate(dashboardRoute);
+              } else {
+                setModalMessage('Login successful but authentication setup failed. Please refresh the page.');
+                setShowFailureModal(true);
+              }
+            }, 500);
+            return;
+          }
+          
           setSuccessMessage('Login successful! Redirecting to your dashboard...');
           
           // Use authService to get the correct route for the user's role
@@ -135,9 +160,10 @@ const Login = () => {
           console.log('📍 Navigating to:', dashboardRoute);
           
           // Navigate to appropriate dashboard based on user role
+          // Small delay to ensure token is fully set in localStorage
           setTimeout(() => {
             navigate(dashboardRoute);
-          }, 1000);
+          }, 300);
         } else {
           // Unexpected response format
           setModalMessage('Unexpected response from server. Please try again.');
@@ -170,6 +196,31 @@ const Login = () => {
         setShowOTPModal(false);
         setOtpLoading(false);
 
+        // Verify tokens are set before navigation
+        const token = authService.isAuthenticated();
+        const user = authService.getCurrentUser();
+        console.log('🔐 OTP - Token set:', !!token, 'User loaded:', !!user);
+        
+        if (!token || !user) {
+          console.error('❌ OTP - Tokens not properly set, retrying...');
+          // Wait a bit more for token to be set
+          setTimeout(() => {
+            const retryToken = authService.isAuthenticated();
+            const retryUser = authService.getCurrentUser();
+            if (retryToken && retryUser) {
+              setModalMessage('Login successful! Redirecting to your dashboard...');
+              setShowSuccessModal(true);
+              const dashboardRoute = authService.getRoleRoutes();
+              console.log('📍 Navigating to:', dashboardRoute);
+              navigate(dashboardRoute);
+            } else {
+              setModalMessage('Login successful but authentication setup failed. Please refresh the page.');
+              setShowFailureModal(true);
+            }
+          }, 500);
+          return;
+        }
+
         // Show success modal
         setModalMessage('Login successful! Redirecting to your dashboard...');
         setShowSuccessModal(true);
@@ -180,9 +231,10 @@ const Login = () => {
         console.log('📍 Navigating to:', dashboardRoute);
 
         // Navigate to appropriate dashboard based on user role
+        // Small delay to ensure token is fully set in localStorage
         setTimeout(() => {
           navigate(dashboardRoute);
-        }, 1500);
+        }, 500);
       } else {
         throw new Error(response.message || 'Invalid OTP. Please try again.');
       }

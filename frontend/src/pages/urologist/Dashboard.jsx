@@ -608,20 +608,79 @@ const UrologistDashboard = () => {
 
   // Load data on component mount
   useEffect(() => {
-    // Check if user is loaded before fetching data
-    const currentUser = authService.getCurrentUser();
-    if (!currentUser) {
-      console.warn('User not loaded yet, skipping data fetch');
-      return;
-    }
+    // Wait for authentication to be ready before fetching data
+    const initializeData = async () => {
+      try {
+        // Check if user and token are available
+        let currentUser = authService.getCurrentUser();
+        let isAuthenticated = authService.isAuthenticated();
+        
+        console.log('[Dashboard] Initial auth check:', {
+          hasUser: !!currentUser,
+          isAuthenticated,
+          userRole: currentUser?.role
+        });
+        
+        // If not authenticated, wait and retry (handles page refresh case)
+        if (!currentUser || !isAuthenticated) {
+          console.warn('[Dashboard] User or token not ready, waiting...');
+          
+          // Wait a bit and check again (token might be setting or needs refresh)
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          currentUser = authService.getCurrentUser();
+          isAuthenticated = authService.isAuthenticated();
+          
+          if (!currentUser || !isAuthenticated) {
+            console.error('[Dashboard] Authentication not ready after retry');
+            
+            // Try to refresh token if it exists but is expired
+            const tokenService = (await import('../../services/tokenService.js')).default;
+            if (tokenService.getAccessToken() || tokenService.getRefreshToken()) {
+              console.log('[Dashboard] Attempting token refresh...');
+              const refreshed = await tokenService.refreshIfNeeded();
+              if (refreshed) {
+                currentUser = authService.getCurrentUser();
+                isAuthenticated = authService.isAuthenticated();
+                console.log('[Dashboard] Token refreshed, auth status:', isAuthenticated);
+              }
+            }
+            
+            if (!currentUser || !isAuthenticated) {
+              console.error('[Dashboard] Authentication not ready after refresh attempt, skipping data fetch');
+              return;
+            }
+          }
+        } else {
+          // Token exists, but might need refresh - check proactively
+          const tokenService = (await import('../../services/tokenService.js')).default;
+          if (tokenService.needsRefresh()) {
+            console.log('[Dashboard] Token needs refresh, refreshing...');
+            await tokenService.refreshIfNeeded();
+          }
+        }
+        
+        console.log('[Dashboard] Authentication ready, fetching data...');
+        console.log('[Dashboard] User:', currentUser);
+        console.log('[Dashboard] Is authenticated:', isAuthenticated);
+        
+        // Small delay to ensure axios interceptor has the token
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Fetch all data
+        fetchTodaysAppointments();
+        fetchSurgicalQueue();
+        fetchRecentPatients();
+        fetchMdtOutcomes();
+        fetchSurgeries();
+        fetchMdtSchedules();
+        fetchPatientsDueForReview();
+      } catch (error) {
+        console.error('[Dashboard] Error initializing data:', error);
+      }
+    };
     
-    fetchTodaysAppointments();
-    fetchSurgicalQueue();
-    fetchRecentPatients();
-    fetchMdtOutcomes();
-    fetchSurgeries();
-    fetchMdtSchedules();
-    fetchPatientsDueForReview();
+    initializeData();
   }, []);
 
   // Refresh data when surgery view changes
