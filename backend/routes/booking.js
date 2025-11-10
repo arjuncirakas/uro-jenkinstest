@@ -27,7 +27,7 @@ router.use(xssProtection);
 router.post('/patients/:patientId/appointments',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   bookUrologistAppointment
 );
 
@@ -35,7 +35,7 @@ router.post('/patients/:patientId/appointments',
 router.post('/patients/:patientId/investigations',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   bookInvestigation
 );
 
@@ -43,7 +43,7 @@ router.post('/patients/:patientId/investigations',
 router.get('/patients/:patientId/appointments',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist', 'gp']),
+  requireRole(['urology_nurse', 'urologist', 'doctor', 'gp']),
   getPatientAppointments
 );
 
@@ -51,7 +51,7 @@ router.get('/patients/:patientId/appointments',
 router.get('/patients/:patientId/investigation-bookings',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist', 'gp']),
+  requireRole(['urology_nurse', 'urologist', 'doctor', 'gp']),
   getPatientInvestigationBookings
 );
 
@@ -59,7 +59,7 @@ router.get('/patients/:patientId/investigation-bookings',
 router.get('/urologists',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist', 'gp']),
+  requireRole(['urology_nurse', 'urologist', 'doctor', 'gp']),
   getAvailableUrologists
 );
 
@@ -67,7 +67,7 @@ router.get('/urologists',
 router.get('/doctors',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist', 'superadmin']),
+  requireRole(['urology_nurse', 'urologist', 'doctor', 'superadmin']),
   getAvailableDoctors
 );
 
@@ -83,7 +83,7 @@ router.get('/appointments/today',
 router.get('/no-show-patients',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   getNoShowPatients
 );
 
@@ -91,7 +91,7 @@ router.get('/no-show-patients',
 router.put('/appointments/:appointmentId/no-show',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   markAppointmentAsNoShow
 );
 
@@ -99,7 +99,7 @@ router.put('/appointments/:appointmentId/no-show',
 router.post('/appointments/:appointmentId/notes',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   addNoShowNote
 );
 
@@ -107,7 +107,7 @@ router.post('/appointments/:appointmentId/notes',
 router.get('/appointments/:appointmentId/notes',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   getNoShowNotes
 );
 
@@ -115,7 +115,7 @@ router.get('/appointments/:appointmentId/notes',
 router.delete('/notes/:noteId',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   removeNoShowNote
 );
 
@@ -123,7 +123,7 @@ router.delete('/notes/:noteId',
 router.get('/doctors/:doctorId/available-slots',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist', 'superadmin']),
+  requireRole(['urology_nurse', 'urologist', 'doctor', 'superadmin']),
   getAvailableTimeSlots
 );
 
@@ -131,7 +131,7 @@ router.get('/doctors/:doctorId/available-slots',
 router.put('/appointments/:appointmentId/reschedule',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   rescheduleNoShowAppointment
 );
 
@@ -139,7 +139,7 @@ router.put('/appointments/:appointmentId/reschedule',
 router.get('/appointments',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   getAllAppointments
 );
 

@@ -12,35 +12,35 @@ import { xssProtection } from '../middleware/sanitizer.js';
 const router = express.Router();
 router.use(xssProtection);
 
-// Add a new note for a patient - accessible by urologists and nurses
+// Add a new note for a patient - accessible by urologists, doctors, and nurses
 router.post('/patients/:patientId/notes',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   addNote
 );
 
-// Get all notes for a patient - accessible by urologists, nurses, and GPs
+// Get all notes for a patient - accessible by urologists, doctors, nurses, and GPs
 router.get('/patients/:patientId/notes',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse', 'gp']),
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getPatientNotes
 );
 
-// Update a note - accessible by urologists and nurses (own notes only)
+// Update a note - accessible by urologists, doctors, and nurses (own notes only)
 router.put('/notes/:noteId',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   updateNote
 );
 
-// Delete a note - accessible by urologists and nurses (own notes only)
+// Delete a note - accessible by urologists, doctors, and nurses (own notes only)
 router.delete('/notes/:noteId',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   deleteNote
 );
 

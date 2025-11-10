@@ -50,28 +50,28 @@ router.get('/', generalLimiter, (req, res) => {
   });
 });
 
-// Add new patient - accessible by urologists, nurses, and GPs
+// Add new patient - accessible by urologists, doctors, nurses, and GPs
 router.post('/', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'urology_nurse', 'gp']), 
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
   validatePatientInput,
   addPatient
 );
 
-// Get all patients - accessible by urologists, nurses, and GPs
+// Get all patients - accessible by urologists, doctors, nurses, and GPs
 router.get('/list', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'urology_nurse', 'gp']), 
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
   getPatients
 );
 
-// Get new patients - accessible by urologists, nurses, and GPs
+// Get new patients - accessible by urologists, doctors, nurses, and GPs
 router.get('/new', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'urology_nurse', 'gp']), 
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
   getNewPatients
 );
 
@@ -79,7 +79,7 @@ router.get('/new',
 router.get('/search',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse', 'gp']),
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   searchPatients
 );
 
@@ -87,7 +87,7 @@ router.get('/search',
 router.get('/assigned',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist']),
+  requireRole(['urologist', 'doctor']),
   getAssignedPatientsForDoctor
 );
 
@@ -95,23 +95,23 @@ router.get('/assigned',
 router.get('/due-for-review',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   getPatientsDueForReview
 );
 
-// Get patient by ID - accessible by urologists, nurses, and GPs
+// Get patient by ID - accessible by urologists, doctors, nurses, and GPs
 router.get('/:id', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'urology_nurse', 'gp']), 
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
   getPatientById
 );
 
-// Update patient - accessible by urologists and nurses
+// Update patient - accessible by urologists, doctors, and nurses
 router.put('/:id', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'urology_nurse']), 
+  requireRole(['urologist', 'doctor', 'urology_nurse']), 
   validatePatientUpdateInput,
   updatePatient
 );
@@ -120,47 +120,47 @@ router.put('/:id',
 router.put('/:id/pathway',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist','urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   updatePatientPathway
 );
 
-// Delete patient (soft delete) - accessible by urologists and nurses
+// Delete patient (soft delete) - accessible by urologists, doctors, and nurses
 router.delete('/:id', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'urology_nurse']), 
+  requireRole(['urologist', 'doctor', 'urology_nurse']), 
   deletePatient
 );
 
-// Get discharge summary for a patient - accessible by urologists, nurses, and GPs
+// Get discharge summary for a patient - accessible by urologists, doctors, nurses, and GPs
 router.get('/:id/discharge-summary',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse', 'gp']),
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getDischargeSummary
 );
 
-// Create discharge summary for a patient - accessible by urologists and nurses
+// Create discharge summary for a patient - accessible by urologists, doctors, and nurses
 router.post('/:id/discharge-summary',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   createDischargeSummary
 );
 
-// Update discharge summary - accessible by urologists and nurses
+// Update discharge summary - accessible by urologists, doctors, and nurses
 router.put('/:id/discharge-summary/:summaryId',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   updateDischargeSummary
 );
 
-// Delete discharge summary - accessible by urologists and nurses
+// Delete discharge summary - accessible by urologists, doctors, and nurses
 router.delete('/:id/discharge-summary/:summaryId',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   deleteDischargeSummary
 );
 

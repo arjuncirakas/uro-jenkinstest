@@ -22,7 +22,7 @@ router.use(xssProtection);
 router.post('/patients/:patientId/investigation-requests',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   createInvestigationRequest
 );
 
@@ -30,7 +30,7 @@ router.post('/patients/:patientId/investigation-requests',
 router.get('/patients/:patientId/investigation-requests',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse', 'gp']),
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getInvestigationRequests
 );
 
@@ -38,7 +38,7 @@ router.get('/patients/:patientId/investigation-requests',
 router.delete('/investigation-requests/:requestId',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   deleteInvestigationRequest
 );
 
@@ -46,7 +46,7 @@ router.delete('/investigation-requests/:requestId',
 router.post('/patients/:patientId/psa-results',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   upload.single('testFile'),
   addPSAResult
 );
@@ -55,7 +55,7 @@ router.post('/patients/:patientId/psa-results',
 router.post('/patients/:patientId/test-results',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   upload.single('testFile'),
   addOtherTestResult
 );
@@ -64,7 +64,7 @@ router.post('/patients/:patientId/test-results',
 router.get('/patients/:patientId/investigations',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse', 'gp']),
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getInvestigationResults
 );
 
@@ -72,7 +72,7 @@ router.get('/patients/:patientId/investigations',
 router.get('/investigations',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   getAllInvestigations
 );
 
@@ -80,7 +80,7 @@ router.get('/investigations',
 router.delete('/investigations/:resultId',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse']),
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
   deleteInvestigationResult
 );
 
@@ -88,7 +88,7 @@ router.delete('/investigations/:resultId',
 router.get('/files/:filePath(*)',
   generalLimiter,
   authenticateToken,
-  requireRole(['urologist', 'urology_nurse', 'gp']),
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   serveFile
 );
 
