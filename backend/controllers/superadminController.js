@@ -199,9 +199,6 @@ export const getAllUsers = async (req, res) => {
 
     // Build WHERE conditions for users table
     let userWhereConditions = ["role != 'superadmin'"];
-    // Default: exclude inactive doctors (soft-deleted) when no status filter is set
-    // When status filter is set, it will override this
-    let doctorWhereConditions = ["d.is_active = true"]; // Exclude inactive doctors by default
 
     // Add role filter
     if (role && role !== '') {
@@ -225,63 +222,28 @@ export const getAllUsers = async (req, res) => {
         email ILIKE $${paramIndex}
       )`;
       userWhereConditions.push(searchCondition);
-      doctorWhereConditions.push(searchCondition);
       queryParams.push(searchPattern);
       paramIndex++;
     }
 
     // Add status filter
     if (status) {
-      // Override the default is_active filter when status is explicitly set
-      doctorWhereConditions = ["1=1"]; // Reset to allow all when status filter is set
-      
       if (status === 'pending') {
         userWhereConditions.push(`is_verified = false`);
-        // Doctors without user accounts are considered pending (all doctors in UNION are pending)
-        // No additional filter needed since we only include doctors without user accounts
       } else if (status === 'active') {
         userWhereConditions.push(`is_verified = true AND is_active = true`);
-        // Active doctors: is_active = true (doctors without user accounts)
-        doctorWhereConditions.push(`d.is_active = true`);
       } else if (status === 'inactive') {
         userWhereConditions.push(`is_verified = true AND is_active = false`);
-        // Inactive doctors: is_active = false (doctors without user accounts)
-        doctorWhereConditions.push(`d.is_active = false`);
-      }
-    }
-
-    // Build role filter for doctors based on department
-    let doctorRoleFilter = '';
-    let departmentFilter = '';
-    let deptParamIndex = null;
-    if (role && role !== '') {
-      if (role === 'urologist') {
-        doctorRoleFilter = `AND (LOWER(dept.name) LIKE '%urology%' OR dept.name IS NULL)`;
-      } else if (role === 'gp') {
-        doctorRoleFilter = `AND (LOWER(dept.name) LIKE '%general%' OR LOWER(dept.name) LIKE '%gp%')`;
-      } else if (role === 'urology_nurse') {
-        doctorRoleFilter = `AND LOWER(dept.name) LIKE '%nurse%'`;
-      } else if (role === 'doctor') {
-        // Include all doctors when filtering by 'doctor' role
-        doctorRoleFilter = ``;
-        // Add department filter if provided
-        if (department_id && department_id !== '') {
-          deptParamIndex = paramIndex;
-          departmentFilter = `AND d.department_id = $${paramIndex}`;
-          queryParams.push(parseInt(department_id, 10));
-          paramIndex++;
-        }
-      } else {
-        // For other roles, don't include doctors
-        doctorRoleFilter = `AND 1=0`;
       }
     }
     
-    // Also filter users with role 'doctor' by department_id if provided
-    if (role === 'doctor' && department_id && department_id !== '' && deptParamIndex !== null) {
-      // For users with role 'doctor', we need to filter by department
+    // Filter users with role 'doctor' by department_id if provided
+    if (role === 'doctor' && department_id && department_id !== '') {
+      const deptParamIndex = paramIndex;
+      queryParams.push(parseInt(department_id, 10));
+      paramIndex++;
+      // For users with role 'doctor', filter by department
       // Only include doctors that have a matching department_id in the doctors table
-      // Since we already filtered by role='doctor', we just need to check the department
       userWhereConditions.push(`EXISTS (
         SELECT 1 FROM doctors doc 
         WHERE doc.email = u.email 
@@ -291,73 +253,34 @@ export const getAllUsers = async (req, res) => {
 
     // Build WHERE clauses AFTER all conditions are added
     const userWhereClause = userWhereConditions.join(' AND ');
-    const doctorWhereClause = doctorWhereConditions.join(' AND ');
 
-    // Build UNION query to combine users and doctors
-    // Only include doctors that don't already have user accounts (to avoid duplicates)
+    // Only query users table - exclude doctors from doctors table (those with ID > 1000000)
+    // Doctors should only appear if they have a corresponding user account in the users table
     const unionQuery = `
-      (
-        SELECT 
-          u.id,
-          u.email,
-          u.first_name,
-          u.last_name,
-          u.phone,
-          u.organization,
-          u.role,
-          u.is_active,
-          u.is_verified,
-          u.created_at,
-          u.last_login_at,
-          CASE 
-            WHEN u.role = 'doctor' THEN (
-              SELECT dept.name 
-              FROM doctors doc 
-              LEFT JOIN departments dept ON doc.department_id = dept.id
-              WHERE doc.email = u.email
-              LIMIT 1
-            )
-            ELSE NULL
-          END as department_name
-        FROM users u
-        WHERE ${userWhereClause}
-      )
-      UNION ALL
-      (
-        SELECT 
-          d.id + 1000000 as id, -- Offset to avoid ID conflicts with users
-          d.email,
-          d.first_name,
-          d.last_name,
-          d.phone,
-          NULL as organization,
-          'doctor' as role, -- Always set role as 'doctor' for doctors from doctors table
-          d.is_active,
-          CASE 
-            WHEN EXISTS (
-              SELECT 1 FROM users u4 
-              WHERE u4.email = d.email 
-              AND u4.role = 'doctor'
-              AND u4.is_verified = true
-            ) THEN true
-            ELSE false
-          END as is_verified,
-          d.created_at,
-          NULL as last_login_at,
-          dept.name as department_name
-        FROM doctors d
-        LEFT JOIN departments dept ON d.department_id = dept.id
-        WHERE ${doctorWhereClause}
-          -- Only include doctors that don't have user accounts (to avoid duplicates)
-          -- Doctors with user accounts are already included in the users table query above
-          AND NOT EXISTS (
-            SELECT 1 FROM users u6 
-            WHERE u6.email = d.email 
-            AND u6.role != 'superadmin'
+      SELECT 
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.organization,
+        u.role,
+        u.is_active,
+        u.is_verified,
+        u.created_at,
+        u.last_login_at,
+        CASE 
+          WHEN u.role = 'doctor' THEN (
+            SELECT dept.name 
+            FROM doctors doc 
+            LEFT JOIN departments dept ON doc.department_id = dept.id
+            WHERE doc.email = u.email
+            LIMIT 1
           )
-          ${doctorRoleFilter}
-          ${departmentFilter}
-      )
+          ELSE NULL
+        END as department_name
+      FROM users u
+      WHERE ${userWhereClause}
     `;
 
     // Build order by clause

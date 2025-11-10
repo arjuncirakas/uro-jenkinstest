@@ -85,7 +85,7 @@ const Users = () => {
       });
     } else {
       // When no status filter is set, exclude inactive users by default
-      // This ensures soft-deleted doctors (is_active = false) don't appear in the list
+      // This ensures soft-deleted users (is_active = false) don't appear in the list
       filtered = filtered.filter(user => {
         // Include pending users (not verified) and active users (verified and active)
         // Exclude inactive users (verified but not active) - these are soft-deleted
