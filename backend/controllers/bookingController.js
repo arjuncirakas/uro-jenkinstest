@@ -643,13 +643,19 @@ export const getTodaysAppointments = async (req, res) => {
   const client = await pool.connect();
   
   try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
     const { type } = req.query; // 'investigation' or 'urologist'
+    
+    console.log(`[getTodaysAppointments] User ID: ${userId}, Role: ${userRole}, Type: ${type}`);
+    
     // Use local timezone instead of UTC to get the correct "today"
     const now = new Date();
     const today = now.getFullYear() + '-' + 
                   String(now.getMonth() + 1).padStart(2, '0') + '-' + 
                   String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
     
+    console.log(`[getTodaysAppointments] Today's date: ${today}`);
     
     let query = '';
     let queryParams = [today];
@@ -680,6 +686,8 @@ export const getTodaysAppointments = async (req, res) => {
       `;
     } else if (type === 'urologist') {
       // Get urologist appointments for today
+      // For urologists/doctors, optionally filter by their ID if they want only their appointments
+      // For now, show all urologist appointments for today
       query = `
         SELECT 
           a.id,
@@ -698,7 +706,9 @@ export const getTodaysAppointments = async (req, res) => {
           'urologist' as type
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
-        WHERE a.appointment_date = $1 AND a.appointment_type = 'urologist'
+        WHERE a.appointment_date = $1 
+        AND a.appointment_type = 'urologist'
+        AND a.status != 'cancelled'
         ORDER BY a.appointment_time
       `;
     } else {
@@ -722,6 +732,7 @@ export const getTodaysAppointments = async (req, res) => {
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
         WHERE a.appointment_date = $1
+        AND a.status != 'cancelled'
         
         UNION ALL
         
@@ -743,124 +754,167 @@ export const getTodaysAppointments = async (req, res) => {
         FROM investigation_bookings ib
         JOIN patients p ON ib.patient_id = p.id
         WHERE ib.scheduled_date = $1
+        AND ib.status != 'cancelled'
         
         ORDER BY appointment_time
       `;
     }
     
+    console.log(`[getTodaysAppointments] Executing query with params:`, queryParams);
     const result = await client.query(query, queryParams);
+    console.log(`[getTodaysAppointments] Query returned ${result.rows.length} rows`);
     
     // Get test results for all patients in the appointments
-    const patientIds = result.rows.map(row => row.patient_id);
+    const patientIds = result.rows
+      .map(row => row.patient_id)
+      .filter(id => id != null && id !== undefined) // Remove null/undefined
+      .filter((id, index, self) => self.indexOf(id) === index); // Remove duplicates
+    
     let testResults = {};
     
     if (patientIds.length > 0) {
-      const testResultsQuery = `
-        SELECT 
-          patient_id,
-          test_type,
-          test_name
-        FROM investigation_results
-        WHERE patient_id = ANY($1)
-      `;
-      
-      const testResultsResult = await client.query(testResultsQuery, [patientIds]);
-      
-      // Group test results by patient ID
-      testResultsResult.rows.forEach(row => {
-        if (!testResults[row.patient_id]) {
-          testResults[row.patient_id] = { mri: false, biopsy: false, trus: false };
-        }
+      try {
+        const testResultsQuery = `
+          SELECT 
+            patient_id,
+            test_type,
+            test_name
+          FROM investigation_results
+          WHERE patient_id = ANY($1::int[])
+        `;
         
-        // Check if test type or name matches our expected values
-        const testType = row.test_type ? row.test_type.toLowerCase() : '';
-        const testName = row.test_name ? row.test_name.toLowerCase() : '';
-        
-        if (testType === 'mri' || testName === 'mri') {
-          testResults[row.patient_id].mri = true;
-        }
-        if (testType === 'biopsy' || testName === 'biopsy') {
-          testResults[row.patient_id].biopsy = true;
-        }
-        if (testType === 'trus' || testName === 'trus') {
-          testResults[row.patient_id].trus = true;
-        }
-      });
+        console.log(`[getTodaysAppointments] Fetching test results for ${patientIds.length} patients`);
+        const testResultsResult = await client.query(testResultsQuery, [patientIds]);
+        console.log(`[getTodaysAppointments] Found ${testResultsResult.rows.length} test results`);
+      
+        // Group test results by patient ID
+        testResultsResult.rows.forEach(row => {
+          if (!row.patient_id) return; // Skip if patient_id is null
+          
+          if (!testResults[row.patient_id]) {
+            testResults[row.patient_id] = { mri: false, biopsy: false, trus: false };
+          }
+          
+          // Check if test type or name matches our expected values
+          const testType = row.test_type ? String(row.test_type).toLowerCase() : '';
+          const testName = row.test_name ? String(row.test_name).toLowerCase() : '';
+          
+          if (testType.includes('mri') || testName.includes('mri')) {
+            testResults[row.patient_id].mri = true;
+          }
+          if (testType.includes('biopsy') || testName.includes('biopsy')) {
+            testResults[row.patient_id].biopsy = true;
+          }
+          if (testType.includes('trus') || testName.includes('trus')) {
+            testResults[row.patient_id].trus = true;
+          }
+        });
+      } catch (testError) {
+        console.error('[getTodaysAppointments] Error fetching test results:', testError);
+        console.error('[getTodaysAppointments] Test error stack:', testError.stack);
+        // Continue without test results rather than failing
+        testResults = {};
+      }
+    } else {
+      console.log('[getTodaysAppointments] No patient IDs to fetch test results for');
     }
     
     // Format results for frontend
-    const formattedAppointments = result.rows.map(row => {
-      // Format date for display (YYYY-MM-DD format for frontend parsing)
-      const formatDate = (dateString) => {
-        if (!dateString) return '';
-        try {
-          // Handle PostgreSQL date objects directly
-          if (dateString instanceof Date) {
-            const year = dateString.getFullYear();
-            const month = String(dateString.getMonth() + 1).padStart(2, '0');
-            const day = String(dateString.getDate()).padStart(2, '0');
+    const formattedAppointments = result.rows.map((row, index) => {
+      try {
+        // Format date for display (YYYY-MM-DD format for frontend parsing)
+        const formatDate = (dateString) => {
+          if (!dateString) return '';
+          try {
+            // Handle PostgreSQL date objects directly
+            if (dateString instanceof Date) {
+              const year = dateString.getFullYear();
+              const month = String(dateString.getMonth() + 1).padStart(2, '0');
+              const day = String(dateString.getDate()).padStart(2, '0');
+              return `${year}-${month}-${day}`;
+            }
+            
+            // Handle string dates
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+              console.error('Invalid date in backend:', dateString);
+              return dateString;
+            }
+            
+            // Use local timezone components to avoid UTC conversion issues
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
-          }
-          
-          // Handle string dates
-          const date = new Date(dateString);
-          if (isNaN(date.getTime())) {
-            console.error('Invalid date in backend:', dateString);
+          } catch (error) {
+            console.error('Date formatting error:', error, 'Input:', dateString);
             return dateString;
           }
-          
-          // Use local timezone components to avoid UTC conversion issues
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          return `${year}-${month}-${day}`;
-        } catch (error) {
-          console.error('Date formatting error:', error, 'Input:', dateString);
-          return dateString;
-        }
-      };
+        };
 
-      // Format time for display (HH:MM format without seconds)
-      const formatTime = (timeString) => {
-        if (!timeString) return '';
-        try {
-          // If it's already in HH:MM format, return as is
-          if (timeString.match(/^\d{2}:\d{2}$/)) {
+        // Format time for display (HH:MM format without seconds)
+        const formatTime = (timeString) => {
+          if (!timeString) return '';
+          try {
+            // If it's already in HH:MM format, return as is
+            if (timeString.match(/^\d{2}:\d{2}$/)) {
+              return timeString;
+            }
+            // If it's a full datetime string, extract time part
+            const date = new Date(timeString);
+            if (isNaN(date.getTime())) {
+              console.error('Invalid time in backend:', timeString);
+              return timeString;
+            }
+            // Return HH:MM format without seconds
+            return date.toTimeString().split(' ')[0].substring(0, 5); // HH:MM format
+          } catch (error) {
+            console.error('Time formatting error:', error, 'Input:', timeString);
             return timeString;
           }
-          // If it's a full datetime string, extract time part
-          const date = new Date(timeString);
-          if (isNaN(date.getTime())) {
-            console.error('Invalid time in backend:', timeString);
-            return timeString;
-          }
-          // Return HH:MM format without seconds
-          return date.toTimeString().split(' ')[0].substring(0, 5); // HH:MM format
-        } catch (error) {
-          console.error('Time formatting error:', error, 'Input:', timeString);
-          return timeString;
-        }
-      };
+        };
 
-      return {
-        id: row.id,
-        patientName: `${row.first_name} ${row.last_name}`,
-        upi: row.upi,
-        age: row.age,
-        gender: row.gender,
-        psa: row.psa,
-        appointmentDate: formatDate(row.appointment_date),
-        appointmentTime: formatTime(row.appointment_time),
-        urologist: row.urologist,
-        status: row.status,
-        notes: row.notes,
-        type: row.type,
-        // Add test result status for all appointments
-        mri: testResults[row.patient_id]?.mri ? 'completed' : 'pending',
-        biopsy: testResults[row.patient_id]?.biopsy ? 'completed' : 'pending',
-        trus: testResults[row.patient_id]?.trus ? 'completed' : 'pending'
-      };
-    });
+        return {
+          id: row.id,
+          patientName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Unknown Patient',
+          upi: row.upi || '',
+          age: row.age || 0,
+          gender: row.gender || 'Unknown',
+          psa: row.psa || 0,
+          appointmentDate: formatDate(row.appointment_date),
+          appointmentTime: formatTime(row.appointment_time),
+          urologist: row.urologist || 'Unassigned',
+          status: row.status || 'scheduled',
+          notes: row.notes || '',
+          type: row.type || 'urologist',
+          // Add test result status for all appointments
+          mri: testResults[row.patient_id]?.mri ? 'completed' : 'pending',
+          biopsy: testResults[row.patient_id]?.biopsy ? 'completed' : 'pending',
+          trus: testResults[row.patient_id]?.trus ? 'completed' : 'pending'
+        };
+      } catch (formatError) {
+        console.error(`[getTodaysAppointments] Error formatting appointment ${index}:`, formatError);
+        console.error(`[getTodaysAppointments] Row data:`, row);
+        // Return a safe fallback object
+        return {
+          id: row.id || 0,
+          patientName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Unknown Patient',
+          upi: row.upi || '',
+          age: row.age || 0,
+          gender: row.gender || 'Unknown',
+          psa: row.psa || 0,
+          appointmentDate: row.appointment_date || today,
+          appointmentTime: row.appointment_time || '',
+          urologist: row.urologist || 'Unassigned',
+          status: row.status || 'scheduled',
+          notes: row.notes || '',
+          type: row.type || 'urologist',
+          mri: 'pending',
+          biopsy: 'pending',
+          trus: 'pending'
+        };
+      }
+    }).filter(apt => apt != null); // Remove any null entries
     
     res.json({
       success: true,
@@ -873,7 +927,11 @@ export const getTodaysAppointments = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Get today\'s appointments error:', error);
+    console.error('[getTodaysAppointments] Error:', error);
+    console.error('[getTodaysAppointments] Error stack:', error.stack);
+    console.error('[getTodaysAppointments] User info:', { id: req.user?.id, role: req.user?.role });
+    console.error('[getTodaysAppointments] Query params:', req.query);
+    
     res.status(500).json({
       success: false,
       message: 'Internal server error',

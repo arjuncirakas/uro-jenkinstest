@@ -75,7 +75,7 @@ router.get('/doctors',
 router.get('/appointments/today',
   generalLimiter,
   authenticateToken,
-  requireRole(['urology_nurse', 'urologist']),
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
   getTodaysAppointments
 );
 
