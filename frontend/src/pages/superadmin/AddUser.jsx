@@ -41,7 +41,7 @@ const AddUser = () => {
     email: '',
     phone: '',
     organization: '',
-    role: 'urology_nurse',
+    role: '',
     department_id: ''
   });
   const [errors, setErrors] = useState({});
@@ -143,6 +143,11 @@ const AddUser = () => {
           error = 'Organization is required';
         } else if (value.trim().length < 2) {
           error = 'Organization name must be at least 2 characters';
+        }
+        break;
+      case 'role':
+        if (!value || value.trim() === '') {
+          error = 'Role is required';
         }
         break;
       case 'department_id':
@@ -504,18 +509,23 @@ const AddUser = () => {
                       Role <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <div className="text-gray-400">
-                          {roleIcons[formData.role]}
+                      {formData.role && (
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <div className="text-gray-400">
+                            {roleIcons[formData.role]}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <select
                         id="role"
                         name="role"
                         value={formData.role}
                         onChange={handleChange}
-                        className="block w-full pl-10 pr-8 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400"
+                        className={`block w-full ${formData.role ? 'pl-10' : 'pl-3'} pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
+                          errors.role ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                        }`}
                       >
+                        <option value="">Select Role</option>
                         <option value="gp">General Practitioner</option>
                         <option value="urology_nurse">Urology Clinical Nurse</option>
                         <option value="doctor">Doctor</option>
@@ -526,6 +536,12 @@ const AddUser = () => {
                         </svg>
                       </div>
                     </div>
+                    {errors.role && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {errors.role}
+                      </p>
+                    )}
                   </div>
 
                   {/* Department - Only show when role is doctor */}

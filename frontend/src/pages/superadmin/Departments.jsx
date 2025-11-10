@@ -2,18 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Building2, Search, Filter } from 'lucide-react';
 import { doctorsService } from '../../services/doctorsService';
 import SuccessModal from '../../components/SuccessModal';
+import ErrorModal from '../../components/modals/ErrorModal';
 import ConfirmModal from '../../components/ConfirmModal';
 
 const Departments = () => {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorModalTitle, setErrorModalTitle] = useState('Error');
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -31,16 +34,24 @@ const Departments = () => {
   // Fetch departments
   const fetchDepartments = async () => {
     setLoading(true);
-    setError(null);
     try {
       const response = await doctorsService.getAllDepartments({ is_active: true });
       if (response.success) {
         setDepartments(response.data);
       } else {
-        setError('Failed to fetch departments');
+        const errorMsg = response.error || response.message || 'Failed to fetch departments. Please try again.';
+        setErrorMessage(errorMsg);
+        setErrorModalTitle('Fetch Departments Error');
+        setShowErrorModal(true);
       }
     } catch (err) {
-      setError('Failed to fetch departments');
+      const errorMsg = err?.response?.data?.error || 
+                      err?.response?.data?.message || 
+                      err?.message || 
+                      'Failed to fetch departments. Please try again.';
+      setErrorMessage(errorMsg);
+      setErrorModalTitle('Fetch Departments Error');
+      setShowErrorModal(true);
       console.error('Error fetching departments:', err);
     } finally {
       setLoading(false);
@@ -143,11 +154,15 @@ const Departments = () => {
 
     // Validate form
     if (!validateForm()) {
-      setError('Please fix the errors in the form');
+      // Show validation errors in modal
+      const validationErrors = Object.values(errors).filter(e => e).join(', ');
+      if (validationErrors) {
+        setErrorMessage(`Please fix the following errors: ${validationErrors}`);
+        setErrorModalTitle('Validation Error');
+        setShowErrorModal(true);
+      }
       return;
     }
-
-    setError(null);
 
     try {
       const response = await doctorsService.createDepartment(formData);
@@ -158,15 +173,23 @@ const Departments = () => {
         setFormData({ name: '', description: '' });
         setErrors({ name: '', description: '' });
         setTouched({ name: false, description: false });
-        setError(null);
         fetchDepartments();
       } else {
-        setError(response.error || response.message || 'Failed to create department');
+        // Show error modal with API error message
+        const errorMsg = response.error || response.message || 'Failed to create department. Please try again.';
+        setErrorMessage(errorMsg);
+        setErrorModalTitle('Create Department Error');
+        setShowErrorModal(true);
       }
     } catch (err) {
-      // Handle error response from API
-      const errorMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to create department';
-      setError(errorMessage);
+      // Extract error message from API response
+      const errorMsg = err?.response?.data?.error || 
+                      err?.response?.data?.message || 
+                      err?.message || 
+                      'An unexpected error occurred while creating the department. Please try again.';
+      setErrorMessage(errorMsg);
+      setErrorModalTitle('Create Department Error');
+      setShowErrorModal(true);
       console.error('Error creating department:', err);
     }
   };
@@ -181,11 +204,15 @@ const Departments = () => {
 
     // Validate form
     if (!validateForm()) {
-      setError('Please fix the errors in the form');
+      // Show validation errors in modal
+      const validationErrors = Object.values(errors).filter(e => e).join(', ');
+      if (validationErrors) {
+        setErrorMessage(`Please fix the following errors: ${validationErrors}`);
+        setErrorModalTitle('Validation Error');
+        setShowErrorModal(true);
+      }
       return;
     }
-
-    setError(null);
 
     try {
       const response = await doctorsService.updateDepartment(selectedDepartment.id, formData);
@@ -199,29 +226,59 @@ const Departments = () => {
         setSelectedDepartment(null);
         fetchDepartments();
       } else {
-        setError(response.error || 'Failed to update department');
+        // Show error modal with API error message
+        const errorMsg = response.error || response.message || 'Failed to update department. Please try again.';
+        setErrorMessage(errorMsg);
+        setErrorModalTitle('Update Department Error');
+        setShowErrorModal(true);
       }
     } catch (err) {
-      setError('Failed to update department');
+      // Extract error message from API response
+      const errorMsg = err?.response?.data?.error || 
+                      err?.response?.data?.message || 
+                      err?.message || 
+                      'An unexpected error occurred while updating the department. Please try again.';
+      setErrorMessage(errorMsg);
+      setErrorModalTitle('Update Department Error');
+      setShowErrorModal(true);
       console.error('Error updating department:', err);
     }
   };
 
   // Handle delete department
   const handleDeleteDepartment = async () => {
+    if (!selectedDepartment) return;
+    
+    const departmentName = selectedDepartment.name;
+    
+    // Close delete confirmation modal immediately
+    setShowDeleteModal(false);
+    
     try {
       const response = await doctorsService.deleteDepartment(selectedDepartment.id);
       if (response.success) {
-        setSuccessMessage('Department deleted successfully');
+        setSuccessMessage(`Department "${departmentName}" deleted successfully`);
         setShowSuccessModal(true);
-        setShowDeleteModal(false);
         setSelectedDepartment(null);
         fetchDepartments();
       } else {
-        setError(response.error || 'Failed to delete department');
+        // Show error modal with API error message
+        const errorMsg = response.error || response.message || 'Failed to delete department. Please try again.';
+        setErrorMessage(errorMsg);
+        setErrorModalTitle('Delete Department Error');
+        setShowErrorModal(true);
+        setSelectedDepartment(null);
       }
     } catch (err) {
-      setError('Failed to delete department');
+      // Extract error message from API response
+      const errorMsg = err?.response?.data?.error || 
+                      err?.response?.data?.message || 
+                      err?.message || 
+                      'An unexpected error occurred while deleting the department. Please try again.';
+      setErrorMessage(errorMsg);
+      setErrorModalTitle('Delete Department Error');
+      setShowErrorModal(true);
+      setSelectedDepartment(null);
       console.error('Error deleting department:', err);
     }
   };
@@ -248,7 +305,6 @@ const Departments = () => {
     setErrors({ name: '', description: '' });
     setTouched({ name: false, description: false });
     setSelectedDepartment(null);
-    setError(null);
   };
 
   // Close modals
@@ -256,7 +312,6 @@ const Departments = () => {
     setShowAddModal(false);
     setShowEditModal(false);
     setShowDeleteModal(false);
-    setError(null);
     resetForm();
   };
 
@@ -284,7 +339,6 @@ const Departments = () => {
         </div>
         <button
           onClick={() => {
-            setError(null);
             setShowAddModal(true);
           }}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
@@ -316,25 +370,6 @@ const Departments = () => {
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">{error}</div>
-              <div className="mt-4">
-                <button
-                  onClick={() => setError(null)}
-                  className="bg-red-100 px-2 py-1 rounded text-sm text-red-800 hover:bg-red-200"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Departments List */}
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
@@ -395,7 +430,6 @@ const Departments = () => {
               <div className="mt-6">
                 <button
                   onClick={() => {
-            setError(null);
             setShowAddModal(true);
           }}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700"
@@ -472,15 +506,6 @@ const Departments = () => {
                 )}
               </div>
               
-              {/* Error Message Display */}
-              {error && (
-                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                  <p className="text-sm text-red-800 flex items-center">
-                    <span className="mr-2">⚠️</span>
-                    {error}
-                  </p>
-                </div>
-              )}
             </div>
             <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
               <button
@@ -611,6 +636,18 @@ const Departments = () => {
         onClose={() => setShowSuccessModal(false)}
         title="Success"
         message={successMessage}
+      />
+
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={showErrorModal}
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorMessage('');
+          setErrorModalTitle('Error');
+        }}
+        title={errorModalTitle}
+        message={errorMessage || 'An error occurred. Please try again.'}
       />
     </div>
   );

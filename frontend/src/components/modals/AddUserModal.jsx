@@ -11,11 +11,10 @@ import {
   CheckCircle,
   XCircle,
   UserPlus,
-  Shield,
-  Loader2
+  Shield
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { createUser, clearError } from '../../store/slices/superadminSlice';
+import { createUser, clearError, getAllUsers } from '../../store/slices/superadminSlice';
 import ErrorModal from './ErrorModal';
 import SuccessModal from './SuccessModal';
 import { doctorsService } from '../../services/doctorsService';
@@ -25,7 +24,7 @@ import {
   sanitizeInput
 } from '../../utils/inputValidation';
 
-const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
+const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
   const dispatch = useAppDispatch();
   const { isLoading, error } = useAppSelector((state) => state.superadmin);
   const [showErrorModal, setShowErrorModal] = useState(false);
@@ -47,37 +46,10 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
   const [departments, setDepartments] = useState([]);
   const [loadingDepartments, setLoadingDepartments] = useState(false);
   
-  useEffect(() => {
-    if (error && !showSuccessModal && !isLoading) {
-      const message = typeof error === 'string' ? error : (error?.message || 'An error occurred while creating the user.');
-      setErrorMessage(message);
-      setShowErrorModal(true);
-    }
-  }, [error, showSuccessModal, isLoading]);
-
-  // Fetch departments on component mount
+  // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      const fetchDepartments = async () => {
-        setLoadingDepartments(true);
-        try {
-          const response = await doctorsService.getAllDepartments({ is_active: true });
-          if (response.success) {
-            setDepartments(response.data);
-          }
-        } catch (err) {
-          console.error('Error fetching departments:', err);
-        } finally {
-          setLoadingDepartments(false);
-        }
-      };
-      fetchDepartments();
-    }
-  }, [isOpen]);
-
-  // Reset form when modal closes
-  useEffect(() => {
-    if (!isOpen) {
+      // Reset form data
       setFormData({
         firstName: '',
         lastName: '',
@@ -95,6 +67,32 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
       dispatch(clearError());
     }
   }, [isOpen, dispatch]);
+
+  useEffect(() => {
+    if (error && !showSuccessModal && !isLoading) {
+      const message = typeof error === 'string' ? error : (error?.message || 'An error occurred while creating the user.');
+      setErrorMessage(message);
+      setShowErrorModal(true);
+    }
+  }, [error, showSuccessModal, isLoading]);
+
+  // Fetch departments on component mount
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      setLoadingDepartments(true);
+      try {
+        const response = await doctorsService.getAllDepartments({ is_active: true });
+        if (response.success) {
+          setDepartments(response.data);
+        }
+      } catch (err) {
+        console.error('Error fetching departments:', err);
+      } finally {
+        setLoadingDepartments(false);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   const roleIcons = {
     gp: <Activity className="h-4 w-4" />,
@@ -124,33 +122,50 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
         break;
       case 'email':
         if (!value.trim()) {
-          error = 'Email address is required';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+          error = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
           error = 'Please enter a valid email address';
         }
         break;
       case 'phone':
         if (!value.trim()) {
           error = 'Phone number is required';
-        } else if (!/^[0-9+\-\s()]+$/.test(value.trim())) {
-          error = 'Phone number can only contain numbers, spaces, hyphens, parentheses, and plus signs';
-        } else if (value.trim().length < 10) {
-          error = 'Phone number must be at least 10 digits';
+        } else {
+          if (/[a-zA-Z]/.test(value)) {
+            error = 'Phone number cannot contain letters. Please enter only digits (8-12 numbers).';
+          }
+          const cleanedPhone = value.replace(/[\s\-\(\)]/g, '');
+          const digitsOnly = cleanedPhone.replace(/^\+/, '');
+          
+          if (!/^[\+\d\s\-\(\)]+$/.test(value)) {
+            error = 'Phone number can only contain digits (0-9), spaces, hyphens, parentheses, and + symbol. Letters are not allowed.';
+          }
+          else if (digitsOnly.length < 8) {
+            error = 'Phone number must contain at least 8 digits. Please enter 8 to 12 numbers.';
+          }
+          else if (digitsOnly.length > 12) {
+            error = 'Phone number cannot exceed 12 digits. Please enter 8 to 12 numbers.';
+          }
+          else if (!/^[\+]?[1-9][\d]{7,11}$/.test(cleanedPhone)) {
+            error = 'Please enter a valid phone number. Must be 8 to 12 digits and cannot start with 0.';
+          }
         }
         break;
       case 'organization':
         if (!value.trim()) {
-          error = 'Organization/Hospital is required';
+          error = 'Organization is required';
+        } else if (value.trim().length < 2) {
+          error = 'Organization name must be at least 2 characters';
         }
         break;
       case 'role':
-        if (!value) {
+        if (!value || value.trim() === '') {
           error = 'Role is required';
         }
         break;
       case 'department_id':
         if (formDataToValidate.role === 'doctor' && !value) {
-          error = 'Department is required when role is doctor';
+          error = 'Department is required when role is Doctor';
         }
         break;
       default:
@@ -162,18 +177,37 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const sanitizedValue = sanitizeInput(value);
     
-    // Update form data
+    let isValid = true;
+    let sanitizedValue = value;
+    
+    if (['firstName', 'lastName'].includes(name)) {
+      isValid = validateNameInput(value);
+      if (!isValid) return;
+    }
+    
+    if (name === 'phone') {
+      isValid = validatePhoneInput(value);
+      if (!isValid) {
+        setErrors(prev => ({
+          ...prev,
+          phone: 'Phone number cannot contain letters. Please enter only digits (8-12 numbers).'
+        }));
+        return;
+      }
+    }
+    
+    if (typeof value === 'string' && !['email', 'phone'].includes(name)) {
+      sanitizedValue = sanitizeInput(value);
+    }
+    
     const updatedFormData = {
       ...formData,
       [name]: sanitizedValue
     };
     
-    // Reset department_id when role changes from doctor
     if (name === 'role' && value !== 'doctor') {
       updatedFormData.department_id = '';
-      // Clear department error if role is not doctor
       setErrors(prev => {
         const newErrors = { ...prev };
         delete newErrors.department_id;
@@ -183,7 +217,6 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
     
     setFormData(updatedFormData);
     
-    // Validate field and update errors
     const error = validateField(name, sanitizedValue, updatedFormData);
     setErrors(prev => ({
       ...prev,
@@ -194,7 +227,6 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
   const validateForm = () => {
     const newErrors = {};
     
-    // Validate all fields
     Object.keys(formData).forEach(key => {
       const error = validateField(key, formData[key]);
       if (error) {
@@ -209,19 +241,16 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Clear any existing error state
     dispatch(clearError());
     setShowErrorModal(false);
     setShowSuccessModal(false);
     setErrorMessage('');
     
-    // Validate form
     if (!validateForm()) {
       return;
     }
 
     try {
-      // Prepare data for submission - convert department_id to number if present
       const submitData = {
         ...formData,
         department_id: formData.role === 'doctor' && formData.department_id 
@@ -231,9 +260,6 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
       
       const result = await dispatch(createUser(submitData));
       
-      console.log('Create user result:', result);
-      
-      // Check if the action was fulfilled and successful
       if (result.type.endsWith('/fulfilled') && result.payload && result.payload.success) {
         setCreatedUser({
           ...formData,
@@ -273,8 +299,11 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
 
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
-    if (onUserAdded) {
-      onUserAdded(createdUser);
+    // Reload users list
+    dispatch(getAllUsers({ page: 1, limit: 10000 }));
+    // Close the modal
+    if (onSuccess) {
+      onSuccess();
     }
     onClose();
   };
@@ -289,10 +318,11 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
+      {/* Modal Backdrop */}
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          {/* Modal Header */}
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-teal-600 to-teal-700 rounded-lg flex items-center justify-center">
                 <UserPlus className="h-5 w-5 text-white" />
@@ -310,296 +340,304 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
             </button>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6">
-            <div className="mb-6">
-              <h3 className="text-base font-semibold text-gray-900 flex items-center mb-4">
-                <Shield className="h-5 w-5 text-teal-600 mr-2" />
-                User Information
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {/* First Name */}
-              <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
-                  First Name <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="firstName"
-                    name="firstName"
-                    type="text"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    autoComplete="given-name"
-                    className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                      errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                    placeholder="Enter first name"
-                  />
-                </div>
-                {errors.firstName && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    {errors.firstName}
-                  </p>
-                )}
+          {/* Modal Body */}
+          <div className="p-6">
+            <div className="bg-white rounded-lg">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200 mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
+                  <Shield className="h-5 w-5 text-teal-600 mr-2" />
+                  User Information
+                </h3>
               </div>
-
-              {/* Last Name */}
-              <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
-                  Last Name <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="lastName"
-                    name="lastName"
-                    type="text"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    autoComplete="family-name"
-                    className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                      errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                    placeholder="Enter last name"
-                  />
-                </div>
-                {errors.lastName && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    {errors.lastName}
-                  </p>
-                )}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    autoComplete="email"
-                    className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                      errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                    placeholder="Enter email address"
-                  />
-                </div>
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    {errors.email}
-                  </p>
-                )}
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Phone className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    autoComplete="tel"
-                    className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                      errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                    placeholder="Enter phone number"
-                  />
-                </div>
-                {errors.phone && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    {errors.phone}
-                  </p>
-                )}
-              </div>
-
-              {/* Organization */}
-              <div>
-                <label htmlFor="organization" className="block text-sm font-medium text-gray-700 mb-2">
-                  Organization/Hospital <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Building2 className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="organization"
-                    name="organization"
-                    type="text"
-                    value={formData.organization}
-                    onChange={handleChange}
-                    className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                      errors.organization ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                    placeholder="Enter organization"
-                  />
-                </div>
-                {errors.organization && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    {errors.organization}
-                  </p>
-                )}
-              </div>
-
-              {/* Role */}
-              <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                  Role <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <div className="text-gray-400">
-                      {formData.role && roleIcons[formData.role] ? roleIcons[formData.role] : <Stethoscope className="h-4 w-4" />}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  {/* First Name */}
+                  <div>
+                    <label htmlFor="modal-firstName" className="block text-sm font-medium text-gray-700 mb-2">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="modal-firstName"
+                        name="firstName"
+                        type="text"
+                        value={formData.firstName}
+                        onChange={handleChange}
+                        autoComplete="given-name"
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                          errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                        placeholder="Enter first name"
+                      />
                     </div>
+                    {errors.firstName && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {errors.firstName}
+                      </p>
+                    )}
                   </div>
-                  <select
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className={`block w-full pl-10 pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
-                      errors.role ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                    }`}
-                  >
-                    <option value="">Select Role</option>
-                    <option value="gp">General Practitioner</option>
-                    <option value="urology_nurse">Urology Clinical Nurse</option>
-                    <option value="doctor">Doctor</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-                {errors.role && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    {errors.role}
-                  </p>
-                )}
-              </div>
 
-              {/* Department - Only show when role is doctor */}
-              {formData.role === 'doctor' && (
-                <div>
-                  <label htmlFor="department_id" className="block text-sm font-medium text-gray-700 mb-2">
-                    Department <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building2 className="h-5 w-5 text-gray-400" />
+                  {/* Last Name */}
+                  <div>
+                    <label htmlFor="modal-lastName" className="block text-sm font-medium text-gray-700 mb-2">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="modal-lastName"
+                        name="lastName"
+                        type="text"
+                        value={formData.lastName}
+                        onChange={handleChange}
+                        autoComplete="family-name"
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                          errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                        placeholder="Enter last name"
+                      />
                     </div>
-                    <select
-                      id="department_id"
-                      name="department_id"
-                      value={formData.department_id}
-                      onChange={handleChange}
-                      disabled={loadingDepartments}
-                      className={`block w-full pl-10 pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
-                        errors.department_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                      } ${loadingDepartments ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      <option value="">Select Department</option>
-                      {departments.map((dept) => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
+                    {errors.lastName && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {errors.lastName}
+                      </p>
+                    )}
                   </div>
-                  {errors.department_id && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <XCircle className="h-4 w-4 mr-1" />
-                      {errors.department_id}
-                    </p>
+
+                  {/* Email */}
+                  <div>
+                    <label htmlFor="modal-email" className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Mail className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="modal-email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        autoComplete="email"
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                          errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                    {errors.email && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {errors.email}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label htmlFor="modal-phone" className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Phone className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="modal-phone"
+                        name="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        autoComplete="tel"
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                          errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                        placeholder="Enter phone number"
+                      />
+                    </div>
+                    {errors.phone && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {errors.phone}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Organization */}
+                  <div>
+                    <label htmlFor="modal-organization" className="block text-sm font-medium text-gray-700 mb-2">
+                      Organization/Hospital <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Building2 className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        id="modal-organization"
+                        name="organization"
+                        type="text"
+                        value={formData.organization}
+                        onChange={handleChange}
+                        autoComplete="organization"
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
+                          errors.organization ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                        placeholder="Enter organization"
+                      />
+                    </div>
+                    {errors.organization && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {errors.organization}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Role */}
+                  <div>
+                    <label htmlFor="modal-role" className="block text-sm font-medium text-gray-700 mb-2">
+                      Role <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      {formData.role && (
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <div className="text-gray-400">
+                            {roleIcons[formData.role]}
+                          </div>
+                        </div>
+                      )}
+                      <select
+                        id="modal-role"
+                        name="role"
+                        value={formData.role}
+                        onChange={handleChange}
+                        className={`block w-full ${formData.role ? 'pl-10' : 'pl-3'} pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
+                          errors.role ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                        }`}
+                      >
+                        <option value="">Select Role</option>
+                        <option value="gp">General Practitioner</option>
+                        <option value="urology_nurse">Urology Clinical Nurse</option>
+                        <option value="doctor">Doctor</option>
+                      </select>
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                    {errors.role && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {errors.role}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Department - Only show when role is doctor */}
+                  {formData.role === 'doctor' && (
+                    <div>
+                      <label htmlFor="modal-department_id" className="block text-sm font-medium text-gray-700 mb-2">
+                        Department <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Building2 className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <select
+                          id="modal-department_id"
+                          name="department_id"
+                          value={formData.department_id}
+                          onChange={handleChange}
+                          disabled={loadingDepartments}
+                          className={`block w-full pl-10 pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
+                            errors.department_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                          } ${loadingDepartments ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <option value="">Select Department</option>
+                          {departments.map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                      {errors.department_id && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <XCircle className="h-4 w-4 mr-1" />
+                          {errors.department_id}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Form Actions */}
-            <div className="mt-6 flex justify-end space-x-3 pt-6 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 border border-transparent rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Create User
-                  </>
-                )}
-              </button>
+                {/* Submit Buttons */}
+                <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-medium rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center"
+                  >
+                    {isLoading ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Creating User...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Create User
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          </div>
         </div>
       </div>
-
-      {/* Error Modal */}
-      <ErrorModal
-        isOpen={showErrorModal}
-        onClose={handleErrorModalClose}
-        title="Error Creating User"
-        message={errorMessage || 'An error occurred while creating the user. Please try again.'}
-      />
 
       {/* Success Modal */}
       <SuccessModal
         isOpen={showSuccessModal}
         onClose={handleSuccessModalClose}
-        title="User Created Successfully"
+        title="User Created Successfully!"
         message={successMessage}
+      />
+
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={showErrorModal}
+        onClose={handleErrorModalClose}
+        message={errorMessage || (typeof error === 'string' ? error : error?.message) || 'An error occurred while creating the user. Please check all fields and try again.'}
+        title="Create User Error"
       />
     </>
   );
 };
 
 export default AddUserModal;
-

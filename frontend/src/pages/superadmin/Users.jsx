@@ -18,10 +18,11 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { getAllUsers, deleteUser, resendPasswordSetup, setFilters, clearFilters } from '../../store/slices/superadminSlice';
+import { getAllUsers, deleteUser, resendPasswordSetup, setFilters, clearFilters, clearError } from '../../store/slices/superadminSlice';
 import { doctorsService } from '../../services/doctorsService';
 import ErrorModal from '../../components/modals/ErrorModal';
 import SuccessModal from '../../components/modals/SuccessModal';
+import AddUserModal from '../../components/modals/AddUserModal';
 import { Building2 } from 'lucide-react';
 
 const Users = () => {
@@ -31,6 +32,7 @@ const Users = () => {
   
   // State declarations - must be before useMemo
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -44,6 +46,7 @@ const Users = () => {
   const [departments, setDepartments] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState(filters.department_id || '');
   const [loadingDepartments, setLoadingDepartments] = useState(false);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
   
   // Fetch departments when role is doctor
   useEffect(() => {
@@ -79,6 +82,17 @@ const Users = () => {
       filtered = filtered.filter(user => {
         const userStatus = user.isVerified ? (user.isActive ? 'active' : 'inactive') : 'pending';
         return userStatus === statusFilter;
+      });
+    } else {
+      // When no status filter is set, exclude inactive users by default
+      // This ensures soft-deleted doctors (is_active = false) don't appear in the list
+      filtered = filtered.filter(user => {
+        // Include pending users (not verified) and active users (verified and active)
+        // Exclude inactive users (verified but not active) - these are soft-deleted
+        if (!user.isVerified) {
+          return true; // Include pending users
+        }
+        return user.isActive === true; // Only include active users, exclude inactive (soft-deleted)
       });
     }
     
@@ -182,15 +196,28 @@ const Users = () => {
   // Handle error modal
   useEffect(() => {
     if (error) {
+      const message = typeof error === 'string' ? error : (error?.message || 'An error occurred. Please try again.');
+      setErrorMessage(message);
       setShowErrorModal(true);
     }
   }, [error]);
 
-  const getRoleDisplayName = (role) => {
+  // Get general role term for the column (Doctor for both doctor and urologist)
+  const getGeneralRole = (role) => {
+    if (role === 'urologist' || role === 'doctor') {
+      return 'Doctor';
+    }
+    const roleMap = {
+      'gp': 'General Practitioner',
+      'urology_nurse': 'Urology Nurse'
+    };
+    return roleMap[role] || role;
+  };
+
+  // Get specific role name for the tag (only for doctors)
+  const getSpecificRoleName = (role) => {
     const roleMap = {
       'urologist': 'Urologist',
-      'gp': 'General Practitioner',
-      'urology_nurse': 'Urology Nurse',
       'doctor': 'Doctor'
     };
     return roleMap[role] || role;
@@ -240,9 +267,79 @@ const Users = () => {
 
   const confirmDelete = async () => {
     if (userToDelete) {
-      dispatch(deleteUser(userToDelete.id));
+      const userName = `${userToDelete.firstName} ${userToDelete.lastName}`;
       setShowDeleteModal(false);
-      setUserToDelete(null);
+      
+      try {
+        // Use the unified deleteUser endpoint which handles both users and doctors
+        // The backend automatically detects if it's a doctor (ID > 1000000) or regular user
+        const deleteResult = await dispatch(deleteUser(userToDelete.id));
+        
+        if (deleteResult.type.endsWith('/fulfilled')) {
+          // Success - reload users with current filters and wait for completion
+          const currentFilters = {
+            page: 1,
+            limit: 10000
+          };
+          if (filters.role && filters.role.trim() !== '') {
+            currentFilters.role = filters.role.trim();
+          }
+          if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
+            currentFilters.status = filters.status.trim().toLowerCase();
+          }
+          if (filters.department_id && filters.department_id.trim() !== '') {
+            currentFilters.department_id = filters.department_id.trim();
+          }
+          
+          // Wait for the reload to complete before showing success
+          try {
+            const reloadResult = await dispatch(getAllUsers(currentFilters));
+            
+            // Check if reload was successful
+            if (reloadResult.type.endsWith('/fulfilled')) {
+              // Show success modal after reload completes
+              setSuccessMessage(`User ${userName} has been deleted successfully.`);
+              setShowSuccessModal(true);
+              setUserToDelete(null);
+            } else {
+              // Reload failed but deletion succeeded
+              console.error('Error reloading users after deletion:', reloadResult);
+              setSuccessMessage(`User ${userName} has been deleted successfully.`);
+              setShowSuccessModal(true);
+              setUserToDelete(null);
+              
+              // Try to reload again
+              dispatch(getAllUsers(currentFilters));
+            }
+          } catch (reloadError) {
+            // Even if reload fails, show success (deletion was successful)
+            console.error('Error reloading users after deletion:', reloadError);
+            setSuccessMessage(`User ${userName} has been deleted successfully.`);
+            setShowSuccessModal(true);
+            setUserToDelete(null);
+            
+            // Try to reload again silently
+            dispatch(getAllUsers(currentFilters));
+          }
+        } else {
+          // Failure - show error modal
+          const deleteError = deleteResult.payload || deleteResult.error || 'Failed to delete user. Please try again.';
+          const message = typeof deleteError === 'string' ? deleteError : (deleteError?.message || 'Failed to delete user. Please try again.');
+          setErrorMessage(message);
+          setShowErrorModal(true);
+          setUserToDelete(null);
+        }
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        const message = error?.response?.data?.error || 
+                       error?.response?.data?.message || 
+                       error?.message || 
+                       error?.toString() || 
+                       'An unexpected error occurred while deleting the user. Please try again.';
+        setErrorMessage(message);
+        setShowErrorModal(true);
+        setUserToDelete(null);
+      }
     }
   };
 
@@ -256,10 +353,15 @@ const Users = () => {
         setSuccessMessage(`Password setup email has been resent successfully to ${user.email}`);
         setShowSuccessModal(true);
       } else {
+        const resendError = result.payload || result.error || 'Failed to resend password setup email. Please try again.';
+        const message = typeof resendError === 'string' ? resendError : (resendError?.message || 'Failed to resend password setup email. Please try again.');
+        setErrorMessage(message);
         setShowErrorModal(true);
       }
     } catch (error) {
       console.error('Error resending password setup:', error);
+      const message = error?.message || error?.toString() || 'An unexpected error occurred while resending the password setup email. Please try again.';
+      setErrorMessage(message);
       setShowErrorModal(true);
     } finally {
       setResendingUserId(null);
@@ -405,7 +507,7 @@ const Users = () => {
           {/* Add User Button */}
           <div className="w-full lg:w-auto">
             <button
-              onClick={() => window.dispatchEvent(new CustomEvent('openAddUserModal'))}
+              onClick={() => setShowAddUserModal(true)}
               className="w-full lg:w-auto inline-flex items-center px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-medium rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all duration-200"
             >
               <UserPlus className="h-4 w-4 mr-2" />
@@ -545,7 +647,7 @@ const Users = () => {
               <p className="mt-1 text-sm text-gray-500">Get started by creating a new user.</p>
               <div className="mt-6">
                 <button
-                  onClick={() => window.dispatchEvent(new CustomEvent('openAddUserModal'))}
+                  onClick={() => setShowAddUserModal(true)}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
                 >
                   <UserPlus className="h-4 w-4 mr-2" />
@@ -562,7 +664,7 @@ const Users = () => {
                       User
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Role
+                      User Type
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -583,13 +685,20 @@ const Users = () => {
                               <UserPlus className="h-5 w-5 text-gray-600" />
                             </div>
                             <div className="ml-4">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   {user.firstName} {user.lastName}
                                 </div>
+                                {/* Role Tag (only for doctors) */}
+                                {(user.role === 'doctor' || user.role === 'urologist') && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200">
+                                    {getSpecificRoleName(user.role)}
+                                  </span>
+                                )}
+                                {/* Department Tag (only for doctors) */}
                                 {user.role === 'doctor' && user.department_name && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 border border-teal-200">
-                                    <Building2 className="h-3 w-3 mr-1" />
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200">
+                                    <Building2 className="h-3 w-3 mr-1 text-teal-600" />
                                     {user.department_name}
                                   </span>
                                 )}
@@ -600,7 +709,7 @@ const Users = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm text-gray-900">
-                            {getRoleDisplayName(user.role)}
+                            {getGeneralRole(user.role)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -780,16 +889,43 @@ const Users = () => {
       <SuccessModal
         isOpen={showSuccessModal}
         onClose={handleSuccessModalClose}
-        title="Email Sent Successfully!"
+        title="Success!"
         message={successMessage}
       />
 
       {/* Error Modal */}
       <ErrorModal
         isOpen={showErrorModal}
-        onClose={() => setShowErrorModal(false)}
-        error={error}
-        title="Users Error"
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorMessage('');
+          dispatch(clearError());
+        }}
+        message={errorMessage || (typeof error === 'string' ? error : error?.message) || 'An error occurred. Please try again.'}
+        title="Error"
+      />
+
+      {/* Add User Modal */}
+      <AddUserModal
+        isOpen={showAddUserModal}
+        onClose={() => setShowAddUserModal(false)}
+        onSuccess={() => {
+          // Reload users with current filters
+          const currentFilters = {
+            page: 1,
+            limit: 10000
+          };
+          if (filters.role && filters.role.trim() !== '') {
+            currentFilters.role = filters.role.trim();
+          }
+          if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
+            currentFilters.status = filters.status.trim().toLowerCase();
+          }
+          if (filters.department_id && filters.department_id.trim() !== '') {
+            currentFilters.department_id = filters.department_id.trim();
+          }
+          dispatch(getAllUsers(currentFilters));
+        }}
       />
     </div>
   );

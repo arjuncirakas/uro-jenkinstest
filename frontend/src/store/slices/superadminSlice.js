@@ -228,15 +228,20 @@ const superadminSlice = createSlice({
         state.error = action.payload;
       })
       
-      // Delete User
+      // Delete User (handles both users and doctors)
       .addCase(deleteUser.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
       .addCase(deleteUser.fulfilled, (state, action) => {
         state.isLoading = false;
+        // Remove the deleted user from the list
+        // action.payload is the user ID (could be regular ID or offset ID for doctors)
         state.users = state.users.filter(user => user.id !== action.payload);
-        state.stats.totalUsers -= 1;
+        // Only decrement stats if we actually removed a user
+        if (state.users.length < state.stats.totalUsers) {
+          state.stats.totalUsers -= 1;
+        }
       })
       .addCase(deleteUser.rejected, (state, action) => {
         state.isLoading = false;

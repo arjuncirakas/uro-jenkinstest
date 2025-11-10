@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, UserPlus, Activity, Shield, AlertCircle, CheckCircle, Building2, User } from 'lucide-react';
+import { Users, UserPlus, Activity, Shield, AlertCircle, CheckCircle, Building2, User, Stethoscope } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { getDashboardStats } from '../../store/slices/superadminSlice';
@@ -121,7 +121,7 @@ const Dashboard = () => {
           <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <button
-              onClick={() => window.dispatchEvent(new CustomEvent('openAddUserModal'))}
+              onClick={() => navigate('/superadmin/users/new')}
               className="bg-white p-5 rounded-lg border border-gray-300 hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <div className="flex flex-col items-center text-center">
@@ -167,6 +167,23 @@ const Dashboard = () => {
                 </h3>
                 <p className="text-sm text-gray-500">
                   Add, edit, and manage hospital doctors
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => navigate('/superadmin/nurses')}
+              className="bg-white p-5 rounded-lg border border-gray-300 hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="rounded-lg inline-flex p-3 bg-teal-50 mb-3">
+                  <Stethoscope className="h-6 w-6 text-teal-600" />
+                </div>
+                <h3 className="text-base font-medium text-gray-900 mb-1">
+                  Manage Nurses
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Add, edit, and manage hospital nurses
                 </p>
               </div>
             </button>
@@ -234,7 +251,7 @@ const Dashboard = () => {
                 <p className="mt-1 text-sm text-gray-500">Get started by creating a new user.</p>
                 <div className="mt-6">
                   <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('openAddUserModal'))}
+                    onClick={() => navigate('/superadmin/users/new')}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
                   >
                     <UserPlus className="h-4 w-4 mr-2" />

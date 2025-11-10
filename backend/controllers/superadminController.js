@@ -199,7 +199,9 @@ export const getAllUsers = async (req, res) => {
 
     // Build WHERE conditions for users table
     let userWhereConditions = ["role != 'superadmin'"];
-    let doctorWhereConditions = ["1=1"]; // Always true base condition
+    // Default: exclude inactive doctors (soft-deleted) when no status filter is set
+    // When status filter is set, it will override this
+    let doctorWhereConditions = ["d.is_active = true"]; // Exclude inactive doctors by default
 
     // Add role filter
     if (role && role !== '') {
@@ -230,6 +232,9 @@ export const getAllUsers = async (req, res) => {
 
     // Add status filter
     if (status) {
+      // Override the default is_active filter when status is explicitly set
+      doctorWhereConditions = ["1=1"]; // Reset to allow all when status filter is set
+      
       if (status === 'pending') {
         userWhereConditions.push(`is_verified = false`);
         // Doctors without user accounts are considered pending (all doctors in UNION are pending)
@@ -708,41 +713,85 @@ export const updateUser = async (req, res) => {
   }
 };
 
-// Delete user (superadmin only)
+// Delete user (superadmin only) - handles both users and doctors
 export const deleteUser = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { id } = req.params;
+    let { id } = req.params;
+    id = parseInt(id);
 
-    // Check if user exists
-    const existingUser = await client.query(
-      'SELECT id, email, first_name, last_name, role FROM users WHERE id = $1 AND role != \'superadmin\'',
-      [id]
-    );
+    // Check if this is a doctor from doctors table (ID > 1000000)
+    // Doctors from doctors table have IDs offset by 1000000 to avoid conflicts
+    const isDoctorFromDoctorsTable = id > 1000000;
+    
+    if (isDoctorFromDoctorsTable) {
+      // This is a doctor from the doctors table
+      // Subtract the offset to get the real doctor ID
+      const realDoctorId = id - 1000000;
+      
+      // Check if doctor exists
+      const existingDoctor = await client.query(
+        'SELECT id, email, first_name, last_name FROM doctors WHERE id = $1',
+        [realDoctorId]
+      );
 
-    if (existingUser.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
+      if (existingDoctor.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Doctor not found'
+        });
+      }
+
+      const doctor = existingDoctor.rows[0];
+
+      // Soft delete doctor (set is_active = false)
+      await client.query(
+        'UPDATE doctors SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [realDoctorId]
+      );
+
+      // Also soft delete corresponding user if exists
+      await client.query(
+        'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE email = $1 AND role != \'superadmin\'',
+        [doctor.email]
+      );
+
+      res.json({
+        success: true,
+        message: 'Doctor deleted successfully'
+      });
+    } else {
+      // This is a regular user from the users table
+      // Check if user exists
+      const existingUser = await client.query(
+        'SELECT id, email, first_name, last_name, role FROM users WHERE id = $1 AND role != \'superadmin\'',
+        [id]
+      );
+
+      if (existingUser.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      const user = existingUser.rows[0];
+
+      // Check how many patients this user created (for logging purposes)
+      const patientCount = await client.query(
+        'SELECT COUNT(*) as count FROM patients WHERE created_by = $1',
+        [id]
+      );
+      
+      // Delete user (foreign keys with SET NULL will preserve patient records)
+      await client.query('DELETE FROM users WHERE id = $1', [id]);
+
+      res.json({
+        success: true,
+        message: 'User deleted successfully. Patient records have been preserved.'
       });
     }
-
-    const user = existingUser.rows[0];
-
-    // Check how many patients this user created (for logging purposes)
-    const patientCount = await client.query(
-      'SELECT COUNT(*) as count FROM patients WHERE created_by = $1',
-      [id]
-    );
-    
-    // Delete user (foreign keys with SET NULL will preserve patient records)
-    await client.query('DELETE FROM users WHERE id = $1', [id]);
-
-    res.json({
-      success: true,
-      message: 'User deleted successfully. Patient records have been preserved.'
-    });
 
   } catch (error) {
     console.error('❌ Delete user error:', error);

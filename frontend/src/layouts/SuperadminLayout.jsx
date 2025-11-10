@@ -58,9 +58,9 @@ const SuperadminLayout = () => {
   const navigation = [
     { name: 'Dashboard', href: '/superadmin/dashboard', icon: BarChart3 },
     { name: 'All Users', href: '/superadmin/users', icon: Users },
-    { name: 'Add User', href: '/superadmin/users/new', icon: UserPlus },
-    { name: 'Doctors', href: '/superadmin/doctors', icon: User },
-    { name: 'Nurses', href: '/superadmin/nurses', icon: Stethoscope },
+    // { name: 'Add User', href: '/superadmin/users/new', icon: UserPlus }, // Now handled as modal in Users page
+    // { name: 'Doctors', href: '/superadmin/doctors', icon: User }, // Commented out as requested
+    // { name: 'Nurses', href: '/superadmin/nurses', icon: Stethoscope }, // Commented out as requested
     { name: 'Departments', href: '/superadmin/departments', icon: Building2 },
   ];
 
