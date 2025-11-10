@@ -19,6 +19,9 @@ const router = express.Router();
 // Apply XSS protection to all routes
 router.use(xssProtection);
 
+// Public password setup route (no authentication required) - MUST be before auth middleware
+router.post('/setup-password', generalLimiter, setupPassword);
+
 // Middleware to check if user is superadmin
 const requireSuperadmin = (req, res, next) => {
   if (req.user && req.user.role === 'superadmin') {
@@ -63,8 +66,5 @@ router.get('/users/:id', generalLimiter, getUserById);
 router.put('/users/:id', generalLimiter, updateUser);
 router.delete('/users/:id', generalLimiter, deleteUser);
 router.post('/users/:id/resend-password-setup', generalLimiter, resendPasswordSetupEmail);
-
-// Public password setup route (no authentication required)
-router.post('/setup-password', generalLimiter, setupPassword);
 
 export default router;

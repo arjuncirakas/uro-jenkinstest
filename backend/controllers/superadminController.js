@@ -761,10 +761,22 @@ export const setupPassword = async (req, res) => {
   const client = await pool.connect();
   
   try {
+    // Start transaction
+    await client.query('BEGIN');
+    
     const { token, password } = req.body;
 
-    // Validate password
+    // Validate input
+    if (!token) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Token is required'
+      });
+    }
+
     if (!password || password.length < 14) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 14 characters long'
@@ -781,6 +793,7 @@ export const setupPassword = async (req, res) => {
     );
 
     if (tokenResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
         message: 'Invalid or expired token'
@@ -803,6 +816,7 @@ export const setupPassword = async (req, res) => {
     for (const historyEntry of passwordHistoryResult.rows) {
       const isMatch = await bcrypt.compare(password, historyEntry.password_hash);
       if (isMatch) {
+        await client.query('ROLLBACK');
         return res.status(400).json({
           success: false,
           message: 'You cannot reuse any of your last 5 passwords. Please choose a different password.'
@@ -845,6 +859,9 @@ export const setupPassword = async (req, res) => {
       [tokenData.id]
     );
 
+    // Commit transaction
+    await client.query('COMMIT');
+
     res.json({
       success: true,
       message: 'Password setup completed successfully. You can now login.',
@@ -858,10 +875,23 @@ export const setupPassword = async (req, res) => {
     });
 
   } catch (error) {
+    // Rollback transaction on error
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('Error rolling back transaction:', rollbackError);
+    }
+    
     console.error('Setup password error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
+    
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: error.message || 'Internal server error. Please try again.'
     });
   } finally {
     client.release();
