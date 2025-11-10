@@ -87,7 +87,21 @@ export const requireRole = (roles) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    // Normalize roles: treat 'doctor' as 'urologist' for permission checks
+    // Doctors registered under urology department should have same access as urologists
+    const userRole = req.user.role;
+    const normalizedRoles = [...roles];
+    
+    // If 'urologist' is in allowed roles, also allow 'doctor'
+    if (roles.includes('urologist') && !normalizedRoles.includes('doctor')) {
+      normalizedRoles.push('doctor');
+    }
+    // If 'doctor' is in allowed roles, also allow 'urologist'
+    if (roles.includes('doctor') && !normalizedRoles.includes('urologist')) {
+      normalizedRoles.push('urologist');
+    }
+
+    if (!normalizedRoles.includes(userRole)) {
       return res.status(403).json({
         success: false,
         message: 'Insufficient permissions'

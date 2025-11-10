@@ -158,12 +158,14 @@ export const createDoctor = async (req, res) => {
       }
     }
     
-    // Determine role based on department name (default to 'urologist' for urology departments)
-    let role = 'urologist'; // Default role
+    // Determine role based on department name
+    // Doctors registered under urology department get 'doctor' role but will have urologist permissions
+    // This allows flexibility while maintaining proper access control
+    let role = 'doctor'; // Default to 'doctor' role
     if (departmentName) {
       const deptNameLower = departmentName.toLowerCase();
       if (deptNameLower.includes('urology')) {
-        role = 'urologist';
+        role = 'doctor'; // Doctors in urology department get 'doctor' role (treated as urologist in middleware)
       } else if (deptNameLower.includes('general') || deptNameLower.includes('gp')) {
         role = 'gp';
       } else if (deptNameLower.includes('nurse')) {
@@ -331,12 +333,13 @@ export const updateDoctor = async (req, res) => {
       }
     }
     
-    // Determine role based on department name (default to 'urologist')
-    let role = 'urologist';
+    // Determine role based on department name
+    // Doctors registered under urology department get 'doctor' role but will have urologist permissions
+    let role = 'doctor'; // Default to 'doctor' role
     if (departmentName) {
       const deptNameLower = departmentName.toLowerCase();
       if (deptNameLower.includes('urology')) {
-        role = 'urologist';
+        role = 'doctor'; // Doctors in urology department get 'doctor' role (treated as urologist in middleware)
       } else if (deptNameLower.includes('general') || deptNameLower.includes('gp')) {
         role = 'gp';
       } else if (deptNameLower.includes('nurse')) {

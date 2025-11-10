@@ -56,8 +56,8 @@ export const bookUrologistAppointment = async (req, res) => {
     // If not found in doctors table, try users table
     if (urologistCheck.rows.length === 0) {
       urologistCheck = await client.query(
-        'SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role = $2',
-        [urologistId, 'urologist']
+        'SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ($2, $3)',
+        [urologistId, 'urologist', 'doctor']
       );
     }
 
