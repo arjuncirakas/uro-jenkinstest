@@ -647,10 +647,12 @@ export const getNewPatients = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching new patients:', error);
+    console.error('Error stack:', error.stack);
+    console.error('User info:', { id: req.user?.id, role: req.user?.role });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch new patients',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();
@@ -1778,10 +1780,12 @@ export const getPatientsDueForReview = async (req, res) => {
     });
   } catch (error) {
     console.error('[getPatientsDueForReview] Error:', error);
+    console.error('[getPatientsDueForReview] Error stack:', error.stack);
+    console.error('[getPatientsDueForReview] User info:', { id: userId, role: userRole });
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch patients due for review',
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();

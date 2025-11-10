@@ -1959,9 +1959,13 @@ export const getAllAppointments = async (req, res) => {
     
   } catch (error) {
     console.error('Get all appointments error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Request params:', { startDate, endDate, urologistId });
+    console.error('User info:', { id: req.user?.id, role: req.user?.role });
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();

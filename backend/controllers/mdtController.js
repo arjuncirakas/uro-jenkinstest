@@ -477,6 +477,9 @@ export const getMyMDTMeetings = async (req, res) => {
   const client = await pool.connect();
   try {
     const userId = req.user.id;
+    const userRole = req.user.role;
+
+    console.log(`[getMyMDTMeetings] User ID: ${userId}, Role: ${userRole}`);
 
     const meetings = await client.query(
       `SELECT 
@@ -558,7 +561,13 @@ export const getMyMDTMeetings = async (req, res) => {
     });
   } catch (error) {
     console.error('Get my MDT meetings error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    console.error('User info:', { id: req.user?.id, role: req.user?.role });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   } finally {
     client.release();
   }
