@@ -481,11 +481,16 @@ export const getMyMDTMeetings = async (req, res) => {
   let client;
   try {
     console.log(`📋 [getMyMDTMeetings ${requestId}] Connecting to database...`);
+    console.log(`📋 [getMyMDTMeetings ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+    const connectStart = Date.now();
     client = await pool.connect();
-    console.log(`✅ [getMyMDTMeetings ${requestId}] Database connection successful`);
+    const connectTime = Date.now() - connectStart;
+    console.log(`✅ [getMyMDTMeetings ${requestId}] Database connection successful (took ${connectTime}ms)`);
   } catch (dbError) {
     console.error(`❌ [getMyMDTMeetings ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Error code:`, dbError.code);
     console.error(`❌ [getMyMDTMeetings ${requestId}] Error stack:`, dbError.stack);
+    console.error(`❌ [getMyMDTMeetings ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
     return res.status(503).json({
       success: false,
       message: 'Database connection failed',
@@ -498,7 +503,10 @@ export const getMyMDTMeetings = async (req, res) => {
     const userRole = req.user.role;
     console.log(`📋 [getMyMDTMeetings ${requestId}] Processing for userId: ${userId}, role: ${userRole}`);
 
-    const meetings = await client.query(
+    console.log(`📋 [getMyMDTMeetings ${requestId}] Executing main query for meetings...`);
+    let meetings;
+    try {
+      meetings = await client.query(
       `SELECT 
          m.id,
          m.patient_id,
@@ -524,8 +532,16 @@ export const getMyMDTMeetings = async (req, res) => {
           )
        ORDER BY m.meeting_date DESC, m.meeting_time DESC`,
       [userId]
-    );
+      );
+      console.log(`✅ [getMyMDTMeetings ${requestId}] Main query executed successfully, returned ${meetings.rows.length} meetings`);
+    } catch (queryError) {
+      console.error(`❌ [getMyMDTMeetings ${requestId}] Main query execution failed:`, queryError.message);
+      console.error(`❌ [getMyMDTMeetings ${requestId}] Query error code:`, queryError.code);
+      console.error(`❌ [getMyMDTMeetings ${requestId}] Query error stack:`, queryError.stack);
+      throw queryError;
+    }
 
+    console.log(`📋 [getMyMDTMeetings ${requestId}] Fetching team members for ${meetings.rows.length} meetings...`);
     const meetingsWithMembers = await Promise.all(
       meetings.rows.map(async (meeting) => {
         const teamMembers = await client.query(
@@ -571,11 +587,13 @@ export const getMyMDTMeetings = async (req, res) => {
       })
     );
 
+    console.log(`✅ [getMyMDTMeetings ${requestId}] Formatted ${meetingsWithMembers.length} meetings, sending response`);
     res.json({
       success: true,
       message: 'MDT meetings for user retrieved successfully',
       data: { meetings: meetingsWithMembers, count: meetingsWithMembers.length }
     });
+    console.log(`✅ [getMyMDTMeetings ${requestId}] Response sent successfully`);
   } catch (error) {
     console.error(`❌ [getMyMDTMeetings ${requestId}] Error occurred:`, error.message);
     console.error(`❌ [getMyMDTMeetings ${requestId}] Error stack:`, error.stack);

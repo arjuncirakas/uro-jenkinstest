@@ -497,11 +497,16 @@ export const getNewPatients = async (req, res) => {
   let client;
   try {
     console.log(`👥 [getNewPatients ${requestId}] Connecting to database...`);
+    console.log(`👥 [getNewPatients ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+    const connectStart = Date.now();
     client = await pool.connect();
-    console.log(`✅ [getNewPatients ${requestId}] Database connection successful`);
+    const connectTime = Date.now() - connectStart;
+    console.log(`✅ [getNewPatients ${requestId}] Database connection successful (took ${connectTime}ms)`);
   } catch (dbError) {
     console.error(`❌ [getNewPatients ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getNewPatients ${requestId}] Error code:`, dbError.code);
     console.error(`❌ [getNewPatients ${requestId}] Error stack:`, dbError.stack);
+    console.error(`❌ [getNewPatients ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
     return res.status(503).json({
       success: false,
       message: 'Database connection failed',
@@ -1664,11 +1669,16 @@ export const getPatientsDueForReview = async (req, res) => {
   let client;
   try {
     console.log(`👥 [getPatientsDueForReview ${requestId}] Connecting to database...`);
+    console.log(`👥 [getPatientsDueForReview ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+    const connectStart = Date.now();
     client = await pool.connect();
-    console.log(`✅ [getPatientsDueForReview ${requestId}] Database connection successful`);
+    const connectTime = Date.now() - connectStart;
+    console.log(`✅ [getPatientsDueForReview ${requestId}] Database connection successful (took ${connectTime}ms)`);
   } catch (dbError) {
     console.error(`❌ [getPatientsDueForReview ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Error code:`, dbError.code);
     console.error(`❌ [getPatientsDueForReview ${requestId}] Error stack:`, dbError.stack);
+    console.error(`❌ [getPatientsDueForReview ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
     return res.status(503).json({
       success: false,
       message: 'Database connection failed',

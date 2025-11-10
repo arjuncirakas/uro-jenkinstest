@@ -14,7 +14,7 @@ const dbConfig = {
   password: process.env.DB_PASSWORD || 'password',
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established (increased from 2s)
 };
 
 // Create a new pool instance
@@ -22,9 +22,17 @@ const pool = new Pool(dbConfig);
 
 // Handle pool errors
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  console.error('❌ [Database Pool] Unexpected error on idle client:', err.message);
+  console.error('❌ [Database Pool] Error stack:', err.stack);
+  // Don't exit - let the server continue and log the error
 });
+
+// Log pool status periodically (only in development)
+if (process.env.NODE_ENV === 'development') {
+  setInterval(() => {
+    console.log(`📊 [Database Pool] Status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+  }, 30000); // Every 30 seconds
+}
 
 // Test database connection
 export const testConnection = async () => {

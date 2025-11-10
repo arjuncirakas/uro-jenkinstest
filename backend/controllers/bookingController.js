@@ -647,11 +647,16 @@ export const getTodaysAppointments = async (req, res) => {
   let client;
   try {
     console.log(`📅 [getTodaysAppointments ${requestId}] Connecting to database...`);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+    const connectStart = Date.now();
     client = await pool.connect();
-    console.log(`✅ [getTodaysAppointments ${requestId}] Database connection successful`);
+    const connectTime = Date.now() - connectStart;
+    console.log(`✅ [getTodaysAppointments ${requestId}] Database connection successful (took ${connectTime}ms)`);
   } catch (dbError) {
     console.error(`❌ [getTodaysAppointments ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error code:`, dbError.code);
     console.error(`❌ [getTodaysAppointments ${requestId}] Error stack:`, dbError.stack);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
     return res.status(503).json({
       success: false,
       message: 'Database connection failed',
@@ -673,7 +678,7 @@ export const getTodaysAppointments = async (req, res) => {
                   String(now.getMonth() + 1).padStart(2, '0') + '-' + 
                   String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
     
-    console.log(`[getTodaysAppointments] Today's date: ${today}`);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Today's date: ${today}`);
     
     let query = '';
     let queryParams = [today];
@@ -778,9 +783,19 @@ export const getTodaysAppointments = async (req, res) => {
       `;
     }
     
-    console.log(`[getTodaysAppointments] Executing query with params:`, queryParams);
-    const result = await client.query(query, queryParams);
-    console.log(`[getTodaysAppointments] Query returned ${result.rows.length} rows`);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Executing query with params:`, queryParams);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Query type: ${type || 'all'}`);
+    
+    let result;
+    try {
+      result = await client.query(query, queryParams);
+      console.log(`✅ [getTodaysAppointments ${requestId}] Query executed successfully, returned ${result.rows.length} rows`);
+    } catch (queryError) {
+      console.error(`❌ [getTodaysAppointments ${requestId}] Query execution failed:`, queryError.message);
+      console.error(`❌ [getTodaysAppointments ${requestId}] Query error code:`, queryError.code);
+      console.error(`❌ [getTodaysAppointments ${requestId}] Query error stack:`, queryError.stack);
+      throw queryError;
+    }
     
     // Get test results for all patients in the appointments
     const patientIds = result.rows
@@ -801,9 +816,9 @@ export const getTodaysAppointments = async (req, res) => {
           WHERE patient_id = ANY($1::int[])
         `;
         
-        console.log(`[getTodaysAppointments] Fetching test results for ${patientIds.length} patients`);
+        console.log(`📅 [getTodaysAppointments ${requestId}] Fetching test results for ${patientIds.length} patients`);
         const testResultsResult = await client.query(testResultsQuery, [patientIds]);
-        console.log(`[getTodaysAppointments] Found ${testResultsResult.rows.length} test results`);
+        console.log(`✅ [getTodaysAppointments ${requestId}] Found ${testResultsResult.rows.length} test results`);
       
         // Group test results by patient ID
         testResultsResult.rows.forEach(row => {
@@ -934,6 +949,7 @@ export const getTodaysAppointments = async (req, res) => {
       }
     }).filter(apt => apt != null); // Remove any null entries
     
+    console.log(`✅ [getTodaysAppointments ${requestId}] Formatted ${formattedAppointments.length} appointments, sending response`);
     res.json({
       success: true,
       message: 'Appointments retrieved successfully',
@@ -943,6 +959,7 @@ export const getTodaysAppointments = async (req, res) => {
         date: today
       }
     });
+    console.log(`✅ [getTodaysAppointments ${requestId}] Response sent successfully`);
     
   } catch (error) {
     console.error(`❌ [getTodaysAppointments ${requestId}] Error occurred:`, error.message);
@@ -1858,11 +1875,16 @@ export const getAllAppointments = async (req, res) => {
   let client;
   try {
     console.log(`📅 [getAllAppointments ${requestId}] Connecting to database...`);
+    console.log(`📅 [getAllAppointments ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+    const connectStart = Date.now();
     client = await pool.connect();
-    console.log(`✅ [getAllAppointments ${requestId}] Database connection successful`);
+    const connectTime = Date.now() - connectStart;
+    console.log(`✅ [getAllAppointments ${requestId}] Database connection successful (took ${connectTime}ms)`);
   } catch (dbError) {
     console.error(`❌ [getAllAppointments ${requestId}] Database connection failed:`, dbError.message);
+    console.error(`❌ [getAllAppointments ${requestId}] Error code:`, dbError.code);
     console.error(`❌ [getAllAppointments ${requestId}] Error stack:`, dbError.stack);
+    console.error(`❌ [getAllAppointments ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
     return res.status(503).json({
       success: false,
       message: 'Database connection failed',
@@ -1962,7 +1984,19 @@ export const getAllAppointments = async (req, res) => {
     
     query += ` ORDER BY appointment_date, appointment_time`;
     
-    const result = await client.query(query, queryParams);
+    console.log(`📅 [getAllAppointments ${requestId}] Executing query with ${queryParams.length} params:`, queryParams);
+    console.log(`📅 [getAllAppointments ${requestId}] Query length: ${query.length} characters`);
+    
+    let result;
+    try {
+      result = await client.query(query, queryParams);
+      console.log(`✅ [getAllAppointments ${requestId}] Query executed successfully, returned ${result.rows.length} rows`);
+    } catch (queryError) {
+      console.error(`❌ [getAllAppointments ${requestId}] Query execution failed:`, queryError.message);
+      console.error(`❌ [getAllAppointments ${requestId}] Query error code:`, queryError.code);
+      console.error(`❌ [getAllAppointments ${requestId}] Query error stack:`, queryError.stack);
+      throw queryError;
+    }
     
     // Format results for frontend
     const formattedAppointments = result.rows.map(row => {
@@ -2048,6 +2082,7 @@ export const getAllAppointments = async (req, res) => {
       };
     });
     
+    console.log(`✅ [getAllAppointments ${requestId}] Formatted ${formattedAppointments.length} appointments, sending response`);
     res.json({
       success: true,
       message: 'Appointments retrieved successfully',
@@ -2056,6 +2091,7 @@ export const getAllAppointments = async (req, res) => {
         count: formattedAppointments.length
       }
     });
+    console.log(`✅ [getAllAppointments ${requestId}] Response sent successfully`);
     
   } catch (error) {
     console.error(`❌ [getAllAppointments ${requestId}] Error occurred:`, error.message);
