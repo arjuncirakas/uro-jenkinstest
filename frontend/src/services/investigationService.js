@@ -200,7 +200,9 @@ export const investigationService = {
         });
         
         console.log('File fetched successfully');
+        console.log('Response status:', response.status);
         console.log('Response headers:', response.headers);
+        console.log('Response data size:', response.data?.size || 'unknown');
         
         // Get file name and extension from path
         const fileName = filePath.split('/').pop() || 'file';
@@ -208,6 +210,43 @@ export const investigationService = {
         
         // Get the content type from response headers, with fallback based on file extension
         let contentType = response.headers['content-type'] || response.headers['Content-Type'] || 'application/octet-stream';
+        
+        // Check if the response is actually an error (JSON response instead of file)
+        // If content-type is application/json, it's likely an error response
+        if (contentType.includes('application/json') || contentType.includes('text/html')) {
+          // Try to read as text to see the error message
+          try {
+            const text = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsText(response.data);
+            });
+            console.error('Received error response instead of file:', text);
+            try {
+              const errorData = JSON.parse(text);
+              alert(`Error loading file: ${errorData.message || 'Unknown error'}`);
+            } catch (e) {
+              alert(`Error loading file: The server returned an error response instead of the file.`);
+            }
+          } catch (e) {
+            console.error('Error reading error response:', e);
+            alert(`Error loading file: The server returned an error response instead of the file.`);
+          }
+          return;
+        }
+        
+        // Check if blob is empty
+        if (!response.data || response.data.size === 0) {
+          console.error('Received empty file');
+          alert('Error: The file appears to be empty or could not be loaded.');
+          return;
+        }
+        
+        // Validate blob size (should be reasonable for images)
+        if (response.data.size < 100 && fileExtension !== 'txt') {
+          console.warn('File size is very small, might be an error response');
+        }
         
         // Fallback: determine content type from file extension if not provided
         if (contentType === 'application/octet-stream' || !contentType) {
@@ -227,6 +266,7 @@ export const investigationService = {
         
         console.log('Content type:', contentType);
         console.log('File extension:', fileExtension);
+        console.log('Blob size:', response.data.size, 'bytes');
         
         // Create blob with proper MIME type
         const blob = new Blob([response.data], { type: contentType });
@@ -239,7 +279,17 @@ export const investigationService = {
         if (contentType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension)) {
           // For images, convert blob to data URL and embed in HTML
           const reader = new FileReader();
+          
+          // Add timeout for reading large files
+          const readTimeout = setTimeout(() => {
+            console.error('Timeout reading image file');
+            reader.abort();
+            alert('Error: Timeout while reading the image file. The file might be too large or corrupted.');
+            URL.revokeObjectURL(blobUrl);
+          }, 30000); // 30 second timeout
+          
           reader.onloadend = () => {
+            clearTimeout(readTimeout); // Clear timeout when reading completes
             try {
               const dataUrl = reader.result;
               // Escape the data URL for use in HTML (it's already safe, but be cautious)
@@ -340,6 +390,19 @@ export const investigationService = {
           };
           reader.onerror = (error) => {
             console.error('Error reading image file:', error);
+            console.error('Blob details:', {
+              size: blob.size,
+              type: blob.type,
+              fileName: fileName
+            });
+            
+            // Check if blob is valid
+            if (blob.size === 0) {
+              alert('Error: The file appears to be empty. Please check if the file exists on the server.');
+              URL.revokeObjectURL(blobUrl);
+              return;
+            }
+            
             // Fallback: try opening blob URL directly
             const fallbackWindow = window.open(blobUrl, '_blank');
             if (!fallbackWindow || fallbackWindow.closed) {
@@ -353,6 +416,7 @@ export const investigationService = {
               document.body.removeChild(link);
             }
           };
+          
           reader.readAsDataURL(blob);
         } else if (contentType === 'application/pdf') {
           // For PDFs, create an HTML page with embedded PDF viewer

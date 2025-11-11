@@ -873,8 +873,17 @@ const setCorsHeaders = (req, res) => {
 // Serve investigation files
 export const serveFile = async (req, res) => {
   try {
-    const filePath = req.params.filePath; // Get the file path from the parameter
-    console.log('Requested file path:', filePath);
+    let filePath = req.params.filePath; // Get the file path from the parameter
+    
+    // Decode the file path (it might be URL encoded)
+    try {
+      filePath = decodeURIComponent(filePath);
+    } catch (e) {
+      console.log('File path is not URL encoded or decode failed, using as-is');
+    }
+    
+    console.log('Requested file path (raw):', req.params.filePath);
+    console.log('Requested file path (decoded):', filePath);
     
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
@@ -889,6 +898,7 @@ export const serveFile = async (req, res) => {
     }
     
     console.log('Full file path:', fullPath);
+    console.log('File exists:', fs.existsSync(fullPath));
     
     // Security check - ensure the file is within the uploads directory
     const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -932,8 +942,35 @@ export const serveFile = async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
     res.setHeader('Cache-Control', 'no-cache');
     
-    // Stream the file
+    // Get file stats for logging
+    const stats = fs.statSync(fullPath);
+    console.log('File size:', stats.size, 'bytes');
+    
+    // Stream the file with error handling
     const fileStream = fs.createReadStream(fullPath);
+    
+    fileStream.on('error', (error) => {
+      console.error('Error reading file stream:', error);
+      if (!res.headersSent) {
+        setCorsHeaders(req, res);
+        res.status(500).json({
+          success: false,
+          message: 'Error reading file'
+        });
+      }
+    });
+    
+    fileStream.on('open', () => {
+      console.log('File stream opened successfully');
+    });
+    
+    res.on('close', () => {
+      console.log('Response closed, destroying file stream');
+      if (!fileStream.destroyed) {
+        fileStream.destroy();
+      }
+    });
+    
     fileStream.pipe(res);
     
   } catch (error) {
