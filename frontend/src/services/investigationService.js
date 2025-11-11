@@ -277,7 +277,7 @@ export const investigationService = {
         
         // Determine how to display based on content type
         if (contentType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension)) {
-          // For images, convert blob to data URL and embed in HTML
+          // For images, convert blob to data URL and show in modal
           const reader = new FileReader();
           
           // Add timeout for reading large files
@@ -292,86 +292,19 @@ export const investigationService = {
             clearTimeout(readTimeout); // Clear timeout when reading completes
             try {
               const dataUrl = reader.result;
-              // Escape the data URL for use in HTML (it's already safe, but be cautious)
-              const htmlContent = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <title>${fileName}</title>
-                  <meta charset="UTF-8">
-                  <style>
-                    * {
-                      box-sizing: border-box;
-                    }
-                    body {
-                      margin: 0;
-                      padding: 20px;
-                      display: flex;
-                      justify-content: center;
-                      align-items: center;
-                      min-height: 100vh;
-                      background-color: #f5f5f5;
-                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                    }
-                    .image-container {
-                      max-width: 100%;
-                      max-height: 100vh;
-                      display: flex;
-                      justify-content: center;
-                      align-items: center;
-                    }
-                    img {
-                      max-width: 100%;
-                      max-height: 100vh;
-                      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                      border-radius: 4px;
-                      object-fit: contain;
-                    }
-                    .error-message {
-                      color: #dc2626;
-                      text-align: center;
-                      padding: 20px;
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="image-container">
-                    <img src="${dataUrl}" alt="${fileName}" onerror="this.parentElement.innerHTML='<div class=\\'error-message\\'>Failed to load image</div>'" />
-                  </div>
-                </body>
-                </html>
-              `;
-              const htmlBlob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
-              const htmlBlobUrl = URL.createObjectURL(htmlBlob);
               
-              // Try to open in new window
-              const newWindow = window.open(htmlBlobUrl, '_blank', 'width=1200,height=800');
-              
-              if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                // If popup blocked, try direct blob URL
-                console.log('Popup blocked, trying direct blob URL');
-                const directWindow = window.open(blobUrl, '_blank');
-                if (!directWindow || directWindow.closed) {
-                  // Last resort: create download link
-                  const link = document.createElement('a');
-                  link.href = blobUrl;
-                  link.download = fileName;
-                  link.target = '_blank';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
+              // Emit event to open image viewer modal
+              const event = new CustomEvent('openImageViewer', {
+                detail: {
+                  imageUrl: dataUrl,
+                  fileName: fileName,
+                  blobUrl: blobUrl // Keep blob URL for download
                 }
-              }
+              });
+              window.dispatchEvent(event);
               
-              // Clean up HTML blob URL after a delay
-              setTimeout(() => {
-                URL.revokeObjectURL(htmlBlobUrl);
-              }, 1000);
-              
-              // Clean up original blob URL after image is loaded (longer delay for viewing)
-              setTimeout(() => {
-                URL.revokeObjectURL(blobUrl);
-              }, 300000); // 5 minutes for viewing
+              // Don't revoke blob URL immediately - let the modal handle it
+              // The modal will revoke it when closed
             } catch (error) {
               console.error('Error creating image viewer:', error);
               // Fallback: try opening blob URL directly
@@ -403,18 +336,15 @@ export const investigationService = {
               return;
             }
             
-            // Fallback: try opening blob URL directly
-            const fallbackWindow = window.open(blobUrl, '_blank');
-            if (!fallbackWindow || fallbackWindow.closed) {
-              // Create download link as last resort
-              const link = document.createElement('a');
-              link.href = blobUrl;
-              link.download = fileName;
-              link.target = '_blank';
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }
+            // Fallback: try using blob URL directly in modal
+            const event = new CustomEvent('openImageViewer', {
+              detail: {
+                imageUrl: blobUrl,
+                fileName: fileName,
+                blobUrl: blobUrl
+              }
+            });
+            window.dispatchEvent(event);
           };
           
           reader.readAsDataURL(blob);

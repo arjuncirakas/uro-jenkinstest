@@ -9,6 +9,7 @@ import AddPSAResultModal from './modals/AddPSAResultModal';
 import AddTestResultModal from './modals/AddTestResultModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddInvestigationModal from './AddInvestigationModal';
+import ImageViewerModal from './ImageViewerModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { notesService } from '../services/notesService';
@@ -39,6 +40,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   // Investigation modals state
   const [isAddPSAModalOpen, setIsAddPSAModalOpen] = useState(false);
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
+  
+  // Image viewer modal state
+  const [isImageViewerModalOpen, setIsImageViewerModalOpen] = useState(false);
+  const [imageViewerUrl, setImageViewerUrl] = useState(null);
+  const [imageViewerFileName, setImageViewerFileName] = useState(null);
+  const [imageViewerBlobUrl, setImageViewerBlobUrl] = useState(null);
   
   // Investigation data state
   const [psaResults, setPsaResults] = useState([]);
@@ -757,6 +764,38 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       console.log('❌ NursePatientDetailsModal: Cannot fetch data - isOpen:', isOpen, 'patient?.id:', patient?.id);
     }
   }, [isOpen, patient?.id, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchDischargeSummary]);
+
+  // Listen for image viewer events
+  useEffect(() => {
+    const handleOpenImageViewer = (event) => {
+      const { imageUrl, fileName, blobUrl } = event.detail;
+      setImageViewerUrl(imageUrl);
+      setImageViewerFileName(fileName);
+      setImageViewerBlobUrl(blobUrl);
+      setIsImageViewerModalOpen(true);
+    };
+
+    window.addEventListener('openImageViewer', handleOpenImageViewer);
+
+    return () => {
+      window.removeEventListener('openImageViewer', handleOpenImageViewer);
+    };
+  }, []);
+
+  // Handle closing image viewer modal and cleanup
+  const handleCloseImageViewer = () => {
+    setIsImageViewerModalOpen(false);
+    // Clean up blob URL if it exists
+    if (imageViewerBlobUrl) {
+      URL.revokeObjectURL(imageViewerBlobUrl);
+      setImageViewerBlobUrl(null);
+    }
+    // Clear state after a delay to allow modal to close smoothly
+    setTimeout(() => {
+      setImageViewerUrl(null);
+      setImageViewerFileName(null);
+    }, 300);
+  };
 
   if (!isOpen || !patient) return null;
 
@@ -3337,6 +3376,14 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       onClose={() => setIsAddTestModalOpen(false)}
       patient={patient}
       onSuccess={handleInvestigationSuccess}
+    />
+
+    {/* Image Viewer Modal */}
+    <ImageViewerModal
+      isOpen={isImageViewerModalOpen}
+      onClose={handleCloseImageViewer}
+      imageUrl={imageViewerUrl}
+      fileName={imageViewerFileName}
     />
     </>
   );
