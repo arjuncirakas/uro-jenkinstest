@@ -34,6 +34,39 @@ export const investigationService = {
     }
   },
 
+  // Update PSA result
+  updatePSAResult: async (resultId, psaData) => {
+    try {
+      const formData = new FormData();
+      
+      // Add text fields
+      Object.keys(psaData).forEach(key => {
+        if (key !== 'testFile' && psaData[key] !== null && psaData[key] !== undefined) {
+          formData.append(key, psaData[key]);
+        }
+      });
+      
+      // Add file if present
+      if (psaData.testFile) {
+        formData.append('testFile', psaData.testFile);
+      }
+
+      const response = await apiClient.patch(`/psa-results/${resultId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error updating PSA result:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
+  },
+
   // Add other test result with file upload
   addOtherTestResult: async (patientId, testData) => {
     try {
@@ -193,6 +226,12 @@ export const investigationService = {
         // Log for debugging
         console.log('Original file path:', filePath);
         console.log('Encoded file path:', encodedPath);
+        
+        // Construct full URL for testing
+        const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
+        const fullURL = `${baseURL}/investigations/files/${encodedPath}`;
+        console.log('🔗 Full URL to test in browser:', fullURL);
+        console.log('🔗 Make sure you are logged in and have a valid token!');
         
         // Fetch the file with proper authentication and MIME type
         // Use /investigations/files to match the backend route

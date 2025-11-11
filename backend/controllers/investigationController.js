@@ -153,6 +153,137 @@ export const addPSAResult = async (req, res) => {
   }
 };
 
+// Update PSA result
+export const updatePSAResult = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { resultId } = req.params;
+    const { 
+      testDate, 
+      result, 
+      referenceRange, 
+      notes, 
+      status 
+    } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Validate required fields
+    if (!testDate || !result) {
+      return res.status(400).json({
+        success: false,
+        message: 'Test date and result are required'
+      });
+    }
+
+    // Check if result exists
+    const resultCheck = await client.query(
+      'SELECT id, patient_id, file_path FROM investigation_results WHERE id = $1',
+      [resultId]
+    );
+
+    if (resultCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'PSA result not found'
+      });
+    }
+
+    const existingResult = resultCheck.rows[0];
+
+    // Handle file upload - if new file is uploaded, replace old one
+    let filePath = existingResult.file_path;
+    let fileName = null;
+    
+    if (req.file) {
+      // Delete old file if it exists
+      if (filePath && fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (err) {
+          console.error('Error deleting old file:', err);
+        }
+      }
+      filePath = req.file.path;
+      fileName = req.file.originalname;
+    }
+
+    // Auto-determine status if not provided
+    let finalStatus = status;
+    if (!finalStatus && result) {
+      const psaValue = parseFloat(result);
+      if (!isNaN(psaValue)) {
+        if (psaValue > 4.0) {
+          finalStatus = 'High';
+        } else if (psaValue < 1.0) {
+          finalStatus = 'Low';
+        } else {
+          finalStatus = 'Normal';
+        }
+      }
+    }
+
+    // Update PSA result
+    const updateQuery = await client.query(
+      `UPDATE investigation_results 
+       SET test_date = $1, 
+           result = $2, 
+           reference_range = COALESCE($3, reference_range),
+           status = COALESCE($4, status),
+           notes = COALESCE($5, notes),
+           file_path = CASE WHEN $6 IS NOT NULL THEN $6 ELSE file_path END,
+           file_name = CASE WHEN $6 IS NOT NULL THEN $7 ELSE file_name END,
+           updated_at = NOW()
+       WHERE id = $8
+       RETURNING *`,
+      [
+        testDate, 
+        result, 
+        referenceRange || '0.0 - 4.0',
+        finalStatus || 'Normal', 
+        notes || '', 
+        filePath !== existingResult.file_path ? filePath : null,
+        fileName,
+        resultId
+      ]
+    );
+
+    const updatedResult = updateQuery.rows[0];
+
+    res.json({
+      success: true,
+      message: 'PSA result updated successfully',
+      data: {
+        id: updatedResult.id,
+        patientId: updatedResult.patient_id,
+        testType: updatedResult.test_type,
+        testName: updatedResult.test_name,
+        testDate: updatedResult.test_date,
+        result: updatedResult.result,
+        referenceRange: updatedResult.reference_range,
+        status: updatedResult.status,
+        notes: updatedResult.notes,
+        filePath: updatedResult.file_path,
+        fileName: updatedResult.file_name,
+        authorName: updatedResult.author_name,
+        authorRole: updatedResult.author_role,
+        createdAt: updatedResult.created_at,
+        updatedAt: updatedResult.updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Update PSA result error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
 // Add other test result with file upload
 export const addOtherTestResult = async (req, res) => {
   const client = await pool.connect();

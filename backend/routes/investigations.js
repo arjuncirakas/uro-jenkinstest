@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
   addPSAResult, 
+  updatePSAResult,
   addOtherTestResult, 
   getInvestigationResults, 
   getAllInvestigations,
@@ -49,6 +50,15 @@ router.post('/patients/:patientId/psa-results',
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   upload.single('testFile'),
   addPSAResult
+);
+
+// Update PSA result
+router.patch('/psa-results/:resultId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
+  upload.single('testFile'),
+  updatePSAResult
 );
 
 // Add other test result with file upload for a patient

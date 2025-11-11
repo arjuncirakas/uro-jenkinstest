@@ -6,6 +6,7 @@ import { Plus, Upload, Eye, Download, Trash } from 'lucide-react';
 import SuccessModal from './SuccessModal';
 import ConfirmationModal from './modals/ConfirmationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
+import EditPSAResultModal from './modals/EditPSAResultModal';
 import AddTestResultModal from './modals/AddTestResultModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddInvestigationModal from './AddInvestigationModal';
@@ -39,6 +40,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   
   // Investigation modals state
   const [isAddPSAModalOpen, setIsAddPSAModalOpen] = useState(false);
+  const [isEditPSAModalOpen, setIsEditPSAModalOpen] = useState(false);
+  const [selectedPSAResult, setSelectedPSAResult] = useState(null);
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
   
   // Image viewer modal state
@@ -1308,19 +1311,31 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                   Date: {psa.formattedDate}
                                 </div>
                               </div>
-                              <button 
-                                onClick={() => {
-                                  const filePath = psa.filePath || psa.file_path;
-                                  if (filePath) {
-                                    handleViewFile(filePath);
-                                  } else {
-                                    handleViewReport(psa);
-                                  }
-                                }}
-                                className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                              >
-                                {(psa.filePath || psa.file_path) ? 'View File' : 'View'}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  onClick={() => {
+                                    setSelectedPSAResult(psa);
+                                    setIsEditPSAModalOpen(true);
+                                  }}
+                                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                                  title="Edit PSA Result"
+                                >
+                                  Edit
+                                </button>
+                                {(psa.filePath || psa.file_path) ? (
+                                  <button 
+                                    onClick={() => {
+                                      const filePath = psa.filePath || psa.file_path;
+                                      handleViewFile(filePath);
+                                    }}
+                                    className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
+                                  >
+                                    View File
+                                  </button>
+                                ) : (
+                                  <span className="text-sm text-gray-500 italic">No files uploaded</span>
+                                )}
+                              </div>
                             </div>
                             
                             <div className="grid grid-cols-1 gap-4 mb-3">
@@ -2254,19 +2269,19 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                               </td>
                               <td className="py-3 px-4 text-sm text-gray-600">{psa.notes}</td>
                               <td className="py-3 px-4">
-                                <button 
-                                  onClick={() => {
-                                    const filePath = psa.filePath || psa.file_path;
-                                    if (filePath) {
+                                {(psa.filePath || psa.file_path) ? (
+                                  <button 
+                                    onClick={() => {
+                                      const filePath = psa.filePath || psa.file_path;
                                       handleViewFile(filePath);
-                                    } else {
-                                      handleViewReport(psa);
-                                    }
-                                  }}
-                                  className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                                >
-                                  {(psa.filePath || psa.file_path) ? 'View File' : 'View'}
-                                </button>
+                                    }}
+                                    className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
+                                  >
+                                    View File
+                                  </button>
+                                ) : (
+                                  <span className="text-sm text-gray-500 italic">No files uploaded</span>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -3367,6 +3382,18 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       isOpen={isAddPSAModalOpen}
       onClose={() => setIsAddPSAModalOpen(false)}
       patient={patient}
+      onSuccess={handleInvestigationSuccess}
+    />
+
+    {/* Edit PSA Result Modal */}
+    <EditPSAResultModal
+      isOpen={isEditPSAModalOpen}
+      onClose={() => {
+        setIsEditPSAModalOpen(false);
+        setSelectedPSAResult(null);
+      }}
+      patient={patient}
+      psaResult={selectedPSAResult}
       onSuccess={handleInvestigationSuccess}
     />
 
