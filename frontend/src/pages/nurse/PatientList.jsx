@@ -255,7 +255,7 @@ const PatientList = () => {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PATIENT</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">UROLOGIST</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PATHWAY</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">PATHWAY</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PSA LEVEL</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">BOOK APPOINTMENT</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">ACTIONS</th>
@@ -315,7 +315,7 @@ const PatientList = () => {
                         <td className="py-4 px-4">
                           <div className="text-sm font-medium text-gray-900">{patientUrologist}</div>
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-4 px-4 text-center">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPathwayStyle(patientPathway)}`}>
                             {patientPathway}
                           </span>

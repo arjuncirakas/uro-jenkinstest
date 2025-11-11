@@ -98,15 +98,18 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const fetchDoctors = async () => {
     setLoadingDoctors(true);
     try {
-      const result = await bookingService.getAvailableDoctors();
+      // Fetch only urologists for investigation bookings
+      const result = await bookingService.getAvailableUrologists();
       if (result.success) {
-        setDoctors(result.data || []);
+        // The service returns urologists array directly in result.data
+        const urologistsList = Array.isArray(result.data) ? result.data : [];
+        setDoctors(urologistsList);
       } else {
-        console.error('Failed to fetch doctors:', result.error);
+        console.error('Failed to fetch urologists:', result.error);
         setDoctors([]);
       }
     } catch (error) {
-      console.error('Error fetching doctors:', error);
+      console.error('Error fetching urologists:', error);
       setDoctors([]);
     } finally {
       setLoadingDoctors(false);

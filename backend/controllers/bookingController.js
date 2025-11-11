@@ -467,6 +467,7 @@ export const getAvailableUrologists = async (req, res) => {
   
   try {
     // Get urologists from doctors table (Urology department)
+    // Only include active doctors that are verified in users table
     const doctorsTableResult = await client.query(
       `SELECT 
         d.id, 
@@ -478,18 +479,27 @@ export const getAvailableUrologists = async (req, res) => {
         dept.name as department_name
        FROM doctors d
        LEFT JOIN departments dept ON d.department_id = dept.id
+       INNER JOIN users u ON d.email = u.email
        WHERE d.is_active = true 
        AND (d.specialization ILIKE '%urology%' OR dept.name ILIKE '%urology%')
+       AND u.is_active = true 
+       AND u.is_verified = true
        ORDER BY d.first_name, d.last_name`
     );
 
     console.log(`[getAvailableUrologists] Found ${doctorsTableResult.rows.length} urologists from doctors table`);
 
     // Also get urologists from users table for backwards compatibility
+    // Only include active and verified users
     const usersTableResult = await client.query(
       `SELECT id, first_name, last_name, email, phone, role
        FROM users 
-       WHERE role IN ('urologist', 'doctor') AND is_active = true
+       WHERE role IN ('urologist', 'doctor') 
+       AND is_active = true 
+       AND is_verified = true
+       AND NOT EXISTS (
+         SELECT 1 FROM doctors d WHERE d.email = users.email AND d.is_active = false
+       )
        ORDER BY first_name, last_name`
     );
 
@@ -549,6 +559,7 @@ export const getAvailableDoctors = async (req, res) => {
   
   try {
     // Get all doctors from the doctors table (where actual doctor records are stored)
+    // Only include active doctors that are verified in users table
     const doctorsTableResult = await client.query(
       `SELECT 
         d.id, 
@@ -560,18 +571,26 @@ export const getAvailableDoctors = async (req, res) => {
         dept.name as department_name
        FROM doctors d
        LEFT JOIN departments dept ON d.department_id = dept.id
+       INNER JOIN users u ON d.email = u.email
        WHERE d.is_active = true 
+       AND u.is_active = true 
+       AND u.is_verified = true
        ORDER BY d.specialization, d.first_name, d.last_name`
     );
 
     console.log(`[getAvailableDoctors] Found ${doctorsTableResult.rows.length} doctors from doctors table`);
 
     // Also get users with doctor roles for backwards compatibility
+    // Only include active and verified users, and exclude those with inactive doctor records
     const usersTableResult = await client.query(
       `SELECT id, first_name, last_name, email, phone, role
        FROM users 
        WHERE role IN ('urologist', 'doctor', 'radiologist', 'pathologist', 'oncologist') 
        AND is_active = true
+       AND is_verified = true
+       AND NOT EXISTS (
+         SELECT 1 FROM doctors d WHERE d.email = users.email AND d.is_active = false
+       )
        ORDER BY role, first_name, last_name`
     );
 
