@@ -169,8 +169,17 @@ export const updatePSAResult = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
+    // Validate resultId
+    const parsedResultId = parseInt(resultId, 10);
+    if (isNaN(parsedResultId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid result ID'
+      });
+    }
+
     // Validate required fields
-    if (!testDate || !result) {
+    if (!testDate || result === undefined || result === null || result === '') {
       return res.status(400).json({
         success: false,
         message: 'Test date and result are required'
@@ -180,7 +189,7 @@ export const updatePSAResult = async (req, res) => {
     // Check if result exists
     const resultCheck = await client.query(
       'SELECT id, patient_id, file_path FROM investigation_results WHERE id = $1',
-      [resultId]
+      [parsedResultId]
     );
 
     if (resultCheck.rows.length === 0) {
@@ -224,6 +233,30 @@ export const updatePSAResult = async (req, res) => {
       }
     }
 
+    // Ensure result is a string for database
+    const resultString = result ? String(result) : null;
+
+    // Prepare update parameters
+    const updateParams = [
+      testDate, 
+      resultString, 
+      referenceRange || null, // Use null instead of default to let COALESCE work properly
+      finalStatus || null, 
+      notes || null, 
+      filePath !== existingResult.file_path ? filePath : null,
+      fileName || null,
+      parsedResultId
+    ];
+
+    console.log('Update PSA result params:', {
+      resultId: parsedResultId,
+      testDate,
+      result: resultString,
+      finalStatus,
+      hasNewFile: filePath !== existingResult.file_path,
+      fileName
+    });
+
     // Update PSA result
     const updateQuery = await client.query(
       `UPDATE investigation_results 
@@ -232,21 +265,12 @@ export const updatePSAResult = async (req, res) => {
            reference_range = COALESCE($3, reference_range),
            status = COALESCE($4, status),
            notes = COALESCE($5, notes),
-           file_path = CASE WHEN $6 IS NOT NULL THEN $6 ELSE file_path END,
-           file_name = CASE WHEN $6 IS NOT NULL THEN $7 ELSE file_name END,
+           file_path = CASE WHEN $6::VARCHAR IS NOT NULL THEN $6::VARCHAR ELSE file_path END,
+           file_name = CASE WHEN $6::VARCHAR IS NOT NULL THEN $7::VARCHAR ELSE file_name END,
            updated_at = NOW()
        WHERE id = $8
        RETURNING *`,
-      [
-        testDate, 
-        result, 
-        referenceRange || '0.0 - 4.0',
-        finalStatus || 'Normal', 
-        notes || '', 
-        filePath !== existingResult.file_path ? filePath : null,
-        fileName,
-        resultId
-      ]
+      updateParams
     );
 
     const updatedResult = updateQuery.rows[0];
@@ -275,9 +299,16 @@ export const updatePSAResult = async (req, res) => {
 
   } catch (error) {
     console.error('Update PSA result error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      detail: error.detail
+    });
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();
