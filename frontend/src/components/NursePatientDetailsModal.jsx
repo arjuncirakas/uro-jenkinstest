@@ -420,16 +420,37 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         
         console.log('✅ NursePatientDetailsModal: Processed results:', results);
         
-        // Filter PSA results
-        const psaResults = results.filter(result => 
-          result.testType === 'psa' || result.test_type === 'PSA' || result.test_type === 'psa'
-        );
+        // Normalize results to ensure consistent property names
+        const normalizeResult = (result) => ({
+          ...result,
+          filePath: result.filePath || result.file_path || null,
+          fileName: result.fileName || result.file_name || null,
+          testType: result.testType || result.test_type || null,
+          testName: result.testName || result.test_name || null,
+          formattedDate: result.formattedDate || (result.testDate ? new Date(result.testDate).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }) : null),
+          referenceRange: result.referenceRange || result.reference_range || null
+        });
+        
+        // Filter PSA results and normalize
+        const psaResults = results
+          .filter(result => {
+            const testType = result.testType || result.test_type || '';
+            return testType.toLowerCase() === 'psa';
+          })
+          .map(normalizeResult);
         setPsaResults(psaResults);
         
-        // Filter non-PSA results
-        const otherResults = results.filter(result => 
-          result.testType !== 'psa' && result.test_type !== 'PSA' && result.test_type !== 'psa'
-        );
+        // Filter non-PSA results and normalize
+        const otherResults = results
+          .filter(result => {
+            const testType = result.testType || result.test_type || '';
+            return testType.toLowerCase() !== 'psa';
+          })
+          .map(normalizeResult);
         setOtherTestResults(otherResults);
       } else {
         setInvestigationsError(allResults.error || 'Failed to fetch investigation results');
@@ -504,18 +525,30 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       const result = await investigationService.getInvestigationResults(patient.id);
       
       if (result.success) {
+        // Handle different response structures
+        const results = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.results || result.data.investigations || []);
+        
         // Filter only PSA results and format for display
-        const psaResults = result.data.results // Access the results array from the API response
-          .filter(investigation => investigation.testType === 'psa')
+        const psaResults = results
+          .filter(investigation => {
+            const testType = investigation.testType || investigation.test_type || '';
+            return testType.toLowerCase() === 'psa';
+          })
           .map(investigation => ({
             id: investigation.id,
-            date: investigation.formattedDate,
+            date: investigation.formattedDate || (investigation.testDate ? new Date(investigation.testDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit'
+            }) : ''),
             result: `${investigation.result} ng/mL`,
-            referenceRange: investigation.referenceRange,
+            referenceRange: investigation.referenceRange || investigation.reference_range || '',
             status: investigation.status,
             notes: investigation.notes || 'No notes',
-            filePath: investigation.filePath,
-            fileName: investigation.fileName
+            filePath: investigation.filePath || investigation.file_path || null,
+            fileName: investigation.fileName || investigation.file_name || null
           }))
           .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
           
@@ -544,19 +577,31 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       const result = await investigationService.getInvestigationResults(patient.id);
       
       if (result.success) {
+        // Handle different response structures
+        const results = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.results || result.data.investigations || []);
+        
         // Filter only non-PSA results and format for display
-        const testResults = result.data.results
-          .filter(investigation => investigation.testType !== 'psa')
+        const testResults = results
+          .filter(investigation => {
+            const testType = investigation.testType || investigation.test_type || '';
+            return testType.toLowerCase() !== 'psa';
+          })
           .map(investigation => ({
             id: investigation.id,
-            date: investigation.formattedDate,
-            testName: investigation.testName,
+            date: investigation.formattedDate || (investigation.testDate ? new Date(investigation.testDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit'
+            }) : ''),
+            testName: investigation.testName || investigation.test_name || '',
             result: investigation.result,
-            referenceRange: investigation.referenceRange,
+            referenceRange: investigation.referenceRange || investigation.reference_range || '',
             status: investigation.status,
             notes: investigation.notes || 'No notes',
-            filePath: investigation.filePath,
-            fileName: investigation.fileName
+            filePath: investigation.filePath || investigation.file_path || null,
+            fileName: investigation.fileName || investigation.file_name || null
           }))
           .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
           
@@ -1225,10 +1270,17 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 </div>
                               </div>
                               <button 
-                                onClick={() => psa.filePath ? handleViewFile(psa.filePath) : handleViewReport(psa)}
+                                onClick={() => {
+                                  const filePath = psa.filePath || psa.file_path;
+                                  if (filePath) {
+                                    handleViewFile(filePath);
+                                  } else {
+                                    handleViewReport(psa);
+                                  }
+                                }}
                                 className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
                               >
-                                {psa.filePath ? 'View File' : 'View'}
+                                {(psa.filePath || psa.file_path) ? 'View File' : 'View'}
                               </button>
                             </div>
                             
@@ -1373,10 +1425,17 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 </div>
                               </div>
                               <button 
-                                onClick={() => test.filePath ? handleViewFile(test.filePath) : handleViewReport(test)}
+                                onClick={() => {
+                                  const filePath = test.filePath || test.file_path;
+                                  if (filePath) {
+                                    handleViewFile(filePath);
+                                  } else {
+                                    handleViewReport(test);
+                                  }
+                                }}
                                 className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
                               >
-                                {test.filePath ? 'View File' : 'View'}
+                                {(test.filePath || test.file_path) ? 'View File' : 'View'}
                               </button>
                             </div>
                             
@@ -2157,10 +2216,17 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                               <td className="py-3 px-4 text-sm text-gray-600">{psa.notes}</td>
                               <td className="py-3 px-4">
                                 <button 
-                                  onClick={() => psa.filePath ? handleViewFile(psa.filePath) : handleViewReport(psa)}
+                                  onClick={() => {
+                                    const filePath = psa.filePath || psa.file_path;
+                                    if (filePath) {
+                                      handleViewFile(filePath);
+                                    } else {
+                                      handleViewReport(psa);
+                                    }
+                                  }}
                                   className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
                                 >
-                                  {psa.filePath ? 'View File' : 'View'}
+                                  {(psa.filePath || psa.file_path) ? 'View File' : 'View'}
                                 </button>
                               </td>
                             </tr>
