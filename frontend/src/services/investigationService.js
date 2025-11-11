@@ -189,33 +189,140 @@ export const investigationService = {
         const blobUrl = URL.createObjectURL(blob);
         console.log('Created blob URL:', blobUrl);
         
-        // Create a temporary link element and click it
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.target = '_blank';
-        link.style.display = 'none';
+        // Get file name from path
+        const fileName = filePath.split('/').pop() || 'file';
         
-        // Add to DOM, click, and remove
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Determine how to display based on content type
+        if (contentType.startsWith('image/')) {
+          // For images, convert blob to data URL and embed in HTML
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            try {
+              const dataUrl = reader.result;
+              const htmlContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <title>${fileName}</title>
+                  <style>
+                    body {
+                      margin: 0;
+                      padding: 20px;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                      min-height: 100vh;
+                      background-color: #f5f5f5;
+                    }
+                    img {
+                      max-width: 100%;
+                      max-height: 100vh;
+                      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    }
+                  </style>
+                </head>
+                <body>
+                  <img src="${dataUrl}" alt="${fileName}" />
+                </body>
+                </html>
+              `;
+              const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+              const htmlBlobUrl = URL.createObjectURL(htmlBlob);
+              const newWindow = window.open(htmlBlobUrl, '_blank');
+              
+              if (!newWindow || newWindow.closed) {
+                // If popup blocked, try direct blob URL
+                window.open(blobUrl, '_blank');
+              }
+              
+              // Clean up HTML blob URL after a delay
+              setTimeout(() => {
+                URL.revokeObjectURL(htmlBlobUrl);
+              }, 1000);
+              
+              // Clean up original blob URL after image is loaded
+              setTimeout(() => {
+                URL.revokeObjectURL(blobUrl);
+              }, 60000);
+            } catch (error) {
+              console.error('Error creating image viewer:', error);
+              // Fallback: try opening blob URL directly
+              window.open(blobUrl, '_blank');
+            }
+          };
+          reader.onerror = () => {
+            console.error('Error reading image file');
+            // Fallback: try opening blob URL directly
+            window.open(blobUrl, '_blank');
+          };
+          reader.readAsDataURL(blob);
+        } else if (contentType === 'application/pdf') {
+          // For PDFs, create an HTML page with embedded PDF viewer
+          const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>${fileName}</title>
+              <style>
+                body {
+                  margin: 0;
+                  padding: 0;
+                  height: 100vh;
+                  overflow: hidden;
+                }
+                iframe {
+                  width: 100%;
+                  height: 100vh;
+                  border: none;
+                }
+              </style>
+            </head>
+            <body>
+              <iframe src="${blobUrl}" type="application/pdf"></iframe>
+            </body>
+            </html>
+          `;
+          const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+          const htmlBlobUrl = URL.createObjectURL(htmlBlob);
+          window.open(htmlBlobUrl, '_blank');
+          
+          // Clean up HTML blob URL after a delay
+          setTimeout(() => {
+            URL.revokeObjectURL(htmlBlobUrl);
+          }, 1000);
+        } else {
+          // For other file types (DOC, DOCX, etc.), open blob URL directly or download
+          const newWindow = window.open(blobUrl, '_blank');
+          
+          // Check if popup was blocked
+          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            // Fallback: create a download link if popup was blocked
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        }
         
-        // Clean up the blob URL after a delay
+        // Clean up the blob URL after a delay (longer for viewing)
         setTimeout(() => {
           URL.revokeObjectURL(blobUrl);
-        }, 30000); // Keep it longer for viewing
+        }, 120000); // Keep it longer for viewing (2 minutes)
         
       } catch (error) {
         console.error('Error fetching file:', error);
         
-        // Fallback: try static file serving
-        try {
-          const staticUrl = `/uploads/${filePath}`;
-          console.log('Falling back to static URL:', staticUrl);
-          window.open(staticUrl, '_blank');
-        } catch (staticError) {
-          console.error('Error with static URL:', staticError);
+        // Check if it's an authentication error
+        if (error.response?.status === 401) {
+          console.error('Authentication error: Session expired');
+          // Silently fail - user can see error in console
+          return;
         }
+        
+        // Log error but don't show alert
+        console.error('Unable to open file:', error.message);
       }
     } else {
       console.error('No file path provided');

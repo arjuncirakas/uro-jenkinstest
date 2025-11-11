@@ -844,6 +844,13 @@ export const serveFile = async (req, res) => {
     const filePath = req.params.filePath; // Get the file path from the parameter
     console.log('Requested file path:', filePath);
     
+    // Set CORS headers explicitly for file responses
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    
     // The filePath should already be the full path from the database
     // But let's handle both cases - relative and absolute paths
     let fullPath;
@@ -859,6 +866,11 @@ export const serveFile = async (req, res) => {
     const uploadsDir = path.join(process.cwd(), 'uploads');
     if (!fullPath.startsWith(uploadsDir)) {
       console.log('Security check failed - file not in uploads directory');
+      // Ensure CORS headers are set even in error responses
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -868,6 +880,11 @@ export const serveFile = async (req, res) => {
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
       console.log('File not found:', fullPath);
+      // Ensure CORS headers are set even in error responses
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       return res.status(404).json({
         success: false,
         message: 'File not found'
@@ -899,6 +916,12 @@ export const serveFile = async (req, res) => {
     
   } catch (error) {
     console.error('Serve file error:', error);
+    // Ensure CORS headers are set even in error responses
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
     res.status(500).json({
       success: false,
       message: 'Error serving file'

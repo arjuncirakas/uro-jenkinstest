@@ -38,8 +38,10 @@ export const validatePatientInput = [
     
   body('lastName')
     .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Last name must be between 2 and 100 characters')
+    .notEmpty()
+    .withMessage('Last name is required')
+    .isLength({ max: 100 })
+    .withMessage('Last name must not exceed 100 characters')
     .matches(/^[a-zA-Z\s]+$/)
     .withMessage('Last name can only contain letters and spaces')
     .escape(),
@@ -62,9 +64,20 @@ export const validatePatientInput = [
     
   body('phone')
     .trim()
-    .isLength({ min: 10, max: 20 })
-    .withMessage('Phone number must be between 10 and 20 characters')
-    .matches(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
+    .notEmpty()
+    .withMessage('Phone number is required')
+    .custom((value) => {
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        throw new Error('Phone number must be at least 8 digits');
+      }
+      if (cleaned.length > 12) {
+        throw new Error('Phone number must not exceed 12 digits');
+      }
+      return true;
+    })
+    .matches(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .withMessage('Please provide a valid phone number')
     .escape(),
     
@@ -79,8 +92,9 @@ export const validatePatientInput = [
     
   // Address Information
   body('address')
-    .optional()
     .trim()
+    .notEmpty()
+    .withMessage('Address is required')
     .isLength({ max: 500 })
     .withMessage('Address must not exceed 500 characters')
     .escape(),
@@ -115,7 +129,7 @@ export const validatePatientInput = [
     .escape(),
     
   body('referralDate')
-    .optional()
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('Referral date must be a valid date')
     .custom((value) => {
@@ -140,7 +154,8 @@ export const validatePatientInput = [
     }),
     
   body('initialPSADate')
-    .optional()
+    .notEmpty()
+    .withMessage('PSA test date is required')
     .isISO8601()
     .withMessage('PSA test date must be a valid date')
     .custom((value) => {
@@ -193,7 +208,19 @@ export const validatePatientInput = [
   body('emergencyContactPhone')
     .optional()
     .trim()
-    .matches(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
+    .custom((value) => {
+      if (!value || value.trim() === '') return true; // Allow empty for optional field
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        throw new Error('Emergency contact phone number must be at least 8 digits');
+      }
+      if (cleaned.length > 12) {
+        throw new Error('Emergency contact phone number must not exceed 12 digits');
+      }
+      return true;
+    })
+    .matches(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .withMessage('Please provide a valid emergency contact phone number')
     .escape(),
     
@@ -251,8 +278,8 @@ export const validatePatientUpdateInput = [
   body('lastName')
     .optional()
     .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Last name must be between 2 and 100 characters')
+    .isLength({ max: 100 })
+    .withMessage('Last name must not exceed 100 characters')
     .matches(/^[a-zA-Z\s]+$/)
     .withMessage('Last name can only contain letters and spaces')
     .escape(),
@@ -280,9 +307,19 @@ export const validatePatientUpdateInput = [
   body('phone')
     .optional()
     .trim()
-    .isLength({ min: 10, max: 20 })
-    .withMessage('Phone number must be between 10 and 20 characters')
-    .matches(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
+    .custom((value) => {
+      if (!value || value.trim() === '') return true; // Allow empty for optional field
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        throw new Error('Phone number must be at least 8 digits');
+      }
+      if (cleaned.length > 12) {
+        throw new Error('Phone number must not exceed 12 digits');
+      }
+      return true;
+    })
+    .matches(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .withMessage('Please provide a valid phone number')
     .escape(),
     
@@ -333,7 +370,7 @@ export const validatePatientUpdateInput = [
     .escape(),
     
   body('referralDate')
-    .optional()
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('Referral date must be a valid date')
     .custom((value) => {
@@ -359,7 +396,8 @@ export const validatePatientUpdateInput = [
     }),
     
   body('initialPSADate')
-    .optional()
+    .notEmpty()
+    .withMessage('PSA test date is required')
     .isISO8601()
     .withMessage('PSA test date must be a valid date')
     .custom((value) => {
@@ -412,7 +450,19 @@ export const validatePatientUpdateInput = [
   body('emergencyContactPhone')
     .optional()
     .trim()
-    .matches(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
+    .custom((value) => {
+      if (!value || value.trim() === '') return true; // Allow empty for optional field
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        throw new Error('Emergency contact phone number must be at least 8 digits');
+      }
+      if (cleaned.length > 12) {
+        throw new Error('Emergency contact phone number must not exceed 12 digits');
+      }
+      return true;
+    })
+    .matches(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .withMessage('Please provide a valid emergency contact phone number')
     .escape(),
     

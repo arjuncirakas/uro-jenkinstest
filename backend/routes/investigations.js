@@ -84,6 +84,19 @@ router.delete('/investigations/:resultId',
   deleteInvestigationResult
 );
 
+// Handle OPTIONS preflight for file requests
+router.options('/files/:filePath(*)', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  res.status(200).end();
+});
+
 // Serve investigation files
 router.get('/files/:filePath(*)',
   generalLimiter,

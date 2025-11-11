@@ -1100,7 +1100,16 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 </div>
                                 <span className="text-sm text-gray-500 flex items-center">
                                   <IoTimeSharp className="mr-1" />
-                                  {note.formattedDate || 'No date'}
+                                  {note.createdAt 
+                                    ? new Date(note.createdAt).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: '2-digit',
+                                        day: '2-digit',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: true
+                                      })
+                                    : 'No date'}
                                 </span>
                               </div>
                               

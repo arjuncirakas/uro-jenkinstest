@@ -66,15 +66,8 @@ export const addNote = async (req, res) => {
         authorName: newNote.author_name,
         authorRole: newNote.author_role,
         createdAt: newNote.created_at,
-        updatedAt: newNote.updated_at,
-        formattedDate: new Date(newNote.created_at).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true
-        })
+        updatedAt: newNote.updated_at
+        // formattedDate removed - will be formatted on client side using user's timezone
       }
     });
 
@@ -145,16 +138,8 @@ export const getPatientNotes = async (req, res) => {
       authorName: note.author_name,
       authorRole: note.author_role,
       createdAt: note.created_at,
-      updatedAt: note.updated_at,
-      // Format date for display
-      formattedDate: new Date(note.created_at).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      })
+      updatedAt: note.updated_at
+      // formattedDate removed - will be formatted on client side using user's timezone
     }));
 
     res.json({

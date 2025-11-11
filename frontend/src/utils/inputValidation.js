@@ -156,13 +156,13 @@ export const validatePhoneFormat = (phone) => {
   // Remove all non-digits
   const cleaned = phone.replace(/\D/g, '');
   
-  // Check if it has at least 10 digits
-  if (cleaned.length < 10) {
-    return 'Phone number must be at least 10 digits';
+  // Check if it has between 8 and 12 digits
+  if (cleaned.length < 8) {
+    return 'Phone number must be at least 8 digits';
   }
   
-  if (cleaned.length > 15) {
-    return 'Phone number is too long';
+  if (cleaned.length > 12) {
+    return 'Phone number must not exceed 12 digits';
   }
   
   return '';
@@ -227,9 +227,12 @@ export const validatePatientForm = (formData) => {
                         validateNameFormat(formData.firstName, 'First name');
   if (firstNameError) errors.firstName = firstNameError;
   
-  const lastNameError = validateRequired(formData.lastName, 'Last name') || 
-                       validateNameFormat(formData.lastName, 'Last name');
-  if (lastNameError) errors.lastName = lastNameError;
+  const lastNameError = validateRequired(formData.lastName, 'Last name');
+  if (lastNameError) {
+    errors.lastName = lastNameError;
+  } else if (formData.lastName && !/^[a-zA-Z\s'-]+$/.test(formData.lastName)) {
+    errors.lastName = 'Last name can only contain letters, spaces, hyphens, and apostrophes';
+  }
   
   const dobError = validateRequired(formData.dateOfBirth, 'Date of birth');
   if (dobError) {
@@ -245,13 +248,24 @@ export const validatePatientForm = (formData) => {
                     validatePhoneFormat(formData.phone);
   if (phoneError) errors.phone = phoneError;
   
-  const emailError = validateEmailFormat(formData.email);
+  const emailError = validateRequired(formData.email, 'Email address') || 
+                    validateEmailFormat(formData.email);
   if (emailError) errors.email = emailError;
+  
+  const addressError = validateRequired(formData.address, 'Address');
+  if (addressError) errors.address = addressError;
   
   // Medical Information
   const psaError = validateRequired(formData.initialPSA, 'Initial PSA') || 
                   validatePSAFormat(formData.initialPSA);
   if (psaError) errors.initialPSA = psaError;
+  
+  const psaDateError = validateRequired(formData.initialPSADate, 'PSA test date');
+  if (psaDateError) {
+    errors.initialPSADate = psaDateError;
+  } else if (formData.initialPSADate && !validateDateOfBirth(formData.initialPSADate)) {
+    errors.initialPSADate = 'PSA test date cannot be in the future';
+  }
   
   // Emergency Contact (if provided)
   if (formData.emergencyContactName || formData.emergencyContactPhone) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { IoClose } from 'react-icons/io5';
+import { IoClose, IoDocument, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
 import { Upload } from 'lucide-react';
 import { investigationService } from '../services/investigationService';
 
@@ -35,6 +35,25 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       setFileName(selectedFile.name);
       setError('');
     }
+  };
+
+  const handleRemoveFile = (e) => {
+    e.stopPropagation();
+    setFile(null);
+    setFileName('');
+    // Reset the file input
+    const fileInput = document.getElementById('report-upload');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const handleSubmit = async (e) => {
@@ -180,33 +199,63 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload Report
               </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-teal-500 transition-colors">
-                <input
-                  type="file"
-                  id="report-upload"
-                  onChange={handleFileChange}
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  className="hidden"
-                />
-                <label
-                  htmlFor="report-upload"
-                  className="cursor-pointer flex flex-col items-center"
-                >
-                  <Upload className="w-12 h-12 text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-600 mb-1">
-                    Click to upload or drag and drop
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    PDF, JPG, PNG, DOC, DOCX (max 10MB)
-                  </p>
-                </label>
-                {fileName && (
-                  <div className="mt-3 flex items-center justify-center gap-2 text-sm text-teal-600">
-                    <Upload className="w-4 h-4" />
-                    <span>{fileName}</span>
+              {file ? (
+                // Show attached file
+                <div className="border-2 border-teal-400 bg-teal-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                      <div className="flex-shrink-0">
+                        <IoDocument className="w-6 h-6 text-teal-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-teal-900 truncate">
+                          {fileName}
+                        </p>
+                        <p className="text-xs text-teal-700 mt-0.5">
+                          {formatFileSize(file.size)}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center space-x-2">
+                        <IoCheckmarkCircle className="w-5 h-5 text-green-500" />
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Remove file"
+                        >
+                          <IoCloseCircle className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                // Show upload area
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-teal-500 transition-colors">
+                  <input
+                    type="file"
+                    id="report-upload"
+                    onChange={handleFileChange}
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="report-upload"
+                    className="cursor-pointer flex flex-col items-center"
+                  >
+                    <Upload className="w-12 h-12 text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-600 mb-1">
+                      Click to upload or drag and drop
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      PDF, JPG, PNG, DOC, DOCX (max 10MB)
+                    </p>
+                  </label>
+                </div>
+              )}
+              {error && (
+                <p className="text-red-500 text-sm mt-1">{error}</p>
+              )}
             </div>
 
             {/* Notes */}

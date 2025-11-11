@@ -130,12 +130,10 @@ export const addPatientSchema = Joi.object({
       'any.required': 'First name is required'
     }),
   lastName: Joi.string()
-    .min(2)
     .max(100)
     .pattern(/^[a-zA-Z\s]+$/)
     .required()
     .messages({
-      'string.min': 'Last name must be at least 2 characters long',
       'string.max': 'Last name must not exceed 100 characters',
       'string.pattern.base': 'Last name can only contain letters and spaces',
       'any.required': 'Last name is required'
@@ -155,27 +153,40 @@ export const addPatientSchema = Joi.object({
       'any.required': 'Gender is required'
     }),
   phone: Joi.string()
-    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
-    .optional()
-    .allow('')
+    .required()
+    .custom((value, helpers) => {
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        return helpers.error('string.phoneMin');
+      }
+      if (cleaned.length > 12) {
+        return helpers.error('string.phoneMax');
+      }
+      return value;
+    })
+    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .messages({
-      'string.pattern.base': 'Please provide a valid phone number'
+      'string.pattern.base': 'Please provide a valid phone number',
+      'string.phoneMin': 'Phone number must be at least 8 digits',
+      'string.phoneMax': 'Phone number must not exceed 12 digits',
+      'any.required': 'Phone number is required'
     }),
   email: Joi.string()
     .email()
     .max(255)
-    .optional()
-    .allow('')
+    .required()
     .messages({
       'string.email': 'Please provide a valid email address',
-      'string.max': 'Email must not exceed 255 characters'
+      'string.max': 'Email must not exceed 255 characters',
+      'any.required': 'Email address is required'
     }),
   address: Joi.string()
     .max(500)
-    .optional()
-    .allow('')
+    .required()
     .messages({
-      'string.max': 'Address must not exceed 500 characters'
+      'string.max': 'Address must not exceed 500 characters',
+      'any.required': 'Address is required'
     }),
   postcode: Joi.string()
     .max(10)
@@ -225,10 +236,10 @@ export const addPatientSchema = Joi.object({
     }),
   initialPSADate: Joi.date()
     .max('now')
-    .optional()
-    .allow('')
+    .required()
     .messages({
-      'date.max': 'PSA test date cannot be in the future'
+      'date.max': 'PSA test date cannot be in the future',
+      'any.required': 'PSA test date is required'
     }),
   medicalHistory: Joi.string()
     .max(2000)
@@ -266,11 +277,25 @@ export const addPatientSchema = Joi.object({
       'string.max': 'Emergency contact name must not exceed 100 characters'
     }),
   emergencyContactPhone: Joi.string()
-    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
     .optional()
     .allow('')
+    .custom((value, helpers) => {
+      if (!value || value.trim() === '') return value; // Allow empty for optional field
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        return helpers.error('string.emergencyPhoneMin');
+      }
+      if (cleaned.length > 12) {
+        return helpers.error('string.emergencyPhoneMax');
+      }
+      return value;
+    })
+    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .messages({
-      'string.pattern.base': 'Please provide a valid emergency contact phone number'
+      'string.pattern.base': 'Please provide a valid emergency contact phone number',
+      'string.emergencyPhoneMin': 'Emergency contact phone number must be at least 8 digits',
+      'string.emergencyPhoneMax': 'Emergency contact phone number must not exceed 12 digits'
     }),
   emergencyContactRelationship: Joi.string()
     .max(50)
@@ -307,12 +332,10 @@ export const updatePatientSchema = Joi.object({
       'string.pattern.base': 'First name can only contain letters and spaces'
     }),
   lastName: Joi.string()
-    .min(2)
     .max(100)
     .pattern(/^[a-zA-Z\s]+$/)
     .optional()
     .messages({
-      'string.min': 'Last name must be at least 2 characters long',
       'string.max': 'Last name must not exceed 100 characters',
       'string.pattern.base': 'Last name can only contain letters and spaces'
     }),
@@ -329,27 +352,41 @@ export const updatePatientSchema = Joi.object({
       'any.only': 'Gender must be Male, Female, or Other'
     }),
   phone: Joi.string()
-    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
     .optional()
     .allow('')
+    .custom((value, helpers) => {
+      if (!value || value.trim() === '') return value; // Allow empty for optional field
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        return helpers.error('string.phoneMin');
+      }
+      if (cleaned.length > 12) {
+        return helpers.error('string.phoneMax');
+      }
+      return value;
+    })
+    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .messages({
-      'string.pattern.base': 'Please provide a valid phone number'
+      'string.pattern.base': 'Please provide a valid phone number',
+      'string.phoneMin': 'Phone number must be at least 8 digits',
+      'string.phoneMax': 'Phone number must not exceed 12 digits'
     }),
   email: Joi.string()
     .email()
     .max(255)
-    .optional()
-    .allow('')
+    .required()
     .messages({
       'string.email': 'Please provide a valid email address',
-      'string.max': 'Email must not exceed 255 characters'
+      'string.max': 'Email must not exceed 255 characters',
+      'any.required': 'Email address is required'
     }),
   address: Joi.string()
     .max(500)
-    .optional()
-    .allow('')
+    .required()
     .messages({
-      'string.max': 'Address must not exceed 500 characters'
+      'string.max': 'Address must not exceed 500 characters',
+      'any.required': 'Address is required'
     }),
   postcode: Joi.string()
     .max(10)
@@ -399,10 +436,10 @@ export const updatePatientSchema = Joi.object({
     }),
   initialPSADate: Joi.date()
     .max('now')
-    .optional()
-    .allow('')
+    .required()
     .messages({
-      'date.max': 'PSA test date cannot be in the future'
+      'date.max': 'PSA test date cannot be in the future',
+      'any.required': 'PSA test date is required'
     }),
   medicalHistory: Joi.string()
     .max(2000)
@@ -440,11 +477,25 @@ export const updatePatientSchema = Joi.object({
       'string.max': 'Emergency contact name must not exceed 100 characters'
     }),
   emergencyContactPhone: Joi.string()
-    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{7,19}$/)
     .optional()
     .allow('')
+    .custom((value, helpers) => {
+      if (!value || value.trim() === '') return value; // Allow empty for optional field
+      // Remove all non-digits to count only digits
+      const cleaned = value.replace(/\D/g, '');
+      if (cleaned.length < 8) {
+        return helpers.error('string.emergencyPhoneMin');
+      }
+      if (cleaned.length > 12) {
+        return helpers.error('string.emergencyPhoneMax');
+      }
+      return value;
+    })
+    .pattern(/^[\+]?[1-9][\d\s\-\(\)]{0,15}$/)
     .messages({
-      'string.pattern.base': 'Please provide a valid emergency contact phone number'
+      'string.pattern.base': 'Please provide a valid emergency contact phone number',
+      'string.emergencyPhoneMin': 'Emergency contact phone number must be at least 8 digits',
+      'string.emergencyPhoneMax': 'Emergency contact phone number must not exceed 12 digits'
     }),
   emergencyContactRelationship: Joi.string()
     .max(50)

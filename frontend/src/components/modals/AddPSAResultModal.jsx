@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { IoClose, IoCalendar, IoFlask, IoCloudUpload } from 'react-icons/io5';
+import { IoClose, IoCalendar, IoFlask, IoCloudUpload, IoDocument, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
 import { investigationService } from '../../services/investigationService';
 
 const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
@@ -74,6 +74,24 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
         file: ''
       }));
     }
+  };
+
+  const handleRemoveFile = (e) => {
+    e.stopPropagation();
+    setTestFile(null);
+    // Reset the file input
+    const fileInput = document.getElementById('psaFile');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const validateForm = () => {
@@ -241,24 +259,57 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Attach PSA Report (Optional)
               </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-teal-400 transition-colors">
-                <input
-                  type="file"
-                  id="psaFile"
-                  onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  className="hidden"
-                />
-                <label htmlFor="psaFile" className="cursor-pointer">
-                  <IoCloudUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">
-                    {testFile ? testFile.name : 'Click to upload or drag and drop'}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    PDF, DOC, DOCX, JPG, PNG up to 10MB
-                  </p>
-                </label>
-              </div>
+              {testFile ? (
+                // Show attached file
+                <div className="border-2 border-teal-400 bg-teal-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                      <div className="flex-shrink-0">
+                        <IoDocument className="w-6 h-6 text-teal-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-teal-900 truncate">
+                          {testFile.name}
+                        </p>
+                        <p className="text-xs text-teal-700 mt-0.5">
+                          {formatFileSize(testFile.size)}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center space-x-2">
+                        <IoCheckmarkCircle className="w-5 h-5 text-green-500" />
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Remove file"
+                        >
+                          <IoCloseCircle className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Show upload area
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-teal-400 transition-colors">
+                  <input
+                    type="file"
+                    id="psaFile"
+                    onChange={handleFileChange}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    className="hidden"
+                  />
+                  <label htmlFor="psaFile" className="cursor-pointer block">
+                    <IoCloudUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-600">
+                      Click to upload or drag and drop
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      PDF, DOC, DOCX, JPG, PNG up to 10MB
+                    </p>
+                  </label>
+                </div>
+              )}
               {errors.file && (
                 <p className="text-red-500 text-sm mt-1">{errors.file}</p>
               )}
