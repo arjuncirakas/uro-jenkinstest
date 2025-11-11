@@ -13,7 +13,6 @@ import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { notesService } from '../services/notesService';
 import { investigationService } from '../services/investigationService';
-import ImageViewerModal from './ImageViewerModal';
 
 const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -60,11 +59,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [testHistory, setTestHistory] = useState([]);
   const [loadingTestHistory, setLoadingTestHistory] = useState(false);
   const [testHistoryError, setTestHistoryError] = useState(null);
-  
-  // Image viewer modal state
-  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
-  const [viewingImageUrl, setViewingImageUrl] = useState(null);
-  const [viewingImageName, setViewingImageName] = useState(null);
 
   // MDT meetings state
   const [mdtMeetings, setMdtMeetings] = useState([]);
@@ -498,29 +492,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       investigationService.viewFile(filePath);
     }
   };
-
-  // Listen for image view events
-  useEffect(() => {
-    const handleViewImage = (event) => {
-      console.log('🎯 viewImage event received:', event.detail);
-      const { imageUrl, fileName } = event.detail;
-      if (imageUrl) {
-        console.log('✅ Setting image URL and opening modal');
-        setViewingImageUrl(imageUrl);
-        setViewingImageName(fileName || 'Image');
-        setIsImageViewerOpen(true);
-      } else {
-        console.error('❌ No imageUrl in event detail');
-      }
-    };
-
-    console.log('👂 Setting up viewImage event listener');
-    window.addEventListener('viewImage', handleViewImage);
-    return () => {
-      console.log('🧹 Cleaning up viewImage event listener');
-      window.removeEventListener('viewImage', handleViewImage);
-    };
-  }, []);
 
   // Fetch PSA history for modal
   const fetchPSAHistory = useCallback(async () => {
@@ -3300,18 +3271,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       onClose={() => setIsAddTestModalOpen(false)}
       patient={patient}
       onSuccess={handleInvestigationSuccess}
-    />
-
-    {/* Image Viewer Modal */}
-    <ImageViewerModal
-      isOpen={isImageViewerOpen}
-      onClose={() => {
-        setIsImageViewerOpen(false);
-        setViewingImageUrl(null);
-        setViewingImageName(null);
-      }}
-      imageUrl={viewingImageUrl}
-      fileName={viewingImageName}
     />
     </>
   );

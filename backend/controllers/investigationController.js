@@ -838,73 +838,18 @@ export const deleteInvestigationRequest = async (req, res) => {
   }
 };
 
-// Helper function to set CORS headers
-const setCorsHeaders = (res, origin) => {
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Content-Length, Content-Disposition');
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  }
-};
-
 // Serve investigation files
 export const serveFile = async (req, res) => {
   try {
-    // Get the file path from the parameter
-    // With route pattern '/files/:filePath(*)', Express captures the path in req.params.filePath
-    let filePath = req.params.filePath;
+    const filePath = req.params.filePath; // Get the file path from the parameter
+    console.log('Requested file path:', filePath);
     
-    // Fallback: try req.params[0] or extract from path
-    if (!filePath) {
-      filePath = req.params[0];
-      if (!filePath && req.path) {
-        const filesIndex = req.path.indexOf('/files/');
-        if (filesIndex !== -1) {
-          filePath = req.path.substring(filesIndex + '/files/'.length);
-        }
-      }
-    }
-    
-    // If filePath is an array (from wildcard), join it
-    if (Array.isArray(filePath)) {
-      filePath = filePath.join('/');
-    }
-    
-    // Decode the file path in case it was URL encoded
-    if (filePath) {
-      try {
-        filePath = decodeURIComponent(filePath);
-      } catch (e) {
-        console.warn('Failed to decode file path, using as-is:', filePath);
-      }
-    }
-    
-    console.log('📁 Serve File Request:');
-    console.log('  - Original URL:', req.originalUrl);
-    console.log('  - Request path:', req.path);
-    console.log('  - Request params:', JSON.stringify(req.params, null, 2));
-    console.log('  - Extracted filePath:', filePath);
-    
-    // Validate filePath
-    if (!filePath) {
-      console.error('No file path provided');
-      const origin = req.headers.origin;
-      setCorsHeaders(res, origin);
-      return res.status(400).json({
-        success: false,
-        message: 'File path is required'
-      });
-    }
-    
-    // Get origin early and set CORS headers (must be set before any response)
+    // Set CORS headers explicitly for file responses
     const origin = req.headers.origin;
-    setCorsHeaders(res, origin);
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
     
     // The filePath should already be the full path from the database
     // But let's handle both cases - relative and absolute paths
@@ -922,7 +867,10 @@ export const serveFile = async (req, res) => {
     if (!fullPath.startsWith(uploadsDir)) {
       console.log('Security check failed - file not in uploads directory');
       // Ensure CORS headers are set even in error responses
-      setCorsHeaders(res, origin);
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -933,7 +881,10 @@ export const serveFile = async (req, res) => {
     if (!fs.existsSync(fullPath)) {
       console.log('File not found:', fullPath);
       // Ensure CORS headers are set even in error responses
-      setCorsHeaders(res, origin);
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       return res.status(404).json({
         success: false,
         message: 'File not found'
@@ -967,7 +918,10 @@ export const serveFile = async (req, res) => {
     console.error('Serve file error:', error);
     // Ensure CORS headers are set even in error responses
     const origin = req.headers.origin;
-    setCorsHeaders(res, origin);
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
     res.status(500).json({
       success: false,
       message: 'Error serving file'
