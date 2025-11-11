@@ -73,6 +73,10 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
+      // Check if this is a file request - don't redirect for file requests, let the service handle it
+      const isFileRequest = originalRequest.url?.includes('/files/') || 
+                           originalRequest.responseType === 'blob';
+      
       try {
         // Import tokenService dynamically to avoid circular imports
         const { default: tokenService } = await import('../services/tokenService.js');
@@ -109,12 +113,16 @@ apiClient.interceptors.response.use(
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
-        // Refresh failed, clear auth data and redirect to login
+        // Refresh failed, clear auth data
         const { default: tokenService } = await import('../services/tokenService.js');
         tokenService.clearAuth();
         
-        // Redirect to login page
-        window.location.href = '/login';
+        // Only redirect to login if it's NOT a file request
+        // File requests should show an error message instead
+        if (!isFileRequest) {
+          // Redirect to login page
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshError);
       }
     }

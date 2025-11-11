@@ -169,13 +169,32 @@ export const investigationService = {
     if (filePath) {
       console.log('Attempting to view file:', filePath);
       
+      // Construct the full URL for debugging
+      const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
+      const fullURL = `${baseURL}/investigations/files/${filePath}`;
+      console.log('🔍 Full file URL:', fullURL);
+      console.log('🔍 You can test this URL directly in your browser (with authentication)');
+      
       try {
+        // Check if token exists before making request
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          console.error('❌ No access token found in localStorage');
+          alert('You must be logged in to view files. Please log in and try again.');
+          return;
+        }
+        console.log('✅ Access token found, length:', token.length);
+        
         // Fetch the file with proper authentication and MIME type
         // Note: The route is /api/investigations/files/:filePath(*) which handles paths with slashes
         // The filePath from database is like "uploads/investigations/testFile-xxx.png"
         // We need to pass it to the correct endpoint
+        console.log('📤 Making request to:', `/investigations/files/${filePath}`);
         const response = await apiClient.get(`/investigations/files/${filePath}`, {
-          responseType: 'blob'
+          responseType: 'blob',
+          headers: {
+            'Authorization': `Bearer ${token}` // Explicitly set header
+          }
         });
         
         console.log('File fetched successfully');
@@ -338,15 +357,39 @@ export const investigationService = {
         
       } catch (error) {
         console.error('Error fetching file:', error);
+        console.error('Error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          message: error.message,
+          url: fullURL
+        });
         
         // Check if it's an authentication error
         if (error.response?.status === 401) {
-          console.error('Authentication error: Session expired');
-          // Silently fail - user can see error in console
+          console.error('❌ Authentication error: Token may be expired or missing');
+          console.error('Please ensure you are logged in and try again');
+          
+          // Show user-friendly error message
+          alert('Unable to view file: Authentication required. Please ensure you are logged in and try again.');
           return;
         }
         
-        // Log error but don't show alert
+        // Check if it's a 404 error
+        if (error.response?.status === 404) {
+          console.error('❌ File not found:', fullURL);
+          alert('File not found. The file may have been deleted or moved.');
+          return;
+        }
+        
+        // Check if it's a CORS error
+        if (error.message?.includes('CORS') || error.code === 'ERR_NETWORK') {
+          console.error('❌ CORS or network error');
+          alert('Unable to load file due to network error. Please check your connection and try again.');
+          return;
+        }
+        
+        // Generic error
+        alert(`Unable to open file: ${error.response?.data?.message || error.message}`);
         console.error('Unable to open file:', error.message);
       }
     } else {
