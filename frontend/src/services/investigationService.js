@@ -170,17 +170,63 @@ export const investigationService = {
       console.log('Attempting to view file:', filePath);
       
       try {
+        // Encode the file path properly - preserve slashes but encode special characters
+        // The backend route uses :filePath(*) which matches everything after /files/
+        // We need to encode special characters but preserve path structure
+        let encodedPath = filePath;
+        if (filePath.includes('/')) {
+          // Split by '/' and encode each segment separately, then join with '/'
+          // This preserves the path structure while encoding special characters in filenames
+          const pathSegments = filePath.split('/');
+          encodedPath = pathSegments
+            .map(segment => {
+              // Only encode if segment is not empty
+              return segment ? encodeURIComponent(segment) : '';
+            })
+            .filter(segment => segment !== '')
+            .join('/');
+        } else {
+          // Single filename, encode it
+          encodedPath = encodeURIComponent(filePath);
+        }
+        
+        // Log for debugging
+        console.log('Original file path:', filePath);
+        console.log('Encoded file path:', encodedPath);
+        
         // Fetch the file with proper authentication and MIME type
-        const response = await apiClient.get(`/files/${filePath}`, {
+        const response = await apiClient.get(`/files/${encodedPath}`, {
           responseType: 'blob'
         });
         
         console.log('File fetched successfully');
         console.log('Response headers:', response.headers);
         
-        // Get the content type from response headers
-        const contentType = response.headers['content-type'] || 'application/octet-stream';
+        // Get file name and extension from path
+        const fileName = filePath.split('/').pop() || 'file';
+        const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+        
+        // Get the content type from response headers, with fallback based on file extension
+        let contentType = response.headers['content-type'] || response.headers['Content-Type'] || 'application/octet-stream';
+        
+        // Fallback: determine content type from file extension if not provided
+        if (contentType === 'application/octet-stream' || !contentType) {
+          const extensionMimeTypes = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'bmp': 'image/bmp',
+            'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          };
+          contentType = extensionMimeTypes[fileExtension] || 'application/octet-stream';
+        }
+        
         console.log('Content type:', contentType);
+        console.log('File extension:', fileExtension);
         
         // Create blob with proper MIME type
         const blob = new Blob([response.data], { type: contentType });
@@ -189,22 +235,24 @@ export const investigationService = {
         const blobUrl = URL.createObjectURL(blob);
         console.log('Created blob URL:', blobUrl);
         
-        // Get file name from path
-        const fileName = filePath.split('/').pop() || 'file';
-        
         // Determine how to display based on content type
-        if (contentType.startsWith('image/')) {
+        if (contentType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension)) {
           // For images, convert blob to data URL and embed in HTML
           const reader = new FileReader();
           reader.onloadend = () => {
             try {
               const dataUrl = reader.result;
+              // Escape the data URL for use in HTML (it's already safe, but be cautious)
               const htmlContent = `
                 <!DOCTYPE html>
                 <html>
                 <head>
                   <title>${fileName}</title>
+                  <meta charset="UTF-8">
                   <style>
+                    * {
+                      box-sizing: border-box;
+                    }
                     body {
                       margin: 0;
                       padding: 20px;
@@ -213,26 +261,56 @@ export const investigationService = {
                       align-items: center;
                       min-height: 100vh;
                       background-color: #f5f5f5;
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                    }
+                    .image-container {
+                      max-width: 100%;
+                      max-height: 100vh;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
                     }
                     img {
                       max-width: 100%;
                       max-height: 100vh;
                       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                      border-radius: 4px;
+                      object-fit: contain;
+                    }
+                    .error-message {
+                      color: #dc2626;
+                      text-align: center;
+                      padding: 20px;
                     }
                   </style>
                 </head>
                 <body>
-                  <img src="${dataUrl}" alt="${fileName}" />
+                  <div class="image-container">
+                    <img src="${dataUrl}" alt="${fileName}" onerror="this.parentElement.innerHTML='<div class=\\'error-message\\'>Failed to load image</div>'" />
+                  </div>
                 </body>
                 </html>
               `;
-              const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+              const htmlBlob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
               const htmlBlobUrl = URL.createObjectURL(htmlBlob);
-              const newWindow = window.open(htmlBlobUrl, '_blank');
               
-              if (!newWindow || newWindow.closed) {
+              // Try to open in new window
+              const newWindow = window.open(htmlBlobUrl, '_blank', 'width=1200,height=800');
+              
+              if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
                 // If popup blocked, try direct blob URL
-                window.open(blobUrl, '_blank');
+                console.log('Popup blocked, trying direct blob URL');
+                const directWindow = window.open(blobUrl, '_blank');
+                if (!directWindow || directWindow.closed) {
+                  // Last resort: create download link
+                  const link = document.createElement('a');
+                  link.href = blobUrl;
+                  link.download = fileName;
+                  link.target = '_blank';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }
               }
               
               // Clean up HTML blob URL after a delay
@@ -240,20 +318,40 @@ export const investigationService = {
                 URL.revokeObjectURL(htmlBlobUrl);
               }, 1000);
               
-              // Clean up original blob URL after image is loaded
+              // Clean up original blob URL after image is loaded (longer delay for viewing)
               setTimeout(() => {
                 URL.revokeObjectURL(blobUrl);
-              }, 60000);
+              }, 300000); // 5 minutes for viewing
             } catch (error) {
               console.error('Error creating image viewer:', error);
               // Fallback: try opening blob URL directly
-              window.open(blobUrl, '_blank');
+              const fallbackWindow = window.open(blobUrl, '_blank');
+              if (!fallbackWindow || fallbackWindow.closed) {
+                // Create download link as last resort
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = fileName;
+                link.target = '_blank';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }
             }
           };
-          reader.onerror = () => {
-            console.error('Error reading image file');
+          reader.onerror = (error) => {
+            console.error('Error reading image file:', error);
             // Fallback: try opening blob URL directly
-            window.open(blobUrl, '_blank');
+            const fallbackWindow = window.open(blobUrl, '_blank');
+            if (!fallbackWindow || fallbackWindow.closed) {
+              // Create download link as last resort
+              const link = document.createElement('a');
+              link.href = blobUrl;
+              link.download = fileName;
+              link.target = '_blank';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }
           };
           reader.readAsDataURL(blob);
         } else if (contentType === 'application/pdf') {
