@@ -264,11 +264,34 @@ export const investigationService = {
         // Determine how to display based on content type or file extension
         if (isImage) {
           console.log('✅ Detected as image, opening in modal...');
-          // For images, convert blob to data URL and trigger modal display
+          
+          // Check if the response is actually HTML (backend error) by reading first few bytes
           const reader = new FileReader();
           reader.onloadend = () => {
             try {
               const dataUrl = reader.result;
+              
+              // Check if the data URL contains HTML (backend returned error page)
+              if (dataUrl.includes('<!DOCTYPE html') || dataUrl.includes('<html') || dataUrl.includes('<!doctype html')) {
+                console.error('❌ Backend returned HTML instead of image. This indicates an error.');
+                
+                // Try to extract error message from HTML if possible
+                const htmlMatch = dataUrl.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+                const errorMessage = htmlMatch ? htmlMatch[1].replace(/<[^>]+>/g, '').trim().substring(0, 200) : 'Server returned HTML instead of image file';
+                
+                alert(`Unable to load image: ${errorMessage}\n\nThis usually means:\n1. The file path is incorrect\n2. The file doesn't exist on the server\n3. There's an authentication or permission issue\n\nPlease check the backend logs for more details.`);
+                URL.revokeObjectURL(blobUrl);
+                return;
+              }
+              
+              // Check if it's a valid image data URL
+              if (!dataUrl.startsWith('data:image/')) {
+                console.error('❌ Data URL is not a valid image:', dataUrl.substring(0, 100));
+                alert('The file received is not a valid image. Please check the file on the server.');
+                URL.revokeObjectURL(blobUrl);
+                return;
+              }
+              
               console.log('✅ Image converted to data URL, dispatching viewImage event');
               
               // Dispatch custom event to open image in modal
@@ -291,11 +314,13 @@ export const investigationService = {
             } catch (error) {
               console.error('❌ Error creating image viewer:', error);
               alert('Error displaying image. Please try again.');
+              URL.revokeObjectURL(blobUrl);
             }
           };
           reader.onerror = (error) => {
             console.error('❌ Error reading image file:', error);
             alert('Error reading image file. Please try again.');
+            URL.revokeObjectURL(blobUrl);
           };
           reader.readAsDataURL(blob);
           return; // IMPORTANT: Return early to prevent opening new window

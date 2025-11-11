@@ -85,7 +85,7 @@ router.delete('/investigations/:resultId',
 );
 
 // Handle OPTIONS preflight for file requests (must be before GET route and without auth)
-router.options('/files/:filePath(*)', (req, res) => {
+router.options('/files/*', (req, res) => {
   const origin = req.headers.origin;
   console.log('OPTIONS preflight request for file:', req.params.filePath, 'from origin:', origin);
   
@@ -106,7 +106,8 @@ router.options('/files/:filePath(*)', (req, res) => {
 });
 
 // Serve investigation files
-router.get('/files/:filePath(*)',
+// Use * instead of (*) for better compatibility - captures everything after /files/
+router.get('/files/*',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),

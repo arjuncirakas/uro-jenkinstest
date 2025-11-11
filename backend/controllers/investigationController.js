@@ -856,8 +856,17 @@ const setCorsHeaders = (res, origin) => {
 // Serve investigation files
 export const serveFile = async (req, res) => {
   try {
-    // Get the file path from the parameter - handle both :filePath and wildcard matching
-    let filePath = req.params.filePath || req.params[0];
+    // Get the file path from the parameter
+    // With route pattern '/files/*', Express captures the path in req.params[0]
+    let filePath = req.params[0] || req.params.filePath;
+    
+    // If still not found, extract from the request path
+    if (!filePath && req.path) {
+      const filesIndex = req.path.indexOf('/files/');
+      if (filesIndex !== -1) {
+        filePath = req.path.substring(filesIndex + '/files/'.length);
+      }
+    }
     
     // If filePath is an array (from wildcard), join it
     if (Array.isArray(filePath)) {
@@ -866,11 +875,18 @@ export const serveFile = async (req, res) => {
     
     // Decode the file path in case it was URL encoded
     if (filePath) {
-      filePath = decodeURIComponent(filePath);
+      try {
+        filePath = decodeURIComponent(filePath);
+      } catch (e) {
+        console.warn('Failed to decode file path, using as-is:', filePath);
+      }
     }
     
-    console.log('Requested file path:', filePath);
-    console.log('Request params:', req.params);
+    console.log('📁 Serve File Request:');
+    console.log('  - Original URL:', req.originalUrl);
+    console.log('  - Request path:', req.path);
+    console.log('  - Request params:', JSON.stringify(req.params, null, 2));
+    console.log('  - Extracted filePath:', filePath);
     
     // Validate filePath
     if (!filePath) {
