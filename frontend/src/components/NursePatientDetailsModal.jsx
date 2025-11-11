@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
-import { Plus, Upload, Eye, Download, Trash } from 'lucide-react';
+import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
 import SuccessModal from './SuccessModal';
 import ConfirmationModal from './modals/ConfirmationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
@@ -1317,10 +1317,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                     setSelectedPSAResult(psa);
                                     setIsEditPSAModalOpen(true);
                                   }}
-                                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                                  className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center"
                                   title="Edit PSA Result"
                                 >
-                                  Edit
+                                  <Edit className="w-4 h-4" />
                                 </button>
                                 {(psa.filePath || psa.file_path) ? (
                                   <button 
