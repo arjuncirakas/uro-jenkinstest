@@ -76,6 +76,10 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
       newErrors.testDate = 'Test date is required';
     }
 
+    if (!testFile) {
+      newErrors.file = 'Document attachment is required';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -204,9 +208,15 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
             {/* File Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Attach Document (Optional)
+                Attach Document *
               </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+              <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                errors.file 
+                  ? 'border-red-500 bg-red-50' 
+                  : testFile 
+                    ? 'border-blue-400 bg-blue-50' 
+                    : 'border-gray-300 hover:border-blue-400'
+              }`}>
                 <input
                   type="file"
                   id="testFile"
@@ -214,9 +224,13 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                   className="hidden"
                 />
-                <label htmlFor="testFile" className="cursor-pointer">
-                  <IoCloudUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">
+                <label htmlFor="testFile" className="cursor-pointer block">
+                  <IoCloudUpload className={`w-8 h-8 mx-auto mb-2 ${
+                    errors.file ? 'text-red-500' : testFile ? 'text-blue-500' : 'text-gray-400'
+                  }`} />
+                  <p className={`text-sm ${
+                    errors.file ? 'text-red-600' : testFile ? 'text-blue-700 font-medium' : 'text-gray-600'
+                  }`}>
                     {testFile ? testFile.name : 'Click to upload or drag and drop'}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">

@@ -384,9 +384,40 @@ export const getPatients = async (req, res) => {
     queryParams.push(limit, offset);
     const patientsResult = await client.query(patientsQuery, queryParams);
 
+    // Get latest PSA for all patients
+    const patientIds = patientsResult.rows.map(p => p.id);
+    let latestPSAMap = {};
+    if (patientIds.length > 0) {
+      const psaQuery = await client.query(
+        `SELECT DISTINCT ON (patient_id) 
+          patient_id, result, test_date
+         FROM investigation_results 
+         WHERE patient_id = ANY($1) 
+           AND (test_type ILIKE 'psa' OR test_name ILIKE '%PSA%')
+         ORDER BY patient_id, test_date DESC, created_at DESC`,
+        [patientIds]
+      );
+      psaQuery.rows.forEach(row => {
+        latestPSAMap[row.patient_id] = {
+          result: row.result,
+          testDate: row.test_date
+        };
+      });
+      console.log(`[getPatients] Found latest PSA for ${psaQuery.rows.length} patients out of ${patientIds.length} total`);
+    }
+
     // Format patient data
     const patients = patientsResult.rows.map(patient => {
       const age = new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear();
+      
+      // Get latest PSA or fallback to initial PSA
+      const latestPSA = latestPSAMap[patient.id];
+      const displayPSA = latestPSA ? latestPSA.result : (patient.initial_psa || null);
+      
+      // Debug logging for PSA values
+      if (patient.id <= 10) { // Only log for first few patients to avoid spam
+        console.log(`[getPatients] Patient ${patient.id}: initialPSA=${patient.initial_psa}, latestPSA=${latestPSA?.result || 'none'}, displayPSA=${displayPSA}`);
+      }
       
       // Format next appointment data
       const nextAppointmentDate = patient.next_appointment_date 
@@ -408,7 +439,7 @@ export const getPatients = async (req, res) => {
       // Calculate monitoring status based on PSA level and care pathway
       let monitoringStatus = 'Stable';
       if (patient.care_pathway === 'Active Monitoring' || patient.care_pathway === 'Medication') {
-        const psaLevel = parseFloat(patient.initial_psa || 0);
+        const psaLevel = parseFloat(displayPSA || 0);
         if (psaLevel > 10) {
           monitoringStatus = 'Needs Attention';
         } else if (psaLevel > 4.0) {
@@ -437,6 +468,7 @@ export const getPatients = async (req, res) => {
         referralDate: patient.referral_date, // Already formatted by TO_CHAR
         initialPSA: patient.initial_psa,
         initialPSADate: patient.initial_psa_date, // Already formatted by TO_CHAR
+        latestPSA: displayPSA, // Latest PSA from investigation_results or initial PSA
         medicalHistory: patient.medical_history,
         currentMedications: patient.current_medications,
         allergies: patient.allergies,

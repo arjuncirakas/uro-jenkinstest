@@ -380,9 +380,9 @@ export const addOtherTestResult = async (req, res) => {
         testName, // Use testName as testType
         testName, // Use testName as testName
         testDate, 
-        '', // Empty result
-        '', // Empty reference range
-        'Normal', // Default status 
+        req.body.result || '', // Result if provided
+        '', // Empty reference range for non-PSA tests
+        req.body.status || 'Normal', // Status if provided
         notes || '', 
         filePath, 
         fileName, 
@@ -599,7 +599,7 @@ export const getAllInvestigations = async (req, res) => {
         p.upi,
         EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
         p.gender,
-        p.initial_psa as psa,
+        p.initial_psa as initial_psa,
         -- Get investigation booking details (primary source for investigation management)
         ib.scheduled_date as appointment_date,
         ib.scheduled_time as appointment_time,
@@ -614,10 +614,13 @@ export const getAllInvestigations = async (req, res) => {
     
     const result = await client.query(query);
     
-    // Get all investigation results to determine test status
+    // Get all investigation results to determine test status and latest PSA
     let resultsQuery = { rows: [] };
+    let latestPSAQuery = { rows: [] };
     
     if (result.rows.length > 0) {
+      const patientIds = result.rows.map(r => r.patient_id);
+      
       resultsQuery = await client.query(`
         SELECT 
           patient_id,
@@ -625,7 +628,18 @@ export const getAllInvestigations = async (req, res) => {
           test_name
         FROM investigation_results
         WHERE patient_id = ANY($1)
-      `, [result.rows.map(r => r.patient_id)]);
+      `, [patientIds]);
+      
+      // Get latest PSA for each patient
+      latestPSAQuery = await client.query(
+        `SELECT DISTINCT ON (patient_id) 
+          patient_id, result, test_date
+         FROM investigation_results 
+         WHERE patient_id = ANY($1) 
+           AND (test_type ILIKE 'psa' OR test_name ILIKE '%PSA%')
+         ORDER BY patient_id, test_date DESC, created_at DESC`,
+        [patientIds]
+      );
     }
     
     // Create a map of patient test results
@@ -646,6 +660,12 @@ export const getAllInvestigations = async (req, res) => {
       } else if (testType === 'trus') {
         patientResults[row.patient_id].trus = true;
       }
+    });
+    
+    // Create a map of latest PSA values
+    const latestPSAMap = {};
+    latestPSAQuery.rows.forEach(row => {
+      latestPSAMap[row.patient_id] = row.result;
     });
     
     // Helper function to format date
@@ -686,6 +706,8 @@ export const getAllInvestigations = async (req, res) => {
       const patientId = row.patient_id;
       if (!patientTests[patientId]) {
         const results = patientResults[patientId] || { mri: false, biopsy: false, trus: false };
+        // Use latest PSA from investigation_results, fallback to initial_psa
+        const displayPSA = latestPSAMap[patientId] || row.initial_psa;
         
         patientTests[patientId] = {
           id: patientId,
@@ -693,7 +715,7 @@ export const getAllInvestigations = async (req, res) => {
           upi: row.upi,
           age: row.age,
           gender: row.gender,
-          psa: row.psa,
+          psa: displayPSA,
           appointmentDate: formatDate(row.appointment_date),
           appointmentTime: formatTime(row.appointment_time),
           urologist: row.urologist || 'Not Assigned',

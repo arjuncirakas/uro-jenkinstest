@@ -69,6 +69,22 @@ const PatientList = () => {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
+  // Listen for PSA update events to refresh patient list
+  useEffect(() => {
+    const handlePSAUpdated = (event) => {
+      console.log('PSA updated event received, refreshing patient list:', event.detail);
+      fetchPatients();
+    };
+
+    window.addEventListener('psaResultAdded', handlePSAUpdated);
+    window.addEventListener('psaResultUpdated', handlePSAUpdated);
+    
+    return () => {
+      window.removeEventListener('psaResultAdded', handlePSAUpdated);
+      window.removeEventListener('psaResultUpdated', handlePSAUpdated);
+    };
+  }, []);
+
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -306,8 +322,8 @@ const PatientList = () => {
                         </td>
                         <td className="py-4 px-4 text-gray-700 text-sm">
                           <div className="flex items-center">
-                            <div className={`w-2 h-2 ${getPSAColor(patient.initialPSA).dotColor} rounded-full mr-2`}></div>
-                            <span className={getPSAColor(patient.initialPSA).textColor}>{patient.initialPSA || 0} ng/mL</span>
+                            <div className={`w-2 h-2 ${getPSAColor(patient.latestPSA || patient.initialPSA).dotColor} rounded-full mr-2`}></div>
+                            <span className={getPSAColor(patient.latestPSA || patient.initialPSA).textColor}>{patient.latestPSA || patient.initialPSA || 0} ng/mL</span>
                           </div>
                         </td>
                         <td className="py-4 px-4 text-center">

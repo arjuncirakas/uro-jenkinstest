@@ -23,7 +23,7 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
       if (!isNaN(psaValue)) {
         if (psaValue > 4.0) {
           newStatus = 'High';
-        } else if (psaValue < 1.0) {
+        } else if (psaValue < 0.0) {
           newStatus = 'Low';
         } else {
           newStatus = 'Normal';
@@ -139,7 +139,7 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
         });
         setTestFile(null);
         
-        // Trigger custom event to refresh tables
+        // Trigger custom events to refresh tables
         const refreshEvent = new CustomEvent('testResultAdded', {
           detail: {
             patientId: patient.id,
@@ -148,6 +148,16 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
           }
         });
         window.dispatchEvent(refreshEvent);
+        
+        // Also dispatch PSA-specific event for PatientList and InvestigationManagement
+        const psaAddedEvent = new CustomEvent('psaResultAdded', {
+          detail: {
+            patientId: patient.id,
+            testName: 'psa',
+            testDate: formData.testDate
+          }
+        });
+        window.dispatchEvent(psaAddedEvent);
         
         onClose();
       } else {
@@ -248,8 +258,8 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                 </span>
                 <span className="text-sm text-gray-600 ml-2">
                   {formData.status === 'High' ? '(PSA > 4.0 ng/mL)' :
-                   formData.status === 'Low' ? '(PSA < 1.0 ng/mL)' :
-                   '(PSA 1.0 - 4.0 ng/mL)'}
+                   formData.status === 'Low' ? '(PSA < 0.0 ng/mL)' :
+                   '(PSA 0.0 - 4.0 ng/mL)'}
                 </span>
               </div>
             </div>

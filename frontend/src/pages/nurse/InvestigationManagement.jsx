@@ -74,6 +74,24 @@ const InvestigationManagement = () => {
     };
   }, []);
 
+  // Listen for PSA update events to refresh investigations data
+  useEffect(() => {
+    const handlePSAUpdated = (event) => {
+      console.log('PSA updated event received, refreshing investigations:', event.detail);
+      // Show brief loading indicator and refresh investigations data
+      setLoadingInvestigations(true);
+      fetchInvestigations();
+    };
+
+    window.addEventListener('psaResultAdded', handlePSAUpdated);
+    window.addEventListener('psaResultUpdated', handlePSAUpdated);
+    
+    return () => {
+      window.removeEventListener('psaResultAdded', handlePSAUpdated);
+      window.removeEventListener('psaResultUpdated', handlePSAUpdated);
+    };
+  }, []);
+
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();

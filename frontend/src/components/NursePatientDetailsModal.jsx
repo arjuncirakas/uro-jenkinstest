@@ -3,6 +3,7 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ConfirmationModal from './modals/ConfirmationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
@@ -433,8 +434,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         // Normalize results to ensure consistent property names
         const normalizeResult = (result) => ({
           ...result,
-          filePath: result.filePath || result.file_path || null,
-          fileName: result.fileName || result.file_name || null,
+          filePath: (result.filePath || result.file_path || '').trim() || null,
+          fileName: (result.fileName || result.file_name || '').trim() || null,
           testType: result.testType || result.test_type || null,
           testName: result.testName || result.test_name || null,
           formattedDate: result.formattedDate || (result.testDate ? new Date(result.testDate).toLocaleDateString('en-US', {
@@ -546,21 +547,28 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
             const testType = investigation.testType || investigation.test_type || '';
             return testType.toLowerCase() === 'psa';
           })
-          .map(investigation => ({
-            id: investigation.id,
-            date: investigation.formattedDate || (investigation.testDate ? new Date(investigation.testDate).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit'
-            }) : ''),
-            result: `${investigation.result} ng/mL`,
-            referenceRange: investigation.referenceRange || investigation.reference_range || '',
-            status: investigation.status,
-            notes: investigation.notes || 'No notes',
-            filePath: investigation.filePath || investigation.file_path || null,
-            fileName: investigation.fileName || investigation.file_name || null
-          }))
-          .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+          .map(investigation => {
+            // Get original date for sorting and charting
+            const originalDate = investigation.testDate || investigation.test_date;
+            const dateObj = originalDate ? new Date(originalDate) : new Date();
+            
+            return {
+              id: investigation.id,
+              date: investigation.formattedDate || (originalDate ? dateObj.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              }) : ''),
+              dateObj: dateObj, // Store date object for proper sorting and charting
+              result: `${investigation.result} ng/mL`,
+              referenceRange: investigation.referenceRange || investigation.reference_range || '',
+              status: investigation.status,
+              notes: investigation.notes || 'No notes',
+              filePath: (investigation.filePath || investigation.file_path || '').trim() || null,
+              fileName: (investigation.fileName || investigation.file_name || '').trim() || null
+            };
+          })
+          .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime()); // Sort by date descending
           
         setPsaHistory(psaResults);
       } else {
@@ -901,10 +909,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
 
   // Handle view test report
   const handleViewReport = (test) => {
-    console.log('Viewing report for:', test.testName);
+    const testNameUpper = (test.testName || '').toUpperCase();
+    console.log('Viewing report for:', testNameUpper);
     // In a real app, this would open a report viewer or modal
     setSuccessModalTitle('View Report');
-    setSuccessModalMessage(`Opening report for ${test.testName}...`);
+    setSuccessModalMessage(`Opening report for ${testNameUpper}...`);
     setIsSuccessModalOpen(true);
   };
 
@@ -1302,7 +1311,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="font-semibold text-gray-900">{psa.testName}</h4>
+                                  <h4 className="font-semibold text-gray-900">{(psa.testName || '').toUpperCase()}</h4>
                                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(psa.status)}`}>
                                     {psa.status}
                                   </span>
@@ -1322,19 +1331,22 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 >
                                   <Edit className="w-4 h-4" />
                                 </button>
-                                {(psa.filePath || psa.file_path) ? (
-                                  <button 
-                                    onClick={() => {
-                                      const filePath = psa.filePath || psa.file_path;
-                                      handleViewFile(filePath);
-                                    }}
-                                    className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                                  >
-                                    View File
-                                  </button>
-                                ) : (
-                                  <span className="text-sm text-gray-500 italic">No files uploaded</span>
-                                )}
+                                {(() => {
+                                  const filePath = psa.filePath || psa.file_path;
+                                  const hasFile = filePath && filePath.trim() !== '';
+                                  return hasFile ? (
+                                    <button 
+                                      onClick={() => {
+                                        handleViewFile(filePath);
+                                      }}
+                                      className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors whitespace-nowrap"
+                                    >
+                                      View File
+                                    </button>
+                                  ) : (
+                                    <span className="text-sm text-gray-500 italic">No files uploaded</span>
+                                  );
+                                })()}
                               </div>
                             </div>
                             
@@ -1351,15 +1363,15 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             
                             {psa.notes && (
                               <div className="pt-3 border-t border-gray-200">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
                                     <span className="text-sm font-medium text-gray-700">Notes:</span>
-                                    <p className="text-sm text-gray-600 mt-1">{psa.notes}</p>
+                                    <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-wrap-anywhere">{psa.notes}</p>
                                   </div>
                                   <button
                                     onClick={() => handleDeleteInvestigation(psa.id)}
                                     disabled={deletingInvestigation === psa.id}
-                                    className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed ml-2 flex-shrink-0"
+                                    className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                                     title="Delete PSA result"
                                   >
                                     {deletingInvestigation === psa.id ? (
@@ -1469,10 +1481,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="font-semibold text-gray-900">{test.testName}</h4>
-                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(test.status)}`}>
-                                    {test.status}
-                                  </span>
+                                  <h4 className="font-semibold text-gray-900">{(test.testName || '').toUpperCase()}</h4>
                                 </div>
                                 <div className="text-sm text-gray-600 mb-2">
                                   Date: {test.formattedDate}
@@ -1500,12 +1509,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                   <span className="ml-2 text-sm text-gray-900">{test.result}</span>
                                 </div>
                               )}
-                              {test.referenceRange && (
-                                <div>
-                                  <span className="text-sm font-medium text-gray-700">Reference Range:</span>
-                                  <span className="ml-2 text-sm text-gray-600">{test.referenceRange}</span>
-                                </div>
-                              )}
                               {test.fileName && (
                                 <div>
                                   <span className="text-sm font-medium text-gray-700">File:</span>
@@ -1516,15 +1519,15 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             
                             {test.notes && (
                               <div className="pt-3 border-t border-gray-200">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
                                     <span className="text-sm font-medium text-gray-700">Notes:</span>
-                                    <p className="text-sm text-gray-600 mt-1">{test.notes}</p>
+                                    <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-wrap-anywhere">{test.notes}</p>
                                   </div>
                                   <button
                                     onClick={() => handleDeleteInvestigation(test.id)}
                                     disabled={deletingInvestigation === test.id}
-                                    className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed ml-2 flex-shrink-0"
+                                    className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                                     title="Delete test result"
                                   >
                                     {deletingInvestigation === test.id ? (
@@ -2087,132 +2090,88 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                         </div>
                       </div>
                     ) : (
-                      <div className="relative h-full">
-                        {/* Y-axis labels */}
-                        <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500">
-                          {(() => {
-                            if (psaHistory.length === 0) {
-                              return [10, 8, 6, 4, 2, 0].map(val => <span key={val}>{val}</span>);
-                            }
-                            
-                            const chartData = psaHistory.slice(0, 5).reverse();
-                            const maxValue = Math.max(...chartData.map(d => parseFloat(d.result.replace(' ng/mL', ''))));
-                            const minValue = Math.min(...chartData.map(d => parseFloat(d.result.replace(' ng/mL', ''))));
-                            const range = maxValue - minValue || 1;
-                            
-                            // Generate 6 Y-axis labels based on actual data range
-                            const labels = [];
-                            for (let i = 5; i >= 0; i--) {
-                              const value = minValue + (range * i / 5);
-                              labels.push(
-                                <span key={i}>{value.toFixed(1)}</span>
-                              );
-                            }
-                            return labels;
-                          })()}
-                        </div>
-                        
-                        {/* Chart area */}
-                        <div className="ml-8 h-full relative">
-                          {/* Grid lines */}
-                          <div className="absolute inset-0">
-                            {[0, 1, 2, 3, 4].map(i => (
-                              <div key={i} className="absolute w-full border-t border-gray-200" style={{top: `${i * 20}%`}}></div>
-                            ))}
-                          </div>
+                      <ResponsiveContainer width="100%" height="100%">
+                        {(() => {
+                          // Get the last 5 PSA results for the chart, sorted by date (oldest first)
+                          const chartData = psaHistory.slice(0, 5).reverse();
                           
-                          {/* Data points and line */}
-                          <div className="absolute inset-0">
-                            <svg className="w-full h-full">
-                              {(() => {
-                                if (psaHistory.length === 0) return null;
-                                
-                                // Get the last 5 PSA results for the chart
-                                const chartData = psaHistory.slice(0, 5).reverse();
-                                const maxValue = Math.max(...chartData.map(d => parseFloat(d.result.replace(' ng/mL', ''))));
-                                const minValue = Math.min(...chartData.map(d => parseFloat(d.result.replace(' ng/mL', ''))));
-                                const range = maxValue - minValue || 1;
-                                
-                                // Ensure we have at least 2 points for a proper line
-                                if (chartData.length < 2) {
-                                  // For single point, create a small range around it
-                                  const singleValue = parseFloat(chartData[0].result.replace(' ng/mL', ''));
-                                  const adjustedMin = Math.max(0, singleValue - 1);
-                                  const adjustedMax = singleValue + 1;
-                                  const adjustedRange = adjustedMax - adjustedMin;
-                                  
-                                  // Calculate points for single data point
-                                  const points = `${20},${100}`; // Center point
-                                  const circles = [{ cx: 20, cy: 100, value: singleValue }];
-                                  
-                                  return (
-                                    <>
-                                      {/* Single point circle */}
-                                      <circle 
-                                        cx="20" 
-                                        cy="100" 
-                                        r="6" 
-                                        fill="#0d9488"
-                                        className="hover:fill-teal-700 cursor-pointer"
-                                        title={`${chartData[0].date}: ${singleValue} ng/mL`}
-                                      />
-                                    </>
-                                  );
-                                }
-                                
-                                // Calculate points
-                                const points = chartData.map((psa, index) => {
-                                  const value = parseFloat(psa.result.replace(' ng/mL', ''));
-                                  const x = (index / (chartData.length - 1)) * 200 + 20; // 20px margin
-                                  const y = 200 - ((value - minValue) / range) * 160; // 200px height - 40px margin
-                                  return `${x},${y}`;
-                                }).join(' ');
-                                
-                                // Calculate circle positions
-                                const circles = chartData.map((psa, index) => {
-                                  const value = parseFloat(psa.result.replace(' ng/mL', ''));
-                                  const x = (index / (chartData.length - 1)) * 200 + 20;
-                                  const y = 200 - ((value - minValue) / range) * 160;
-                                  return { cx: x, cy: y, value: value };
-                                });
-                                
-                                return (
-                                  <>
-                                    {/* Line connecting points */}
-                                    <polyline
-                                      fill="none"
-                                      stroke="#0d9488"
-                                      strokeWidth="2"
-                                      points={points}
-                                    />
-                                    {/* Data points */}
-                                    {circles.map((circle, index) => (
-                                      <circle 
-                                        key={index}
-                                        cx={circle.cx} 
-                                        cy={circle.cy} 
-                                        r="4" 
-                                        fill="#0d9488"
-                                        className="hover:fill-teal-700 cursor-pointer"
-                                        title={`${chartData[index].date}: ${circle.value} ng/mL`}
-                                      />
-                                    ))}
-                                  </>
-                                );
-                              })()}
-                            </svg>
-                          </div>
+                          // Parse PSA values and prepare data for Recharts
+                          const parsePSAValue = (result) => {
+                            if (typeof result === 'number') return result;
+                            if (typeof result === 'string') {
+                              const cleaned = result.replace(/ ng\/mL/gi, '').trim();
+                              const parsed = parseFloat(cleaned);
+                              return isNaN(parsed) ? 0 : parsed;
+                            }
+                            return 0;
+                          };
                           
-                          {/* X-axis labels */}
-                          <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-gray-500">
-                            {psaHistory.slice(0, 5).reverse().map((psa, index) => (
-                              <span key={index} className="text-center">
-                                {new Date(psa.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                          // Format data for Recharts
+                          const rechartsData = chartData.map((psa) => {
+                            const value = parsePSAValue(psa.result);
+                            const date = psa.dateObj || (psa.date ? new Date(psa.date) : new Date());
+                            const dateStr = date && !isNaN(date.getTime()) 
+                              ? date.toLocaleDateString('en-US', { 
+                                  month: 'short', 
+                                  day: 'numeric',
+                                  year: 'numeric' 
+                                })
+                              : psa.date || 'N/A';
+                            
+                            return {
+                              date: dateStr,
+                              dateObj: date,
+                              value: value,
+                              psa: value
+                            };
+                          });
+                          
+                          // Calculate domain for Y-axis with padding
+                          const values = rechartsData.map(d => d.value);
+                          const maxValue = Math.max(...values);
+                          const minValue = Math.min(...values);
+                          const valueRange = maxValue - minValue;
+                          const padding = valueRange > 0 ? Math.max(valueRange * 0.1, 0.5) : 1;
+                          const yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+                          
+                          return (
+                            <LineChart data={rechartsData} margin={{ top: 5, right: 20, left: 10, bottom: 30 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis 
+                                dataKey="date" 
+                                stroke="#6b7280"
+                                style={{ fontSize: '12px' }}
+                                tick={{ fill: '#6b7280' }}
+                              />
+                              <YAxis 
+                                domain={yDomain}
+                                stroke="#6b7280"
+                                style={{ fontSize: '12px' }}
+                                tick={{ fill: '#6b7280' }}
+                                label={{ value: 'PSA Value (ng/mL)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } }}
+                              />
+                              <Tooltip 
+                                contentStyle={{ 
+                                  backgroundColor: 'white', 
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '6px',
+                                  padding: '8px'
+                                }}
+                                formatter={(value) => [`${value.toFixed(1)} ng/mL`, 'PSA Value']}
+                                labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+                              />
+                              <Line 
+                                type="monotone" 
+                                dataKey="psa" 
+                                stroke="#0d9488" 
+                                strokeWidth={2}
+                                dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
+                                activeDot={{ r: 7, fill: '#0d9488' }}
+                              />
+                            </LineChart>
+                          );
+                        })()}
+                      </ResponsiveContainer>
                     )}
                   </div>
                 </div>
@@ -2269,19 +2228,22 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                               </td>
                               <td className="py-3 px-4 text-sm text-gray-600">{psa.notes}</td>
                               <td className="py-3 px-4">
-                                {(psa.filePath || psa.file_path) ? (
-                                  <button 
-                                    onClick={() => {
-                                      const filePath = psa.filePath || psa.file_path;
-                                      handleViewFile(filePath);
-                                    }}
-                                    className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                                  >
-                                    View File
-                                  </button>
-                                ) : (
-                                  <span className="text-sm text-gray-500 italic">No files uploaded</span>
-                                )}
+                                {(() => {
+                                  const filePath = psa.filePath || psa.file_path;
+                                  const hasFile = filePath && filePath.trim() !== '';
+                                  return hasFile ? (
+                                    <button 
+                                      onClick={() => {
+                                        handleViewFile(filePath);
+                                      }}
+                                      className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors whitespace-nowrap"
+                                    >
+                                      View File
+                                    </button>
+                                  ) : (
+                                    <span className="text-sm text-gray-500 italic">No files uploaded</span>
+                                  );
+                                })()}
                               </td>
                             </tr>
                           ))}
@@ -2388,38 +2350,40 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="font-semibold text-gray-900">{test.testName}</h4>
-                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(test.status)}`}>
-                                    {test.status}
-                                  </span>
+                                  <h4 className="font-semibold text-gray-900">{(test.testName || '').toUpperCase()}</h4>
                                 </div>
                                 <div className="text-sm text-gray-600 mb-2">
                                   Time: {test.date}
                                 </div>
                               </div>
                               <button 
-                                onClick={() => handleViewReport(test)}
+                                onClick={() => {
+                                  const filePath = test.filePath || test.file_path;
+                                  if (filePath) {
+                                    handleViewFile(filePath);
+                                  } else {
+                                    handleViewReport(test);
+                                  }
+                                }}
                                 className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
                               >
-                                View
+                                {(test.filePath || test.file_path) ? 'View File' : 'View'}
                               </button>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                              <div>
-                                <span className="text-sm font-medium text-gray-700">Result:</span>
-                                <span className="ml-2 text-sm text-gray-900">{test.result}</span>
-                              </div>
-                              <div>
-                                <span className="text-sm font-medium text-gray-700">Reference Range:</span>
-                                <span className="ml-2 text-sm text-gray-600">{test.referenceRange}</span>
-                              </div>
+                              {test.result && (
+                                <div>
+                                  <span className="text-sm font-medium text-gray-700">Result:</span>
+                                  <span className="ml-2 text-sm text-gray-900">{test.result}</span>
+                                </div>
+                              )}
                             </div>
                             
                             {test.notes && (
                               <div className="pt-3 border-t border-gray-200">
                                 <span className="text-sm font-medium text-gray-700">Notes:</span>
-                                <p className="text-sm text-gray-600 mt-1">{test.notes}</p>
+                                <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-wrap-anywhere">{test.notes}</p>
                               </div>
                             )}
                           </div>
