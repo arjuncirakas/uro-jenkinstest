@@ -203,6 +203,21 @@ export const investigationService = {
         console.log('Response status:', response.status);
         console.log('Response headers:', response.headers);
         console.log('Response data size:', response.data?.size || 'unknown');
+        console.log('Response data type:', response.data?.constructor?.name || 'unknown');
+        
+        // Log first few bytes for debugging (if it's a blob)
+        if (response.data && response.data.size > 0) {
+          try {
+            const preview = response.data.slice(0, 50);
+            preview.text().then(text => {
+              console.log('First 50 bytes of response:', text);
+            }).catch(e => {
+              console.log('Could not read preview (might be binary data)');
+            });
+          } catch (e) {
+            console.log('Could not create preview');
+          }
+        }
         
         // Get file name and extension from path
         const fileName = filePath.split('/').pop() || 'file';
@@ -211,9 +226,21 @@ export const investigationService = {
         // Get the content type from response headers, with fallback based on file extension
         let contentType = response.headers['content-type'] || response.headers['Content-Type'] || 'application/octet-stream';
         
+        // Check if blob is empty
+        if (!response.data || response.data.size === 0) {
+          console.error('Received empty file');
+          alert('Error: The file appears to be empty or could not be loaded.');
+          return;
+        }
+        
         // Check if the response is actually an error (JSON response instead of file)
-        // If content-type is application/json, it's likely an error response
-        if (contentType.includes('application/json') || contentType.includes('text/html')) {
+        // Only check for JSON/HTML if content-type explicitly says so AND file is small
+        // Don't block if content-type is image/* even if small (might be valid small image)
+        const isLikelyError = (contentType.includes('application/json') || contentType.includes('text/html')) 
+          && !contentType.startsWith('image/')
+          && response.data.size < 1024;
+        
+        if (isLikelyError) {
           // Try to read as text to see the error message
           try {
             const text = await new Promise((resolve, reject) => {
@@ -236,16 +263,26 @@ export const investigationService = {
           return;
         }
         
-        // Check if blob is empty
-        if (!response.data || response.data.size === 0) {
-          console.error('Received empty file');
-          alert('Error: The file appears to be empty or could not be loaded.');
-          return;
-        }
-        
-        // Validate blob size (should be reasonable for images)
-        if (response.data.size < 100 && fileExtension !== 'txt') {
-          console.warn('File size is very small, might be an error response');
+        // For images, validate that the blob size is reasonable
+        // Images should be at least a few KB (unless it's a very small icon)
+        // But don't block if content-type is correct - let the image load and show error if it fails
+        if (contentType.startsWith('image/') && response.data.size < 500 && fileExtension !== 'ico') {
+          console.warn('Image file size is very small:', response.data.size, 'bytes');
+          // Check if it's actually JSON by reading first few bytes
+          try {
+            // Clone the blob to read without consuming it
+            const blobClone = response.data.slice(0, 100);
+            const firstBytes = await blobClone.text();
+            if (firstBytes.trim().startsWith('{') || firstBytes.trim().startsWith('<')) {
+              console.error('Response appears to be JSON/HTML, not an image');
+              console.error('First 100 bytes:', firstBytes);
+              alert('Error: The server returned an error response instead of the image file.');
+              return;
+            }
+          } catch (e) {
+            // If we can't read it, proceed anyway - might be a valid small image
+            console.warn('Could not validate response content, proceeding...', e);
+          }
         }
         
         // Fallback: determine content type from file extension if not provided
