@@ -80,24 +80,12 @@ npm install --production
 print_success "Backend dependencies installed"
 
 print_step "Checking backend environment file..."
-if [ ! -f "$BACKEND_DIR/secure.env" ]; then
-    print_error "secure.env file not found!"
-    print_warning "Please create secure.env with required configuration"
+if [ ! -f "$BACKEND_DIR/.env" ]; then
+    print_error ".env file not found!"
+    print_warning "Please create .env with required configuration"
     exit 1
 else
     print_success "Environment file found"
-fi
-
-# Update .env for production if needed
-if [ -f "$BACKEND_DIR/.env" ]; then
-    print_step "Backing up existing .env..."
-    cp "$BACKEND_DIR/.env" "$BACKEND_DIR/.env.backup"
-fi
-
-# Copy secure.env to .env if it doesn't exist
-if [ ! -f "$BACKEND_DIR/.env" ]; then
-    print_step "Creating .env from secure.env..."
-    cp "$BACKEND_DIR/secure.env" "$BACKEND_DIR/.env"
 fi
 
 # Create superadmin user
