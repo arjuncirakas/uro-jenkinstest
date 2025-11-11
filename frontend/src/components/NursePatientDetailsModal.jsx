@@ -11,6 +11,7 @@ import MDTSchedulingModal from './MDTSchedulingModal';
 import AddInvestigationModal from './AddInvestigationModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
+import ImageViewerModal from './modals/ImageViewerModal';
 import { notesService } from '../services/notesService';
 import { investigationService } from '../services/investigationService';
 
@@ -39,6 +40,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   // Investigation modals state
   const [isAddPSAModalOpen, setIsAddPSAModalOpen] = useState(false);
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
+  
+  // Image viewer modal state
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState(null);
+  const [imageFileName, setImageFileName] = useState('');
+  const [imageBlobUrl, setImageBlobUrl] = useState(null);
   
   // Investigation data state
   const [psaResults, setPsaResults] = useState([]);
@@ -489,8 +496,29 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   // Handle viewing files
   const handleViewFile = (filePath) => {
     if (filePath) {
-      investigationService.viewFile(filePath);
+      // For images, use modal; for others, open in new tab
+      investigationService.viewFile(filePath, (dataUrl, fileName, blobUrl) => {
+        // This callback is called for images
+        setImageUrl(dataUrl);
+        setImageFileName(fileName);
+        setImageBlobUrl(blobUrl);
+        setIsImageViewerOpen(true);
+      });
     }
+  };
+
+  // Handle closing image viewer
+  const handleCloseImageViewer = () => {
+    setIsImageViewerOpen(false);
+    // Clean up blob URL after a delay
+    if (imageBlobUrl) {
+      setTimeout(() => {
+        URL.revokeObjectURL(imageBlobUrl);
+        setImageBlobUrl(null);
+      }, 1000);
+    }
+    setImageUrl(null);
+    setImageFileName('');
   };
 
   // Fetch PSA history for modal
@@ -3255,6 +3283,15 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       cancelText="Cancel"
       type="danger"
       isLoading={deletingNote !== null || deletingInvestigation !== null}
+    />
+
+    {/* Image Viewer Modal */}
+    <ImageViewerModal
+      isOpen={isImageViewerOpen}
+      onClose={handleCloseImageViewer}
+      imageUrl={imageUrl}
+      fileName={imageFileName}
+      blobUrl={imageBlobUrl}
     />
 
     {/* Add PSA Result Modal */}
