@@ -229,6 +229,31 @@ export const investigationService = {
         contentType = contentType.split(';')[0].trim();
         console.log('Normalized content type:', contentType);
         
+        // Check file extension to determine if it's an image (fallback if content-type is wrong)
+        const isImageByExtension = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(fileExtension);
+        const isImageByContentType = contentType.startsWith('image/');
+        const isImage = isImageByContentType || isImageByExtension;
+        
+        console.log('File extension:', fileExtension);
+        console.log('Is image by extension:', isImageByExtension);
+        console.log('Is image by content type:', isImageByContentType);
+        console.log('Is image:', isImage);
+        
+        // If content type is wrong but file extension suggests it's an image, fix the content type
+        if (isImageByExtension && !isImageByContentType) {
+          console.log('⚠️ Content type is wrong, but file extension suggests image. Fixing content type...');
+          const extensionMimeTypes = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'bmp': 'image/bmp'
+          };
+          contentType = extensionMimeTypes[fileExtension] || contentType;
+          console.log('Fixed content type:', contentType);
+        }
+        
         // Create blob with proper MIME type
         const blob = new Blob([response.data], { type: contentType });
         
@@ -236,13 +261,15 @@ export const investigationService = {
         const blobUrl = URL.createObjectURL(blob);
         console.log('Created blob URL:', blobUrl);
         
-        // Determine how to display based on content type
-        if (contentType.startsWith('image/')) {
+        // Determine how to display based on content type or file extension
+        if (isImage) {
+          console.log('✅ Detected as image, opening in modal...');
           // For images, convert blob to data URL and trigger modal display
           const reader = new FileReader();
           reader.onloadend = () => {
             try {
               const dataUrl = reader.result;
+              console.log('✅ Image converted to data URL, dispatching viewImage event');
               
               // Dispatch custom event to open image in modal
               // Components listening to this event will show the ImageViewerModal
@@ -251,24 +278,27 @@ export const investigationService = {
                   imageUrl: dataUrl,
                   fileName: fileName,
                   blobUrl: blobUrl // Keep blob URL as fallback
-                }
+                },
+                bubbles: true
               });
               window.dispatchEvent(imageViewEvent);
+              console.log('✅ viewImage event dispatched');
               
               // Clean up blob URL after a delay (keep it for modal display)
               setTimeout(() => {
                 URL.revokeObjectURL(blobUrl);
               }, 300000); // 5 minutes - enough time for modal viewing
             } catch (error) {
-              console.error('Error creating image viewer:', error);
+              console.error('❌ Error creating image viewer:', error);
               alert('Error displaying image. Please try again.');
             }
           };
-          reader.onerror = () => {
-            console.error('Error reading image file');
+          reader.onerror = (error) => {
+            console.error('❌ Error reading image file:', error);
             alert('Error reading image file. Please try again.');
           };
           reader.readAsDataURL(blob);
+          return; // IMPORTANT: Return early to prevent opening new window
         } else if (contentType === 'application/pdf') {
           // For PDFs, create an HTML page with embedded PDF viewer
           const htmlContent = `
