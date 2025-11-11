@@ -84,16 +84,24 @@ router.delete('/investigations/:resultId',
   deleteInvestigationResult
 );
 
-// Handle OPTIONS preflight for file requests
+// Handle OPTIONS preflight for file requests (must be before GET route and without auth)
 router.options('/files/:filePath(*)', (req, res) => {
   const origin = req.headers.origin;
+  console.log('OPTIONS preflight request for file:', req.params.filePath, 'from origin:', origin);
+  
   if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Content-Length, Content-Disposition');
     res.setHeader('Access-Control-Max-Age', '86400');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   }
+  
   res.status(200).end();
 });
 

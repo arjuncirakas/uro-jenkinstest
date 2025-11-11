@@ -12,7 +12,6 @@ import AddInvestigationResultModal from './AddInvestigationResultModal';
 import DischargeSummaryModal from './DischargeSummaryModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
-import ImageViewerModal from './modals/ImageViewerModal';
 import { notesService } from '../services/notesService';
 import { patientService } from '../services/patientService';
 import { investigationService } from '../services/investigationService';
@@ -34,12 +33,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
   const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
   const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
-  
-  // Image viewer modal state
-  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
-  const [imageUrl, setImageUrl] = useState(null);
-  const [imageFileName, setImageFileName] = useState('');
-  const [imageBlobUrl, setImageBlobUrl] = useState(null);
   
   // Transfer modal states
   const [isPathwayModalOpen, setIsPathwayModalOpen] = useState(false);
@@ -868,34 +861,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     
     if (test.filePath) {
       // Use the investigation service to view the file
-      // For images, use modal; for others, open in new tab
-      investigationService.viewFile(test.filePath, (dataUrl, fileName, blobUrl) => {
-        // This callback is called for images
-        setImageUrl(dataUrl);
-        setImageFileName(fileName);
-        setImageBlobUrl(blobUrl);
-        setIsImageViewerOpen(true);
-      });
+      investigationService.viewFile(test.filePath);
     } else {
       // Fallback for tests without file attachments
       setSuccessModalTitle('View Report');
       setSuccessModalMessage(`No file attachment available for ${test.testName || test.name}`);
       setIsSuccessModalOpen(true);
     }
-  };
-
-  // Handle closing image viewer
-  const handleCloseImageViewer = () => {
-    setIsImageViewerOpen(false);
-    // Clean up blob URL after a delay
-    if (imageBlobUrl) {
-      setTimeout(() => {
-        URL.revokeObjectURL(imageBlobUrl);
-        setImageBlobUrl(null);
-      }, 1000);
-    }
-    setImageUrl(null);
-    setImageFileName('');
   };
 
   // Medication management functions
@@ -2457,15 +2429,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           fetchInvestigationRequests();
           fetchNotes(); // Also refresh notes as a clinical note is created
         }}
-      />
-
-      {/* Image Viewer Modal */}
-      <ImageViewerModal
-        isOpen={isImageViewerOpen}
-        onClose={handleCloseImageViewer}
-        imageUrl={imageUrl}
-        fileName={imageFileName}
-        blobUrl={imageBlobUrl}
       />
 
       {/* Add PSA Result Modal */}
