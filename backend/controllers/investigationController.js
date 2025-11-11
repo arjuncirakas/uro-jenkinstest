@@ -857,14 +857,17 @@ const setCorsHeaders = (res, origin) => {
 export const serveFile = async (req, res) => {
   try {
     // Get the file path from the parameter
-    // With route pattern '/files/*', Express captures the path in req.params[0]
-    let filePath = req.params[0] || req.params.filePath;
+    // With route pattern '/files/:filePath(*)', Express captures the path in req.params.filePath
+    let filePath = req.params.filePath;
     
-    // If still not found, extract from the request path
-    if (!filePath && req.path) {
-      const filesIndex = req.path.indexOf('/files/');
-      if (filesIndex !== -1) {
-        filePath = req.path.substring(filesIndex + '/files/'.length);
+    // Fallback: try req.params[0] or extract from path
+    if (!filePath) {
+      filePath = req.params[0];
+      if (!filePath && req.path) {
+        const filesIndex = req.path.indexOf('/files/');
+        if (filesIndex !== -1) {
+          filePath = req.path.substring(filesIndex + '/files/'.length);
+        }
       }
     }
     

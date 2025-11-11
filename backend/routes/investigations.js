@@ -18,6 +18,15 @@ import { xssProtection } from '../middleware/sanitizer.js';
 const router = express.Router();
 router.use(xssProtection);
 
+// Debug middleware to log all requests to this router
+router.use((req, res, next) => {
+  if (req.path.includes('/files/')) {
+    console.log('🔍 [Investigations Router] Request received:', req.method, req.path);
+    console.log('🔍 [Investigations Router] Original URL:', req.originalUrl);
+  }
+  next();
+});
+
 // Create investigation request for a patient
 router.post('/patients/:patientId/investigation-requests',
   generalLimiter,
@@ -85,7 +94,7 @@ router.delete('/investigations/:resultId',
 );
 
 // Handle OPTIONS preflight for file requests (must be before GET route and without auth)
-router.options('/files/*', (req, res) => {
+router.options('/files/:filePath(*)', (req, res) => {
   const origin = req.headers.origin;
   console.log('OPTIONS preflight request for file:', req.params.filePath, 'from origin:', origin);
   
@@ -106,8 +115,15 @@ router.options('/files/*', (req, res) => {
 });
 
 // Serve investigation files
-// Use * instead of (*) for better compatibility - captures everything after /files/
-router.get('/files/*',
+// Use parameter with wildcard to capture the full path including slashes
+router.get('/files/:filePath(*)',
+  (req, res, next) => {
+    console.log('🔍 [File Route] Route matched!');
+    console.log('🔍 [File Route] Path:', req.path);
+    console.log('🔍 [File Route] Params:', req.params);
+    console.log('🔍 [File Route] Original URL:', req.originalUrl);
+    next();
+  },
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
