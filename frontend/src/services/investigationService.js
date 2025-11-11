@@ -195,7 +195,8 @@ export const investigationService = {
         console.log('Encoded file path:', encodedPath);
         
         // Fetch the file with proper authentication and MIME type
-        const response = await apiClient.get(`/files/${encodedPath}`, {
+        // Use /investigations/files to match the backend route
+        const response = await apiClient.get(`/investigations/files/${encodedPath}`, {
           responseType: 'blob'
         });
         

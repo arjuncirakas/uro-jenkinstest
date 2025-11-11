@@ -873,6 +873,12 @@ const setCorsHeaders = (req, res) => {
 // Serve investigation files
 export const serveFile = async (req, res) => {
   try {
+    console.log('📁 [serveFile] Request received');
+    console.log('📁 [serveFile] Method:', req.method);
+    console.log('📁 [serveFile] Original URL:', req.originalUrl);
+    console.log('📁 [serveFile] Path:', req.path);
+    console.log('📁 [serveFile] Params:', req.params);
+    
     let filePath = req.params.filePath; // Get the file path from the parameter
     
     // Decode the file path (it might be URL encoded)
@@ -882,8 +888,8 @@ export const serveFile = async (req, res) => {
       console.log('File path is not URL encoded or decode failed, using as-is');
     }
     
-    console.log('Requested file path (raw):', req.params.filePath);
-    console.log('Requested file path (decoded):', filePath);
+    console.log('📁 [serveFile] Requested file path (raw):', req.params.filePath);
+    console.log('📁 [serveFile] Requested file path (decoded):', filePath);
     
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);

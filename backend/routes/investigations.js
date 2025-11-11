@@ -98,6 +98,15 @@ router.options('/files/:filePath(*)', (req, res) => {
 });
 
 // Serve investigation files
+// Use /investigations/files to avoid conflicts with other routes
+router.get('/investigations/files/:filePath(*)',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
+  serveFile
+);
+
+// Also support the old route for backward compatibility
 router.get('/files/:filePath(*)',
   generalLimiter,
   authenticateToken,
