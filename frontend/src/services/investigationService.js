@@ -238,66 +238,35 @@ export const investigationService = {
         
         // Determine how to display based on content type
         if (contentType.startsWith('image/')) {
-          // For images, convert blob to data URL and embed in HTML
+          // For images, convert blob to data URL and trigger modal display
           const reader = new FileReader();
           reader.onloadend = () => {
             try {
               const dataUrl = reader.result;
-              const htmlContent = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <title>${fileName}</title>
-                  <style>
-                    body {
-                      margin: 0;
-                      padding: 20px;
-                      display: flex;
-                      justify-content: center;
-                      align-items: center;
-                      min-height: 100vh;
-                      background-color: #f5f5f5;
-                    }
-                    img {
-                      max-width: 100%;
-                      max-height: 100vh;
-                      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                    }
-                  </style>
-                </head>
-                <body>
-                  <img src="${dataUrl}" alt="${fileName}" />
-                </body>
-                </html>
-              `;
-              const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
-              const htmlBlobUrl = URL.createObjectURL(htmlBlob);
-              const newWindow = window.open(htmlBlobUrl, '_blank');
               
-              if (!newWindow || newWindow.closed) {
-                // If popup blocked, try direct blob URL
-                window.open(blobUrl, '_blank');
-              }
+              // Dispatch custom event to open image in modal
+              // Components listening to this event will show the ImageViewerModal
+              const imageViewEvent = new CustomEvent('viewImage', {
+                detail: {
+                  imageUrl: dataUrl,
+                  fileName: fileName,
+                  blobUrl: blobUrl // Keep blob URL as fallback
+                }
+              });
+              window.dispatchEvent(imageViewEvent);
               
-              // Clean up HTML blob URL after a delay
-              setTimeout(() => {
-                URL.revokeObjectURL(htmlBlobUrl);
-              }, 1000);
-              
-              // Clean up original blob URL after image is loaded
+              // Clean up blob URL after a delay (keep it for modal display)
               setTimeout(() => {
                 URL.revokeObjectURL(blobUrl);
-              }, 60000);
+              }, 300000); // 5 minutes - enough time for modal viewing
             } catch (error) {
               console.error('Error creating image viewer:', error);
-              // Fallback: try opening blob URL directly
-              window.open(blobUrl, '_blank');
+              alert('Error displaying image. Please try again.');
             }
           };
           reader.onerror = () => {
             console.error('Error reading image file');
-            // Fallback: try opening blob URL directly
-            window.open(blobUrl, '_blank');
+            alert('Error reading image file. Please try again.');
           };
           reader.readAsDataURL(blob);
         } else if (contentType === 'application/pdf') {

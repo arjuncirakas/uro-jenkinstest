@@ -856,8 +856,32 @@ const setCorsHeaders = (res, origin) => {
 // Serve investigation files
 export const serveFile = async (req, res) => {
   try {
-    const filePath = req.params.filePath; // Get the file path from the parameter
+    // Get the file path from the parameter - handle both :filePath and wildcard matching
+    let filePath = req.params.filePath || req.params[0];
+    
+    // If filePath is an array (from wildcard), join it
+    if (Array.isArray(filePath)) {
+      filePath = filePath.join('/');
+    }
+    
+    // Decode the file path in case it was URL encoded
+    if (filePath) {
+      filePath = decodeURIComponent(filePath);
+    }
+    
     console.log('Requested file path:', filePath);
+    console.log('Request params:', req.params);
+    
+    // Validate filePath
+    if (!filePath) {
+      console.error('No file path provided');
+      const origin = req.headers.origin;
+      setCorsHeaders(res, origin);
+      return res.status(400).json({
+        success: false,
+        message: 'File path is required'
+      });
+    }
     
     // Get origin early and set CORS headers (must be set before any response)
     const origin = req.headers.origin;
