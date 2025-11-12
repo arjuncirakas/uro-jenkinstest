@@ -665,6 +665,8 @@ export const deleteUser = async (req, res) => {
       // Subtract the offset to get the real doctor ID
       const realDoctorId = id - 1000000;
       
+      await client.query('BEGIN'); // Start transaction
+      
       // Check if doctor exists
       const existingDoctor = await client.query(
         'SELECT id, email, first_name, last_name FROM doctors WHERE id = $1',
@@ -672,6 +674,7 @@ export const deleteUser = async (req, res) => {
       );
 
       if (existingDoctor.rows.length === 0) {
+        await client.query('ROLLBACK');
         return res.status(404).json({
           success: false,
           message: 'Doctor not found'
@@ -679,22 +682,31 @@ export const deleteUser = async (req, res) => {
       }
 
       const doctor = existingDoctor.rows[0];
+      const doctorEmail = doctor.email;
 
-      // Soft delete doctor (set is_active = false)
+      // Delete password setup tokens for the user (if exists)
       await client.query(
-        'UPDATE doctors SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        'DELETE FROM password_setup_tokens WHERE email = $1',
+        [doctorEmail]
+      );
+
+      // Delete the corresponding user record if it exists (but not superadmin)
+      await client.query(
+        'DELETE FROM users WHERE email = $1 AND role != \'superadmin\'',
+        [doctorEmail]
+      );
+
+      // Delete the doctor record completely from the database
+      await client.query(
+        'DELETE FROM doctors WHERE id = $1',
         [realDoctorId]
       );
 
-      // Also soft delete corresponding user if exists
-      await client.query(
-        'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE email = $1 AND role != \'superadmin\'',
-        [doctor.email]
-      );
+      await client.query('COMMIT'); // Commit transaction
 
       res.json({
         success: true,
-        message: 'Doctor deleted successfully'
+        message: 'Doctor deleted successfully from the database'
       });
     } else {
       // This is a regular user from the users table
@@ -729,6 +741,13 @@ export const deleteUser = async (req, res) => {
     }
 
   } catch (error) {
+    // Rollback transaction if it was started (for doctor deletion)
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('Error rolling back transaction:', rollbackError);
+    }
+    
     console.error('❌ Delete user error:', error);
     console.error('Error code:', error.code);
     console.error('Error detail:', error.detail);

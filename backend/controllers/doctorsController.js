@@ -408,35 +408,65 @@ export const updateDoctor = async (req, res) => {
   }
 };
 
-// Delete doctor (soft delete)
+// Delete doctor (hard delete - completely remove from database)
 export const deleteDoctor = async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN'); // Start transaction
+    
     const { id } = req.params;
     
-    const result = await pool.query(`
-      UPDATE doctors 
-      SET is_active = false, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING *
-    `, [id]);
+    // First check if doctor exists and get email
+    const doctorResult = await client.query(
+      'SELECT id, email, first_name, last_name FROM doctors WHERE id = $1',
+      [id]
+    );
     
-    if (result.rows.length === 0) {
+    if (doctorResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         error: 'Doctor not found'
       });
     }
     
+    const doctor = doctorResult.rows[0];
+    const doctorEmail = doctor.email;
+    
+    // Delete password setup tokens for the user (if exists)
+    await client.query(
+      'DELETE FROM password_setup_tokens WHERE email = $1',
+      [doctorEmail]
+    );
+    
+    // Delete the corresponding user record if it exists (but not superadmin)
+    await client.query(
+      'DELETE FROM users WHERE email = $1 AND role != \'superadmin\'',
+      [doctorEmail]
+    );
+    
+    // Delete the doctor record completely from the database
+    const deleteResult = await client.query(
+      'DELETE FROM doctors WHERE id = $1 RETURNING *',
+      [id]
+    );
+    
+    await client.query('COMMIT'); // Commit transaction
+    
     res.json({
       success: true,
-      message: 'Doctor deleted successfully'
+      message: 'Doctor deleted successfully from the database'
     });
   } catch (error) {
+    await client.query('ROLLBACK'); // Rollback transaction on error
     console.error('Error deleting doctor:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to delete doctor'
     });
+  } finally {
+    client.release();
   }
 };
 
