@@ -245,32 +245,36 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       
       if (appointmentIdToUpdate) {
         // Update existing appointment (reschedule)
-        // Determine if it's investigation or urologist appointment
-        const isInvestigationUpdate = appointmentTypeToUpdate === 'investigation' || 
-                                      (appointmentTypeSelected === 'investigation' && appointmentTypeToUpdate !== 'urologist');
-        
+        // Use the selected appointment type from the dropdown (appointmentTypeSelected)
+        // This allows changing from urologist to investigation or vice versa
         const result = await bookingService.rescheduleNoShowAppointment(
           appointmentIdToUpdate,
           {
             newDate: selectedDate,
             newTime: selectedTime,
             newDoctorId: selectedDoctorId,
-            appointmentType: isInvestigationUpdate ? 'investigation' : 'urologist',
+            appointmentType: appointmentTypeSelected, // Use the selected type, not the original
             surgeryType: appointmentType === 'surgery' ? surgeryType : null,
             notes: notes
           }
         );
 
         if (result.success) {
-          // Dispatch appropriate events
+          // Dispatch appropriate events based on the selected appointment type
           if (appointmentType === 'surgery') {
-            window.dispatchEvent(new CustomEvent('surgery:updated'));
+            window.dispatchEvent(new CustomEvent('surgery:updated', {
+              detail: { patientId: patient.id, appointmentData: result.data }
+            }));
           }
-          if (isInvestigationUpdate || appointmentTypeSelected === 'investigation') {
+          if (appointmentTypeSelected === 'investigation') {
             window.dispatchEvent(new CustomEvent('investigationBooked', {
               detail: { patientId: patient.id, investigationData: result.data }
             }));
           }
+          // Dispatch general appointment updated event
+          window.dispatchEvent(new CustomEvent('appointment:updated', {
+            detail: { patientId: patient.id, appointmentData: result.data }
+          }));
           if (onSuccess) onSuccess();
           onClose();
         } else {
@@ -293,6 +297,9 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             window.dispatchEvent(new CustomEvent('investigationBooked', {
               detail: { patientId: patient.id, investigationData: result.data }
             }));
+            window.dispatchEvent(new CustomEvent('appointment:updated', {
+              detail: { patientId: patient.id, appointmentData: result.data }
+            }));
             if (onSuccess) onSuccess();
             onClose();
           } else {
@@ -313,8 +320,13 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
           if (result.success) {
             // Dispatch event if it's a surgery appointment
             if (appointmentType === 'surgery') {
-              window.dispatchEvent(new CustomEvent('surgery:updated'));
+              window.dispatchEvent(new CustomEvent('surgery:updated', {
+                detail: { patientId: patient.id, appointmentData: result.data }
+              }));
             }
+            window.dispatchEvent(new CustomEvent('appointment:updated', {
+              detail: { patientId: patient.id, appointmentData: result.data }
+            }));
             if (onSuccess) onSuccess();
             onClose();
           } else {

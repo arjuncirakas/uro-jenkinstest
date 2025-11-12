@@ -1608,6 +1608,160 @@ export const rescheduleNoShowAppointment = async (req, res) => {
     // Start transaction
     await client.query('BEGIN');
 
+    // First, determine the original appointment type by checking both tables
+    const checkUrologistAppointment = await client.query(
+      'SELECT id, status, patient_id FROM appointments WHERE id = $1',
+      [appointmentId]
+    );
+    
+    const checkInvestigationAppointment = await client.query(
+      'SELECT id, status, patient_id FROM investigation_bookings WHERE id = $1',
+      [appointmentId]
+    );
+    
+    const originalAppointmentType = checkUrologistAppointment.rows.length > 0 
+      ? 'urologist' 
+      : (checkInvestigationAppointment.rows.length > 0 ? 'investigation' : null);
+    
+    if (!originalAppointmentType) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found'
+      });
+    }
+    
+    const patientIdForTimeline = checkUrologistAppointment.rows.length > 0 
+      ? checkUrologistAppointment.rows[0].patient_id 
+      : checkInvestigationAppointment.rows[0].patient_id;
+    
+    const currentStatus = checkUrologistAppointment.rows.length > 0
+      ? checkUrologistAppointment.rows[0].status
+      : checkInvestigationAppointment.rows[0].status;
+    
+    // Check if appointment type is being changed
+    const isTypeChange = originalAppointmentType !== appointmentType;
+    
+    console.log(`[rescheduleNoShowAppointment] Original type: ${originalAppointmentType}, New type: ${appointmentType}, Type change: ${isTypeChange}`);
+    
+    // If appointment type is being changed, delete old appointment and create new one
+    if (isTypeChange) {
+      // Delete the old appointment
+      if (originalAppointmentType === 'urologist') {
+        await client.query('DELETE FROM appointments WHERE id = $1', [appointmentId]);
+        console.log(`[rescheduleNoShowAppointment] Deleted old urologist appointment ${appointmentId}`);
+      } else {
+        await client.query('DELETE FROM investigation_bookings WHERE id = $1', [appointmentId]);
+        console.log(`[rescheduleNoShowAppointment] Deleted old investigation appointment ${appointmentId}`);
+      }
+      
+      // Create new appointment in the other table
+      const notesText = req.body.notes || '';
+      
+      if (appointmentType === 'investigation') {
+        // Create new investigation booking
+        const newInvestigationQuery = `
+          INSERT INTO investigation_bookings (
+            patient_id, investigation_type, investigation_name, 
+            scheduled_date, scheduled_time, notes, created_by, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id, patient_id
+        `;
+        const newInvestigationResult = await client.query(newInvestigationQuery, [
+          patientIdForTimeline,
+          'urologist', // investigation_type
+          doctorName,
+          newDate,
+          newTime,
+          notesText || `Changed from ${originalAppointmentType} appointment`,
+          req.user.id,
+          'scheduled'
+        ]);
+        
+        const newAppointmentId = newInvestigationResult.rows[0].id;
+        console.log(`[rescheduleNoShowAppointment] Created new investigation appointment ${newAppointmentId}`);
+        
+        // Update patient's assigned urologist
+        await client.query(
+          'UPDATE patients SET assigned_urologist = $1 WHERE id = $2',
+          [doctorName, patientIdForTimeline]
+        );
+        
+        // Add timeline entry
+        const timelineNote = `Appointment type changed from ${originalAppointmentType} to investigation and scheduled for ${newDate} at ${newTime} with ${doctorName}`;
+        await client.query(
+          'INSERT INTO patient_notes (patient_id, note_content, author_id, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
+          [patientIdForTimeline, timelineNote, req.user.id]
+        );
+        
+        // Commit and return
+        await client.query('COMMIT');
+        return res.json({
+          success: true,
+          message: 'Appointment type changed and rescheduled successfully',
+          data: {
+            appointmentId: newAppointmentId,
+            newDate,
+            newTime,
+            doctorName,
+            appointmentType: 'investigation'
+          }
+        });
+      } else {
+        // Create new urologist appointment
+        const newAppointmentQuery = `
+          INSERT INTO appointments (
+            patient_id, appointment_type, appointment_date, appointment_time, 
+            urologist_id, urologist_name, surgery_type, notes, created_by, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          RETURNING id, patient_id
+        `;
+        const newAppointmentResult = await client.query(newAppointmentQuery, [
+          patientIdForTimeline,
+          'urologist',
+          newDate,
+          newTime,
+          newDoctorId,
+          doctorName,
+          surgeryType || null,
+          notesText || `Changed from ${originalAppointmentType} appointment`,
+          req.user.id,
+          'scheduled'
+        ]);
+        
+        const newAppointmentId = newAppointmentResult.rows[0].id;
+        console.log(`[rescheduleNoShowAppointment] Created new urologist appointment ${newAppointmentId}`);
+        
+        // Update patient's assigned urologist
+        await client.query(
+          'UPDATE patients SET assigned_urologist = $1 WHERE id = $2',
+          [doctorName, patientIdForTimeline]
+        );
+        
+        // Add timeline entry
+        const timelineNote = `Appointment type changed from ${originalAppointmentType} to urologist consultation and scheduled for ${newDate} at ${newTime} with Dr. ${doctorName}`;
+        await client.query(
+          'INSERT INTO patient_notes (patient_id, note_content, author_id, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
+          [patientIdForTimeline, timelineNote, req.user.id]
+        );
+        
+        // Commit and return
+        await client.query('COMMIT');
+        return res.json({
+          success: true,
+          message: 'Appointment type changed and rescheduled successfully',
+          data: {
+            appointmentId: newAppointmentId,
+            newDate,
+            newTime,
+            doctorName,
+            appointmentType: 'urologist'
+          }
+        });
+      }
+    }
+    
+    // If appointment type is not changing, proceed with normal update
     if (appointmentType === 'investigation') {
       // Update investigation booking
       // First get the current appointment status
