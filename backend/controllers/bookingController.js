@@ -506,6 +506,7 @@ export const getAvailableUrologists = async (req, res) => {
     // Also get urologists from users table for backwards compatibility
     // Only include active and verified users from Urology department
     // Only include users with role 'urologist' or 'doctor' who are in Urology department
+    // Exclude users who already have a record in doctors table (to prevent duplicates)
     const usersTableResult = await client.query(
       `SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role
        FROM users u
@@ -525,8 +526,14 @@ export const getAvailableUrologists = async (req, res) => {
          -- If no department record, only include if role is explicitly 'urologist'
          (dept.name IS NULL AND u.role = 'urologist')
        )
+       -- Exclude users who already have an active doctor record in doctors table
        AND NOT EXISTS (
-         SELECT 1 FROM doctors d2 WHERE d2.email = u.email AND d2.is_active = false
+         SELECT 1 FROM doctors d2 
+         WHERE d2.email = u.email 
+         AND d2.is_active = true
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM doctors d3 WHERE d3.email = u.email AND d3.is_active = false
        )
        ORDER BY u.first_name, u.last_name`
     );
@@ -545,21 +552,39 @@ export const getAvailableUrologists = async (req, res) => {
       source: 'doctors_table'
     }));
 
-    // Create urologists array from users table
-    const urologistsFromUsers = usersTableResult.rows.map(row => ({
-      id: row.id,
-      name: `${row.first_name} ${row.last_name}`,
-      email: row.email,
-      phone: row.phone,
-      role: row.role,
-      specialization: 'Urologist',
-      source: 'users_table'
-    }));
+    // Get emails from doctors table to exclude duplicates
+    const doctorsTableEmails = new Set(
+      doctorsTableResult.rows.map(row => row.email.toLowerCase())
+    );
 
-    // Combine both lists (doctors table takes priority)
-    const urologists = [...urologistsFromTable, ...urologistsFromUsers];
+    // Create urologists array from users table, excluding those already in doctors table
+    const urologistsFromUsers = usersTableResult.rows
+      .filter(row => !doctorsTableEmails.has(row.email.toLowerCase()))
+      .map(row => ({
+        id: row.id,
+        name: `${row.first_name} ${row.last_name}`,
+        email: row.email,
+        phone: row.phone,
+        role: row.role,
+        specialization: 'Urologist',
+        source: 'users_table'
+      }));
 
-    console.log(`[getAvailableUrologists] Total urologists available: ${urologists.length}`);
+    // Combine both lists (doctors table takes priority, no duplicates)
+    const allUrologists = [...urologistsFromTable, ...urologistsFromUsers];
+    
+    // Final deduplication by email (case-insensitive) - keep first occurrence (doctors_table takes priority)
+    const seenEmails = new Set();
+    const urologists = allUrologists.filter(urologist => {
+      const emailLower = urologist.email.toLowerCase();
+      if (seenEmails.has(emailLower)) {
+        return false; // Skip duplicate
+      }
+      seenEmails.add(emailLower);
+      return true; // Keep first occurrence
+    });
+
+    console.log(`[getAvailableUrologists] Total urologists available (after deduplication): ${urologists.length}`);
 
     res.json({
       success: true,
