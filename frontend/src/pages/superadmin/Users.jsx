@@ -702,8 +702,8 @@ const Users = () => {
                                     {getSpecificRoleName(user.role)}
                                   </span>
                                 )}
-                                {/* Department Tag (only for doctors) */}
-                                {user.role === 'doctor' && user.department_name && (
+                                {/* Department Tag (for doctors and urologists) */}
+                                {(user.role === 'doctor' || user.role === 'urologist') && user.department_name && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200">
                                     <Building2 className="h-3 w-3 mr-1 text-teal-600" />
                                     {user.department_name}

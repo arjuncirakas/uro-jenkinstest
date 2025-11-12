@@ -95,10 +95,16 @@ export const createUser = async (req, res) => {
       const specialization = deptResult.rows[0].name;
       const departmentName = deptResult.rows[0].name;
 
-      // If department is urology, change role from 'doctor' to 'urologist'
-      if (departmentName && departmentName.toLowerCase().includes('urology')) {
-        finalRole = 'urologist';
-        console.log(`[createUser] Department is urology, changing role from 'doctor' to 'urologist'`);
+      // If department is urology (exact match or starts with "urology" followed by space/end), change role from 'doctor' to 'urologist'
+      // Use word boundary to avoid matching "neurology" which contains "urology"
+      if (departmentName) {
+        const deptNameLower = departmentName.toLowerCase().trim();
+        // Check if department name is exactly "urology" or starts with "urology" followed by space or end
+        // This prevents matching "neurology" which contains "urology" as a substring
+        if (deptNameLower === 'urology' || /^urology(\s|$)/.test(deptNameLower)) {
+          finalRole = 'urologist';
+          console.log(`[createUser] Department is urology, changing role from 'doctor' to 'urologist'`);
+        }
       }
 
       // Check if doctor already exists with this email
@@ -306,7 +312,7 @@ export const getAllUsers = async (req, res) => {
         u.created_at,
         u.last_login_at,
         CASE 
-          WHEN u.role = 'doctor' THEN (
+          WHEN u.role = 'doctor' OR u.role = 'urologist' THEN (
             SELECT dept.name 
             FROM doctors doc 
             LEFT JOIN departments dept ON doc.department_id = dept.id
@@ -419,7 +425,7 @@ export const filterUsers = async (req, res) => {
           dept.name as department_name,
           d.department_id
         FROM doctors d
-        LEFT JOIN users u ON d.email = u.email AND u.role = 'doctor'
+        LEFT JOIN users u ON d.email = u.email AND (u.role = 'doctor' OR u.role = 'urologist')
         LEFT JOIN departments dept ON d.department_id = dept.id
         WHERE d.department_id = $${paramIndex}
       `;
