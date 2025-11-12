@@ -363,12 +363,18 @@ export const getPatients = async (req, res) => {
         gp.last_name as gp_last_name,
         COALESCE(next_apt.appointment_date, next_inv_apt.appointment_date) as next_appointment_date,
         COALESCE(next_apt.appointment_time, next_inv_apt.appointment_time) as next_appointment_time,
-        COALESCE(next_apt.urologist_name, next_inv_apt.urologist_name) as next_appointment_urologist
+        COALESCE(next_apt.urologist_name, next_inv_apt.urologist_name) as next_appointment_urologist,
+        COALESCE(next_apt.id, next_inv_apt.id) as next_appointment_id,
+        CASE 
+          WHEN next_apt.id IS NOT NULL THEN 'urologist'
+          WHEN next_inv_apt.id IS NOT NULL THEN 'investigation'
+          ELSE NULL
+        END as next_appointment_type
       FROM patients p
       LEFT JOIN users u ON p.created_by = u.id
       LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
       LEFT JOIN LATERAL (
-        SELECT appointment_date, appointment_time, urologist_name
+        SELECT id, appointment_date, appointment_time, urologist_name, appointment_type
         FROM appointments
         WHERE patient_id = p.id 
         AND status IN ('scheduled', 'confirmed')
@@ -377,7 +383,7 @@ export const getPatients = async (req, res) => {
         LIMIT 1
       ) next_apt ON true
       LEFT JOIN LATERAL (
-        SELECT scheduled_date as appointment_date, scheduled_time as appointment_time, investigation_name as urologist_name
+        SELECT id, scheduled_date as appointment_date, scheduled_time as appointment_time, investigation_name as urologist_name
         FROM investigation_bookings
         WHERE patient_id = p.id 
         AND status IN ('scheduled', 'confirmed')
@@ -504,6 +510,8 @@ export const getPatients = async (req, res) => {
         nextAppointmentTime,
         nextReview,
         nextAppointmentUrologist: patient.next_appointment_urologist,
+        nextAppointmentId: patient.next_appointment_id, // Appointment ID for updating
+        nextAppointmentType: patient.next_appointment_type, // 'urologist' or 'investigation'
         hasAppointment, // Boolean flag to easily check if patient has an appointment
         monitoringStatus
       };

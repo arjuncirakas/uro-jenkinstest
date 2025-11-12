@@ -6,6 +6,7 @@ import { bookingService } from '../services/bookingService';
 
 const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointmentType = 'urologist' }) => {
   // Pre-populate with existing appointment details
+  const [appointmentTypeSelected, setAppointmentTypeSelected] = useState('urologist'); // 'urologist' or 'investigation'
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState(null);
   const [selectedDate, setSelectedDate] = useState('');
@@ -70,7 +71,9 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
 
       setLoadingSlots(true);
       try {
-        const result = await bookingService.getAvailableTimeSlots(selectedDoctorId, selectedDate, 'urologist');
+        // Use the selected appointment type for fetching slots
+        const slotType = appointmentTypeSelected === 'investigation' ? 'investigation' : 'urologist';
+        const result = await bookingService.getAvailableTimeSlots(selectedDoctorId, selectedDate, slotType);
         if (result.success) {
           setAvailableSlots(result.data || []);
         } else {
@@ -86,7 +89,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     };
 
     fetchAvailableSlots();
-  }, [selectedDoctorId, selectedDate]);
+  }, [selectedDoctorId, selectedDate, appointmentTypeSelected]);
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -112,6 +115,15 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
   // Update form when patient or urologists change
   useEffect(() => {
     if (patient && isOpen && !loading && urologists.length > 0) {
+      // Determine appointment type based on existing appointment
+      // Check if patient has investigation booking or urologist appointment
+      if (patient.nextAppointmentType) {
+        // Set appointment type based on what patient already has
+        setAppointmentTypeSelected(patient.nextAppointmentType);
+      } else if (patient.nextAppointmentDate || patient.nextAppointmentTime) {
+        // If patient has appointment but type is not specified, default to urologist
+        setAppointmentTypeSelected('urologist');
+      }
       // Set default doctor to assigned urologist (surgeon) if available
       const assignedUrologistName = patient.surgeon || patient.assignedUrologist || '';
       
@@ -153,14 +165,33 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       }
       
       // Set appointment details if exists
+      // Check for surgery appointment first
       if (patient.hasSurgeryAppointment && patient.surgeryDate && patient.surgeryDate !== 'TBD') {
         setSelectedDate(patient.surgeryDate);
-        setSelectedTime(patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '');
+        const surgeryTime = patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '';
+        // Normalize time format to HH:MM
+        const normalizedSurgeryTime = surgeryTime ? surgeryTime.substring(0, 5) : '';
+        setSelectedTime(normalizedSurgeryTime);
         setSurgeryType(patient.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '');
-      } else {
-        // Default to today's date
+      } 
+      // Check for regular appointment (nextAppointmentDate/nextAppointmentTime)
+      else if (patient.nextAppointmentDate || patient.nextAppointmentTime) {
+        if (patient.nextAppointmentDate) {
+          setSelectedDate(patient.nextAppointmentDate);
+        }
+        if (patient.nextAppointmentTime) {
+          // Normalize time format to HH:MM (handle both HH:MM and HH:MM:SS formats)
+          const normalizedTime = patient.nextAppointmentTime.substring(0, 5);
+          setSelectedTime(normalizedTime);
+          console.log('Setting appointment time from patient data:', normalizedTime);
+        }
+        setSurgeryType('');
+      } 
+      // Default to today's date if no existing appointment
+      else {
         const today = new Date().toISOString().split('T')[0];
         setSelectedDate(today);
+        setSelectedTime('');
         setSurgeryType('');
       }
       
@@ -201,23 +232,44 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     setError(null);
 
     try {
-      if (patient?.hasSurgeryAppointment && patient?.surgeryAppointmentId) {
+      // Find the selected doctor details for investigation bookings
+      const selectedDoctorData = urologists.find(u => {
+        const firstName = u.first_name || '';
+        const lastName = u.last_name || '';
+        return `${firstName} ${lastName}`.trim() === selectedDoctor;
+      });
+
+      // Check if patient has an existing appointment to update
+      const appointmentIdToUpdate = patient?.surgeryAppointmentId || patient?.nextAppointmentId;
+      const appointmentTypeToUpdate = patient?.nextAppointmentType || (patient?.hasSurgeryAppointment ? 'urologist' : null);
+      
+      if (appointmentIdToUpdate) {
         // Update existing appointment (reschedule)
+        // Determine if it's investigation or urologist appointment
+        const isInvestigationUpdate = appointmentTypeToUpdate === 'investigation' || 
+                                      (appointmentTypeSelected === 'investigation' && appointmentTypeToUpdate !== 'urologist');
+        
         const result = await bookingService.rescheduleNoShowAppointment(
-          patient.surgeryAppointmentId,
+          appointmentIdToUpdate,
           {
             newDate: selectedDate,
             newTime: selectedTime,
             newDoctorId: selectedDoctorId,
+            appointmentType: isInvestigationUpdate ? 'investigation' : 'urologist',
             surgeryType: appointmentType === 'surgery' ? surgeryType : null,
             notes: notes
           }
         );
 
         if (result.success) {
-          // Dispatch event if it's a surgery appointment
+          // Dispatch appropriate events
           if (appointmentType === 'surgery') {
             window.dispatchEvent(new CustomEvent('surgery:updated'));
+          }
+          if (isInvestigationUpdate || appointmentTypeSelected === 'investigation') {
+            window.dispatchEvent(new CustomEvent('investigationBooked', {
+              detail: { patientId: patient.id, investigationData: result.data }
+            }));
           }
           if (onSuccess) onSuccess();
           onClose();
@@ -225,26 +277,49 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
           setError(result.error || 'Failed to update appointment');
         }
       } else {
-        // Book new appointment
-        const result = await bookingService.bookUrologistAppointment(patient.id, {
-          appointmentDate: selectedDate,
-          appointmentTime: selectedTime,
-          urologistId: selectedDoctorId,
-          urologistName: selectedDoctor,
-          surgeryType: appointmentType === 'surgery' ? surgeryType : null,
-          notes: notes,
-          appointmentType: appointmentType === 'surgery' ? 'surgery' : 'urologist'
-        });
+        // Book new appointment - check appointment type
+        if (appointmentTypeSelected === 'investigation') {
+          // Book investigation appointment
+          const result = await bookingService.bookInvestigation(patient.id, {
+            investigationType: selectedDoctorData?.role || 'urologist',
+            investigationName: selectedDoctor,
+            scheduledDate: selectedDate,
+            scheduledTime: selectedTime,
+            notes: notes || ''
+          });
 
-        if (result.success) {
-          // Dispatch event if it's a surgery appointment
-          if (appointmentType === 'surgery') {
-            window.dispatchEvent(new CustomEvent('surgery:updated'));
+          if (result.success) {
+            // Dispatch event to notify other components
+            window.dispatchEvent(new CustomEvent('investigationBooked', {
+              detail: { patientId: patient.id, investigationData: result.data }
+            }));
+            if (onSuccess) onSuccess();
+            onClose();
+          } else {
+            setError(result.error || 'Failed to book investigation');
           }
-          if (onSuccess) onSuccess();
-          onClose();
         } else {
-          setError(result.error || 'Failed to book appointment');
+          // Book urologist appointment
+          const result = await bookingService.bookUrologistAppointment(patient.id, {
+            appointmentDate: selectedDate,
+            appointmentTime: selectedTime,
+            urologistId: selectedDoctorId,
+            urologistName: selectedDoctor,
+            surgeryType: appointmentType === 'surgery' ? surgeryType : null,
+            notes: notes,
+            appointmentType: appointmentType === 'surgery' ? 'surgery' : 'urologist'
+          });
+
+          if (result.success) {
+            // Dispatch event if it's a surgery appointment
+            if (appointmentType === 'surgery') {
+              window.dispatchEvent(new CustomEvent('surgery:updated'));
+            }
+            if (onSuccess) onSuccess();
+            onClose();
+          } else {
+            setError(result.error || 'Failed to book appointment');
+          }
         }
       }
     } catch (err) {
@@ -284,9 +359,29 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         setSelectedDoctorId(assignedUrologist.id);
       }
     }
-    setSelectedDate(patient?.surgeryDate && patient.surgeryDate !== 'TBD' ? patient.surgeryDate : '');
-    setSelectedTime(patient?.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '');
-    setSurgeryType(patient?.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '');
+    
+    // Reset appointment details - check for surgery first, then regular appointment
+    if (patient?.hasSurgeryAppointment && patient?.surgeryDate && patient.surgeryDate !== 'TBD') {
+      setSelectedDate(patient.surgeryDate);
+      const surgeryTime = patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '';
+      const normalizedSurgeryTime = surgeryTime ? surgeryTime.substring(0, 5) : '';
+      setSelectedTime(normalizedSurgeryTime);
+      setSurgeryType(patient.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '');
+    } else if (patient?.nextAppointmentDate || patient?.nextAppointmentTime) {
+      setSelectedDate(patient.nextAppointmentDate || '');
+      if (patient.nextAppointmentTime) {
+        const normalizedTime = patient.nextAppointmentTime.substring(0, 5);
+        setSelectedTime(normalizedTime);
+      } else {
+        setSelectedTime('');
+      }
+      setSurgeryType('');
+    } else {
+      setSelectedDate('');
+      setSelectedTime('');
+      setSurgeryType('');
+    }
+    
     setNotes(patient?.notes || '');
   };
 
@@ -329,17 +424,19 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     <>
       {/* Main Modal */}
     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slideUp">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col animate-slideUp">
         
-        {/* Modal Header - Simplified */}
-        <div className="px-6 py-5 border-b border-gray-100">
+        {/* Modal Header - Fixed */}
+        <div className="flex-shrink-0 px-6 py-5 border-b border-gray-100">
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                {patient?.hasSurgeryAppointment ? 'Update Appointment' : 'Book Appointment'}
+                {patient?.hasSurgeryAppointment || patient?.hasAppointment ? 'Update Appointment' : 'Book Appointment'}
               </h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                {patient?.hasSurgeryAppointment ? 'Modify existing appointment details' : 'Schedule a new surgery appointment'}
+                {patient?.hasSurgeryAppointment || patient?.hasAppointment 
+                  ? 'Modify existing appointment details' 
+                  : `Schedule a new ${appointmentTypeSelected === 'investigation' ? 'investigation' : 'consultation'} appointment`}
               </p>
             </div>
             <button
@@ -352,11 +449,11 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
           </div>
         </div>
 
-        {/* Patient Card - Cleaner Design */}
-        <div className="px-6 py-4 bg-gradient-to-br from-teal-50 to-white">
+        {/* Patient Card - Fixed */}
+        <div className="flex-shrink-0 px-6 py-4 bg-gradient-to-br from-teal-50 to-white border-b border-gray-100">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl flex items-center justify-center text-white font-semibold text-lg shadow-md">
-              {getInitials(patient?.name || '')}
+            <div className="w-14 h-14 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl flex items-center justify-center text-white font-semibold text-lg shadow-md relative">
+              <FiUser className="w-7 h-7" />
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-gray-900 text-base">{patient?.name}</h3>
@@ -372,9 +469,45 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
           </div>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {/* Scrollable Form Content */}
+        <div className="flex-1 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="p-6 space-y-5">
           
+          {/* Appointment Type Selection */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <FiCalendar className="w-4 h-4 text-teal-600" />
+              Appointment Type
+              <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <select
+                value={appointmentTypeSelected}
+                onChange={(e) => {
+                  setAppointmentTypeSelected(e.target.value);
+                  // Reset selected doctor and time when type changes
+                  setSelectedDoctor('');
+                  setSelectedDoctorId(null);
+                  setSelectedTime('');
+                  setAvailableSlots([]);
+                }}
+                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 appearance-none text-gray-900"
+                required
+              >
+                <option value="urologist">Urologist Consultation</option>
+                <option value="investigation">Investigation</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1.5">
+              Select whether this is a consultation appointment or an investigation booking
+            </p>
+          </div>
+
           {/* Select Doctor */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
@@ -489,12 +622,15 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
                 Selected Time
               </label>
               <div className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 flex items-center justify-between">
-                <span>{selectedTime || 'No time selected'}</span>
+                <span className={selectedTime ? 'font-medium text-teal-700' : 'text-gray-500'}>
+                  {selectedTime || 'No time selected'}
+                </span>
                 {selectedTime && (
                   <button
                     type="button"
                     onClick={() => setSelectedTime('')}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label="Clear selected time"
                   >
                     <FiX className="w-4 h-4" />
                   </button>
@@ -523,13 +659,23 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               ) : (
                 availableSlots.map((slot) => {
                   const isAvailable = slot.available;
-                  const isSelected = selectedTime === slot.time;
+                  // Normalize time format for comparison (handle both HH:MM and HH:MM:SS formats)
+                  const slotTime = slot.time ? slot.time.substring(0, 5) : '';
+                  const currentSelectedTime = selectedTime ? selectedTime.substring(0, 5) : '';
+                  const isSelected = currentSelectedTime === slotTime;
                   
                   return (
                     <button
                       key={slot.time}
                       type="button"
-                      onClick={() => isAvailable && setSelectedTime(slot.time)}
+                      onClick={() => {
+                        if (isAvailable) {
+                          // Store the time in HH:MM format
+                          const timeToSet = slot.time ? slot.time.substring(0, 5) : slot.time;
+                          setSelectedTime(timeToSet);
+                          console.log('Time selected:', timeToSet);
+                        }
+                      }}
                       disabled={!isAvailable}
                       className={`px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${
                         isSelected
@@ -539,7 +685,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
                           : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
                       }`}
                     >
-                      {slot.time}
+                      {slotTime}
                     </button>
                   );
                 })
@@ -565,22 +711,32 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             </p>
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+          </form>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-2">
+        {/* Fixed Footer with Action Buttons */}
+        <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+          <div className="flex gap-3">
             <button
               type="submit"
+              onClick={handleSubmit}
               disabled={!selectedDoctorId || !selectedDate || !selectedTime || isSubmitting}
               className="flex-1 bg-gradient-to-r from-teal-600 to-teal-500 text-white px-4 py-2.5 rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
             >
               <FiCalendar className="w-4 h-4" />
-              {isSubmitting ? 'Saving...' : (patient?.hasSurgeryAppointment ? 'Update Appointment' : 'Book Appointment')}
+              {isSubmitting 
+                ? 'Saving...' 
+                : (patient?.hasSurgeryAppointment || patient?.hasAppointment 
+                  ? 'Update Appointment' 
+                  : appointmentTypeSelected === 'investigation' 
+                    ? 'Book Investigation' 
+                    : 'Book Appointment')}
             </button>
             <button
               type="button"
@@ -590,7 +746,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               Cancel
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
     

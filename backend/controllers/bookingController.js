@@ -1610,17 +1610,57 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
     if (appointmentType === 'investigation') {
       // Update investigation booking
-      const updateQuery = `
-        UPDATE investigation_bookings 
-        SET scheduled_date = $1, 
-            scheduled_time = $2, 
-            status = 'scheduled',
-            notes = COALESCE(notes, '') || '\nRescheduled from no-show on ' || CURRENT_TIMESTAMP
-        WHERE id = $3
-        RETURNING patient_id
-      `;
+      // First get the current appointment status
+      const getCurrentInvestigation = await client.query(
+        'SELECT status, patient_id FROM investigation_bookings WHERE id = $1',
+        [appointmentId]
+      );
       
-      const updateResult = await client.query(updateQuery, [newDate, newTime, appointmentId]);
+      if (getCurrentInvestigation.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({
+          success: false,
+          message: 'Investigation appointment not found'
+        });
+      }
+      
+      const currentStatus = getCurrentInvestigation.rows[0].status;
+      const patientIdForTimeline = getCurrentInvestigation.rows[0].patient_id;
+      
+      // Build notes update - append new notes if provided
+      const notesText = req.body.notes || '';
+      
+      let updateQuery;
+      let updateParams;
+      
+      if (notesText) {
+        updateQuery = `
+          UPDATE investigation_bookings 
+          SET scheduled_date = $1, 
+              scheduled_time = $2, 
+              investigation_name = $3,
+              status = 'scheduled',
+              notes = COALESCE(notes, '') || '\n' || $4,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $5
+          RETURNING patient_id
+        `;
+        updateParams = [newDate, newTime, doctorName, notesText, appointmentId];
+      } else {
+        updateQuery = `
+          UPDATE investigation_bookings 
+          SET scheduled_date = $1, 
+              scheduled_time = $2, 
+              investigation_name = $3,
+              status = 'scheduled',
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = $4
+          RETURNING patient_id
+        `;
+        updateParams = [newDate, newTime, doctorName, appointmentId];
+      }
+      
+      const updateResult = await client.query(updateQuery, updateParams);
       
       if (updateResult.rows.length === 0) {
         await client.query('ROLLBACK');
@@ -1636,8 +1676,19 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         SET assigned_urologist = $1
         WHERE id = $2
       `;
-      await client.query(updatePatientQuery, [doctorName, updateResult.rows[0].patient_id]);
-      console.log(`[rescheduleNoShowAppointment] Assigned patient ${updateResult.rows[0].patient_id} to urologist: ${doctorName}`);
+      await client.query(updatePatientQuery, [doctorName, patientIdForTimeline]);
+      console.log(`[rescheduleNoShowAppointment] Assigned patient ${patientIdForTimeline} to urologist: ${doctorName}`);
+      
+      // Add timeline entry for the update
+      const timelineQuery = `
+        INSERT INTO patient_notes (patient_id, note_content, author_id, created_at)
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      `;
+      
+      const timelineNote = currentStatus === 'no_show' 
+        ? `Investigation appointment rescheduled from no-show to ${newDate} at ${newTime} with ${doctorName}`
+        : `Investigation appointment updated to ${newDate} at ${newTime} with ${doctorName}`;
+      await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id]);
 
     } else {
       // Update urologist appointment (for both no-show and regular appointments)
