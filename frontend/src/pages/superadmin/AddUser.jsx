@@ -81,6 +81,16 @@ const AddUser = () => {
     doctor: <UserCircle className="h-4 w-4" />
   };
 
+  // Map role to category
+  const getCategoryFromRole = (role) => {
+    const roleToCategoryMap = {
+      'doctor': 'doctor',
+      'urology_nurse': 'nurse',
+      'gp': 'gp'
+    };
+    return roleToCategoryMap[role] || role;
+  };
+
   const validateField = (name, value, formDataToValidate = formData) => {
     let error = '';
     
@@ -267,7 +277,8 @@ const AddUser = () => {
         setCreatedUser({
           ...formData,
           id: result.payload.data.userId,
-          emailSent: result.payload.data.emailSent
+          emailSent: result.payload.data.emailSent,
+          category: getCategoryFromRole(formData.role)
         });
         
         const message = result.payload.data.emailSent 

@@ -3,6 +3,17 @@ import crypto from 'crypto';
 import pool from '../config/database.js';
 import { sendPasswordSetupEmail } from '../services/emailService.js';
 
+// Map role to category
+const getCategoryFromRole = (role) => {
+  const roleToCategoryMap = {
+    'doctor': 'doctor',
+    'urologist': 'doctor',
+    'urology_nurse': 'nurse',
+    'gp': 'gp'
+  };
+  return roleToCategoryMap[role] || role;
+};
+
 // Create a new user (superadmin only)
 export const createUser = async (req, res) => {
   const client = await pool.connect();
@@ -151,6 +162,7 @@ export const createUser = async (req, res) => {
         firstName: newUser.first_name,
         lastName: newUser.last_name,
         role: newUser.role,
+        category: getCategoryFromRole(newUser.role),
         emailSent: emailResult.success,
         doctorId: doctorId || null
       }
