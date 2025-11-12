@@ -696,12 +696,6 @@ const Users = () => {
                                 <div className="text-sm font-medium text-gray-900">
                                   {user.firstName} {user.lastName}
                                 </div>
-                                {/* Role Tag (only for doctors) */}
-                                {(user.role === 'doctor' || user.role === 'urologist') && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200">
-                                    {getSpecificRoleName(user.role)}
-                                  </span>
-                                )}
                                 {/* Department Tag (for doctors and urologists) */}
                                 {(user.role === 'doctor' || user.role === 'urologist') && user.department_name && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200">

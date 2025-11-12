@@ -466,8 +466,9 @@ export const getAvailableUrologists = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    // Get urologists from doctors table (Urology department)
+    // Get urologists from doctors table (Urology department only)
     // Only include active doctors that are verified in users table
+    // Only match "Urology" department exactly (not "Neurology" which contains "urology")
     const doctorsTableResult = await client.query(
       `SELECT 
         d.id, 
@@ -481,7 +482,20 @@ export const getAvailableUrologists = async (req, res) => {
        LEFT JOIN departments dept ON d.department_id = dept.id
        INNER JOIN users u ON d.email = u.email
        WHERE d.is_active = true 
-       AND (d.specialization ILIKE '%urology%' OR dept.name ILIKE '%urology%')
+       AND (
+         -- Check department name: must be exactly "urology" or start with "urology " (with space)
+         -- This prevents matching "neurology" which contains "urology" as substring
+         (dept.name IS NOT NULL AND (
+           LOWER(TRIM(dept.name)) = 'urology' OR 
+           LOWER(TRIM(dept.name)) LIKE 'urology %'
+         ))
+         OR
+         -- If no department, check specialization (same logic)
+         (dept.name IS NULL AND d.specialization IS NOT NULL AND (
+           LOWER(TRIM(d.specialization)) = 'urology' OR 
+           LOWER(TRIM(d.specialization)) LIKE 'urology %'
+         ))
+       )
        AND u.is_active = true 
        AND u.is_verified = true
        ORDER BY d.first_name, d.last_name`
@@ -490,17 +504,31 @@ export const getAvailableUrologists = async (req, res) => {
     console.log(`[getAvailableUrologists] Found ${doctorsTableResult.rows.length} urologists from doctors table`);
 
     // Also get urologists from users table for backwards compatibility
-    // Only include active and verified users
+    // Only include active and verified users from Urology department
+    // Only include users with role 'urologist' or 'doctor' who are in Urology department
     const usersTableResult = await client.query(
-      `SELECT id, first_name, last_name, email, phone, role
-       FROM users 
-       WHERE role IN ('urologist', 'doctor') 
-       AND is_active = true 
-       AND is_verified = true
-       AND NOT EXISTS (
-         SELECT 1 FROM doctors d WHERE d.email = users.email AND d.is_active = false
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role
+       FROM users u
+       LEFT JOIN doctors d ON u.email = d.email
+       LEFT JOIN departments dept ON d.department_id = dept.id
+       WHERE u.role IN ('urologist', 'doctor') 
+       AND u.is_active = true 
+       AND u.is_verified = true
+       AND (
+         -- User must be in Urology department (exact match, not Neurology)
+         -- Check department name: must be exactly "urology" or start with "urology " (with space)
+         (dept.name IS NOT NULL AND (
+           LOWER(TRIM(dept.name)) = 'urology' OR 
+           LOWER(TRIM(dept.name)) LIKE 'urology %'
+         ))
+         OR
+         -- If no department record, only include if role is explicitly 'urologist'
+         (dept.name IS NULL AND u.role = 'urologist')
        )
-       ORDER BY first_name, last_name`
+       AND NOT EXISTS (
+         SELECT 1 FROM doctors d2 WHERE d2.email = u.email AND d2.is_active = false
+       )
+       ORDER BY u.first_name, u.last_name`
     );
 
     console.log(`[getAvailableUrologists] Found ${usersTableResult.rows.length} urologists from users table`);
