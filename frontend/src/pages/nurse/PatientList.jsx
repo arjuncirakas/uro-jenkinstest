@@ -330,24 +330,23 @@ const PatientList = () => {
                           {patientPathway.toLowerCase() === 'medications' || 
                            patientPathway.toLowerCase() === 'medication' ? (
                             <span className="text-gray-400 text-xs">—</span>
-                          ) : patientPathway.toLowerCase() === 'active surveillance' || 
-                             patientPathway.toLowerCase() === 'active monitoring' ? (
-                            <button 
-                              onClick={() => handleUpdateAppointment(patient)}
-                              className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
-                            >
-                              <FiCalendar className="w-3 h-3" />
-                              <span>Update Appointment</span>
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={() => handleUpdateAppointment(patient)}
-                              className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
-                            >
-                              <FiCalendar className="w-3 h-3" />
-                              <span>Book Appointment</span>
-                            </button>
-                          )}
+                          ) : (() => {
+                            // Check if patient has an appointment booked
+                            // Backend now provides hasAppointment boolean, with fallback to date/time check
+                            const hasAppointment = patient.hasAppointment !== undefined 
+                              ? patient.hasAppointment 
+                              : !!(patient.nextAppointmentDate || patient.nextAppointmentTime);
+                            
+                            return (
+                              <button 
+                                onClick={() => handleUpdateAppointment(patient)}
+                                className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
+                              >
+                                <FiCalendar className="w-3 h-3" />
+                                <span>{hasAppointment ? 'Update Appointment' : 'Book Appointment'}</span>
+                              </button>
+                            );
+                          })()}
                         </td>
                         <td className="py-4 px-4 text-center">
                           <button 

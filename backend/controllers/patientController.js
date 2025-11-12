@@ -361,9 +361,9 @@ export const getPatients = async (req, res) => {
         u.last_name as created_by_last_name,
         gp.first_name as gp_first_name,
         gp.last_name as gp_last_name,
-        next_apt.appointment_date as next_appointment_date,
-        next_apt.appointment_time as next_appointment_time,
-        next_apt.urologist_name as next_appointment_urologist
+        COALESCE(next_apt.appointment_date, next_inv_apt.appointment_date) as next_appointment_date,
+        COALESCE(next_apt.appointment_time, next_inv_apt.appointment_time) as next_appointment_time,
+        COALESCE(next_apt.urologist_name, next_inv_apt.urologist_name) as next_appointment_urologist
       FROM patients p
       LEFT JOIN users u ON p.created_by = u.id
       LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
@@ -376,6 +376,15 @@ export const getPatients = async (req, res) => {
         ORDER BY appointment_date ASC, appointment_time ASC
         LIMIT 1
       ) next_apt ON true
+      LEFT JOIN LATERAL (
+        SELECT scheduled_date as appointment_date, scheduled_time as appointment_time, investigation_name as urologist_name
+        FROM investigation_bookings
+        WHERE patient_id = p.id 
+        AND status IN ('scheduled', 'confirmed')
+        AND scheduled_date >= CURRENT_DATE
+        ORDER BY scheduled_date ASC, scheduled_time ASC
+        LIMIT 1
+      ) next_inv_apt ON true
       WHERE ${whereClause}
       ORDER BY p.${sortBy} ${sortOrder}
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
@@ -426,6 +435,9 @@ export const getPatients = async (req, res) => {
       const nextAppointmentTime = patient.next_appointment_time 
         ? patient.next_appointment_time.substring(0, 5) // Format HH:MM
         : null;
+      
+      // Check if patient has any appointment (for easier frontend checking)
+      const hasAppointment = !!(nextAppointmentDate || nextAppointmentTime);
       
       // Calculate next review date (appointment date formatted for display)
       const nextReview = nextAppointmentDate 
@@ -492,6 +504,7 @@ export const getPatients = async (req, res) => {
         nextAppointmentTime,
         nextReview,
         nextAppointmentUrologist: patient.next_appointment_urologist,
+        hasAppointment, // Boolean flag to easily check if patient has an appointment
         monitoringStatus
       };
     });
