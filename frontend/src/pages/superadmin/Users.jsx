@@ -48,9 +48,9 @@ const Users = () => {
   const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   
-  // Fetch departments when role is doctor
+  // Fetch departments when category is doctor
   useEffect(() => {
-    if (filters.role === 'doctor') {
+    if (filters.category === 'doctor') {
       const fetchDepartments = async () => {
         setLoadingDepartments(true);
         try {
@@ -66,11 +66,11 @@ const Users = () => {
       };
       fetchDepartments();
     } else {
-      // Clear department selection when role is not doctor
+      // Clear department selection when category is not doctor
       setSelectedDepartment('');
       dispatch(setFilters({ department_id: '' }));
     }
-  }, [filters.role, dispatch]);
+  }, [filters.category, dispatch]);
 
   // Frontend filtering as fallback - ALWAYS applied to ensure correct filtering
   const filteredUsers = useMemo(() => {
@@ -96,13 +96,20 @@ const Users = () => {
       });
     }
     
-    // Apply role filter on frontend as fallback
-    if (filters.role && filters.role.trim() !== '') {
-      filtered = filtered.filter(user => user.role === filters.role.trim());
+    // Apply category filter on frontend as fallback
+    if (filters.category && filters.category.trim() !== '') {
+      const categoryFilter = filters.category.trim().toLowerCase();
+      filtered = filtered.filter(user => {
+        // Map user role to category
+        const userCategory = user.role === 'doctor' || user.role === 'urologist' ? 'doctor' :
+                            user.role === 'urology_nurse' ? 'nurse' :
+                            user.role === 'gp' ? 'gp' : null;
+        return userCategory === categoryFilter;
+      });
     }
     
-    // Apply department filter when role is doctor
-    if (filters.role === 'doctor' && selectedDepartment && selectedDepartment.trim() !== '') {
+    // Apply department filter when category is doctor
+    if (filters.category === 'doctor' && selectedDepartment && selectedDepartment.trim() !== '') {
       filtered = filtered.filter(user => {
         // Filter by department_id if available in user data
         // The backend should now include department_name, but we filter by department_id from Redux
@@ -140,7 +147,7 @@ const Users = () => {
     }
     
     return filtered;
-  }, [allUsers, filters.status, filters.role, searchValue, selectedDepartment]);
+  }, [allUsers, filters.status, filters.category, searchValue, selectedDepartment]);
   
   // Apply frontend pagination to filtered results
   const paginatedUsers = useMemo(() => {
@@ -156,7 +163,7 @@ const Users = () => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setFrontendPage(1);
-  }, [filters.status, filters.role, searchValue, selectedDepartment]);
+  }, [filters.status, filters.category, searchValue, selectedDepartment]);
 
   // Sync searchValue with filters when filters change externally (e.g., clear filters)
   useEffect(() => {
@@ -175,9 +182,9 @@ const Users = () => {
       limit: 10000 // Load a very large number to get all users
     };
     
-    // Only add role and status filters (not search - we filter that on frontend)
-    if (filters.role && filters.role.trim() !== '') {
-      initialFilters.role = filters.role.trim();
+    // Only add category and status filters (not search - we filter that on frontend)
+    if (filters.category && filters.category.trim() !== '') {
+      initialFilters.category = filters.category.trim();
     }
     if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
       initialFilters.status = filters.status.trim().toLowerCase();
@@ -281,8 +288,8 @@ const Users = () => {
             page: 1,
             limit: 10000
           };
-          if (filters.role && filters.role.trim() !== '') {
-            currentFilters.role = filters.role.trim();
+          if (filters.category && filters.category.trim() !== '') {
+            currentFilters.category = filters.category.trim();
           }
           if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
             currentFilters.status = filters.status.trim().toLowerCase();
@@ -404,26 +411,26 @@ const Users = () => {
       return;
     }
     
-    // If role changes, clear department filter if not doctor
-    if (filterType === 'role' && cleanValue !== 'doctor') {
+    // If category changes, clear department filter if not doctor
+    if (filterType === 'category' && cleanValue !== 'doctor') {
       setSelectedDepartment('');
       dispatch(setFilters({ department_id: '' }));
     }
     
-    // For role and status, reload users from backend (but load all, frontend will filter)
+    // For category and status, reload users from backend (but load all, frontend will filter)
     const newFilters = {
       page: 1,
       limit: 10000 // Load all users, frontend will filter
     };
     
-    // Add role filter
-    if (filterType === 'role') {
-      if (cleanValue) newFilters.role = cleanValue;
-    } else if (filters.role && filters.role.trim() !== '') {
-      newFilters.role = filters.role.trim();
+    // Add category filter
+    if (filterType === 'category') {
+      if (cleanValue) newFilters.category = cleanValue;
+    } else if (filters.category && filters.category.trim() !== '') {
+      newFilters.category = filters.category.trim();
     }
     
-    // Add department filter when role is doctor
+    // Add department filter when category is doctor
     if (filterType === 'department_id') {
       if (cleanValue) {
         newFilters.department_id = cleanValue;
@@ -431,7 +438,7 @@ const Users = () => {
       } else {
         setSelectedDepartment('');
       }
-    } else if (filters.role === 'doctor' && selectedDepartment) {
+    } else if (filters.category === 'doctor' && selectedDepartment) {
       newFilters.department_id = selectedDepartment;
     }
     
@@ -466,7 +473,7 @@ const Users = () => {
     dispatch(getAllUsers({
       page: 1,
       limit: 10000,
-      role: '',
+      category: '',
       status: ''
       // Don't send search - frontend handles it
     }));
@@ -525,7 +532,7 @@ const Users = () => {
             </h3>
           </div>
           <div className="p-4 sm:p-6">
-            <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${filters.role === 'doctor' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+            <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${filters.category === 'doctor' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
               {/* Search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -545,25 +552,25 @@ const Users = () => {
                 </div>
               </div>
 
-              {/* Role Filter */}
+              {/* Category Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Role
+                  Category
                 </label>
                 <select
-                  value={filters.role}
-                  onChange={(e) => handleFilterChange('role', e.target.value)}
+                  value={filters.category || ''}
+                  onChange={(e) => handleFilterChange('category', e.target.value)}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
                 >
-                  <option value="">All Roles</option>
+                  <option value="">All Categories</option>
                   <option value="gp">General Practitioner</option>
-                  <option value="urology_nurse">Urology Nurse</option>
+                  <option value="nurse">Nurse</option>
                   <option value="doctor">Doctor</option>
                 </select>
               </div>
 
-              {/* Department Filter - Only show when role is doctor */}
-              {filters.role === 'doctor' && (
+              {/* Department Filter - Only show when category is doctor */}
+              {filters.category === 'doctor' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Department
@@ -915,8 +922,8 @@ const Users = () => {
             page: 1,
             limit: 10000
           };
-          if (filters.role && filters.role.trim() !== '') {
-            currentFilters.role = filters.role.trim();
+          if (filters.category && filters.category.trim() !== '') {
+            currentFilters.category = filters.category.trim();
           }
           if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
             currentFilters.status = filters.status.trim().toLowerCase();

@@ -99,7 +99,7 @@ const initialState = {
   // Filters
   filters: {
     search: '',
-    role: '',
+    category: '',
     status: '',
     department_id: ''
   }
@@ -118,7 +118,7 @@ const superadminSlice = createSlice({
     clearFilters: (state) => {
       state.filters = {
         search: '',
-        role: '',
+        category: '',
         status: '',
         department_id: ''
       };

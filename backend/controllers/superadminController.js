@@ -180,6 +180,16 @@ export const createUser = async (req, res) => {
   }
 };
 
+// Map category to roles
+const getRolesFromCategory = (category) => {
+  const categoryToRolesMap = {
+    'doctor': ['doctor', 'urologist'],
+    'nurse': ['urology_nurse'],
+    'gp': ['gp']
+  };
+  return categoryToRolesMap[category] || null;
+};
+
 // Get all users (superadmin only) - includes users and doctors
 export const getAllUsers = async (req, res) => {
   const client = await pool.connect();
@@ -188,6 +198,9 @@ export const getAllUsers = async (req, res) => {
     // Extract and parse query parameters - CRITICAL: Handle status correctly
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    // Accept category instead of role
+    const category = req.query.category ? String(req.query.category).trim() : null;
+    // Keep role for backward compatibility, but prefer category
     const role = req.query.role ? String(req.query.role).trim() : null;
     const search = req.query.search ? String(req.query.search).trim() : null;
     const department_id = req.query.department_id ? String(req.query.department_id).trim() : null;
@@ -212,11 +225,22 @@ export const getAllUsers = async (req, res) => {
     // Build WHERE conditions for users table
     let userWhereConditions = ["role != 'superadmin'"];
 
-    // Add role filter
-    if (role && role !== '') {
+    // Add category/role filter - map category to roles
+    let effectiveCategory = category || (role ? getCategoryFromRole(role) : null);
+    let rolesToFilter = null;
+    
+    if (effectiveCategory && effectiveCategory !== '') {
+      rolesToFilter = getRolesFromCategory(effectiveCategory);
+      if (rolesToFilter && rolesToFilter.length > 0) {
+        // Use IN clause for multiple roles
+        const rolePlaceholders = rolesToFilter.map((_, idx) => `$${paramIndex + idx}`).join(', ');
+        userWhereConditions.push(`role IN (${rolePlaceholders})`);
+        queryParams.push(...rolesToFilter);
+        paramIndex += rolesToFilter.length;
+      }
+    } else if (role && role !== '') {
+      // Fallback to role if category not provided (backward compatibility)
       userWhereConditions.push(`role = $${paramIndex}`);
-      // For doctors, we need to check if their department matches the role
-      // We'll handle this in the UNION query by checking department name
       queryParams.push(role);
       paramIndex++;
     }
@@ -249,12 +273,12 @@ export const getAllUsers = async (req, res) => {
       }
     }
     
-    // Filter users with role 'doctor' by department_id if provided
-    if (role === 'doctor' && department_id && department_id !== '') {
+    // Filter users with category 'doctor' by department_id if provided
+    if (effectiveCategory === 'doctor' && department_id && department_id !== '') {
       const deptParamIndex = paramIndex;
       queryParams.push(parseInt(department_id, 10));
       paramIndex++;
-      // For users with role 'doctor', filter by department
+      // For users with category 'doctor', filter by department
       // Only include doctors that have a matching department_id in the doctors table
       userWhereConditions.push(`EXISTS (
         SELECT 1 FROM doctors doc 

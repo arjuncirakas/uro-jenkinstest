@@ -14,8 +14,8 @@ class SuperadminService {
   // Get all users with pagination and filters
   async getAllUsers(params = {}) {
     try {
-      // If filtering by department with role 'doctor', use the dedicated filter endpoint
-      if (params.role === 'doctor' && params.department_id && String(params.department_id).trim() !== '') {
+      // If filtering by department with category 'doctor', use the dedicated filter endpoint
+      if (params.category === 'doctor' && params.department_id && String(params.department_id).trim() !== '') {
         return this.filterUsers(params);
       }
       
@@ -26,7 +26,10 @@ class SuperadminService {
       queryParams.append('limit', params.limit || 10);
       
       // Only add filters if they have non-empty values
-      if (params.role && String(params.role).trim() !== '') {
+      // Prefer category over role (for backward compatibility)
+      if (params.category && String(params.category).trim() !== '') {
+        queryParams.append('category', String(params.category).trim());
+      } else if (params.role && String(params.role).trim() !== '') {
         queryParams.append('role', String(params.role).trim());
       }
       if (params.search && String(params.search).trim() !== '') {
@@ -54,7 +57,10 @@ class SuperadminService {
       const queryParams = new URLSearchParams();
       
       // Only add filters if they have non-empty values
-      if (params.role && String(params.role).trim() !== '') {
+      // Prefer category over role (for backward compatibility)
+      if (params.category && String(params.category).trim() !== '') {
+        queryParams.append('category', String(params.category).trim());
+      } else if (params.role && String(params.role).trim() !== '') {
         queryParams.append('role', String(params.role).trim());
       }
       if (params.search && String(params.search).trim() !== '') {
