@@ -1580,17 +1580,25 @@ export const rescheduleNoShowAppointment = async (req, res) => {
     }
 
     // Check if doctor exists - try doctors table first, then users table
+    // IMPORTANT: appointments.urologist_id references users(id), so we need the users table ID
     let doctorResult = await client.query(
-      `SELECT id, first_name, last_name, specialization FROM doctors WHERE id = $1 AND is_active = true`,
+      `SELECT d.id, d.first_name, d.last_name, d.specialization, d.email, u.id as user_id
+       FROM doctors d
+       LEFT JOIN users u ON d.email = u.email
+       WHERE d.id = $1 AND d.is_active = true`,
       [newDoctorId]
     );
     
-    // If not found in doctors table, try users table
+    let doctorUserId = null;
+    let doctorSource = 'doctors';
+    
+    // If not found in doctors table, try users table directly
     if (doctorResult.rows.length === 0) {
       doctorResult = await client.query(
-        `SELECT id, first_name, last_name FROM users WHERE id = $1 AND role IN ('urologist', 'doctor')`,
+        `SELECT id, first_name, last_name, id as user_id FROM users WHERE id = $1 AND role IN ('urologist', 'doctor') AND is_active = true`,
         [newDoctorId]
       );
+      doctorSource = 'users';
     }
     
     if (doctorResult.rows.length === 0) {
@@ -1603,7 +1611,21 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
     const doctor = doctorResult.rows[0];
     const doctorName = `${doctor.first_name} ${doctor.last_name}`;
-    console.log(`[rescheduleNoShowAppointment] Found doctor: ${doctorName}`);
+    
+    // Get the user_id for the foreign key constraint
+    // If doctor is from doctors table, use the linked user_id
+    // If doctor is from users table, use the id directly
+    doctorUserId = doctor.user_id || (doctorSource === 'users' ? doctor.id : null);
+    
+    if (!doctorUserId) {
+      console.error(`[rescheduleNoShowAppointment] Doctor ${doctorName} (ID: ${newDoctorId}) does not have a corresponding user record`);
+      return res.status(400).json({
+        success: false,
+        message: 'Doctor does not have a corresponding user account. Please ensure the doctor has a user account linked to their email.'
+      });
+    }
+    
+    console.log(`[rescheduleNoShowAppointment] Found doctor: ${doctorName} (Doctor ID: ${newDoctorId}, User ID: ${doctorUserId}, Source: ${doctorSource})`);
 
     // Start transaction
     await client.query('BEGIN');
@@ -1721,7 +1743,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           'urologist',
           newDate,
           newTime,
-          newDoctorId,
+          doctorUserId, // Use user_id for foreign key constraint, not doctor_id
           doctorName,
           surgeryType || null,
           notesText || `Changed from ${originalAppointmentType} appointment`,
@@ -1883,7 +1905,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           WHERE id = $7
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, newDoctorId, doctorName, surgeryType || null, notesText, appointmentId];
+        updateParams = [newDate, newTime, doctorUserId, doctorName, surgeryType || null, notesText, appointmentId];
       } else {
         updateQuery = `
           UPDATE appointments 
@@ -1897,7 +1919,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           WHERE id = $6
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, newDoctorId, doctorName, surgeryType || null, appointmentId];
+        updateParams = [newDate, newTime, doctorUserId, doctorName, surgeryType || null, appointmentId];
       }
       
       const updateResult = await client.query(updateQuery, updateParams);

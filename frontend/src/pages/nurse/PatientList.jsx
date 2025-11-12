@@ -38,11 +38,20 @@ const PatientList = () => {
       if (result.success) {
         console.log('✅ PatientList: Patient data received:', result.data);
         console.log('✅ PatientList: Number of patients:', result.data?.length || 0);
-        setPatients(result.data || []);
+        const updatedPatients = result.data || [];
+        setPatients(updatedPatients);
+        
+        // Update selectedPatient if it exists in the updated list
+        if (selectedPatient) {
+          const updatedSelectedPatient = updatedPatients.find(p => p.id === selectedPatient.id);
+          if (updatedSelectedPatient) {
+            setSelectedPatient(updatedSelectedPatient);
+          }
+        }
         
         // Extract unique urologists
         const uniqueUrologists = [...new Set(
-          (result.data || [])
+          updatedPatients
             .map(patient => patient.assignedUrologist)
             .filter(urologist => urologist && urologist.trim() !== '')
         )].sort();
@@ -82,6 +91,24 @@ const PatientList = () => {
     return () => {
       window.removeEventListener('psaResultAdded', handlePSAUpdated);
       window.removeEventListener('psaResultUpdated', handlePSAUpdated);
+    };
+  }, []);
+
+  // Listen for appointment update events to refresh patient list
+  useEffect(() => {
+    const handleAppointmentUpdated = (event) => {
+      console.log('Appointment updated event received, refreshing patient list:', event.detail);
+      fetchPatients();
+    };
+
+    window.addEventListener('investigationBooked', handleAppointmentUpdated);
+    window.addEventListener('surgery:updated', handleAppointmentUpdated);
+    window.addEventListener('appointment:updated', handleAppointmentUpdated);
+    
+    return () => {
+      window.removeEventListener('investigationBooked', handleAppointmentUpdated);
+      window.removeEventListener('surgery:updated', handleAppointmentUpdated);
+      window.removeEventListener('appointment:updated', handleAppointmentUpdated);
     };
   }, []);
 
@@ -386,8 +413,15 @@ const PatientList = () => {
       {/* Update Appointment Modal */}
       <UpdateAppointmentModal 
         isOpen={isUpdateAppointmentModalOpen}
-        onClose={() => setIsUpdateAppointmentModalOpen(false)}
+        onClose={() => {
+          setIsUpdateAppointmentModalOpen(false);
+          setSelectedPatient(null);
+        }}
         patient={selectedPatient}
+        onSuccess={() => {
+          // Refresh patient list after successful appointment update
+          fetchPatients();
+        }}
       />
 
       {/* Delete Confirmation Modal */}
