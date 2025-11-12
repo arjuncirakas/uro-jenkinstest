@@ -314,12 +314,14 @@ export const getPatients = async (req, res) => {
       console.log(`🔍 Care Pathway Filter: ${carePathway}`);
     }
 
-    // Add search filter
+    // Add search filter - search in first name, last name, full name (concatenated), UPI, phone, and email
     if (search) {
       paramCount++;
       whereConditions.push(`(
         p.first_name ILIKE $${paramCount} OR 
         p.last_name ILIKE $${paramCount} OR 
+        CONCAT(p.first_name, ' ', p.last_name) ILIKE $${paramCount} OR
+        CONCAT(p.last_name, ' ', p.first_name) ILIKE $${paramCount} OR
         p.upi ILIKE $${paramCount} OR 
         p.phone ILIKE $${paramCount} OR 
         p.email ILIKE $${paramCount}
@@ -1637,6 +1639,7 @@ export const searchPatients = async (req, res) => {
     const searchTerm = `%${query.trim()}%`;
     
     // Search patients by name, UPI, or phone
+    // Search in first name, last name, full name (both orders), UPI, and phone
     const result = await client.query(
       `SELECT 
         id,
@@ -1654,7 +1657,10 @@ export const searchPatients = async (req, res) => {
         priority
        FROM patients
        WHERE (
-         LOWER(first_name || ' ' || last_name) LIKE LOWER($1)
+         LOWER(first_name) LIKE LOWER($1)
+         OR LOWER(last_name) LIKE LOWER($1)
+         OR LOWER(first_name || ' ' || last_name) LIKE LOWER($1)
+         OR LOWER(last_name || ' ' || first_name) LIKE LOWER($1)
          OR LOWER(upi) LIKE LOWER($1)
          OR LOWER(phone) LIKE LOWER($1)
        )
@@ -1662,8 +1668,11 @@ export const searchPatients = async (req, res) => {
        ORDER BY 
          CASE 
            WHEN LOWER(first_name || ' ' || last_name) LIKE LOWER($2) THEN 1
-           WHEN LOWER(upi) LIKE LOWER($2) THEN 2
-           ELSE 3
+           WHEN LOWER(last_name || ' ' || first_name) LIKE LOWER($2) THEN 1
+           WHEN LOWER(first_name) LIKE LOWER($2) THEN 2
+           WHEN LOWER(last_name) LIKE LOWER($2) THEN 2
+           WHEN LOWER(upi) LIKE LOWER($2) THEN 3
+           ELSE 4
          END,
          first_name, last_name
        LIMIT $3`,
