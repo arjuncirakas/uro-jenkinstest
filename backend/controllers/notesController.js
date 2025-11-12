@@ -222,6 +222,7 @@ export const updateNote = async (req, res) => {
       message: 'Note updated successfully',
       data: {
         id: updatedNote.id,
+        content: updatedNote.note_content,
         noteContent: updatedNote.note_content,
         updatedAt: updatedNote.updated_at
       }

@@ -34,6 +34,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [notesError, setNotesError] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
   const [deletingNote, setDeletingNote] = useState(null);
+  const [editingNote, setEditingNote] = useState(null);
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [isEditNoteModalOpen, setIsEditNoteModalOpen] = useState(false);
   
   // Confirmation modal state
   const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
@@ -405,6 +408,65 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const cancelDeleteNote = () => {
     setIsConfirmationModalOpen(false);
     setNoteToDelete(null);
+  };
+
+  // Handle edit note
+  const handleEditNote = (note) => {
+    setEditingNote(note);
+    setEditNoteContent(note.content || '');
+    setIsEditNoteModalOpen(true);
+  };
+
+  // Handle update note
+  const handleUpdateNote = async () => {
+    if (!editingNote || !editNoteContent.trim()) {
+      setNotesError('Note content is required');
+      return;
+    }
+
+    setSavingNote(true);
+    setNotesError(null);
+
+    try {
+      const result = await notesService.updateNote(editingNote.id, {
+        content: editNoteContent.trim()
+      });
+
+      if (result.success) {
+        // Update the note in the list
+        setClinicalNotes(prev => prev.map(note => 
+          note.id === editingNote.id 
+            ? { ...note, content: editNoteContent.trim(), updatedAt: result.data.updatedAt }
+            : note
+        ));
+
+        // Close modal and reset state
+        setIsEditNoteModalOpen(false);
+        setEditingNote(null);
+        setEditNoteContent('');
+
+        // Show success message
+        setSuccessModalTitle('Note Updated Successfully!');
+        setSuccessModalMessage('The clinical note has been updated in the patient timeline.');
+        setIsSuccessModalOpen(true);
+      } else {
+        setNotesError(result.error || 'Failed to update note');
+        console.error('Error updating note:', result.error);
+      }
+    } catch (error) {
+      setNotesError('Failed to update note');
+      console.error('Error updating note:', error);
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  // Cancel edit
+  const cancelEditNote = () => {
+    setIsEditNoteModalOpen(false);
+    setEditingNote(null);
+    setEditNoteContent('');
+    setNotesError(null);
   };
 
   // Fetch investigation results
@@ -1222,18 +1284,28 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                   <span className="text-xs text-gray-500">•</span>
                                   <span className="text-xs text-gray-500">{note.authorRole || 'Staff'}</span>
                                 </div>
-                                <button
-                                  onClick={() => handleDeleteNote(note.id)}
-                                  disabled={deletingNote === note.id}
-                                  className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Delete note"
-                                >
-                                  {deletingNote === note.id ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-                                  ) : (
-                                    <Trash className="w-4 h-4" />
-                                  )}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleEditNote(note)}
+                                    disabled={deletingNote === note.id}
+                                    className="text-blue-500 hover:text-blue-700 transition-colors p-1 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Edit note"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteNote(note.id)}
+                                    disabled={deletingNote === note.id}
+                                    className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Delete note"
+                                  >
+                                    {deletingNote === note.id ? (
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                                    ) : (
+                                      <Trash className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -3376,6 +3448,89 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       imageUrl={imageViewerUrl}
       fileName={imageViewerFileName}
     />
+
+    {/* Edit Note Modal */}
+    {isEditNoteModalOpen && (
+      <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col animate-slideUp">
+          {/* Modal Header */}
+          <div className="flex-shrink-0 px-6 py-5 border-b border-gray-100">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Edit Clinical Note</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Update the clinical note content</p>
+              </div>
+              <button
+                onClick={cancelEditNote}
+                className="p-2 -mr-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                aria-label="Close modal"
+              >
+                <IoClose className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="space-y-4">
+              {/* Note Content */}
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  <IoDocumentText className="w-4 h-4 text-teal-600" />
+                  Note Content
+                  <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={editNoteContent}
+                  onChange={(e) => setEditNoteContent(e.target.value)}
+                  placeholder="Enter clinical note details..."
+                  rows={8}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 text-gray-900 resize-none"
+                  required
+                />
+              </div>
+
+              {/* Error Message */}
+              {notesError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {notesError}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50">
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelEditNote}
+                disabled={savingNote}
+                className="px-4 py-2 bg-white text-gray-700 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateNote}
+                disabled={!editNoteContent.trim() || savingNote}
+                className="px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
+              >
+                {savingNote ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <IoCheckmarkCircle className="w-4 h-4" />
+                    <span>Update Note</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 };
