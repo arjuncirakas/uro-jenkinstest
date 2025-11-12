@@ -710,6 +710,8 @@ export const deleteUser = async (req, res) => {
       });
     } else {
       // This is a regular user from the users table
+      await client.query('BEGIN'); // Start transaction
+      
       // Check if user exists
       const existingUser = await client.query(
         'SELECT id, email, first_name, last_name, role FROM users WHERE id = $1 AND role != \'superadmin\'',
@@ -717,6 +719,7 @@ export const deleteUser = async (req, res) => {
       );
 
       if (existingUser.rows.length === 0) {
+        await client.query('ROLLBACK');
         return res.status(404).json({
           success: false,
           message: 'User not found'
@@ -724,6 +727,36 @@ export const deleteUser = async (req, res) => {
       }
 
       const user = existingUser.rows[0];
+      const userEmail = user.email;
+
+      // Check if there's a corresponding doctor record with the same email
+      const doctorResult = await client.query(
+        'SELECT id FROM doctors WHERE email = $1',
+        [userEmail]
+      );
+
+      // If doctor record exists, delete it first
+      if (doctorResult.rows.length > 0) {
+        const doctorId = doctorResult.rows[0].id;
+        
+        // Delete password setup tokens for the user
+        await client.query(
+          'DELETE FROM password_setup_tokens WHERE email = $1',
+          [userEmail]
+        );
+        
+        // Delete the doctor record
+        await client.query(
+          'DELETE FROM doctors WHERE id = $1',
+          [doctorId]
+        );
+      } else {
+        // Delete password setup tokens for the user (if exists)
+        await client.query(
+          'DELETE FROM password_setup_tokens WHERE email = $1',
+          [userEmail]
+        );
+      }
 
       // Check how many patients this user created (for logging purposes)
       const patientCount = await client.query(
@@ -734,6 +767,8 @@ export const deleteUser = async (req, res) => {
       // Delete user (foreign keys with SET NULL will preserve patient records)
       await client.query('DELETE FROM users WHERE id = $1', [id]);
 
+      await client.query('COMMIT'); // Commit transaction
+
       res.json({
         success: true,
         message: 'User deleted successfully. Patient records have been preserved.'
@@ -741,7 +776,7 @@ export const deleteUser = async (req, res) => {
     }
 
   } catch (error) {
-    // Rollback transaction if it was started (for doctor deletion)
+    // Rollback transaction if it was started
     try {
       await client.query('ROLLBACK');
     } catch (rollbackError) {
