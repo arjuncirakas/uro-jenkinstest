@@ -1055,26 +1055,40 @@ export const deletePatient = async (req, res) => {
       await client.query('DELETE FROM investigation_bookings WHERE patient_id = $1', [id]);
       console.log(`Deleted investigation bookings for patient ${id}`);
 
-      // 5. Delete discharge summaries (if table exists)
+      // 5. Delete discharge summaries (if table exists) - use SAVEPOINT to handle gracefully
+      await client.query('SAVEPOINT before_discharge_summaries');
       try {
         await client.query('DELETE FROM discharge_summaries WHERE patient_id = $1', [id]);
         console.log(`Deleted discharge summaries for patient ${id}`);
       } catch (err) {
-        // Table might not exist, ignore error
-        console.log('Discharge summaries table may not exist, skipping...');
+        // Rollback to savepoint if error (table might not exist)
+        await client.query('ROLLBACK TO SAVEPOINT before_discharge_summaries');
+        console.log('Discharge summaries table may not exist or error occurred, skipping...');
       }
 
-      // 6. Delete MDT meeting references (if any)
+      // 6. Delete MDT meeting references (if any) - use SAVEPOINT to handle gracefully
+      await client.query('SAVEPOINT before_mdt_patients');
       try {
-        // First delete MDT patient references if table exists
         await client.query('DELETE FROM mdt_patients WHERE patient_id = $1', [id]);
         console.log(`Deleted MDT patient references for patient ${id}`);
       } catch (err) {
-        // Table might not exist, ignore error
-        console.log('MDT patients table may not exist, skipping...');
+        // Rollback to savepoint if error (table might not exist)
+        await client.query('ROLLBACK TO SAVEPOINT before_mdt_patients');
+        console.log('MDT patients table may not exist or error occurred, skipping...');
       }
 
-      // 7. Finally, delete the patient record itself
+      // 7. Delete MDT meetings if they reference this patient - use SAVEPOINT
+      await client.query('SAVEPOINT before_mdt_meetings');
+      try {
+        await client.query('DELETE FROM mdt_meetings WHERE patient_id = $1', [id]);
+        console.log(`Deleted MDT meetings for patient ${id}`);
+      } catch (err) {
+        // Rollback to savepoint if error
+        await client.query('ROLLBACK TO SAVEPOINT before_mdt_meetings');
+        console.log('MDT meetings deletion skipped (table may not exist or no records)...');
+      }
+
+      // 8. Finally, delete the patient record itself
       const deleteResult = await client.query(
         'DELETE FROM patients WHERE id = $1 RETURNING *',
         [id]
