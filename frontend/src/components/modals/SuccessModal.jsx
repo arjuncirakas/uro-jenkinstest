@@ -30,9 +30,11 @@ const SuccessModal = ({ isOpen, onClose, title, message, details, onConfirm }) =
               <h3 className="text-xl font-semibold text-gray-900">
                 {title || 'Success!'}
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {message || 'Operation completed successfully'}
-              </p>
+              {!message && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Operation completed successfully
+                </p>
+              )}
             </div>
           </div>
           <button

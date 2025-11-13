@@ -61,6 +61,34 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     }
   }, [isOpen]);
 
+  // Helper function to check if a time slot is in the past
+  const isTimeInPast = (date, time) => {
+    if (!date || !time) return false;
+    
+    const today = new Date();
+    const selectedDateObj = new Date(date);
+    
+    // Reset time to midnight for date comparison
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const selectedDateOnly = new Date(selectedDateObj.getFullYear(), selectedDateObj.getMonth(), selectedDateObj.getDate());
+    
+    // If selected date is in the past, time is definitely in the past
+    if (selectedDateOnly < todayDate) {
+      return true;
+    }
+    
+    // If selected date is today, check if time has passed
+    if (selectedDateOnly.getTime() === todayDate.getTime()) {
+      const [hours, minutes] = time.split(':').map(Number);
+      const selectedDateTime = new Date(today);
+      selectedDateTime.setHours(hours, minutes, 0, 0);
+      
+      return selectedDateTime < today;
+    }
+    
+    return false;
+  };
+
   // Fetch available time slots when doctor and date are selected
   useEffect(() => {
     const fetchAvailableSlots = async () => {
@@ -90,6 +118,17 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
 
     fetchAvailableSlots();
   }, [selectedDoctorId, selectedDate, appointmentTypeSelected]);
+
+  // Clear selected time if it's in the past when date changes
+  useEffect(() => {
+    if (selectedDate && selectedTime) {
+      if (isTimeInPast(selectedDate, selectedTime)) {
+        console.log('Selected time is in the past, clearing selection');
+        setSelectedTime('');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -219,6 +258,12 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     
     if (!selectedDoctorId || !selectedDate || !selectedTime) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    // Validate that the selected time is not in the past
+    if (isTimeInPast(selectedDate, selectedTime)) {
+      setError('Cannot book or reschedule appointments for past time slots. Please select a future time.');
       return;
     }
 
@@ -675,24 +720,28 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
                   const slotTime = slot.time ? slot.time.substring(0, 5) : '';
                   const currentSelectedTime = selectedTime ? selectedTime.substring(0, 5) : '';
                   const isSelected = currentSelectedTime === slotTime;
+                  // Check if this time slot is in the past
+                  const isPastTime = isTimeInPast(selectedDate, slotTime);
+                  // Slot is disabled if it's not available OR if it's in the past
+                  const isDisabled = !isAvailable || isPastTime;
                   
                   return (
                     <button
                       key={slot.time}
                       type="button"
                       onClick={() => {
-                        if (isAvailable) {
+                        if (isAvailable && !isPastTime) {
                           // Store the time in HH:MM format
                           const timeToSet = slot.time ? slot.time.substring(0, 5) : slot.time;
                           setSelectedTime(timeToSet);
                           console.log('Time selected:', timeToSet);
                         }
                       }}
-                      disabled={!isAvailable}
+                      disabled={isDisabled}
                       className={`px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${
-                        isSelected
+                        isSelected && !isPastTime
                           ? 'bg-teal-600 text-white border-teal-600 shadow-sm scale-105'
-                          : isAvailable
+                          : isAvailable && !isPastTime
                           ? 'bg-white text-gray-700 border-gray-200 hover:border-teal-300 hover:bg-teal-50'
                           : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
                       }`}

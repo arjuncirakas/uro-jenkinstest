@@ -4,6 +4,8 @@ import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
+import SuccessModal from '../../components/modals/SuccessModal';
+import ErrorModal from '../../components/modals/ErrorModal';
 import { patientService } from '../../services/patientService';
 
 const PatientList = () => {
@@ -15,6 +17,10 @@ const PatientList = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientToDelete, setPatientToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   
   // API state
   const [patients, setPatients] = useState([]);
@@ -223,6 +229,8 @@ const PatientList = () => {
     if (!patientToDelete) return;
     
     setIsDeleting(true);
+    const patientName = patientToDelete.fullName || 'Patient';
+    
     try {
       const result = await patientService.deletePatient(patientToDelete.id);
       
@@ -247,14 +255,21 @@ const PatientList = () => {
           detail: { patientId: patientToDelete.id }
         }));
         
-        console.log('✅ Patient deleted successfully from database');
+        // Show success modal
+        setSuccessMessage(`${patientName} has been permanently deleted from the database. All related records including appointments, notes, investigation results, and bookings have been removed.`);
+        setShowSuccessModal(true);
       } else {
-        console.error('Failed to delete patient:', result.error);
-        alert(`Failed to delete patient: ${result.error || 'Unknown error'}`);
+        // Show error modal
+        setErrorMessage(result.error || result.message || 'Failed to delete patient. Please try again.');
+        setShowErrorModal(true);
+        setIsDeleteConfirmModalOpen(false);
       }
     } catch (error) {
       console.error('Error deleting patient:', error);
-      alert('An error occurred while deleting the patient');
+      // Show error modal
+      setErrorMessage(error.message || 'An error occurred while deleting the patient. Please try again.');
+      setShowErrorModal(true);
+      setIsDeleteConfirmModalOpen(false);
     } finally {
       setIsDeleting(false);
     }
@@ -476,6 +491,28 @@ const PatientList = () => {
         cancelText="Cancel"
         type="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => {
+          setShowSuccessModal(false);
+          setSuccessMessage('');
+        }}
+        title="Patient Deleted Successfully"
+        message={successMessage}
+      />
+
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={showErrorModal}
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorMessage('');
+        }}
+        title="Delete Patient Failed"
+        message={errorMessage}
       />
     </div>
   );

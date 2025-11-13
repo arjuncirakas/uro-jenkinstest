@@ -1837,7 +1837,22 @@ export const getPatientsDueForReview = async (req, res) => {
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
-    console.log(`👥 [getPatientsDueForReview ${requestId}] Processing for userId: ${userId}, role: ${userRole}`);
+    const userEmail = req.user.email;
+    console.log(`👥 [getPatientsDueForReview ${requestId}] Processing for userId: ${userId}, role: ${userRole}, email: ${userEmail}`);
+    
+    // For urologists/doctors, check if they have a corresponding doctor record
+    // Appointments might have urologist_id pointing to either users.id or doctors.id
+    let doctorId = null;
+    if (userRole === 'urologist' || userRole === 'doctor') {
+      const doctorCheck = await client.query(
+        'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+        [userEmail]
+      );
+      if (doctorCheck.rows.length > 0) {
+        doctorId = doctorCheck.rows[0].id;
+        console.log(`👥 [getPatientsDueForReview ${requestId}] Found doctor record with id: ${doctorId}`);
+      }
+    }
     
     // Calculate date range for 7-14 days from now
     const today = new Date();
@@ -1849,9 +1864,10 @@ export const getPatientsDueForReview = async (req, res) => {
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
     
-    console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for user ${userId}`);
+    console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for user ${userId}${doctorId ? ` (doctorId: ${doctorId})` : ''}`);
     
     // For urologists/doctors, get appointments assigned to them
+    // Check both users.id and doctors.id since appointments might reference either
     // For nurses, get all appointments in the department
     const appointmentsQuery = (userRole === 'urologist' || userRole === 'doctor') 
       ? `SELECT 
@@ -1873,7 +1889,7 @@ export const getPatientsDueForReview = async (req, res) => {
          FROM appointments a
          INNER JOIN patients p ON a.patient_id = p.id
          WHERE a.appointment_date BETWEEN $1 AND $2
-         AND a.urologist_id = $3
+         AND (a.urologist_id = $3${doctorId ? ' OR a.urologist_id = $4' : ''})
          AND a.status IN ('scheduled', 'confirmed')
          ORDER BY a.appointment_date, a.appointment_time`
       : `SELECT 
@@ -1899,7 +1915,9 @@ export const getPatientsDueForReview = async (req, res) => {
          ORDER BY a.appointment_date, a.appointment_time`;
     
     const queryParams = (userRole === 'urologist' || userRole === 'doctor')
-      ? [startDateStr, endDateStr, userId]
+      ? doctorId 
+        ? [startDateStr, endDateStr, userId, doctorId]
+        : [startDateStr, endDateStr, userId]
       : [startDateStr, endDateStr];
     
     const result = await client.query(appointmentsQuery, queryParams);
@@ -1980,7 +1998,7 @@ export const getPatientsDueForReview = async (req, res) => {
   } catch (error) {
     console.error(`❌ [getPatientsDueForReview ${requestId}] Error occurred:`, error.message);
     console.error(`❌ [getPatientsDueForReview ${requestId}] Error stack:`, error.stack);
-    console.error(`❌ [getPatientsDueForReview ${requestId}] User info:`, { id: userId, role: userRole });
+    console.error(`❌ [getPatientsDueForReview ${requestId}] User info:`, { id: userId, role: userRole, email: req.user.email });
     console.error(`❌ [getPatientsDueForReview ${requestId}] Error code:`, error.code);
     console.error(`❌ [getPatientsDueForReview ${requestId}] Error name:`, error.name);
     res.status(500).json({ 

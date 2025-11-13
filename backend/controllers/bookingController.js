@@ -2197,13 +2197,40 @@ export const getAllAppointments = async (req, res) => {
     
     const queryParams = [];
     
+    // If urologistId is provided, check if they have a corresponding doctor record
+    // Appointments might have urologist_id pointing to either users.id or doctors.id
+    let doctorId = null;
+    if (urologistId) {
+      // Get user email to find doctor record
+      const userCheck = await client.query(
+        'SELECT email FROM users WHERE id = $1',
+        [urologistId]
+      );
+      if (userCheck.rows.length > 0) {
+        const userEmail = userCheck.rows[0].email;
+        const doctorCheck = await client.query(
+          'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+          [userEmail]
+        );
+        if (doctorCheck.rows.length > 0) {
+          doctorId = doctorCheck.rows[0].id;
+          console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${urologistId}`);
+        }
+      }
+    }
+    
     // Build first part - urologist appointments (includes regular consultations and surgery appointments)
     let urologistWhere = ['a.status != \'cancelled\''];
     
-    // Add urologist filter directly in the first query
+    // Add urologist filter - check both users.id and doctors.id if doctor record exists
     if (urologistId) {
       queryParams.push(urologistId);
-      urologistWhere.push(`a.urologist_id = $${queryParams.length}`);
+      if (doctorId) {
+        queryParams.push(doctorId);
+        urologistWhere.push(`(a.urologist_id = $${queryParams.length - 1} OR a.urologist_id = $${queryParams.length})`);
+      } else {
+        urologistWhere.push(`a.urologist_id = $${queryParams.length}`);
+      }
     }
     
     // Note: Surgery appointments are stored in the appointments table with appointment_type = 'surgery'
