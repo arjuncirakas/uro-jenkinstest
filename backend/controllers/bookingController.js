@@ -48,17 +48,38 @@ export const bookUrologistAppointment = async (req, res) => {
     }
 
     // Check if urologist exists - try doctors table first, then users table
+    // IMPORTANT: Always store doctors.id in appointments, not users.id
     let urologistCheck = await client.query(
       'SELECT id, first_name, last_name, specialization FROM doctors WHERE id = $1 AND is_active = true',
       [urologistId]
     );
 
-    // If not found in doctors table, try users table
+    let finalUrologistId = urologistId; // Default to provided ID
+
+    // If not found in doctors table, try users table and get corresponding doctors.id
     if (urologistCheck.rows.length === 0) {
-      urologistCheck = await client.query(
-        'SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ($2, $3)',
+      const userCheck = await client.query(
+        'SELECT id, first_name, last_name, role, email FROM users WHERE id = $1 AND role IN ($2, $3)',
         [urologistId, 'urologist', 'doctor']
       );
+      
+      if (userCheck.rows.length > 0) {
+        // Found in users table, now find corresponding doctors.id
+        const userEmail = userCheck.rows[0].email;
+        const doctorByEmailCheck = await client.query(
+          'SELECT id, first_name, last_name, specialization FROM doctors WHERE email = $1 AND is_active = true',
+          [userEmail]
+        );
+        
+        if (doctorByEmailCheck.rows.length > 0) {
+          // Use doctors.id instead of users.id
+          finalUrologistId = doctorByEmailCheck.rows[0].id;
+          urologistCheck = doctorByEmailCheck;
+          console.log(`[bookUrologistAppointment] Converted users.id ${urologistId} to doctors.id ${finalUrologistId}`);
+        } else {
+          urologistCheck = userCheck; // Use user data for error message
+        }
+      }
     }
 
     if (urologistCheck.rows.length === 0) {
@@ -69,14 +90,14 @@ export const bookUrologistAppointment = async (req, res) => {
       });
     }
 
-    console.log(`[bookUrologistAppointment] Found urologist: ${urologistCheck.rows[0].first_name} ${urologistCheck.rows[0].last_name}`);
+    console.log(`[bookUrologistAppointment] Found urologist: ${urologistCheck.rows[0].first_name} ${urologistCheck.rows[0].last_name}, using ID: ${finalUrologistId}`);
 
-    // Check for conflicting appointments
+    // Check for conflicting appointments using doctors.id
     const conflictCheck = await client.query(
       `SELECT id FROM appointments 
        WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
        AND status IN ('scheduled', 'confirmed')`,
-      [urologistId, appointmentDate, appointmentTime]
+      [finalUrologistId, appointmentDate, appointmentTime]
     );
 
     if (conflictCheck.rows.length > 0) {
@@ -89,7 +110,7 @@ export const bookUrologistAppointment = async (req, res) => {
     // Determine appointment type (default to 'urologist', but allow 'surgery' for surgery pathway)
     const aptType = appointmentType || 'urologist';
     
-    // Insert appointment
+    // Insert appointment - ALWAYS use doctors.id
     const appointmentQuery = await client.query(
       `INSERT INTO appointments (
         patient_id, appointment_type, appointment_date, appointment_time, 
@@ -101,7 +122,7 @@ export const bookUrologistAppointment = async (req, res) => {
         aptType, 
         appointmentDate, 
         appointmentTime, 
-        urologistId, 
+        finalUrologistId, // Use doctors.id, not users.id
         urologistName, 
         surgeryType || null, 
         notes || '', 
@@ -2197,27 +2218,52 @@ export const getAllAppointments = async (req, res) => {
     
     let queryParams = [];
     
-    // If urologistId is provided, get their doctors.id (appointments use doctors.id, not users.id)
+    // If urologistId is provided, determine if it's doctors.id or users.id
     // Appointments have urologist_id pointing to doctors.id
     let doctorId = null;
     if (urologistId) {
-      // Get user email to find doctor record
-      const userCheck = await client.query(
-        'SELECT email FROM users WHERE id = $1',
-        [urologistId]
+      // First, check if urologistId is already a doctors.id
+      // Convert to integer to ensure proper type matching
+      const urologistIdInt = parseInt(urologistId);
+      const doctorCheck = await client.query(
+        'SELECT id FROM doctors WHERE id = $1 AND is_active = true',
+        [urologistIdInt]
       );
-      if (userCheck.rows.length > 0) {
-        const userEmail = userCheck.rows[0].email;
-        const doctorCheck = await client.query(
-          'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
-          [userEmail]
+      
+      if (doctorCheck.rows.length > 0) {
+        // urologistId is already a doctors.id
+        doctorId = urologistIdInt;
+        console.log(`📅 [getAllAppointments ${requestId}] urologistId ${urologistId} is already a doctors.id`);
+      } else {
+        // urologistId might be a users.id, try to find corresponding doctors.id
+        const userCheck = await client.query(
+          'SELECT email FROM users WHERE id = $1',
+          [urologistIdInt]
         );
-        if (doctorCheck.rows.length > 0) {
-          doctorId = doctorCheck.rows[0].id;
-          console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${urologistId}`);
+        if (userCheck.rows.length > 0) {
+          const userEmail = userCheck.rows[0].email;
+          const doctorByEmailCheck = await client.query(
+            'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+            [userEmail]
+          );
+          if (doctorByEmailCheck.rows.length > 0) {
+            doctorId = doctorByEmailCheck.rows[0].id;
+            console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${urologistId}`);
+          } else {
+            console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${urologistId} - returning empty results`);
+            // Return empty results if no doctor record exists
+            client.release();
+            return res.json({
+              success: true,
+              data: {
+                appointments: [],
+                count: 0
+              }
+            });
+          }
         } else {
-          console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${urologistId} - returning empty results`);
-          // Return empty results if no doctor record exists
+          // urologistId is neither a doctors.id nor a users.id
+          console.log(`📅 [getAllAppointments ${requestId}] urologistId ${urologistId} not found in doctors or users table - returning empty results`);
           client.release();
           return res.json({
             success: true,
@@ -2236,8 +2282,15 @@ export const getAllAppointments = async (req, res) => {
     let innerQueryParams = [];
     
     // Add urologist filter - use doctors.id only
+    // Note: Appointments might have been created with either doctors.id or users.id
+    // But we only want to match by doctors.id (as per user requirement)
     if (urologistId && doctorId) {
       innerQueryParams.push(doctorId);
+      urologistWhere.push(`a.urologist_id = $1`);
+    } else if (urologistId && !doctorId) {
+      // If urologistId was provided but no doctor record found, don't filter (return empty)
+      // This ensures we only show appointments for doctors with proper records
+      innerQueryParams.push(-1); // Use invalid ID to return no results
       urologistWhere.push(`a.urologist_id = $1`);
     }
     

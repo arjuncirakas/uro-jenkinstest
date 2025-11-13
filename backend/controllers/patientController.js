@@ -1844,6 +1844,7 @@ export const getPatientsDueForReview = async (req, res) => {
     // Appointments have urologist_id pointing to doctors.id
     let doctorId = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
+      // Find doctor record by email (since doctors and users are linked by email)
       const doctorCheck = await client.query(
         'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
         [userEmail]
