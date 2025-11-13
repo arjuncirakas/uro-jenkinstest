@@ -527,7 +527,7 @@ export const getAvailableUrologists = async (req, res) => {
     // Also get urologists from users table for backwards compatibility
     // Only include active and verified users from Urology department
     // Only include users with role 'urologist' or 'doctor' who are in Urology department
-    // Exclude users who already have a record in doctors table (to prevent duplicates)
+    // Note: We'll convert users.id to doctors.id in the processing loop below
     const usersTableResult = await client.query(
       `SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role
        FROM users u
@@ -546,15 +546,6 @@ export const getAvailableUrologists = async (req, res) => {
          OR
          -- If no department record, only include if role is explicitly 'urologist'
          (dept.name IS NULL AND u.role = 'urologist')
-       )
-       -- Exclude users who already have an active doctor record in doctors table
-       AND NOT EXISTS (
-         SELECT 1 FROM doctors d2 
-         WHERE d2.email = u.email 
-         AND d2.is_active = true
-       )
-       AND NOT EXISTS (
-         SELECT 1 FROM doctors d3 WHERE d3.email = u.email AND d3.is_active = false
        )
        ORDER BY u.first_name, u.last_name`
     );
@@ -578,18 +569,50 @@ export const getAvailableUrologists = async (req, res) => {
       doctorsTableResult.rows.map(row => row.email.toLowerCase())
     );
 
-    // Create urologists array from users table, excluding those already in doctors table
-    const urologistsFromUsers = usersTableResult.rows
-      .filter(row => !doctorsTableEmails.has(row.email.toLowerCase()))
-      .map(row => ({
-        id: row.id,
-        name: `${row.first_name} ${row.last_name}`,
-        email: row.email,
-        phone: row.phone,
-        role: row.role,
-        specialization: 'Urologist',
-        source: 'users_table'
-      }));
+    // Create urologists array from users table
+    // IMPORTANT: Only include urologists who have a corresponding doctors record
+    // and always use doctors.id instead of users.id
+    const urologistsFromUsers = [];
+    for (const userRow of usersTableResult.rows) {
+      // Skip if already in doctors table (to avoid duplicates)
+      if (doctorsTableEmails.has(userRow.email.toLowerCase())) {
+        continue;
+      }
+      
+      // Look up corresponding doctors.id by email
+      const doctorByEmailCheck = await client.query(
+        'SELECT id, first_name, last_name, specialization, department_id FROM doctors WHERE email = $1 AND is_active = true',
+        [userRow.email]
+      );
+      
+      if (doctorByEmailCheck.rows.length > 0) {
+        // Found corresponding doctors record - use doctors.id
+        const doctorRow = doctorByEmailCheck.rows[0];
+        // Get department name if available
+        let departmentName = null;
+        if (doctorRow.department_id) {
+          const deptResult = await client.query('SELECT name FROM departments WHERE id = $1', [doctorRow.department_id]);
+          if (deptResult.rows.length > 0) {
+            departmentName = deptResult.rows[0].name;
+          }
+        }
+        
+        urologistsFromUsers.push({
+          id: doctorRow.id, // Use doctors.id, not users.id
+          name: `${doctorRow.first_name} ${doctorRow.last_name}`,
+          email: userRow.email,
+          phone: userRow.phone,
+          role: 'urologist',
+          specialization: doctorRow.specialization || departmentName || 'Urology',
+          department: departmentName,
+          source: 'users_table_converted_to_doctors'
+        });
+        console.log(`[getAvailableUrologists] Converted users.id ${userRow.id} to doctors.id ${doctorRow.id} for ${userRow.email}`);
+      } else {
+        // No doctors record found - exclude this urologist
+        console.log(`[getAvailableUrologists] Excluding user ${userRow.email} (id: ${userRow.id}) - no corresponding doctors record`);
+      }
+    }
 
     // Combine both lists (doctors table takes priority, no duplicates)
     const allUrologists = [...urologistsFromTable, ...urologistsFromUsers];
