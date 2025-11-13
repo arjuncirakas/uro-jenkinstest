@@ -161,6 +161,33 @@ const OPDManagement = () => {
     fetchTodaysAppointments(activeAppointmentTab);
   }, [activeAppointmentTab]);
 
+  // Listen for patient deletion events to refresh all data
+  useEffect(() => {
+    const handlePatientDeleted = (event) => {
+      console.log('Patient deleted event received, refreshing all data:', event.detail);
+      // Refresh all data to remove deleted patient from all lists
+      refreshAllData();
+      
+      // Close modals if the deleted patient was selected
+      if (selectedPatient && selectedPatient.id === event.detail.patientId) {
+        setIsPatientDetailsModalOpen(false);
+        setIsInvestigationModalOpen(false);
+        setIsScheduleModalOpen(false);
+        setIsNoShowModalOpen(false);
+        setSelectedPatient(null);
+        setSelectedNoShowPatient(null);
+        setSelectedNoShowAppointmentId(null);
+        setSelectedNoShowAppointmentType(null);
+      }
+    };
+
+    window.addEventListener('patientDeleted', handlePatientDeleted);
+    
+    return () => {
+      window.removeEventListener('patientDeleted', handlePatientDeleted);
+    };
+  }, [selectedPatient]);
+
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();

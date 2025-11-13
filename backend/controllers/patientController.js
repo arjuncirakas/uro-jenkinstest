@@ -1013,35 +1013,103 @@ export const updatePatient = async (req, res) => {
   }
 };
 
-// Delete patient (soft delete by setting status to Inactive)
+// Delete patient (hard delete - removes patient and all related records from database)
 export const deletePatient = async (req, res) => {
   const client = await pool.connect();
   
   try {
     const { id } = req.params;
 
-    const result = await client.query(
-      'UPDATE patients SET status = $1, updated_at = $2 WHERE id = $3 RETURNING *',
-      ['Inactive', new Date(), id]
+    // Check if patient exists
+    const patientCheck = await client.query(
+      'SELECT id, upi, first_name, last_name FROM patients WHERE id = $1',
+      [id]
     );
 
-    if (result.rows.length === 0) {
+    if (patientCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Patient not found'
       });
     }
 
-    res.json({
-      success: true,
-      message: 'Patient deleted successfully'
-    });
+    // Begin transaction to ensure all deletions succeed or none do
+    await client.query('BEGIN');
+
+    try {
+      // Delete all related records in order (respecting foreign key constraints)
+      
+      // 1. Delete patient notes
+      await client.query('DELETE FROM patient_notes WHERE patient_id = $1', [id]);
+      console.log(`Deleted patient notes for patient ${id}`);
+
+      // 2. Delete investigation results
+      await client.query('DELETE FROM investigation_results WHERE patient_id = $1', [id]);
+      console.log(`Deleted investigation results for patient ${id}`);
+
+      // 3. Delete appointments (urologist appointments)
+      await client.query('DELETE FROM appointments WHERE patient_id = $1', [id]);
+      console.log(`Deleted appointments for patient ${id}`);
+
+      // 4. Delete investigation bookings
+      await client.query('DELETE FROM investigation_bookings WHERE patient_id = $1', [id]);
+      console.log(`Deleted investigation bookings for patient ${id}`);
+
+      // 5. Delete discharge summaries (if table exists)
+      try {
+        await client.query('DELETE FROM discharge_summaries WHERE patient_id = $1', [id]);
+        console.log(`Deleted discharge summaries for patient ${id}`);
+      } catch (err) {
+        // Table might not exist, ignore error
+        console.log('Discharge summaries table may not exist, skipping...');
+      }
+
+      // 6. Delete MDT meeting references (if any)
+      try {
+        // First delete MDT patient references if table exists
+        await client.query('DELETE FROM mdt_patients WHERE patient_id = $1', [id]);
+        console.log(`Deleted MDT patient references for patient ${id}`);
+      } catch (err) {
+        // Table might not exist, ignore error
+        console.log('MDT patients table may not exist, skipping...');
+      }
+
+      // 7. Finally, delete the patient record itself
+      const deleteResult = await client.query(
+        'DELETE FROM patients WHERE id = $1 RETURNING *',
+        [id]
+      );
+
+      if (deleteResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({
+          success: false,
+          message: 'Patient not found'
+        });
+      }
+
+      // Commit transaction
+      await client.query('COMMIT');
+
+      console.log(`✅ Patient ${id} (${patientCheck.rows[0].upi}) deleted completely from database`);
+
+      res.json({
+        success: true,
+        message: 'Patient and all related records deleted successfully from the database'
+      });
+
+    } catch (error) {
+      // Rollback transaction on any error
+      await client.query('ROLLBACK');
+      throw error;
+    }
 
   } catch (error) {
     console.error('Delete patient error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: error.message
     });
   } finally {
     client.release();

@@ -227,16 +227,30 @@ const PatientList = () => {
       const result = await patientService.deletePatient(patientToDelete.id);
       
       if (result.success) {
-        // Remove patient from the list or refresh the list
+        // Remove patient from the list
         setPatients(prevPatients => prevPatients.filter(p => p.id !== patientToDelete.id));
+        
+        // Clear selected patient if it was the deleted one
+        if (selectedPatient && selectedPatient.id === patientToDelete.id) {
+          setSelectedPatient(null);
+          setIsPatientDetailsModalOpen(false);
+        }
+        
         setIsDeleteConfirmModalOpen(false);
         setPatientToDelete(null);
         
-        // Optionally show a success message
-        console.log('Patient deleted successfully');
+        // Refresh the patient list to ensure consistency
+        fetchPatients();
+        
+        // Dispatch event to notify other components (like OPDManagement) to refresh
+        window.dispatchEvent(new CustomEvent('patientDeleted', {
+          detail: { patientId: patientToDelete.id }
+        }));
+        
+        console.log('✅ Patient deleted successfully from database');
       } else {
         console.error('Failed to delete patient:', result.error);
-        alert(`Failed to delete patient: ${result.error}`);
+        alert(`Failed to delete patient: ${result.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error deleting patient:', error);
@@ -457,8 +471,8 @@ const PatientList = () => {
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title="Delete Patient"
-        message={`Are you sure you want to delete ${patientToDelete?.fullName || 'this patient'}? This will mark the patient as inactive and they will no longer appear in the active patient list.`}
-        confirmText="Delete Patient"
+        message={`Are you sure you want to permanently delete ${patientToDelete?.fullName || 'this patient'}? This action cannot be undone. All patient data including appointments, notes, investigation results, and bookings will be permanently removed from the database.`}
+        confirmText="Delete Permanently"
         cancelText="Cancel"
         type="danger"
         isLoading={isDeleting}
