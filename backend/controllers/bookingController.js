@@ -2195,7 +2195,7 @@ export const getAllAppointments = async (req, res) => {
     const { startDate, endDate, urologistId } = req.query;
     console.log(`📅 [getAllAppointments ${requestId}] Processing query with startDate: ${startDate}, endDate: ${endDate}, urologistId: ${urologistId}`);
     
-    const queryParams = [];
+    let queryParams = [];
     
     // If urologistId is provided, get their doctors.id (appointments use doctors.id, not users.id)
     // Appointments have urologist_id pointing to doctors.id
@@ -2216,25 +2216,29 @@ export const getAllAppointments = async (req, res) => {
           doctorId = doctorCheck.rows[0].id;
           console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${urologistId}`);
         } else {
-          console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${urologistId}, will check by users.id as fallback`);
+          console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${urologistId} - returning empty results`);
+          // Return empty results if no doctor record exists
+          client.release();
+          return res.json({
+            success: true,
+            data: {
+              appointments: [],
+              count: 0
+            }
+          });
         }
       }
     }
     
     // Build first part - urologist appointments (includes regular consultations and surgery appointments)
-    // Note: Date parameters will be added later to the outer query, so inner query uses $1, $2 for urologist filter
+    // Note: Date parameters will be added later to the outer query, so inner query uses $1 for urologist filter
     let urologistWhere = ['a.status != \'cancelled\''];
     let innerQueryParams = [];
     
-    // Add urologist filter - Primary: doctors.id, Fallback: users.id
-    if (urologistId) {
-      if (doctorId) {
-        innerQueryParams.push(doctorId, urologistId);  // Primary: doctors.id, Fallback: users.id
-        urologistWhere.push(`(a.urologist_id = $1 OR a.urologist_id = $2)`);
-      } else {
-        innerQueryParams.push(urologistId);  // Only users.id if no doctor record
-        urologistWhere.push(`a.urologist_id = $1`);
-      }
+    // Add urologist filter - use doctors.id only
+    if (urologistId && doctorId) {
+      innerQueryParams.push(doctorId);
+      urologistWhere.push(`a.urologist_id = $1`);
     }
     
     // Note: Surgery appointments are stored in the appointments table with appointment_type = 'surgery'
@@ -2429,7 +2433,7 @@ export const getAllAppointments = async (req, res) => {
   } catch (error) {
     console.error(`❌ [getAllAppointments ${requestId}] Error occurred:`, error.message);
     console.error(`❌ [getAllAppointments ${requestId}] Error stack:`, error.stack);
-    console.error(`❌ [getAllAppointments ${requestId}] Request params:`, { startDate, endDate, urologistId });
+    console.error(`❌ [getAllAppointments ${requestId}] Request params:`, req.query);
     console.error(`❌ [getAllAppointments ${requestId}] User info:`, { id: req.user?.id, role: req.user?.role });
     console.error(`❌ [getAllAppointments ${requestId}] Error code:`, error.code);
     console.error(`❌ [getAllAppointments ${requestId}] Error name:`, error.name);

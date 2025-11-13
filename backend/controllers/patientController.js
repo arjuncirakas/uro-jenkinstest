@@ -1852,7 +1852,21 @@ export const getPatientsDueForReview = async (req, res) => {
         doctorId = doctorCheck.rows[0].id;
         console.log(`👥 [getPatientsDueForReview ${requestId}] Found doctor record with id: ${doctorId} for user ${userId}`);
       } else {
-        console.log(`👥 [getPatientsDueForReview ${requestId}] No doctor record found for user ${userId}, will check by users.id as fallback`);
+        console.log(`👥 [getPatientsDueForReview ${requestId}] No doctor record found for user ${userId} - returning empty results`);
+        // Return empty results if no doctor record exists
+        client.release();
+        return res.json({
+          success: true,
+          data: {
+            patients: [],
+            summary: {
+              total: 0,
+              postOpFollowup: 0,
+              investigation: 0,
+              surgical: 0
+            }
+          }
+        });
       }
     }
     
@@ -1866,11 +1880,9 @@ export const getPatientsDueForReview = async (req, res) => {
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
     
-    console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for user ${userId}${doctorId ? ` (using doctors.id: ${doctorId})` : ` (using users.id: ${userId})`}`);
+    console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for doctor ${doctorId}`);
     
-    // For urologists/doctors, get appointments assigned to them
-    // Primary check: doctors.id (since appointments use doctors.id)
-    // Fallback: users.id (in case some appointments were created with users.id)
+    // For urologists/doctors, get appointments assigned to them using doctors.id only
     // For nurses, get all appointments in the department
     const appointmentsQuery = (userRole === 'urologist' || userRole === 'doctor') 
       ? `SELECT 
@@ -1892,7 +1904,7 @@ export const getPatientsDueForReview = async (req, res) => {
          FROM appointments a
          INNER JOIN patients p ON a.patient_id = p.id
          WHERE a.appointment_date BETWEEN $1 AND $2
-         AND (${doctorId ? `a.urologist_id = $3 OR a.urologist_id = $4` : `a.urologist_id = $3`})
+         AND a.urologist_id = $3
          AND a.status IN ('scheduled', 'confirmed')
          ORDER BY a.appointment_date, a.appointment_time`
       : `SELECT 
@@ -1917,11 +1929,9 @@ export const getPatientsDueForReview = async (req, res) => {
          AND a.status IN ('scheduled', 'confirmed')
          ORDER BY a.appointment_date, a.appointment_time`;
     
-    // Use doctors.id as primary, users.id as fallback
+    // Use doctors.id only (appointments use doctors.id)
     const queryParams = (userRole === 'urologist' || userRole === 'doctor')
-      ? doctorId 
-        ? [startDateStr, endDateStr, doctorId, userId]  // Primary: doctors.id, Fallback: users.id
-        : [startDateStr, endDateStr, userId]  // Only users.id if no doctor record
+      ? [startDateStr, endDateStr, doctorId]
       : [startDateStr, endDateStr];
     
     const result = await client.query(appointmentsQuery, queryParams);
