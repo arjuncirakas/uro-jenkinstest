@@ -792,30 +792,40 @@ export const getTodaysAppointments = async (req, res) => {
     // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
     let doctorId = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
+      console.log(`📅 [getTodaysAppointments ${requestId}] Looking up doctor record for email: ${userEmail}`);
       // Find doctor record by email (since doctors and users are linked by email)
-      const doctorCheck = await client.query(
-        'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
-        [userEmail]
-      );
-      if (doctorCheck.rows.length > 0) {
-        doctorId = doctorCheck.rows[0].id;
-        console.log(`📅 [getTodaysAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${userId}`);
-      } else {
-        console.log(`📅 [getTodaysAppointments ${requestId}] No doctor record found for user ${userId} - returning empty results`);
-        // Return empty results if no doctor record exists
-        client.release();
-        return res.json({
-          success: true,
-          message: 'Appointments retrieved successfully',
-          data: {
-            appointments: [],
-            count: 0,
-            date: new Date().getFullYear() + '-' + 
-                  String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
-                  String(new Date().getDate()).padStart(2, '0')
-          }
-        });
+      try {
+        const doctorCheck = await client.query(
+          'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+          [userEmail]
+        );
+        console.log(`📅 [getTodaysAppointments ${requestId}] Doctor lookup query executed, found ${doctorCheck.rows.length} records`);
+        if (doctorCheck.rows.length > 0) {
+          doctorId = doctorCheck.rows[0].id;
+          console.log(`📅 [getTodaysAppointments ${requestId}] ✅ Found doctor record with id: ${doctorId} for user ${userId} (email: ${userEmail})`);
+        } else {
+          console.log(`📅 [getTodaysAppointments ${requestId}] ⚠️ No doctor record found for user ${userId} (email: ${userEmail}) - returning empty results`);
+          // Return empty results if no doctor record exists
+          client.release();
+          return res.json({
+            success: true,
+            message: 'Appointments retrieved successfully',
+            data: {
+              appointments: [],
+              count: 0,
+              date: new Date().getFullYear() + '-' + 
+                    String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(new Date().getDate()).padStart(2, '0')
+            }
+          });
+        }
+      } catch (doctorLookupError) {
+        console.error(`❌ [getTodaysAppointments ${requestId}] Error looking up doctor record:`, doctorLookupError.message);
+        console.error(`❌ [getTodaysAppointments ${requestId}] Doctor lookup error stack:`, doctorLookupError.stack);
+        throw doctorLookupError;
       }
+    } else {
+      console.log(`📅 [getTodaysAppointments ${requestId}] User role is ${userRole}, skipping doctor lookup (not urologist/doctor)`);
     }
     
     // Use local timezone instead of UTC to get the correct "today"
@@ -829,7 +839,10 @@ export const getTodaysAppointments = async (req, res) => {
     let query = '';
     let queryParams = [today];
     
+    console.log(`📅 [getTodaysAppointments ${requestId}] Building query - type: ${type || 'all'}, doctorId: ${doctorId || 'null'}, userRole: ${userRole}`);
+    
     if (type === 'investigation') {
+      console.log(`📅 [getTodaysAppointments ${requestId}] Building investigation query`);
       // Get investigation bookings for today
       query = `
         SELECT 
@@ -857,7 +870,9 @@ export const getTodaysAppointments = async (req, res) => {
       // Get urologist appointments for today
       // For urologists/doctors, filter by their doctors.id only
       // For nurses, show all urologist appointments for today
+      console.log(`📅 [getTodaysAppointments ${requestId}] Building urologist query - userRole: ${userRole}, doctorId: ${doctorId}`);
       if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+        console.log(`📅 [getTodaysAppointments ${requestId}] Using filtered query with doctorId: ${doctorId}`);
         query = `
           SELECT 
             a.id,
@@ -884,6 +899,7 @@ export const getTodaysAppointments = async (req, res) => {
         `;
         queryParams.push(doctorId);
       } else {
+        console.log(`📅 [getTodaysAppointments ${requestId}] Using unfiltered urologist query (nurse or no doctorId)`);
         query = `
           SELECT 
             a.id,
@@ -912,7 +928,9 @@ export const getTodaysAppointments = async (req, res) => {
       // Get all appointments for today
       // For urologists/doctors, filter appointments by their doctors.id only
       // For nurses, show all appointments
+      console.log(`📅 [getTodaysAppointments ${requestId}] Building 'all' query - userRole: ${userRole}, doctorId: ${doctorId}`);
       if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+        console.log(`📅 [getTodaysAppointments ${requestId}] Using filtered 'all' query with doctorId: ${doctorId}`);
         query = `
           SELECT 
             a.id,
@@ -961,6 +979,7 @@ export const getTodaysAppointments = async (req, res) => {
         `;
         queryParams.push(doctorId);
       } else {
+        console.log(`📅 [getTodaysAppointments ${requestId}] Using unfiltered 'all' query (nurse or no doctorId)`);
         query = `
           SELECT 
             a.id,
@@ -1009,17 +1028,33 @@ export const getTodaysAppointments = async (req, res) => {
       }
     }
     
-    console.log(`📅 [getTodaysAppointments ${requestId}] Executing query with params:`, queryParams);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Query built successfully`);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Query params:`, JSON.stringify(queryParams));
     console.log(`📅 [getTodaysAppointments ${requestId}] Query type: ${type || 'all'}`);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Query length: ${query.length} characters`);
     
     let result;
     try {
+      console.log(`📅 [getTodaysAppointments ${requestId}] Executing database query...`);
+      const queryStart = Date.now();
       result = await client.query(query, queryParams);
-      console.log(`✅ [getTodaysAppointments ${requestId}] Query executed successfully, returned ${result.rows.length} rows`);
+      const queryTime = Date.now() - queryStart;
+      console.log(`✅ [getTodaysAppointments ${requestId}] Query executed successfully in ${queryTime}ms, returned ${result.rows.length} rows`);
+      if (result.rows.length > 0) {
+        console.log(`📅 [getTodaysAppointments ${requestId}] Sample appointment data:`, {
+          id: result.rows[0].id,
+          patient_id: result.rows[0].patient_id,
+          appointment_date: result.rows[0].appointment_date,
+          urologist_id: result.rows[0].urologist_id || 'N/A (investigation)',
+          type: result.rows[0].type
+        });
+      }
     } catch (queryError) {
       console.error(`❌ [getTodaysAppointments ${requestId}] Query execution failed:`, queryError.message);
       console.error(`❌ [getTodaysAppointments ${requestId}] Query error code:`, queryError.code);
+      console.error(`❌ [getTodaysAppointments ${requestId}] Query error detail:`, queryError.detail);
       console.error(`❌ [getTodaysAppointments ${requestId}] Query error stack:`, queryError.stack);
+      console.error(`❌ [getTodaysAppointments ${requestId}] Failed query params:`, JSON.stringify(queryParams));
       throw queryError;
     }
     
@@ -1175,7 +1210,8 @@ export const getTodaysAppointments = async (req, res) => {
       }
     }).filter(apt => apt != null); // Remove any null entries
     
-    console.log(`✅ [getTodaysAppointments ${requestId}] Formatted ${formattedAppointments.length} appointments, sending response`);
+    console.log(`✅ [getTodaysAppointments ${requestId}] Formatted ${formattedAppointments.length} appointments`);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Sending response - success: true, count: ${formattedAppointments.length}, date: ${today}`);
     res.json({
       success: true,
       message: 'Appointments retrieved successfully',
@@ -1188,12 +1224,20 @@ export const getTodaysAppointments = async (req, res) => {
     console.log(`✅ [getTodaysAppointments ${requestId}] Response sent successfully`);
     
   } catch (error) {
-    console.error(`❌ [getTodaysAppointments ${requestId}] Error occurred:`, error.message);
-    console.error(`❌ [getTodaysAppointments ${requestId}] Error stack:`, error.stack);
-    console.error(`❌ [getTodaysAppointments ${requestId}] User info:`, { id: req.user?.id, role: req.user?.role });
-    console.error(`❌ [getTodaysAppointments ${requestId}] Query params:`, req.query);
-    console.error(`❌ [getTodaysAppointments ${requestId}] Error code:`, error.code);
+    console.error(`❌ [getTodaysAppointments ${requestId}] ========== ERROR OCCURRED ==========`);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error message:`, error.message);
     console.error(`❌ [getTodaysAppointments ${requestId}] Error name:`, error.name);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error code:`, error.code);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Error stack:`, error.stack);
+    console.error(`❌ [getTodaysAppointments ${requestId}] User info:`, { 
+      id: req.user?.id, 
+      role: req.user?.role,
+      email: req.user?.email 
+    });
+    console.error(`❌ [getTodaysAppointments ${requestId}] Request query params:`, req.query);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Request method:`, req.method);
+    console.error(`❌ [getTodaysAppointments ${requestId}] Request path:`, req.path);
+    console.error(`❌ [getTodaysAppointments ${requestId}] ======================================`);
     
     res.status(500).json({
       success: false,
