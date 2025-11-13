@@ -166,10 +166,37 @@ const PatientList = () => {
     const patientPathway = getPatientPathway(patient);
     const patientUrologist = patient.assignedUrologist || 'Unassigned';
     
-    const matchesSearch = patient.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         patient.upi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         patientPathway.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         patientUrologist.toLowerCase().includes(searchQuery.toLowerCase());
+    // If no search query, only filter by urologist
+    if (!searchQuery || searchQuery.trim() === '') {
+      const matchesUrologist = selectedUrologist === 'all' || patientUrologist === selectedUrologist;
+      return matchesUrologist;
+    }
+    
+    // Search logic - similar to superadmin panel
+    const searchLower = searchQuery.trim().toLowerCase();
+    const firstName = (patient.firstName || '').toLowerCase().trim();
+    const lastName = (patient.lastName || '').toLowerCase().trim();
+    const fullName = (patient.fullName || '').toLowerCase().trim();
+    const fullNameNoSpace = `${firstName}${lastName}`.toLowerCase();
+    const upi = (patient.upi || '').toLowerCase();
+    const pathway = patientPathway.toLowerCase();
+    const urologist = patientUrologist.toLowerCase();
+    
+    // Check multiple search criteria:
+    // 1. Full name (first + last with space)
+    // 2. Full name without space
+    // 3. First name
+    // 4. Last name
+    // 5. UPI
+    // 6. Pathway
+    // 7. Urologist
+    const matchesSearch = fullName.includes(searchLower) ||
+                         fullNameNoSpace.includes(searchLower) ||
+                         firstName.includes(searchLower) ||
+                         lastName.includes(searchLower) ||
+                         upi.includes(searchLower) ||
+                         pathway.includes(searchLower) ||
+                         urologist.includes(searchLower);
     
     const matchesUrologist = selectedUrologist === 'all' || patientUrologist === selectedUrologist;
     

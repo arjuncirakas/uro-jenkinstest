@@ -322,6 +322,8 @@ export const getPatients = async (req, res) => {
         p.last_name ILIKE $${paramCount} OR 
         CONCAT(p.first_name, ' ', p.last_name) ILIKE $${paramCount} OR
         CONCAT(p.last_name, ' ', p.first_name) ILIKE $${paramCount} OR
+        CONCAT(p.first_name, p.last_name) ILIKE $${paramCount} OR
+        CONCAT(p.last_name, p.first_name) ILIKE $${paramCount} OR
         p.upi ILIKE $${paramCount} OR 
         p.phone ILIKE $${paramCount} OR 
         p.email ILIKE $${paramCount}
@@ -1661,6 +1663,8 @@ export const searchPatients = async (req, res) => {
          OR LOWER(last_name) LIKE LOWER($1)
          OR LOWER(first_name || ' ' || last_name) LIKE LOWER($1)
          OR LOWER(last_name || ' ' || first_name) LIKE LOWER($1)
+         OR LOWER(first_name || last_name) LIKE LOWER($1)
+         OR LOWER(last_name || first_name) LIKE LOWER($1)
          OR LOWER(upi) LIKE LOWER($1)
          OR LOWER(phone) LIKE LOWER($1)
        )
