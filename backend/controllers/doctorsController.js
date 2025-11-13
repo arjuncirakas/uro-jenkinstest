@@ -159,13 +159,16 @@ export const createDoctor = async (req, res) => {
     }
     
     // Determine role based on department name
-    // Doctors registered under urology department get 'doctor' role but will have urologist permissions
-    // This allows flexibility while maintaining proper access control
+    // If department is urology (exact match or starts with "urology" followed by space/end), change role to 'urologist'
+    // Use word boundary to avoid matching "neurology" which contains "urology"
     let role = 'doctor'; // Default to 'doctor' role
     if (departmentName) {
-      const deptNameLower = departmentName.toLowerCase();
-      if (deptNameLower.includes('urology')) {
-        role = 'doctor'; // Doctors in urology department get 'doctor' role (treated as urologist in middleware)
+      const deptNameLower = departmentName.toLowerCase().trim();
+      // Check if department name is exactly "urology" or starts with "urology" followed by space or end
+      // This prevents matching "neurology" which contains "urology" as a substring
+      if (deptNameLower === 'urology' || /^urology(\s|$)/.test(deptNameLower)) {
+        role = 'urologist';
+        console.log(`[createDoctor] Department is urology, setting role to 'urologist'`);
       } else if (deptNameLower.includes('general') || deptNameLower.includes('gp')) {
         role = 'gp';
       } else if (deptNameLower.includes('nurse')) {
