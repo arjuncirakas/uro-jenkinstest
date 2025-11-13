@@ -132,8 +132,8 @@ export const bookUrologistAppointment = async (req, res) => {
 
     const newAppointment = appointmentQuery.rows[0];
 
-    // Update patient's assigned urologist (use consistent name format)
-    const urologistFullName = `${urologistCheck.rows[0].first_name} ${urologistCheck.rows[0].last_name}`;
+    // Update patient's assigned urologist (use consistent name format with trimming)
+    const urologistFullName = `${urologistCheck.rows[0].first_name} ${urologistCheck.rows[0].last_name}`.trim();
     const updateResult = await client.query(
       'UPDATE patients SET assigned_urologist = $1 WHERE id = $2 RETURNING id, upi, first_name, last_name, assigned_urologist',
       [urologistFullName, patientId]
@@ -262,12 +262,13 @@ export const bookInvestigation = async (req, res) => {
           const currentUrologist = currentAssignment.rows[0].assigned_urologist;
           
           if (!currentUrologist || currentUrologist.trim() === '') {
-            // Patient not assigned yet - assign to the investigation doctor
+            // Patient not assigned yet - assign to the investigation doctor (trim for consistency)
+            const trimmedInvestigationName = investigationName.trim();
             await client.query(
               'UPDATE patients SET assigned_urologist = $1 WHERE id = $2',
-              [investigationName, patientId]
+              [trimmedInvestigationName, patientId]
             );
-            console.log(`[bookInvestigation] Assigned patient ${patientId} to ${investigationName} for investigation`);
+            console.log(`[bookInvestigation] Assigned patient ${patientId} to ${trimmedInvestigationName} for investigation`);
           } else {
             console.log(`[bookInvestigation] Patient already assigned to ${currentUrologist}, skipping reassignment`);
           }
@@ -1808,7 +1809,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
     }
 
     const doctor = doctorResult.rows[0];
-    const doctorName = `${doctor.first_name} ${doctor.last_name}`;
+    const doctorName = `${doctor.first_name} ${doctor.last_name}`.trim();
     
     // Get the user_id for the foreign key constraint
     // If doctor is from doctors table, use the linked user_id

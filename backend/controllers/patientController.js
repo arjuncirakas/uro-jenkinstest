@@ -1165,8 +1165,9 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       }))
     );
 
-    // Base WHERE for assignment
-    const whereBase = `p.status = 'Active' AND p.assigned_urologist = $1`;
+    // Base WHERE for assignment - use TRIM for robust name matching
+    // This ensures patients rescheduled to different doctors appear in their lists
+    const whereBase = `p.status = 'Active' AND TRIM(p.assigned_urologist) = TRIM($1)`;
 
     let additionalWhere = '';
     // Category filters
