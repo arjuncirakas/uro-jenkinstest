@@ -783,10 +783,40 @@ export const getTodaysAppointments = async (req, res) => {
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
-    console.log(`📅 [getTodaysAppointments ${requestId}] Processing for userId: ${userId}, role: ${userRole}`);
+    const userEmail = req.user?.email;
+    console.log(`📅 [getTodaysAppointments ${requestId}] Processing for userId: ${userId}, role: ${userRole}, email: ${userEmail}`);
     const { type } = req.query; // 'investigation' or 'urologist'
     
     console.log(`[getTodaysAppointments] User ID: ${userId}, Role: ${userRole}, Type: ${type}`);
+    
+    // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
+    let doctorId = null;
+    if (userRole === 'urologist' || userRole === 'doctor') {
+      // Find doctor record by email (since doctors and users are linked by email)
+      const doctorCheck = await client.query(
+        'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+        [userEmail]
+      );
+      if (doctorCheck.rows.length > 0) {
+        doctorId = doctorCheck.rows[0].id;
+        console.log(`📅 [getTodaysAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${userId}`);
+      } else {
+        console.log(`📅 [getTodaysAppointments ${requestId}] No doctor record found for user ${userId} - returning empty results`);
+        // Return empty results if no doctor record exists
+        client.release();
+        return res.json({
+          success: true,
+          message: 'Appointments retrieved successfully',
+          data: {
+            appointments: [],
+            count: 0,
+            date: new Date().getFullYear() + '-' + 
+                  String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
+                  String(new Date().getDate()).padStart(2, '0')
+          }
+        });
+      }
+    }
     
     // Use local timezone instead of UTC to get the correct "today"
     const now = new Date();
@@ -825,78 +855,158 @@ export const getTodaysAppointments = async (req, res) => {
       `;
     } else if (type === 'urologist') {
       // Get urologist appointments for today
-      // For urologists/doctors, optionally filter by their ID if they want only their appointments
-      // For now, show all urologist appointments for today
-      query = `
-        SELECT 
-          a.id,
-          a.patient_id,
-          p.first_name,
-          p.last_name,
-          p.upi,
-          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-          p.gender,
-          p.initial_psa as psa,
-          a.appointment_date,
-          a.appointment_time,
-          a.urologist_name as urologist,
-          a.status,
-          a.notes,
-          'urologist' as type
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.id
-        WHERE a.appointment_date = $1 
-        AND a.appointment_type = 'urologist'
-        AND a.status != 'cancelled'
-        ORDER BY a.appointment_time
-      `;
+      // For urologists/doctors, filter by their doctors.id only
+      // For nurses, show all urologist appointments for today
+      if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.initial_psa as psa,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            'urologist' as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date = $1 
+          AND a.appointment_type = 'urologist'
+          AND a.urologist_id = $2
+          AND a.status != 'cancelled'
+          ORDER BY a.appointment_time
+        `;
+        queryParams.push(doctorId);
+      } else {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.initial_psa as psa,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            'urologist' as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date = $1 
+          AND a.appointment_type = 'urologist'
+          AND a.status != 'cancelled'
+          ORDER BY a.appointment_time
+        `;
+      }
     } else {
       // Get all appointments for today
-      query = `
-        SELECT 
-          a.id,
-          a.patient_id,
-          p.first_name,
-          p.last_name,
-          p.upi,
-          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-          p.gender,
-          p.initial_psa as psa,
-          a.appointment_date,
-          a.appointment_time,
-          a.urologist_name as urologist,
-          a.status,
-          a.notes,
-          a.appointment_type as type
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.id
-        WHERE a.appointment_date = $1
-        AND a.status != 'cancelled'
-        
-        UNION ALL
-        
-        SELECT 
-          ib.id,
-          ib.patient_id,
-          p.first_name,
-          p.last_name,
-          p.upi,
-          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-          p.gender,
-          p.initial_psa as psa,
-          ib.scheduled_date as appointment_date,
-          ib.scheduled_time as appointment_time,
-          ib.investigation_name as urologist,
-          ib.status,
-          ib.notes,
-          'investigation' as type
-        FROM investigation_bookings ib
-        JOIN patients p ON ib.patient_id = p.id
-        WHERE ib.scheduled_date = $1
-        AND ib.status != 'cancelled'
-        
-        ORDER BY appointment_time
-      `;
+      // For urologists/doctors, filter appointments by their doctors.id only
+      // For nurses, show all appointments
+      if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.initial_psa as psa,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            a.appointment_type as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date = $1
+          AND a.urologist_id = $2
+          AND a.status != 'cancelled'
+          
+          UNION ALL
+          
+          SELECT 
+            ib.id,
+            ib.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.initial_psa as psa,
+            ib.scheduled_date as appointment_date,
+            ib.scheduled_time as appointment_time,
+            ib.investigation_name as urologist,
+            ib.status,
+            ib.notes,
+            'investigation' as type
+          FROM investigation_bookings ib
+          JOIN patients p ON ib.patient_id = p.id
+          WHERE ib.scheduled_date = $1
+          AND ib.status != 'cancelled'
+          
+          ORDER BY appointment_time
+        `;
+        queryParams.push(doctorId);
+      } else {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.initial_psa as psa,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            a.appointment_type as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date = $1
+          AND a.status != 'cancelled'
+          
+          UNION ALL
+          
+          SELECT 
+            ib.id,
+            ib.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.initial_psa as psa,
+            ib.scheduled_date as appointment_date,
+            ib.scheduled_time as appointment_time,
+            ib.investigation_name as urologist,
+            ib.status,
+            ib.notes,
+            'investigation' as type
+          FROM investigation_bookings ib
+          JOIN patients p ON ib.patient_id = p.id
+          WHERE ib.scheduled_date = $1
+          AND ib.status != 'cancelled'
+          
+          ORDER BY appointment_time
+        `;
+      }
     }
     
     console.log(`📅 [getTodaysAppointments ${requestId}] Executing query with params:`, queryParams);
