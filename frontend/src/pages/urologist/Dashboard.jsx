@@ -83,7 +83,7 @@ const UrologistDashboard = () => {
     setAppointmentsError(null);
     
     try {
-      const result = await bookingService.getDashboardTodaysAppointments();
+      const result = await bookingService.getTodaysAppointments();
       
       if (result.success) {
         console.log('Raw appointments data:', result.data.appointments);

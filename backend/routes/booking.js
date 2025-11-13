@@ -7,7 +7,6 @@ import {
   getAvailableUrologists,
   getAvailableDoctors,
   getTodaysAppointments,
-  getDashboardTodaysAppointments,
   getNoShowPatients,
   markAppointmentAsNoShow,
   addNoShowNote,
@@ -23,13 +22,6 @@ import { xssProtection } from '../middleware/sanitizer.js';
 
 const router = express.Router();
 router.use(xssProtection);
-
-// Log all requests to booking routes for debugging
-router.use((req, res, next) => {
-  console.log(`🔷 [BOOKING ROUTER] ${req.method} ${req.path} - Query:`, req.query);
-  console.log(`🔷 [BOOKING ROUTER] Original URL: ${req.originalUrl}`);
-  next();
-});
 
 // Book urologist appointment for a patient
 router.post('/patients/:patientId/appointments',
@@ -79,25 +71,11 @@ router.get('/doctors',
   getAvailableDoctors
 );
 
-// Get today's appointments for dashboard (new simplified endpoint)
-router.get('/appointments/dashboard-today',
-  generalLimiter,
-  authenticateToken,
-  requireRole(['urology_nurse', 'urologist', 'doctor']),
-  getDashboardTodaysAppointments
-);
-
 // Get today's appointments
 router.get('/appointments/today',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor']),
-  (req, res, next) => {
-    console.log(`🔵 [ROUTE] /appointments/today - Request received`);
-    console.log(`🔵 [ROUTE] /appointments/today - User:`, req.user?.id, req.user?.role);
-    console.log(`🔵 [ROUTE] /appointments/today - Query:`, req.query);
-    next();
-  },
   getTodaysAppointments
 );
 
@@ -162,12 +140,6 @@ router.get('/appointments',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor']),
-  (req, res, next) => {
-    console.log(`🟢 [ROUTE] /appointments - Request received`);
-    console.log(`🟢 [ROUTE] /appointments - User:`, req.user?.id, req.user?.role);
-    console.log(`🟢 [ROUTE] /appointments - Query:`, req.query);
-    next();
-  },
   getAllAppointments
 );
 

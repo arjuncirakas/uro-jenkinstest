@@ -55,14 +55,10 @@ export const authenticateToken = async (req, res, next) => {
       const connectTime = Date.now() - connectStart;
       console.log(`✅ [Auth ${requestId}] Database connection successful (took ${connectTime}ms)`);
     } catch (dbError) {
-      console.error(`❌ [Auth ${requestId}] ========== DATABASE CONNECTION FAILED ==========`);
-      console.error(`❌ [Auth ${requestId}] Path: ${req.path}, Method: ${req.method}`);
       console.error(`❌ [Auth ${requestId}] Database connection error:`, dbError.message);
       console.error(`❌ [Auth ${requestId}] Database error code:`, dbError.code);
-      console.error(`❌ [Auth ${requestId}] Database error name:`, dbError.name);
       console.error(`❌ [Auth ${requestId}] Database error stack:`, dbError.stack);
       console.error(`❌ [Auth ${requestId}] Pool status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
-      console.error(`❌ [Auth ${requestId}] ================================================`);
       return res.status(503).json({
         success: false,
         message: 'Database connection failed. Please try again later.'
