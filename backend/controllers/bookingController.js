@@ -757,8 +757,13 @@ export const getAvailableDoctors = async (req, res) => {
 // Get today's appointments
 export const getTodaysAppointments = async (req, res) => {
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`\n📅 [getTodaysAppointments ${requestId}] Starting`);
-  console.log(`📅 [getTodaysAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
+  console.log(`\n📅 [getTodaysAppointments ${requestId}] ========== FUNCTION CALLED ==========`);
+  console.log(`📅 [getTodaysAppointments ${requestId}] Starting`);
+  console.log(`📅 [getTodaysAppointments ${requestId}] Request method: ${req.method}`);
+  console.log(`📅 [getTodaysAppointments ${requestId}] Request path: ${req.path}`);
+  console.log(`📅 [getTodaysAppointments ${requestId}] Request originalUrl: ${req.originalUrl}`);
+  console.log(`📅 [getTodaysAppointments ${requestId}] Request query:`, req.query);
+  console.log(`📅 [getTodaysAppointments ${requestId}] User:`, req.user?.id, req.user?.role, req.user?.email);
   
   let client;
   try {

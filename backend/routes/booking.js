@@ -76,6 +76,12 @@ router.get('/appointments/today',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor']),
+  (req, res, next) => {
+    console.log(`🔵 [ROUTE] /appointments/today - Request received`);
+    console.log(`🔵 [ROUTE] /appointments/today - User:`, req.user?.id, req.user?.role);
+    console.log(`🔵 [ROUTE] /appointments/today - Query:`, req.query);
+    next();
+  },
   getTodaysAppointments
 );
 
@@ -140,6 +146,12 @@ router.get('/appointments',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor']),
+  (req, res, next) => {
+    console.log(`🟢 [ROUTE] /appointments - Request received`);
+    console.log(`🟢 [ROUTE] /appointments - User:`, req.user?.id, req.user?.role);
+    console.log(`🟢 [ROUTE] /appointments - Query:`, req.query);
+    next();
+  },
   getAllAppointments
 );
 
