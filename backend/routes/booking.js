@@ -23,6 +23,13 @@ import { xssProtection } from '../middleware/sanitizer.js';
 const router = express.Router();
 router.use(xssProtection);
 
+// Log all requests to booking routes for debugging
+router.use((req, res, next) => {
+  console.log(`🔷 [BOOKING ROUTER] ${req.method} ${req.path} - Query:`, req.query);
+  console.log(`🔷 [BOOKING ROUTER] Original URL: ${req.originalUrl}`);
+  next();
+});
+
 // Book urologist appointment for a patient
 router.post('/patients/:patientId/appointments',
   generalLimiter,

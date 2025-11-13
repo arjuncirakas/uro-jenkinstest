@@ -110,6 +110,13 @@ app.use((req, res, next) => {
   if (req.path.includes('/api/') && req.method !== 'GET') {
     console.log(`🔒 Security Event: ${req.method} ${req.path} from ${req.ip} at ${new Date().toISOString()}`);
   }
+  // Log all requests to /appointments/today for debugging
+  if (req.path.includes('/appointments/today') || req.originalUrl.includes('/appointments/today')) {
+    console.log(`🔴 [SERVER] Request to /appointments/today detected`);
+    console.log(`🔴 [SERVER] Method: ${req.method}, Path: ${req.path}, Original URL: ${req.originalUrl}`);
+    console.log(`🔴 [SERVER] Query:`, req.query);
+    console.log(`🔴 [SERVER] Headers:`, req.headers);
+  }
   next();
 });
 
