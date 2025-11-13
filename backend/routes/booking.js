@@ -7,6 +7,7 @@ import {
   getAvailableUrologists,
   getAvailableDoctors,
   getTodaysAppointments,
+  getDashboardTodaysAppointments,
   getNoShowPatients,
   markAppointmentAsNoShow,
   addNoShowNote,
@@ -76,6 +77,14 @@ router.get('/doctors',
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor', 'superadmin']),
   getAvailableDoctors
+);
+
+// Get today's appointments for dashboard (new simplified endpoint)
+router.get('/appointments/dashboard-today',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
+  getDashboardTodaysAppointments
 );
 
 // Get today's appointments

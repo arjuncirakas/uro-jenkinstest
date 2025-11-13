@@ -136,6 +136,21 @@ export const bookingService = {
     }
   },
 
+  // Get today's appointments for dashboard (new simplified endpoint)
+  getDashboardTodaysAppointments: async () => {
+    try {
+      const response = await apiClient.get('/booking/appointments/dashboard-today');
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error fetching dashboard today\'s appointments:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
+  },
+
   // Get today's appointments
   getTodaysAppointments: async (type = null) => {
     try {
