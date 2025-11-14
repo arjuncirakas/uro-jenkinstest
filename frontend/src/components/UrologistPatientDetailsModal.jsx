@@ -48,9 +48,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     // Surgery scheduling fields
     surgeryDate: '',
     surgeryTime: '',
-    surgeon: '',
-    operatingRoom: '',
-    duration: '60'
+    surgeon: ''
   });
   
   const [medicationDetails, setMedicationDetails] = useState({
@@ -2544,9 +2542,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       additionalNotes: '',
                       surgeryDate: '',
                       surgeryTime: '',
-                      surgeon: '',
-                      operatingRoom: '',
-                      duration: '60'
+                      surgeon: ''
                     });
                     setAppointmentBooking({
                       appointmentDate: '',
@@ -2878,63 +2874,27 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Surgeon *
-                        </label>
-                        <select
-                          value={transferDetails.surgeon}
-                          onChange={(e) => setTransferDetails(prev => ({ ...prev, surgeon: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
-                          required
-                          disabled={loadingUrologists}
-                        >
-                          <option value="">Select surgeon...</option>
-                          {availableUrologists.map((urologist) => (
-                            <option key={urologist.id} value={urologist.id}>
-                              {urologist.name}
-                            </option>
-                          ))}
-                        </select>
-                        {loadingUrologists && (
-                          <p className="text-xs text-gray-500 mt-1">Loading surgeons...</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Operating Room *
-                        </label>
-                        <select
-                          value={transferDetails.operatingRoom}
-                          onChange={(e) => setTransferDetails(prev => ({ ...prev, operatingRoom: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
-                          required
-                        >
-                          <option value="">Select operating room...</option>
-                          <option value="OR 1">OR 1</option>
-                          <option value="OR 2">OR 2</option>
-                          <option value="OR 3">OR 3</option>
-                          <option value="OR 4">OR 4</option>
-                          <option value="OR 5">OR 5</option>
-                        </select>
-                      </div>
-                    </div>
-
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Estimated Duration (minutes) *
+                        Surgeon *
                       </label>
-                      <input
-                        type="number"
-                        value={transferDetails.duration}
-                        onChange={(e) => setTransferDetails(prev => ({ ...prev, duration: e.target.value }))}
-                        placeholder="60"
-                        min="15"
-                        step="15"
+                      <select
+                        value={transferDetails.surgeon}
+                        onChange={(e) => setTransferDetails(prev => ({ ...prev, surgeon: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
                         required
-                      />
+                        disabled={loadingUrologists}
+                      >
+                        <option value="">Select surgeon...</option>
+                        {availableUrologists.map((urologist) => (
+                          <option key={urologist.id} value={urologist.id}>
+                            {urologist.name}
+                          </option>
+                        ))}
+                      </select>
+                      {loadingUrologists && (
+                        <p className="text-xs text-gray-500 mt-1">Loading surgeons...</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3288,9 +3248,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       additionalNotes: '',
                       surgeryDate: '',
                       surgeryTime: '',
-                      surgeon: '',
-                      operatingRoom: '',
-                      duration: '60'
+                      surgeon: ''
                     });
                     setAppointmentBooking({
                       appointmentDate: '',
@@ -3345,9 +3303,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       }
                       // Validate surgery scheduling fields
                       if (!transferDetails.surgeryDate || !transferDetails.surgeryTime || 
-                          !transferDetails.surgeon || !transferDetails.operatingRoom || 
-                          !transferDetails.duration) {
-                        alert('Please fill in all surgery scheduling fields (date, time, surgeon, operating room, and duration)');
+                          !transferDetails.surgeon) {
+                        alert('Please fill in all surgery scheduling fields (date, time, and surgeon)');
                         return;
                       }
                     } else {
@@ -3512,9 +3469,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           urologistName: selectedSurgeon.name,
                           appointmentType: 'surgery',
                           surgeryType: transferDetails.reason,
-                          notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nClinical Rationale: ${transferDetails.clinicalRationale}\nOperating Room: ${transferDetails.operatingRoom}\nDuration: ${transferDetails.duration} minutes${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
-                          operatingRoom: transferDetails.operatingRoom,
-                          duration: parseInt(transferDetails.duration) || 60,
+                          notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nClinical Rationale: ${transferDetails.clinicalRationale}${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
                           priority: transferDetails.priority
                         };
                         
