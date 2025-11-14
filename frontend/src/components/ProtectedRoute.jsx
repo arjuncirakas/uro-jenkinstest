@@ -14,21 +14,18 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Check if user is authenticated
-      const isAuthenticated = tokenService.isAuthenticated();
+      // Immediately check if tokens exist
+      const accessToken = tokenService.getAccessToken();
+      const refreshToken = tokenService.getRefreshToken();
       
-      if (!isAuthenticated) {
-        console.log('🔒 ProtectedRoute: User not authenticated, redirecting to login');
-        // Clear any stale tokens
+      // If no tokens at all, immediately reject
+      if (!accessToken || !refreshToken) {
+        console.log('🔒 ProtectedRoute: No tokens found, redirecting to login');
         tokenService.clearAuth();
         setIsAuthorized(false);
         setIsChecking(false);
         return;
       }
-
-      // Get tokens
-      const accessToken = tokenService.getAccessToken();
-      const refreshToken = tokenService.getRefreshToken();
 
       // Validate token format (basic check)
       const isValidTokenFormat = (token) => {
@@ -65,6 +62,17 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
         return;
       }
 
+      // Check if user is authenticated (has valid tokens)
+      const isAuthenticated = tokenService.isAuthenticated();
+      
+      if (!isAuthenticated) {
+        console.log('🔒 ProtectedRoute: User not authenticated, redirecting to login');
+        tokenService.clearAuth();
+        setIsAuthorized(false);
+        setIsChecking(false);
+        return;
+      }
+
       // Check if user has required role
       if (allowedRoles.length > 0) {
         const userRole = tokenService.getUserRole();
@@ -87,10 +95,41 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
         }
       }
 
-      // All checks passed
-      console.log('✅ ProtectedRoute: User authorized');
-      setIsAuthorized(true);
-      setIsChecking(false);
+      // Verify token is still valid by making a lightweight API call
+      // This ensures the token hasn't been revoked on the backend
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
+        const response = await fetch(`${apiUrl}/auth/profile`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.log('🔒 ProtectedRoute: Token invalid or expired (401), clearing auth and redirecting to login');
+            tokenService.clearAuth();
+            setIsAuthorized(false);
+            setIsChecking(false);
+            return;
+          }
+          throw new Error(`API call failed: ${response.status}`);
+        }
+
+        // Token is valid, user is authenticated
+        console.log('✅ ProtectedRoute: User authorized and token verified');
+        setIsAuthorized(true);
+        setIsChecking(false);
+      } catch (error) {
+        console.error('🔒 ProtectedRoute: Error verifying token:', error);
+        // On error, clear auth and redirect to login for security
+        tokenService.clearAuth();
+        setIsAuthorized(false);
+        setIsChecking(false);
+      }
     };
 
     checkAuth();

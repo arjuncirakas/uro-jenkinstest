@@ -23,6 +23,7 @@ import { generalLimiter } from './middleware/rateLimiter.js';
 import { initializeNotificationsTable } from './services/notificationService.js';
 import { corsOptions, validateCorsConfig, corsLoggingMiddleware } from './middleware/corsConfig.js';
 import { initAutoNoShowScheduler } from './schedulers/autoNoShowScheduler.js';
+import { protectApiRoutes } from './middleware/apiAuth.js';
 
 // Load environment variables
 dotenv.config();
@@ -145,6 +146,11 @@ app.get('/api', (req, res) => {
 // Serve uploaded files statically (for debugging)
 app.use('/uploads', express.static('uploads'));
 
+// Apply global API authentication middleware
+// This protects ALL /api/* routes except public auth endpoints
+app.use(protectApiRoutes);
+
+// Register API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/superadmin', superadminRoutes);
 app.use('/api/patients', patientRoutes);
