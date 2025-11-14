@@ -47,8 +47,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     additionalNotes: '',
     // Surgery scheduling fields
     surgeryDate: '',
-    surgeryTime: '',
-    surgeon: ''
+    surgeryTime: ''
   });
   
   const [medicationDetails, setMedicationDetails] = useState({
@@ -72,9 +71,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     interval: '3'
   });
 
-  // Surgery scheduling state
-  const [availableUrologists, setAvailableUrologists] = useState([]);
-  const [loadingUrologists, setLoadingUrologists] = useState(false);
 
   // API state management
   const [clinicalNotes, setClinicalNotes] = useState([]);
@@ -119,31 +115,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   }, [isOpen, patient]);
 
-  // Fetch urologists when Surgery Pathway is selected
-  useEffect(() => {
-    if (isPathwayModalOpen && selectedPathway === 'Surgery Pathway') {
-      fetchUrologists();
-    }
-  }, [isPathwayModalOpen, selectedPathway]);
-
-  const fetchUrologists = async () => {
-    setLoadingUrologists(true);
-    try {
-      const result = await bookingService.getAvailableUrologists();
-      if (result.success) {
-        const urologistsList = Array.isArray(result.data) ? result.data : [];
-        setAvailableUrologists(urologistsList);
-      } else {
-        console.error('Failed to fetch urologists:', result.error);
-        setAvailableUrologists([]);
-      }
-    } catch (error) {
-      console.error('Error fetching urologists:', error);
-      setAvailableUrologists([]);
-    } finally {
-      setLoadingUrologists(false);
-    }
-  };
 
   // API functions
   const fetchNotes = async () => {
@@ -2541,8 +2512,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       clinicalRationale: '',
                       additionalNotes: '',
                       surgeryDate: '',
-                      surgeryTime: '',
-                      surgeon: ''
+                      surgeryTime: ''
                     });
                     setAppointmentBooking({
                       appointmentDate: '',
@@ -2872,29 +2842,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           required
                         />
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Surgeon *
-                      </label>
-                      <select
-                        value={transferDetails.surgeon}
-                        onChange={(e) => setTransferDetails(prev => ({ ...prev, surgeon: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
-                        required
-                        disabled={loadingUrologists}
-                      >
-                        <option value="">Select surgeon...</option>
-                        {availableUrologists.map((urologist) => (
-                          <option key={urologist.id} value={urologist.id}>
-                            {urologist.name}
-                          </option>
-                        ))}
-                      </select>
-                      {loadingUrologists && (
-                        <p className="text-xs text-gray-500 mt-1">Loading surgeons...</p>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -3247,8 +3194,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       clinicalRationale: '',
                       additionalNotes: '',
                       surgeryDate: '',
-                      surgeryTime: '',
-                      surgeon: ''
+                      surgeryTime: ''
                     });
                     setAppointmentBooking({
                       appointmentDate: '',
@@ -3302,9 +3248,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         return;
                       }
                       // Validate surgery scheduling fields
-                      if (!transferDetails.surgeryDate || !transferDetails.surgeryTime || 
-                          !transferDetails.surgeon) {
-                        alert('Please fill in all surgery scheduling fields (date, time, and surgeon)');
+                      if (!transferDetails.surgeryDate || !transferDetails.surgeryTime) {
+                        alert('Please fill in all surgery scheduling fields (date and time)');
                         return;
                       }
                     } else {
@@ -3456,17 +3401,34 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         console.log('🔍 Scheduling surgery BEFORE pathway transfer');
                         console.log('📋 Surgery details:', transferDetails);
                         
-                        // Get selected surgeon details
-                        const selectedSurgeon = availableUrologists.find(u => u.id.toString() === transferDetails.surgeon.toString());
-                        if (!selectedSurgeon) {
-                          throw new Error('Selected surgeon not found');
+                        const currentUser = authService.getCurrentUser();
+                        if (!currentUser || !currentUser.id) {
+                          throw new Error('User data is incomplete. Please log in again.');
+                        }
+                        
+                        const urologistId = currentUser.id;
+                        
+                        // Try multiple ways to get the urologist name
+                        let urologistName = '';
+                        if (currentUser.firstName && currentUser.lastName) {
+                          urologistName = `${currentUser.firstName} ${currentUser.lastName}`;
+                        } else if (currentUser.first_name && currentUser.last_name) {
+                          urologistName = `${currentUser.first_name} ${currentUser.last_name}`;
+                        } else if (currentUser.name) {
+                          urologistName = currentUser.name;
+                        } else if (currentUser.username) {
+                          urologistName = currentUser.username;
+                        }
+                        
+                        if (!urologistName || urologistName.trim() === '') {
+                          throw new Error('Urologist name could not be determined. Please update your profile.');
                         }
                         
                         const surgeryData = {
                           appointmentDate: transferDetails.surgeryDate,
                           appointmentTime: transferDetails.surgeryTime,
-                          urologistId: transferDetails.surgeon,
-                          urologistName: selectedSurgeon.name,
+                          urologistId: urologistId,
+                          urologistName: urologistName.trim(),
                           appointmentType: 'surgery',
                           surgeryType: transferDetails.reason,
                           notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nClinical Rationale: ${transferDetails.clinicalRationale}${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
