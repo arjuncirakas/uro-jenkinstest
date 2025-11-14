@@ -1779,25 +1779,41 @@ export const rescheduleNoShowAppointment = async (req, res) => {
     }
 
     // Check if doctor exists - try doctors table first, then users table
-    // IMPORTANT: appointments.urologist_id references users(id), so we need the users table ID
+    // IMPORTANT: appointments.urologist_id now references doctors(id), so we need the doctors table ID
     let doctorResult = await client.query(
-      `SELECT d.id, d.first_name, d.last_name, d.specialization, d.email, u.id as user_id
+      `SELECT d.id, d.first_name, d.last_name, d.specialization, d.email
        FROM doctors d
-       LEFT JOIN users u ON d.email = u.email
        WHERE d.id = $1 AND d.is_active = true`,
       [newDoctorId]
     );
     
-    let doctorUserId = null;
+    let finalDoctorId = newDoctorId; // Default to provided ID
     let doctorSource = 'doctors';
     
-    // If not found in doctors table, try users table directly
+    // If not found in doctors table, try users table and get corresponding doctors.id
     if (doctorResult.rows.length === 0) {
-      doctorResult = await client.query(
-        `SELECT id, first_name, last_name, id as user_id FROM users WHERE id = $1 AND role IN ('urologist', 'doctor') AND is_active = true`,
+      const userCheck = await client.query(
+        `SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role IN ('urologist', 'doctor') AND is_active = true`,
         [newDoctorId]
       );
-      doctorSource = 'users';
+      
+      if (userCheck.rows.length > 0) {
+        // Found in users table, now find corresponding doctors.id
+        const userEmail = userCheck.rows[0].email;
+        const doctorByEmailCheck = await client.query(
+          `SELECT id, first_name, last_name, specialization FROM doctors WHERE email = $1 AND is_active = true`,
+          [userEmail]
+        );
+        
+        if (doctorByEmailCheck.rows.length > 0) {
+          // Use doctors.id instead of users.id
+          finalDoctorId = doctorByEmailCheck.rows[0].id;
+          doctorResult = doctorByEmailCheck;
+          console.log(`[rescheduleNoShowAppointment] Converted users.id ${newDoctorId} to doctors.id ${finalDoctorId}`);
+        } else {
+          doctorResult = userCheck; // Use user data for error message
+        }
+      }
     }
     
     if (doctorResult.rows.length === 0) {
@@ -1811,20 +1827,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
     const doctor = doctorResult.rows[0];
     const doctorName = `${doctor.first_name} ${doctor.last_name}`.trim();
     
-    // Get the user_id for the foreign key constraint
-    // If doctor is from doctors table, use the linked user_id
-    // If doctor is from users table, use the id directly
-    doctorUserId = doctor.user_id || (doctorSource === 'users' ? doctor.id : null);
-    
-    if (!doctorUserId) {
-      console.error(`[rescheduleNoShowAppointment] Doctor ${doctorName} (ID: ${newDoctorId}) does not have a corresponding user record`);
-      return res.status(400).json({
-        success: false,
-        message: 'Doctor does not have a corresponding user account. Please ensure the doctor has a user account linked to their email.'
-      });
-    }
-    
-    console.log(`[rescheduleNoShowAppointment] Found doctor: ${doctorName} (Doctor ID: ${newDoctorId}, User ID: ${doctorUserId}, Source: ${doctorSource})`);
+    console.log(`[rescheduleNoShowAppointment] Found doctor: ${doctorName} (Doctor ID: ${finalDoctorId}, Source: ${doctorSource})`);
 
     // Start transaction
     await client.query('BEGIN');
@@ -1942,7 +1945,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           'urologist',
           newDate,
           newTime,
-          doctorUserId, // Use user_id for foreign key constraint, not doctor_id
+          finalDoctorId, // Use doctors.id, not users.id
           doctorName,
           surgeryType || null,
           notesText || `Changed from ${originalAppointmentType} appointment`,
@@ -2494,13 +2497,13 @@ export const getAllAppointments = async (req, res) => {
         a.notes,
         a.appointment_type as type,
         a.urologist_id,
-        u.first_name as urologist_first_name,
-        u.last_name as urologist_last_name,
+        d.first_name as urologist_first_name,
+        d.last_name as urologist_last_name,
         a.created_at,
         a.updated_at
       FROM appointments a
       JOIN patients p ON a.patient_id = p.id
-      LEFT JOIN users u ON a.urologist_id = u.id
+      LEFT JOIN doctors d ON a.urologist_id = d.id
       WHERE ${urologistWhere.join(' AND ')}
       
       UNION ALL

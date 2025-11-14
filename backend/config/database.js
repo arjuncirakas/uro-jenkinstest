@@ -526,7 +526,7 @@ export const initializeDatabase = async () => {
           appointment_type VARCHAR(50) NOT NULL,
           appointment_date DATE NOT NULL,
           appointment_time TIME NOT NULL,
-          urologist_id INTEGER REFERENCES users(id),
+          urologist_id INTEGER REFERENCES doctors(id) ON DELETE SET NULL,
           urologist_name VARCHAR(100),
           surgery_type VARCHAR(200),
           status VARCHAR(50) DEFAULT 'scheduled',
@@ -548,6 +548,58 @@ export const initializeDatabase = async () => {
         console.log('✅ Added surgery_type column to appointments table');
       } catch (err) {
         console.log(`⚠️  Surgery_type column might already exist: ${err.message}`);
+      }
+      
+      // Try to update foreign key constraint to reference doctors(id) instead of users(id)
+      // This is safe to run multiple times - it will only update if the constraint exists
+      try {
+        // Check if constraint exists and points to users
+        const constraintCheck = await client.query(`
+          SELECT 
+            tc.constraint_name,
+            ccu.table_name AS foreign_table_name
+          FROM information_schema.table_constraints AS tc
+          JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+          JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+            AND ccu.table_schema = tc.table_schema
+          WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND tc.table_name = 'appointments'
+            AND kcu.column_name = 'urologist_id'
+            AND ccu.table_name = 'users';
+        `);
+        
+        if (constraintCheck.rows.length > 0) {
+          const constraintName = constraintCheck.rows[0].constraint_name;
+          console.log(`🔄 Updating appointments.urologist_id foreign key constraint to reference doctors(id)...`);
+          
+          // Drop old constraint
+          await client.query(`
+            ALTER TABLE appointments 
+            DROP CONSTRAINT IF EXISTS ${constraintName};
+          `);
+          
+          // Make column nullable if not already
+          await client.query(`
+            ALTER TABLE appointments 
+            ALTER COLUMN urologist_id DROP NOT NULL;
+          `);
+          
+          // Add new constraint pointing to doctors
+          await client.query(`
+            ALTER TABLE appointments 
+            ADD CONSTRAINT appointments_urologist_id_fkey 
+            FOREIGN KEY (urologist_id) 
+            REFERENCES doctors(id) 
+            ON DELETE SET NULL;
+          `);
+          
+          console.log('✅ Updated appointments.urologist_id foreign key to reference doctors(id)');
+        }
+      } catch (err) {
+        console.log(`⚠️  Could not update foreign key constraint (may already be correct): ${err.message}`);
       }
     }
 

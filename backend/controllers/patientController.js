@@ -1317,14 +1317,29 @@ export const updatePatientPathway = async (req, res) => {
         console.log(`[updatePatientPathway] Patient transferred to Active Monitoring - Auto-booking follow-up...`);
         
         // Get the urologist who is transferring the patient (logged-in user)
-        const urologistInfo = await client.query(
-          'SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = $2',
+        // IMPORTANT: Use doctors.id for appointments, not users.id
+        const userInfo = await client.query(
+          'SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role = $2',
           [userId, 'urologist']
         );
 
-        if (urologistInfo.rows.length > 0) {
-          const urologist = urologistInfo.rows[0];
-          const urologistName = `${urologist.first_name} ${urologist.last_name}`;
+        if (userInfo.rows.length > 0) {
+          const user = userInfo.rows[0];
+          const urologistName = `${user.first_name} ${user.last_name}`;
+          
+          // Get the corresponding doctors.id
+          let urologistDoctorId = null;
+          const doctorCheck = await client.query(
+            'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
+            [user.email]
+          );
+          
+          if (doctorCheck.rows.length > 0) {
+            urologistDoctorId = doctorCheck.rows[0].id;
+          } else {
+            console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Urologist ${urologistName} does not have a doctors table record`);
+            throw new Error('Urologist does not have a doctors table record');
+          }
           
           // Calculate follow-up date (3 months from today for Active Monitoring)
           const followUpDate = new Date();
@@ -1334,12 +1349,12 @@ export const updatePatientPathway = async (req, res) => {
           // Default time: 10:00 AM
           const appointmentTime = '10:00';
           
-          // Check if time slot is available
+          // Check if time slot is available (using doctors.id)
           const conflictCheck = await client.query(
             `SELECT id FROM appointments 
              WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
              AND status IN ('scheduled', 'confirmed')`,
-            [urologist.id, appointmentDate, appointmentTime]
+            [urologistDoctorId, appointmentDate, appointmentTime]
           );
 
           // If slot is taken, find next available slot
@@ -1352,7 +1367,7 @@ export const updatePatientPathway = async (req, res) => {
                 `SELECT id FROM appointments 
                  WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
                  AND status IN ('scheduled', 'confirmed')`,
-                [urologist.id, appointmentDate, slot]
+                [urologistDoctorId, appointmentDate, slot]
               );
               if (slotCheck.rows.length === 0) {
                 finalTime = slot;
@@ -1361,7 +1376,7 @@ export const updatePatientPathway = async (req, res) => {
             }
           }
 
-          // Book the appointment
+          // Book the appointment (using doctors.id)
           const appointment = await client.query(
             `INSERT INTO appointments (
               patient_id, appointment_type, appointment_date, appointment_time, 
@@ -1373,7 +1388,7 @@ export const updatePatientPathway = async (req, res) => {
               'urologist', 
               appointmentDate, 
               finalTime, 
-              urologist.id, 
+              urologistDoctorId, // Use doctors.id, not users.id
               urologistName, 
               `Auto-booked for Active Monitoring follow-up. ${reason || ''}`.trim(), 
               userId,
@@ -1404,13 +1419,14 @@ export const updatePatientPathway = async (req, res) => {
         console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking 6-month follow-up appointments...`);
         
         // Get the urologist (either from patient assignment or current user)
-        let urologistId = null;
+        // IMPORTANT: Use doctors.id for appointments, not users.id
+        let urologistDoctorId = null;
         let urologistName = null;
         
         // First, try to use the assigned urologist from patient record
         if (patientData.assigned_urologist) {
           const assignedUrologistQuery = await client.query(
-            `SELECT id, first_name, last_name FROM users 
+            `SELECT id, first_name, last_name, email FROM users 
              WHERE role IN ('urologist', 'doctor') 
              AND CONCAT(first_name, ' ', last_name) = $1 
              LIMIT 1`,
@@ -1419,26 +1435,42 @@ export const updatePatientPathway = async (req, res) => {
           
           if (assignedUrologistQuery.rows.length > 0) {
             const urologist = assignedUrologistQuery.rows[0];
-            urologistId = urologist.id;
-            urologistName = `${urologist.first_name} ${urologist.last_name}`;
+            // Get the corresponding doctors.id
+            const doctorCheck = await client.query(
+              'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
+              [urologist.email]
+            );
+            
+            if (doctorCheck.rows.length > 0) {
+              urologistDoctorId = doctorCheck.rows[0].id;
+              urologistName = `${urologist.first_name} ${urologist.last_name}`;
+            }
           }
         }
         
         // If no assigned urologist found, use the current user if they're a urologist
-        if (!urologistId) {
+        if (!urologistDoctorId) {
           const currentUrologistQuery = await client.query(
-            'SELECT id, first_name, last_name FROM users WHERE id = $1 AND role = $2',
+            'SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role = $2',
             [userId, 'urologist']
           );
           
           if (currentUrologistQuery.rows.length > 0) {
             const urologist = currentUrologistQuery.rows[0];
-            urologistId = urologist.id;
-            urologistName = `${urologist.first_name} ${urologist.last_name}`;
+            // Get the corresponding doctors.id
+            const doctorCheck = await client.query(
+              'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
+              [urologist.email]
+            );
+            
+            if (doctorCheck.rows.length > 0) {
+              urologistDoctorId = doctorCheck.rows[0].id;
+              urologistName = `${urologist.first_name} ${urologist.last_name}`;
+            }
           }
         }
 
-        if (urologistId && urologistName) {
+        if (urologistDoctorId && urologistName) {
           // Create multiple follow-up appointments at 6-month intervals for 1 year (6 months, 12 months)
           const appointmentIntervals = [6, 12]; // months - 6-month intervals for 1 year
           const bookedAppointments = [];
@@ -1451,12 +1483,12 @@ export const updatePatientPathway = async (req, res) => {
             // Default time: 10:00 AM
             let appointmentTime = '10:00';
             
-            // Check if time slot is available
+            // Check if time slot is available (using doctors.id)
             const conflictCheck = await client.query(
               `SELECT id FROM appointments 
                WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
                AND status IN ('scheduled', 'confirmed')`,
-              [urologistId, appointmentDate, appointmentTime]
+              [urologistDoctorId, appointmentDate, appointmentTime]
             );
 
             // If slot is taken, find next available slot
@@ -1467,7 +1499,7 @@ export const updatePatientPathway = async (req, res) => {
                   `SELECT id FROM appointments 
                    WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
                    AND status IN ('scheduled', 'confirmed')`,
-                  [urologistId, appointmentDate, slot]
+                  [urologistDoctorId, appointmentDate, slot]
                 );
                 if (slotCheck.rows.length === 0) {
                   appointmentTime = slot;
@@ -1476,7 +1508,7 @@ export const updatePatientPathway = async (req, res) => {
               }
             }
 
-            // Book the appointment
+            // Book the appointment (using doctors.id)
             const appointment = await client.query(
               `INSERT INTO appointments (
                 patient_id, appointment_type, appointment_date, appointment_time, 
@@ -1488,7 +1520,7 @@ export const updatePatientPathway = async (req, res) => {
                 'urologist', 
                 appointmentDate, 
                 appointmentTime, 
-                urologistId, 
+                urologistDoctorId, // Use doctors.id, not users.id
                 urologistName, 
                 `Auto-booked ${monthsAhead}-month post-operative follow-up. ${reason || ''}`.trim(), 
                 userId,
