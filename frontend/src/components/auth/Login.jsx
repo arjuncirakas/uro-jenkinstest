@@ -92,6 +92,16 @@ const Login = () => {
     }
   }, [location.state, navigate, location.pathname]);
 
+  // Prevent automatic redirect if user has old tokens but is on login page
+  // This ensures OTP flow works correctly
+  React.useEffect(() => {
+    // Only clear tokens if we're explicitly on the login page and not in OTP flow
+    if (!showOTPModal && authService.isAuthenticated()) {
+      // Don't auto-clear, but log for debugging
+      console.log('⚠️ User has existing tokens but is on login page. OTP flow will handle token clearing.');
+    }
+  }, [showOTPModal]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -107,26 +117,47 @@ const Login = () => {
       return;
     }
     
+    // Clear any existing tokens before login attempt (prevent auto-redirect from old tokens)
+    authService.logout().catch(() => {
+      // Ignore errors if logout fails (user might not be logged in)
+    });
+    
     setIsLoading(true);
     setError('');
     setSuccessMessage('');
     
     try {
-      // Call login API (Step 1: Send OTP)
+      // Call login API (may require OTP based on role)
       const response = await authService.login(formData.email, formData.password);
-      console.log('🔍 Login response:', response);
+      console.log('🔍 Full Login response:', JSON.stringify(response, null, 2));
+      console.log('🔍 Response success:', response.success);
+      console.log('🔍 Response data:', response.data);
+      console.log('🔍 requiresOTPVerification:', response.data?.requiresOTPVerification);
+      console.log('🔍 has accessToken:', !!response.data?.accessToken);
+      console.log('🔍 has user:', !!response.data?.user);
       
       if (response.success) {
-        if (response.data && response.data.requiresOTPVerification) {
+        // PRIORITY 1: Check if OTP verification is required (for nurses, urologists, doctors, gp)
+        // This must be checked FIRST before checking for direct login
+        if (response.data && response.data.requiresOTPVerification === true) {
+          console.log('📧 OTP verification required - showing OTP modal');
+          console.log('📧 OTP Data - userId:', response.data.userId, 'email:', response.data.email);
+          
           // Show OTP modal for verification
           setOtpData({
             userId: response.data.userId,
             email: response.data.email
           });
           setShowOTPModal(true);
-          setSuccessMessage(response.message);
-        } else if (response.data && response.data.user && response.data.accessToken) {
-          // Direct login successful (tokens already stored by authService)
+          setSuccessMessage(response.message || 'Please check your email for OTP verification.');
+          setIsLoading(false); // Stop loading since we're showing OTP modal
+          
+          // CRITICAL: Return early to prevent any redirect
+          return;
+        } 
+        // PRIORITY 2: Check if direct login (for superadmin - tokens already returned)
+        // Only check this if requiresOTPVerification is NOT true
+        else if (response.data && response.data.user && response.data.accessToken) {
           console.log('✅ Direct login successful, user role:', response.data.user.role);
           
           // Verify tokens are set before navigation
@@ -166,6 +197,8 @@ const Login = () => {
           }, 300);
         } else {
           // Unexpected response format
+          console.error('❌ Unexpected response format:', response);
+          console.error('❌ Response data keys:', response.data ? Object.keys(response.data) : 'no data');
           setModalMessage('Unexpected response from server. Please try again.');
           setShowFailureModal(true);
         }
@@ -176,6 +209,8 @@ const Login = () => {
       }
     } catch (err) {
       // Network or other error - show modal
+      console.error('❌ Login error:', err);
+      console.error('❌ Error details:', err.response?.data || err.message);
       setModalMessage(err.message || 'Login failed. Please check your credentials and try again.');
       setShowFailureModal(true);
     } finally {

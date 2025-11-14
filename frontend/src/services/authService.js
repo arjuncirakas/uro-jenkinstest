@@ -57,12 +57,19 @@ class AuthService {
         password
       });
       
-      // Check if it's a direct login (tokens returned) or OTP flow
-      if (response.data.success && response.data.data && response.data.data.accessToken) {
-        // Direct login successful - store tokens and user data
+      // Only store tokens if it's a direct login (superadmin) - NOT if OTP is required
+      if (response.data.success && 
+          response.data.data && 
+          response.data.data.accessToken && 
+          !response.data.data.requiresOTPVerification) {
+        // Direct login successful (superadmin) - store tokens and user data
         const { user, accessToken, refreshToken } = response.data.data;
         tokenService.setTokens(accessToken, refreshToken);
         tokenService.setUser(user);
+        console.log('✅ Tokens stored for direct login (superadmin)');
+      } else if (response.data.success && response.data.data && response.data.data.requiresOTPVerification) {
+        // OTP required - do NOT store tokens
+        console.log('📧 OTP verification required - tokens NOT stored');
       }
       
       return response.data;
