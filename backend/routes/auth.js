@@ -13,7 +13,7 @@ import {
   verifyPasswordResetOTP,
   resetPassword
 } from '../controllers/authController.js';
-import { loginSimple } from '../controllers/authControllerSimple.js';
+// import { loginSimple } from '../controllers/authControllerSimple.js'; // Not used - using login with OTP instead
 import { validateRequest } from '../utils/validation.js';
 import { 
   registerSchema, 
@@ -81,7 +81,7 @@ router.post('/resend-registration-otp',
 router.post('/login', 
   authLimiter, 
   validateLoginInput, 
-  loginSimple
+  login
 );
 
 router.post('/verify-login-otp', 
