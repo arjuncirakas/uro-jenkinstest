@@ -6,10 +6,13 @@ import {
   Users,
   Plus,
   Search,
-  CheckCircle
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
+import SuccessModal from './modals/SuccessModal';
+import ErrorModal from './modals/ErrorModal';
 import { doctorsService } from '../services/doctorsService';
 
 const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
@@ -41,6 +44,11 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [scheduledMDTData, setScheduledMDTData] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showAddMemberSuccessModal, setShowAddMemberSuccessModal] = useState(false);
+  const [showAddMemberErrorModal, setShowAddMemberErrorModal] = useState(false);
+  const [addMemberSuccessMessage, setAddMemberSuccessMessage] = useState('');
+  const [addMemberErrorMessage, setAddMemberErrorMessage] = useState('');
+  const [isAddingMember, setIsAddingMember] = useState(false);
 
   // Close confirmation modal
   const closeConfirmModal = (save = false) => {
@@ -144,6 +152,10 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
 
   const handleAddNewTeamMember = async () => {
     if (newTeamMember.name && newTeamMember.department) {
+      setIsAddingMember(true);
+      setAddMemberErrorMessage('');
+      setAddMemberSuccessMessage('');
+      
       try {
         console.log('Creating new team member:', newTeamMember);
         console.log('Available departments:', departments);
@@ -155,7 +167,9 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
         
         if (!department) {
           console.error('Department not found:', newTeamMember.department);
-          alert('Department not found. Please select a valid department.');
+          setAddMemberErrorMessage('Department not found. Please select a valid department.');
+          setShowAddMemberErrorModal(true);
+          setIsAddingMember(false);
           return;
         }
         
@@ -204,15 +218,20 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
           setNewTeamMember({ name: '', department: '', email: '', phone: '' });
           setShowAddTeamMemberModal(false);
           
-          // Show success message
-          alert('Team member added successfully!');
+          // Show success modal
+          setAddMemberSuccessMessage(`${newDoctor.name} has been added successfully and is now available as a team member.`);
+          setShowAddMemberSuccessModal(true);
         } else {
           console.error('Failed to create doctor:', response);
-          alert('Failed to create team member: ' + (response.error || 'Unknown error'));
+          setAddMemberErrorMessage(response.error || 'Failed to create team member. Please try again.');
+          setShowAddMemberErrorModal(true);
         }
       } catch (error) {
         console.error('Error creating new team member:', error);
-        alert('Failed to create new team member. Please try again.');
+        setAddMemberErrorMessage(error.message || 'Failed to create new team member. Please try again.');
+        setShowAddMemberErrorModal(true);
+      } finally {
+        setIsAddingMember(false);
       }
     }
   };
@@ -775,14 +794,22 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex space-x-3">
               <button
                 onClick={handleAddNewTeamMember}
-                disabled={!newTeamMember.name || !newTeamMember.department}
-                className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                disabled={!newTeamMember.name || !newTeamMember.department || isAddingMember}
+                className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
               >
-                Add Member
+                {isAddingMember ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Member'
+                )}
               </button>
               <button
                 onClick={() => setShowAddTeamMemberModal(false)}
-                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all"
+                disabled={isAddingMember}
+                className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -799,6 +826,28 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
       onCancel={() => closeConfirmModal(false)}
       title="Unsaved Changes"
       message="You have unsaved changes. Do you want to save before closing?"
+    />
+
+    {/* Add Member Success Modal */}
+    <SuccessModal
+      isOpen={showAddMemberSuccessModal}
+      onClose={() => {
+        setShowAddMemberSuccessModal(false);
+        setAddMemberSuccessMessage('');
+      }}
+      title="Team Member Added Successfully!"
+      message={addMemberSuccessMessage}
+    />
+
+    {/* Add Member Error Modal */}
+    <ErrorModal
+      isOpen={showAddMemberErrorModal}
+      onClose={() => {
+        setShowAddMemberErrorModal(false);
+        setAddMemberErrorMessage('');
+      }}
+      title="Failed to Add Team Member"
+      message={addMemberErrorMessage}
     />
     </>
   );
