@@ -173,7 +173,7 @@ export const initializeDatabase = async () => {
           user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
           email VARCHAR(255) NOT NULL,
           otp_code VARCHAR(6) NOT NULL,
-          type VARCHAR(20) NOT NULL CHECK (type IN ('registration', 'login', 'password_reset', 'password_setup')),
+          type VARCHAR(20) NOT NULL CHECK (type IN ('registration', 'login', 'login_verification', 'password_reset', 'password_setup')),
           expires_at TIMESTAMP NOT NULL,
           attempts INTEGER DEFAULT 0,
           is_used BOOLEAN DEFAULT false,
@@ -183,6 +183,23 @@ export const initializeDatabase = async () => {
       console.log('✅ OTP verifications table created successfully');
     } else {
       console.log('✅ OTP verifications table already exists');
+      // Update the constraint to include 'login_verification' if it doesn't already
+      try {
+        // Drop the old constraint
+        await client.query(`
+          ALTER TABLE otp_verifications 
+          DROP CONSTRAINT IF EXISTS otp_verifications_type_check;
+        `);
+        // Add the new constraint with 'login_verification'
+        await client.query(`
+          ALTER TABLE otp_verifications 
+          ADD CONSTRAINT otp_verifications_type_check 
+          CHECK (type IN ('registration', 'login', 'login_verification', 'password_reset', 'password_setup'));
+        `);
+        console.log('✅ Updated OTP verifications table constraint to include login_verification');
+      } catch (err) {
+        console.log(`⚠️  Could not update OTP constraint (might already be updated): ${err.message}`);
+      }
     }
 
     // Create password_setup_tokens table
