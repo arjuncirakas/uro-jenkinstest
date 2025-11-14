@@ -18,7 +18,8 @@ const Patients = () => {
     if (path.includes('/patients/new')) return 'new';
     if (path.includes('/patients/surgery-pathway')) return 'surgery-pathway';
     if (path.includes('/patients/post-op-followup')) return 'post-op-followup';
-    return 'all';
+    if (path.includes('/patients/all')) return 'all';
+    return 'all'; // Default fallback
   }, [location.pathname]);
 
   // Get page title based on category
