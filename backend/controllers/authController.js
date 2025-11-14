@@ -264,47 +264,6 @@ export const login = async (req, res) => {
 
     console.log(`✅ Password verified for: ${email}`);
 
-    // Skip OTP verification for superadmin users
-    if (user.role === 'superadmin') {
-      console.log(`🔐 Superadmin login - skipping OTP verification for: ${email}`);
-      
-      // Generate tokens directly for superadmin
-      const tokens = generateTokens(user);
-
-      // Store refresh token in database
-      await client.query(
-        'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-        [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
-      );
-
-      // Update last login time
-      await client.query(
-        'UPDATE users SET last_login_at = NOW() WHERE id = $1',
-        [user.id]
-      );
-
-      return res.json({
-        success: true,
-        message: 'Login successful',
-        data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.first_name,
-            lastName: user.last_name,
-            role: user.role,
-            isActive: user.is_active,
-            isVerified: user.is_verified
-          },
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken
-        }
-      });
-    }
-
-    // For all other users, require OTP verification
-    console.log(`🔐 Regular user login - requiring OTP verification for: ${email}`);
-    
     // Generate and store OTP for login verification
     const otpResult = await storeOTP(user.id, email, 'login_verification');
 
@@ -382,12 +341,6 @@ export const verifyLoginOTP = async (req, res) => {
     await client.query(
       'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
       [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
-    );
-
-    // Update last login time
-    await client.query(
-      'UPDATE users SET last_login_at = NOW() WHERE id = $1',
-      [user.id]
     );
 
     res.json({
