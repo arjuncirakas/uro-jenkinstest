@@ -16,7 +16,7 @@ const SuccessModal = ({ isOpen, onClose, title, message, details, onConfirm }) =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[130] animate-fadeIn">
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 transform transition-all animate-slideUp">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
