@@ -10,6 +10,7 @@ import AddPSAResultModal from './modals/AddPSAResultModal';
 import AddTestResultModal from './modals/AddTestResultModal';
 import AddInvestigationResultModal from './AddInvestigationResultModal';
 import DischargeSummaryModal from './DischargeSummaryModal';
+import EditSurgeryAppointmentModal from './EditSurgeryAppointmentModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { notesService } from '../services/notesService';
@@ -38,6 +39,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isPathwayModalOpen, setIsPathwayModalOpen] = useState(false);
   const [selectedPathway, setSelectedPathway] = useState('');
   const [isDischargeSummaryModalOpen, setIsDischargeSummaryModalOpen] = useState(false);
+  const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
+  const [selectedSurgeryAppointment, setSelectedSurgeryAppointment] = useState(null);
   
   // Transfer form states
   const [transferDetails, setTransferDetails] = useState({
@@ -1269,6 +1272,99 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
+                                  {/* Edit Appointment button for Surgery Pathway notes */}
+                                  {(() => {
+                                    const noteContent = note.content || '';
+                                    const isSurgeryPathway = noteContent.includes('Surgery Pathway') || noteContent.includes('Transfer To:') && noteContent.includes('Surgery Pathway');
+                                    return isSurgeryPathway ? (
+                                      <button 
+                                        onClick={async () => {
+                                          // Parse note content to extract pathway details
+                                          const lines = noteContent.split('\n').filter(line => line.trim());
+                                          const parsedData = {};
+                                          let currentKey = null;
+                                          let currentValue = [];
+                                          
+                                          lines.forEach(line => {
+                                            const trimmedLine = line.trim();
+                                            if (trimmedLine.includes('Transfer To:')) {
+                                              if (currentKey && currentValue.length > 0) {
+                                                parsedData[currentKey] = currentValue.join('\n');
+                                              }
+                                              currentKey = 'transferTo';
+                                              parsedData[currentKey] = trimmedLine.replace('Transfer To:', '').trim();
+                                              currentValue = [];
+                                            } else if (trimmedLine.includes('Priority:')) {
+                                              if (currentKey && currentValue.length > 0) {
+                                                parsedData[currentKey] = currentValue.join('\n');
+                                              }
+                                              currentKey = 'priority';
+                                              parsedData[currentKey] = trimmedLine.replace('Priority:', '').trim();
+                                              currentValue = [];
+                                            } else if (trimmedLine.includes('Reason for Transfer:') || trimmedLine.includes('Reason for Surgery:')) {
+                                              if (currentKey && currentValue.length > 0) {
+                                                parsedData[currentKey] = currentValue.join('\n');
+                                              }
+                                              currentKey = 'reason';
+                                              currentValue = [];
+                                            } else if (trimmedLine.includes('Clinical Rationale:')) {
+                                              if (currentKey && currentValue.length > 0) {
+                                                parsedData[currentKey] = currentValue.join('\n');
+                                              }
+                                              currentKey = 'clinicalRationale';
+                                              currentValue = [];
+                                            } else if (trimmedLine.includes('Additional Notes:')) {
+                                              if (currentKey && currentValue.length > 0) {
+                                                parsedData[currentKey] = currentValue.join('\n');
+                                              }
+                                              currentKey = 'additionalNotes';
+                                              currentValue = [];
+                                            } else if (trimmedLine && currentKey) {
+                                              currentValue.push(trimmedLine);
+                                            }
+                                          });
+                                          
+                                          if (currentKey && currentValue.length > 0) {
+                                            parsedData[currentKey] = currentValue.join('\n');
+                                          }
+                                          
+                                          // Fetch surgery appointment details
+                                          try {
+                                            const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
+                                            if (appointmentsResult.success) {
+                                              const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
+                                              const surgeryAppointment = appointments.find(apt => {
+                                                const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
+                                                return aptType === 'surgery' || aptType === 'surgical';
+                                              });
+                                              
+                                              if (surgeryAppointment) {
+                                                setSelectedSurgeryAppointment({
+                                                  ...surgeryAppointment,
+                                                  reason: parsedData.reason || '',
+                                                  priority: parsedData.priority || 'normal',
+                                                  clinicalRationale: parsedData.clinicalRationale || '',
+                                                  additionalNotes: parsedData.additionalNotes || ''
+                                                });
+                                                setIsEditSurgeryAppointmentModalOpen(true);
+                                              } else {
+                                                alert('No surgery appointment found for this patient.');
+                                              }
+                                            } else {
+                                              alert('Failed to fetch appointment details.');
+                                            }
+                                          } catch (error) {
+                                            console.error('Error fetching surgery appointment:', error);
+                                            alert('Error fetching appointment details.');
+                                          }
+                                        }}
+                                        className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center gap-1"
+                                      >
+                                        <IoCalendar className="w-3 h-3" />
+                                        Edit Appointment
+                                      </button>
+                                    ) : null;
+                                  })()}
                                   <button 
                                     onClick={() => handleDeleteClick(note.id)}
                                     disabled={deletingNote === note.id}
@@ -3847,6 +3943,23 @@ ${transferDetails.additionalNotes}` : ''}
       onSubmit={handleDischargeSummarySubmit}
       patient={patient}
       pathway={selectedPathway}
+    />
+
+    {/* Edit Surgery Appointment Modal */}
+    <EditSurgeryAppointmentModal
+      isOpen={isEditSurgeryAppointmentModalOpen}
+      onClose={() => {
+        setIsEditSurgeryAppointmentModalOpen(false);
+        setSelectedSurgeryAppointment(null);
+      }}
+      appointment={selectedSurgeryAppointment}
+      patient={patient}
+      onUpdate={() => {
+        // Refresh clinical notes after update
+        fetchNotes();
+        // Dispatch event to refresh other components
+        window.dispatchEvent(new CustomEvent('surgery:updated'));
+      }}
     />
     
     {/* Confirmation Modal */}
