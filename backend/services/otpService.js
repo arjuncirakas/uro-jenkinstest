@@ -12,6 +12,8 @@ export const storeOTP = async (userId, email, type = 'registration') => {
   const client = await pool.connect();
   
   try {
+    console.log(`📧 Storing OTP for user ${userId}, email: ${email}, type: ${type}`);
+    
     const otpCode = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
     
@@ -27,12 +29,25 @@ export const storeOTP = async (userId, email, type = 'registration') => {
       [userId, email, otpCode, type, expiresAt]
     );
     
-    // Send OTP email
-    const emailResult = await sendOTPEmail(email, otpCode, type);
+    console.log(`✅ OTP stored in database for ${email}: ${otpCode}`);
     
-    if (!emailResult.success) {
-      console.warn(`⚠️ OTP stored but email sending failed: ${emailResult.error}`);
-      // Don't throw error here as OTP is still stored and can be retrieved manually
+    // Send OTP email - don't fail if email sending fails
+    let emailResult = { success: false, error: 'Email sending not attempted' };
+    try {
+      emailResult = await sendOTPEmail(email, otpCode, type);
+      if (emailResult.success) {
+        console.log(`✅ OTP email sent successfully to ${email}`);
+      } else {
+        console.warn(`⚠️ OTP stored but email sending failed: ${emailResult.error}`);
+        // Don't throw error here as OTP is still stored and can be retrieved manually
+      }
+    } catch (emailError) {
+      console.error(`❌ Error sending OTP email: ${emailError.message}`);
+      emailResult = {
+        success: false,
+        error: emailError.message
+      };
+      // Don't throw - OTP is stored, just email failed
     }
     
     return {
@@ -41,7 +56,8 @@ export const storeOTP = async (userId, email, type = 'registration') => {
       emailError: emailResult.error
     };
   } catch (error) {
-    console.error('Error storing OTP:', error);
+    console.error('❌ Error storing OTP:', error);
+    console.error('❌ Error stack:', error.stack);
     throw error;
   } finally {
     client.release();

@@ -301,27 +301,38 @@ export const login = async (req, res) => {
     // For all other roles (nurse, urologist, doctor, gp), require OTP verification
     console.log(`📧 OTP required for role: ${user.role} - ${email}`);
     
-    // Generate and store OTP for login verification
-    const otpResult = await storeOTP(user.id, email, 'login_verification');
+    try {
+      // Generate and store OTP for login verification
+      const otpResult = await storeOTP(user.id, email, 'login_verification');
+      
+      console.log(`✅ OTP stored for ${email}, email sent: ${otpResult.emailSent}`);
 
-    res.json({
-      success: true,
-      message: otpResult.emailSent 
-        ? 'Login initiated. Please check your email for OTP verification.'
-        : 'Login initiated. OTP stored but email sending failed. Please contact support.',
-      data: {
-        userId: user.id,
-        email: user.email,
-        requiresOTPVerification: true,
-        emailSent: otpResult.emailSent
-      }
-    });
+      res.json({
+        success: true,
+        message: otpResult.emailSent 
+          ? 'Login initiated. Please check your email for OTP verification.'
+          : 'Login initiated. OTP stored but email sending failed. Please contact support.',
+        data: {
+          userId: user.id,
+          email: user.email,
+          requiresOTPVerification: true,
+          emailSent: otpResult.emailSent
+        }
+      });
+    } catch (otpError) {
+      console.error('❌ Error storing OTP:', otpError);
+      console.error('❌ OTP Error stack:', otpError.stack);
+      throw otpError; // Re-throw to be caught by outer catch
+    }
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
+    console.error('❌ Login error message:', error.message);
+    console.error('❌ Login error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();

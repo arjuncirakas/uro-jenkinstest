@@ -6,10 +6,16 @@ dotenv.config();
 
 // Create SMTP transporter
 const createTransporter = () => {
+  // Validate required environment variables
+  if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.error('❌ SMTP configuration missing! Required: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS');
+    throw new Error('SMTP configuration is incomplete. Please check your .env file.');
+  }
+
   const config = {
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT),
-    secure: process.env.SMTP_SECURE === 'true',
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true' || false,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
@@ -29,7 +35,8 @@ const createTransporter = () => {
     logger: process.env.NODE_ENV === 'development'
   };
   
-  console.log(`📧 Creating SMTP transporter with config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT} (secure: ${process.env.SMTP_SECURE})`);
+  console.log(`📧 Creating SMTP transporter with config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT} (secure: ${config.secure})`);
+  console.log(`📧 SMTP User: ${process.env.SMTP_USER}`);
   
   return nodemailer.createTransport(config);
 };
@@ -50,6 +57,13 @@ export const verifySMTPConnection = async () => {
 // Send OTP email
 export const sendOTPEmail = async (to, otpCode, type = 'registration') => {
   try {
+    console.log(`📧 Attempting to send OTP email to ${to} (Type: ${type})`);
+    
+    // Validate email address
+    if (!to || !to.includes('@')) {
+      throw new Error(`Invalid email address: ${to}`);
+    }
+    
     const transporter = createTransporter();
     
     // Email templates based on type
