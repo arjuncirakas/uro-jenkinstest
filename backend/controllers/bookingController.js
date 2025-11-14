@@ -2107,7 +2107,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           WHERE id = $7
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, doctorUserId, doctorName, surgeryType || null, notesText, appointmentId];
+        updateParams = [newDate, newTime, finalDoctorId, doctorName, surgeryType || null, notesText, appointmentId];
       } else {
         updateQuery = `
           UPDATE appointments 
@@ -2121,7 +2121,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           WHERE id = $6
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, doctorUserId, doctorName, surgeryType || null, appointmentId];
+        updateParams = [newDate, newTime, finalDoctorId, doctorName, surgeryType || null, appointmentId];
       }
       
       const updateResult = await client.query(updateQuery, updateParams);
