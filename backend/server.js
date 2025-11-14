@@ -24,6 +24,7 @@ import { initializeNotificationsTable } from './services/notificationService.js'
 import { corsOptions, validateCorsConfig, corsLoggingMiddleware } from './middleware/corsConfig.js';
 import { initAutoNoShowScheduler } from './schedulers/autoNoShowScheduler.js';
 import { protectApiRoutes } from './middleware/apiAuth.js';
+import { restrictHealthCheckAccess } from './middleware/healthCheckAuth.js';
 
 // Load environment variables
 dotenv.config();
@@ -114,13 +115,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint - minimal response, optionally restricted to internal monitoring
+app.get('/health', restrictHealthCheckAccess, (req, res) => {
   res.json({
-    success: true,
-    message: 'Server is running',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    status: 'OK'
   });
 });
 
