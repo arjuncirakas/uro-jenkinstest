@@ -13,12 +13,53 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       // Check if user is authenticated
       const isAuthenticated = tokenService.isAuthenticated();
       
       if (!isAuthenticated) {
         console.log('🔒 ProtectedRoute: User not authenticated, redirecting to login');
+        // Clear any stale tokens
+        tokenService.clearAuth();
+        setIsAuthorized(false);
+        setIsChecking(false);
+        return;
+      }
+
+      // Get tokens
+      const accessToken = tokenService.getAccessToken();
+      const refreshToken = tokenService.getRefreshToken();
+
+      // Validate token format (basic check)
+      const isValidTokenFormat = (token) => {
+        if (!token) return false;
+        try {
+          const parts = token.split('.');
+          if (parts.length !== 3) return false;
+          // Try to decode payload
+          JSON.parse(atob(parts[1]));
+          return true;
+        } catch (error) {
+          return false;
+        }
+      };
+
+      // Check if tokens are in valid format
+      if (!isValidTokenFormat(accessToken) || !isValidTokenFormat(refreshToken)) {
+        console.log('🔒 ProtectedRoute: Invalid token format, clearing auth and redirecting to login');
+        tokenService.clearAuth();
+        setIsAuthorized(false);
+        setIsChecking(false);
+        return;
+      }
+
+      // Check if tokens are expired
+      const isAccessTokenExpired = tokenService.isTokenExpired(accessToken);
+      const isRefreshTokenExpired = tokenService.isTokenExpired(refreshToken);
+      
+      if (isAccessTokenExpired && isRefreshTokenExpired) {
+        console.log('🔒 ProtectedRoute: Both tokens expired, redirecting to login');
+        tokenService.clearAuth();
         setIsAuthorized(false);
         setIsChecking(false);
         return;
@@ -27,6 +68,15 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
       // Check if user has required role
       if (allowedRoles.length > 0) {
         const userRole = tokenService.getUserRole();
+        
+        if (!userRole) {
+          console.log('🔒 ProtectedRoute: No user role found, redirecting to login');
+          tokenService.clearAuth();
+          setIsAuthorized(false);
+          setIsChecking(false);
+          return;
+        }
+
         const hasRole = allowedRoles.includes(userRole);
         
         if (!hasRole) {
@@ -35,18 +85,6 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
           setIsChecking(false);
           return;
         }
-      }
-
-      // Check if tokens are expired
-      const accessToken = tokenService.getAccessToken();
-      const refreshToken = tokenService.getRefreshToken();
-      
-      if (tokenService.isTokenExpired(accessToken) && tokenService.isTokenExpired(refreshToken)) {
-        console.log('🔒 ProtectedRoute: Both tokens expired, redirecting to login');
-        tokenService.clearAuth();
-        setIsAuthorized(false);
-        setIsChecking(false);
-        return;
       }
 
       // All checks passed

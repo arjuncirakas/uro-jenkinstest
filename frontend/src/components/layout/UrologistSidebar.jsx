@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { HiHome } from 'react-icons/hi';
 import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaClipboardList, FaProcedures, FaHeartbeat } from 'react-icons/fa';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
+import authService from '../../services/authService';
 
 const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
   
   // Auto-expand Patients menu when on any patients route
@@ -40,6 +42,18 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
   const handleLinkClick = () => {
     if (onClose) {
       onClose();
+    }
+  };
+
+  const handleLogout = async (e) => {
+    e.preventDefault();
+    try {
+      await authService.logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force logout even if API call fails
+      navigate('/login');
     }
   };
 
@@ -189,14 +203,14 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
           {!isCollapsed && 'New Patient'}
         </button>
         
-        <Link
-          to="/login"
-          className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors`}
+        <button
+          onClick={handleLogout}
+          className={`flex items-center ${isCollapsed ? 'justify-center' : ''} w-full px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors`}
           title={isCollapsed ? "Logout" : ""}
         >
           <IoLogOutOutline className={`text-xl ${isCollapsed ? '' : 'mr-3'}`} />
           {!isCollapsed && <span className="font-medium">Logout</span>}
-        </Link>
+        </button>
         
         {/* Powered by AhimsaGlobal */}
         {!isCollapsed && (
