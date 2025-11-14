@@ -119,10 +119,11 @@ export const doctorsService = {
   },
 
   // Get doctors formatted for dropdown
+  // Only includes doctors with verified user accounts (consistent with superadmin panel)
   async getDoctorsForDropdown() {
     try {
       console.log('Fetching doctors for dropdown...');
-      const response = await this.getAllDoctors({ is_active: true });
+      const response = await this.getAllDoctors({ is_active: true, verified_only: true });
       console.log('Raw doctors response:', response);
       
       if (response.success) {

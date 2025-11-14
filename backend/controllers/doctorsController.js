@@ -7,8 +7,10 @@ import { sendPasswordSetupEmail } from '../services/emailService.js';
 // Get all doctors
 export const getAllDoctors = async (req, res) => {
   try {
-    const { department_id, is_active = true } = req.query;
+    const { department_id, is_active = true, verified_only = false } = req.query;
     
+    // If verified_only is true, only return doctors that have verified user accounts
+    // This ensures consistency with the superadmin panel which only shows doctors with user accounts
     let query = `
       SELECT 
         d.id,
@@ -24,14 +26,24 @@ export const getAllDoctors = async (req, res) => {
         dept.name as department_name
       FROM doctors d
       LEFT JOIN departments dept ON d.department_id = dept.id
-      WHERE d.is_active = $1
     `;
     
+    // Add JOIN with users table if verified_only is true
+    if (verified_only === 'true' || verified_only === true) {
+      query += ` INNER JOIN users u ON d.email = u.email 
+                 AND u.is_active = true 
+                 AND u.is_verified = true`;
+    }
+    
+    query += ` WHERE d.is_active = $1`;
+    
     const params = [is_active === 'true'];
+    let paramIndex = 2;
     
     if (department_id) {
-      query += ' AND d.department_id = $2';
+      query += ` AND d.department_id = $${paramIndex}`;
       params.push(department_id);
+      paramIndex++;
     }
     
     query += ' ORDER BY d.first_name, d.last_name';
