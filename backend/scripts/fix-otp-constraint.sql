@@ -18,3 +18,4 @@ FROM pg_constraint
 WHERE conrelid = 'otp_verifications'::regclass
 AND conname = 'otp_verifications_type_check';
 
+

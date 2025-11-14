@@ -44,7 +44,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     reason: '',
     priority: 'normal',
     clinicalRationale: '',
-    additionalNotes: ''
+    additionalNotes: '',
+    // Surgery scheduling fields
+    surgeryDate: '',
+    surgeryTime: '',
+    surgeon: '',
+    operatingRoom: '',
+    duration: '60'
   });
   
   const [medicationDetails, setMedicationDetails] = useState({
@@ -67,6 +73,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [recurringAppointments, setRecurringAppointments] = useState({
     interval: '3'
   });
+
+  // Surgery scheduling state
+  const [availableUrologists, setAvailableUrologists] = useState([]);
+  const [loadingUrologists, setLoadingUrologists] = useState(false);
 
   // API state management
   const [clinicalNotes, setClinicalNotes] = useState([]);
@@ -110,6 +120,32 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       }
     }
   }, [isOpen, patient]);
+
+  // Fetch urologists when Surgery Pathway is selected
+  useEffect(() => {
+    if (isPathwayModalOpen && selectedPathway === 'Surgery Pathway') {
+      fetchUrologists();
+    }
+  }, [isPathwayModalOpen, selectedPathway]);
+
+  const fetchUrologists = async () => {
+    setLoadingUrologists(true);
+    try {
+      const result = await bookingService.getAvailableUrologists();
+      if (result.success) {
+        const urologistsList = Array.isArray(result.data) ? result.data : [];
+        setAvailableUrologists(urologistsList);
+      } else {
+        console.error('Failed to fetch urologists:', result.error);
+        setAvailableUrologists([]);
+      }
+    } catch (error) {
+      console.error('Error fetching urologists:', error);
+      setAvailableUrologists([]);
+    } finally {
+      setLoadingUrologists(false);
+    }
+  };
 
   // API functions
   const fetchNotes = async () => {
@@ -2505,7 +2541,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       reason: '',
                       priority: 'normal',
                       clinicalRationale: '',
-                      additionalNotes: ''
+                      additionalNotes: '',
+                      surgeryDate: '',
+                      surgeryTime: '',
+                      surgeon: '',
+                      operatingRoom: '',
+                      duration: '60'
                     });
                     setAppointmentBooking({
                       appointmentDate: '',
@@ -2793,6 +2834,106 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         placeholder="Any additional information or special considerations..."
                         rows={2}
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Surgery Scheduling Section */}
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <div className="flex items-center mb-4">
+                      <div className="w-8 h-8 bg-orange-100 rounded flex items-center justify-center mr-3">
+                        <IoCalendar className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900">Surgery Scheduling</h4>
+                        <p className="text-sm text-gray-600">Schedule the surgical procedure</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Surgery Date *
+                        </label>
+                        <input
+                          type="date"
+                          value={transferDetails.surgeryDate}
+                          onChange={(e) => setTransferDetails(prev => ({ ...prev, surgeryDate: e.target.value }))}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Surgery Time *
+                        </label>
+                        <input
+                          type="time"
+                          value={transferDetails.surgeryTime}
+                          onChange={(e) => setTransferDetails(prev => ({ ...prev, surgeryTime: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Surgeon *
+                        </label>
+                        <select
+                          value={transferDetails.surgeon}
+                          onChange={(e) => setTransferDetails(prev => ({ ...prev, surgeon: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                          required
+                          disabled={loadingUrologists}
+                        >
+                          <option value="">Select surgeon...</option>
+                          {availableUrologists.map((urologist) => (
+                            <option key={urologist.id} value={urologist.id}>
+                              {urologist.name}
+                            </option>
+                          ))}
+                        </select>
+                        {loadingUrologists && (
+                          <p className="text-xs text-gray-500 mt-1">Loading surgeons...</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Operating Room *
+                        </label>
+                        <select
+                          value={transferDetails.operatingRoom}
+                          onChange={(e) => setTransferDetails(prev => ({ ...prev, operatingRoom: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                          required
+                        >
+                          <option value="">Select operating room...</option>
+                          <option value="OR 1">OR 1</option>
+                          <option value="OR 2">OR 2</option>
+                          <option value="OR 3">OR 3</option>
+                          <option value="OR 4">OR 4</option>
+                          <option value="OR 5">OR 5</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estimated Duration (minutes) *
+                      </label>
+                      <input
+                        type="number"
+                        value={transferDetails.duration}
+                        onChange={(e) => setTransferDetails(prev => ({ ...prev, duration: e.target.value }))}
+                        placeholder="60"
+                        min="15"
+                        step="15"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                        required
                       />
                     </div>
                   </div>
@@ -3144,7 +3285,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       reason: '',
                       priority: 'normal',
                       clinicalRationale: '',
-                      additionalNotes: ''
+                      additionalNotes: '',
+                      surgeryDate: '',
+                      surgeryTime: '',
+                      surgeon: '',
+                      operatingRoom: '',
+                      duration: '60'
                     });
                     setAppointmentBooking({
                       appointmentDate: '',
@@ -3189,6 +3335,19 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     } else if (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') {
                       if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
                         alert('Please fill in all required fields');
+                        return;
+                      }
+                    } else if (selectedPathway === 'Surgery Pathway') {
+                      // Validate surgery pathway fields including scheduling
+                      if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
+                        alert('Please provide reason and clinical rationale');
+                        return;
+                      }
+                      // Validate surgery scheduling fields
+                      if (!transferDetails.surgeryDate || !transferDetails.surgeryTime || 
+                          !transferDetails.surgeon || !transferDetails.operatingRoom || 
+                          !transferDetails.duration) {
+                        alert('Please fill in all surgery scheduling fields (date, time, surgeon, operating room, and duration)');
                         return;
                       }
                     } else {
@@ -3333,13 +3492,58 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       }
                     }
 
+                    // Handle surgery scheduling for Surgery Pathway (BEFORE pathway transfer)
+                    let surgeryScheduled = false;
+                    if (selectedPathway === 'Surgery Pathway') {
+                      try {
+                        console.log('🔍 Scheduling surgery BEFORE pathway transfer');
+                        console.log('📋 Surgery details:', transferDetails);
+                        
+                        // Get selected surgeon details
+                        const selectedSurgeon = availableUrologists.find(u => u.id.toString() === transferDetails.surgeon.toString());
+                        if (!selectedSurgeon) {
+                          throw new Error('Selected surgeon not found');
+                        }
+                        
+                        const surgeryData = {
+                          appointmentDate: transferDetails.surgeryDate,
+                          appointmentTime: transferDetails.surgeryTime,
+                          urologistId: transferDetails.surgeon,
+                          urologistName: selectedSurgeon.name,
+                          appointmentType: 'surgery',
+                          surgeryType: transferDetails.reason,
+                          notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nClinical Rationale: ${transferDetails.clinicalRationale}\nOperating Room: ${transferDetails.operatingRoom}\nDuration: ${transferDetails.duration} minutes${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
+                          operatingRoom: transferDetails.operatingRoom,
+                          duration: parseInt(transferDetails.duration) || 60,
+                          priority: transferDetails.priority
+                        };
+                        
+                        console.log('📤 Surgery data being sent:', JSON.stringify(surgeryData, null, 2));
+                        
+                        const surgeryResult = await bookingService.bookUrologistAppointment(patient.id, surgeryData);
+                        
+                        if (surgeryResult.success) {
+                          console.log('✅ Surgery scheduled successfully');
+                          surgeryScheduled = true;
+                        } else {
+                          console.error('❌ Failed to schedule surgery:', surgeryResult.error);
+                          alert(`Failed to schedule surgery: ${surgeryResult.error}\n\nPathway transfer has been cancelled. Please try again.`);
+                          return; // Exit early - don't proceed with pathway transfer
+                        }
+                      } catch (surgeryError) {
+                        console.error('❌ Error scheduling surgery:', surgeryError);
+                        alert(`An error occurred while scheduling surgery: ${surgeryError.message}\n\nPathway transfer has been cancelled. Please try again.`);
+                        return; // Exit early - don't proceed with pathway transfer
+                      }
+                    }
+
                     // Persist pathway (only if appointment booking succeeded or wasn't needed)
                     try {
                       const payload = {
                         pathway: selectedPathway,
                         reason: transferDetails.reason,
                         notes: transferDetails.clinicalRationale || transferDetails.additionalNotes || '',
-                        skipAutoBooking: hasManualBooking // Tell backend to skip auto-booking if we're doing manual booking
+                        skipAutoBooking: hasManualBooking || surgeryScheduled // Tell backend to skip auto-booking if we're doing manual booking or surgery scheduling
                       };
                       const res = await patientService.updatePatientPathway(patient.id, payload);
                       if (res.success) {

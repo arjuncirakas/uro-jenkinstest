@@ -102,3 +102,4 @@ fixAppointmentsUrologistIdFkey()
     process.exit(1);
   });
 
+
