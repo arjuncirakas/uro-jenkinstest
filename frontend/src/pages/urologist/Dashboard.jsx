@@ -549,11 +549,13 @@ const UrologistDashboard = () => {
     return () => window.removeEventListener('mdt:updated', handler);
   }, []);
 
-  // Refresh surgical queue when surgery appointments are updated
+  // Refresh surgical queue and surgeries when surgery appointments are updated
   useEffect(() => {
     const handler = () => {
-      console.log('Surgery appointment updated event received, refreshing surgical queue');
+      console.log('Surgery appointment updated event received, refreshing surgical queue and surgeries');
       fetchSurgicalQueue();
+      fetchSurgeries(); // Also refresh the surgeries section
+      fetchTodaysAppointments(); // Refresh today's appointments as well
     };
     window.addEventListener('surgery:updated', handler);
     return () => window.removeEventListener('surgery:updated', handler);
