@@ -1318,19 +1318,42 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   {/* Edit Appointment button - ALWAYS show for Surgery Pathway notes (not reschedule notes) */}
                                   {(() => {
                                     const noteContent = note.content || '';
-                                    // Check if note is a pathway transfer to Surgery Pathway
-                                    const isSurgeryPathwayNote = noteContent.includes('Transfer To:') && 
-                                                                  (noteContent.includes('Surgery Pathway') || 
-                                                                   noteContent.toLowerCase().includes('surgery pathway'));
                                     
                                     // Don't show button on reschedule notes
                                     const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
-                                    
-                                    // ALWAYS show button if it's a surgery pathway note (not a reschedule note)
-                                    // We'll check for appointment when button is clicked
-                                    if (!isSurgeryPathwayNote || isRescheduleNote) {
+                                    if (isRescheduleNote) {
                                       return null;
                                     }
+                                    
+                                    // Check if note is a pathway transfer to Surgery Pathway
+                                    // Be VERY lenient - check for ANY mention of Surgery Pathway in ANY form
+                                    const noteContentLower = noteContent.toLowerCase();
+                                    const hasSurgeryPathway = 
+                                      noteContent.includes('Surgery Pathway') || 
+                                      noteContentLower.includes('surgery pathway') ||
+                                      (noteContent.includes('Transfer To:') && noteContentLower.includes('surgery')) ||
+                                      (note.type === 'pathway_transfer' && noteContentLower.includes('surgery'));
+                                    
+                                    // ALWAYS show button if it mentions Surgery Pathway (and it's not a reschedule note)
+                                    // This button MUST stay visible - no other conditions should hide it
+                                    if (!hasSurgeryPathway) {
+                                      console.log('❌ Edit Appointment button hidden - not a Surgery Pathway note:', {
+                                        noteId: note.id,
+                                        noteType: note.type,
+                                        hasSurgeryPathway,
+                                        noteContentPreview: noteContent.substring(0, 150)
+                                      });
+                                      return null;
+                                    }
+                                    
+                                    // Debug logging - button WILL be shown
+                                    console.log('✅ Edit Appointment button WILL BE SHOWN:', {
+                                      noteId: note.id,
+                                      noteType: note.type,
+                                      hasSurgeryPathway,
+                                      isRescheduleNote,
+                                      noteContentPreview: noteContent.substring(0, 150)
+                                    });
                                     
                                     return (
                                       <button 
