@@ -681,13 +681,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       return 'bg-green-100 text-green-700 border-green-200';
     };
 
+    // Get the actual pathway name - use patient's current pathway if "Not specified"
+    const displayPathway = data.transferTo && data.transferTo !== 'Not specified' 
+      ? data.transferTo 
+      : (patient?.carePathway || patient?.pathway || 'Not specified');
+
     return (
       <div className="space-y-3">
         {/* Transfer To and Priority in same row */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <div className="text-sm font-medium text-gray-500 mb-1">Transfer To</div>
-            <div className="text-base text-gray-900">{data.transferTo || 'Not specified'}</div>
+            <div className="text-base text-gray-900">{displayPathway}</div>
           </div>
           {data.priority && (
             <span className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${getPriorityColor(data.priority)}`}>
@@ -1466,9 +1471,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
-                                  {/* Edit Appointment button - ALWAYS show for Surgery Pathway notes (not reschedule notes) */}
+                                  {/* Edit Appointment button - ONLY show on clinical notes with Surgery Pathway (not pathway_transfer notes, not reschedule notes) */}
                                   {(() => {
                                     const noteContent = note.content || '';
+                                    const noteType = note.type || '';
+                                    
+                                    // Don't show button on pathway_transfer notes - only on clinical notes
+                                    if (noteType === 'pathway_transfer') {
+                                      return null;
+                                    }
                                     
                                     // Don't show button on reschedule notes
                                     const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
@@ -1476,19 +1487,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       return null;
                                     }
                                     
-                                    // Check if note is a pathway transfer to Surgery Pathway
-                                    // Be VERY lenient - check for ANY mention of Surgery Pathway in ANY form
+                                    // Only show on clinical notes that mention Surgery Pathway
                                     const noteContentLower = noteContent.toLowerCase();
                                     const hasSurgeryPathway = 
                                       noteContent.includes('Surgery Pathway') || 
                                       noteContentLower.includes('surgery pathway') ||
-                                      (noteContent.includes('Transfer To:') && noteContentLower.includes('surgery')) ||
-                                      (note.type === 'pathway_transfer' && noteContentLower.includes('surgery'));
+                                      (noteContent.includes('Transfer To:') && noteContentLower.includes('surgery'));
                                     
-                                    // ALWAYS show button if it mentions Surgery Pathway (and it's not a reschedule note)
-                                    // This button MUST stay visible - no other conditions should hide it
+                                    // Only show button on clinical notes with Surgery Pathway
                                     if (!hasSurgeryPathway) {
-                                      console.log('❌ Edit Appointment button hidden - not a Surgery Pathway note:', {
+                                      console.log('❌ Edit Appointment button hidden - not a Surgery Pathway clinical note:', {
                                         noteId: note.id,
                                         noteType: note.type,
                                         hasSurgeryPathway,
