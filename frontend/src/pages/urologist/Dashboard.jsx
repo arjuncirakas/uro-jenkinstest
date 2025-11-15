@@ -144,9 +144,23 @@ const UrologistDashboard = () => {
           .filter(apt => {
             const aptType = (apt.type || apt.appointmentType || '').toLowerCase();
             const aptStatus = (apt.status || '').toLowerCase();
+            const aptNotes = (apt.notes || '').toLowerCase();
+            const aptSurgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
+            
+            // Check for surgery in type field
+            const isSurgeryType = aptType.includes('surgery') || aptType.includes('surgical');
+            
+            // Check for surgery keywords in notes
+            const hasSurgeryInNotes = aptNotes.includes('surgery scheduled') ||
+                                     aptNotes.includes('surgery appointment scheduled') ||
+                                     aptNotes.includes('surgical') ||
+                                     aptNotes.includes('surgery type:');
+            
+            // Check for surgeryType field
+            const hasSurgeryType = aptSurgeryType && aptSurgeryType.length > 0;
+            
             // Include surgery appointments that are scheduled or confirmed
-            // Check if type contains 'surgery' or 'surgical'
-            return (aptType.includes('surgery') || aptType.includes('surgical')) && 
+            return (isSurgeryType || hasSurgeryInNotes || hasSurgeryType) && 
                    (aptStatus === 'scheduled' || aptStatus === 'confirmed');
           })
           .map(apt => {
@@ -363,15 +377,37 @@ const UrologistDashboard = () => {
           return;
         }
         
-        // Filter for surgery appointments (check both raw type and formatted type)
+        // Filter for surgery appointments (check type, notes, and surgeryType field)
         const surgeryAppointments = appointments.filter(apt => {
           const aptType = (apt.type || apt.appointmentType || '').toLowerCase();
+          const aptNotes = (apt.notes || '').toLowerCase();
+          const aptSurgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
+          
           console.log('Checking appointment:', apt.patientName, 'Type:', apt.type, 'aptType:', aptType);
-          // Check for both the raw database value and the formatted type string
-          const isSurgery = aptType === 'surgery' || 
-                           aptType === 'surgical' || 
-                           apt.type === 'Surgery Appointment';
-          console.log('Is surgery?:', isSurgery);
+          
+          // Check for surgery in type field
+          const isSurgeryType = aptType === 'surgery' || 
+                               aptType === 'surgical' || 
+                               apt.type === 'Surgery Appointment';
+          
+          // Check for surgery keywords in notes
+          const hasSurgeryInNotes = aptNotes.includes('surgery scheduled') ||
+                                   aptNotes.includes('surgery appointment scheduled') ||
+                                   aptNotes.includes('surgical') ||
+                                   aptNotes.includes('surgery type:');
+          
+          // Check for surgeryType field
+          const hasSurgeryType = aptSurgeryType && aptSurgeryType.length > 0;
+          
+          const isSurgery = isSurgeryType || hasSurgeryInNotes || hasSurgeryType;
+          
+          console.log('Is surgery?:', isSurgery, {
+            isSurgeryType,
+            hasSurgeryInNotes,
+            hasSurgeryType,
+            notesPreview: apt.notes?.substring(0, 100)
+          });
+          
           return isSurgery;
         });
         
