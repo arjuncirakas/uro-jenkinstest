@@ -2399,8 +2399,8 @@ export const getAllAppointments = async (req, res) => {
   }
   
   try {
-    const { startDate, endDate, urologistId } = req.query;
-    console.log(`📅 [getAllAppointments ${requestId}] Processing query with startDate: ${startDate}, endDate: ${endDate}, urologistId: ${urologistId}`);
+    const { startDate, endDate, urologistId, search } = req.query;
+    console.log(`📅 [getAllAppointments ${requestId}] Processing query with startDate: ${startDate}, endDate: ${endDate}, urologistId: ${urologistId}, search: ${search}`);
     
     let queryParams = [];
     
@@ -2484,6 +2484,8 @@ export const getAllAppointments = async (req, res) => {
     // They are already included in the first part of the UNION query
     
     // Build query to get both urologist appointments and investigation bookings
+    // IMPORTANT: Using INNER JOINs ensures only patients with appointments are returned
+    // This guarantees that search results will only include patients who have booked appointments
     let query = `
       SELECT 
         a.id,
@@ -2507,7 +2509,7 @@ export const getAllAppointments = async (req, res) => {
         a.created_at,
         a.updated_at
       FROM appointments a
-      JOIN patients p ON a.patient_id = p.id
+      INNER JOIN patients p ON a.patient_id = p.id
       LEFT JOIN doctors d ON a.urologist_id = d.id
       WHERE ${urologistWhere.join(' AND ')}
       
@@ -2535,7 +2537,7 @@ export const getAllAppointments = async (req, res) => {
         ib.created_at,
         ib.updated_at
       FROM investigation_bookings ib
-      JOIN patients p ON ib.patient_id = p.id
+      INNER JOIN patients p ON ib.patient_id = p.id
       WHERE ib.status != 'cancelled'
     `;
     
@@ -2552,6 +2554,18 @@ export const getAllAppointments = async (req, res) => {
       whereConditions.push(`appointment_date BETWEEN $${startParamIndex} AND $${endParamIndex}`);
     }
     
+    // Add search filter for patient name
+    // Note: This search is applied to the combined_appointments subquery which already contains
+    // only patients with appointments (via INNER JOINs), ensuring search only returns patients with bookings
+    if (search && search.trim()) {
+      const searchParamIndex = queryParams.length + 1;
+      const searchTerm = `%${search.trim()}%`;
+      queryParams.push(searchTerm);
+      whereConditions.push(`(first_name || ' ' || last_name) ILIKE $${searchParamIndex}`);
+    }
+    
+    // Wrap the query in a subquery to apply filters
+    // The base query already ensures only patients with appointments are included via INNER JOINs
     if (whereConditions.length > 0) {
       query = `SELECT * FROM (${query}) AS combined_appointments WHERE ${whereConditions.join(' AND ')}`;
     } else {

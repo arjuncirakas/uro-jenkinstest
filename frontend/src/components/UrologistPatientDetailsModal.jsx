@@ -3171,8 +3171,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               <input
                                 type="text"
                                 value={medication.duration}
-                                onChange={(e) => updateMedication(medication.id, 'duration', e.target.value)}
-                                placeholder="e.g., 30 days"
+                                onChange={(e) => {
+                                  // Only allow numbers in duration field
+                                  const numericValue = e.target.value.replace(/[^0-9]/g, '');
+                                  updateMedication(medication.id, 'duration', numericValue);
+                                }}
+                                placeholder="e.g., 30"
                                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
                               />
                             </div>
@@ -3742,14 +3746,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 </button>
                 <button
                   onClick={async () => {
-                    // Special handling for Discharge and Post-op Transfer - require discharge summary
-                    if (selectedPathway === 'Discharge' || selectedPathway === 'Post-op Transfer') {
-                      // Close pathway modal and open discharge summary modal
-                      setIsPathwayModalOpen(false);
-                      setIsDischargeSummaryModalOpen(true);
-                      return;
-                    }
-                    
                     // Basic validation based on pathway type
                     if (selectedPathway === 'Medication') {
                       const hasValidMedications = medicationDetails.medications.every(med => 
@@ -3775,7 +3771,48 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         showErrorModal('Validation Error', 'Please fill in all surgery scheduling fields (date and time)');
                         return;
                       }
+                      // Validate surgery date is not in the past
+                      const surgeryDate = new Date(transferDetails.surgeryDate);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      surgeryDate.setHours(0, 0, 0, 0);
+                      if (surgeryDate < today) {
+                        showErrorModal('Validation Error', 'Surgery date cannot be in the past');
+                        return;
+                      }
+                      // Validate time format (should be HH:MM)
+                      if (!/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(transferDetails.surgeryTime)) {
+                        showErrorModal('Validation Error', 'Please provide a valid time in HH:MM format');
+                        return;
+                      }
+                    } else if (selectedPathway === 'Post-op Transfer') {
+                      // Validate Post-op Transfer fields before opening discharge summary modal
+                      if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
+                        showErrorModal('Validation Error', 'Please provide reason and clinical rationale for post-op transfer');
+                        return;
+                      }
+                      // Close pathway modal and open discharge summary modal
+                      setIsPathwayModalOpen(false);
+                      setIsDischargeSummaryModalOpen(true);
+                      return;
+                    } else if (selectedPathway === 'Post-op Followup') {
+                      // Validate Post-op Followup fields
+                      if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
+                        showErrorModal('Validation Error', 'Please provide reason and clinical rationale for post-op followup');
+                        return;
+                      }
+                    } else if (selectedPathway === 'Discharge') {
+                      // Validate Discharge fields before opening discharge summary modal
+                      if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
+                        showErrorModal('Validation Error', 'Please provide discharge reason and clinical summary');
+                        return;
+                      }
+                      // Close pathway modal and open discharge summary modal
+                      setIsPathwayModalOpen(false);
+                      setIsDischargeSummaryModalOpen(true);
+                      return;
                     } else {
+                      // Default validation for other pathways
                       if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
                         showErrorModal('Validation Error', 'Please provide reason and clinical rationale');
                         return;
@@ -3827,6 +3864,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         }
                         if (!appointmentBooking.appointmentTime) {
                           throw new Error('Appointment time is required.');
+                        }
+                        // Validate appointment date is not in the past
+                        const appointmentDate = new Date(appointmentBooking.appointmentDate);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        appointmentDate.setHours(0, 0, 0, 0);
+                        if (appointmentDate < today) {
+                          throw new Error('Appointment date cannot be in the past.');
+                        }
+                        // Validate time format (should be HH:MM)
+                        if (!/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(appointmentBooking.appointmentTime)) {
+                          throw new Error('Please provide a valid time in HH:MM format.');
                         }
                         
                         // Build appointment data with all required fields (matching backend expectations)

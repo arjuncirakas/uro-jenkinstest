@@ -273,6 +273,7 @@ export const bookingService = {
       if (filters.startDate) params.append('startDate', filters.startDate);
       if (filters.endDate) params.append('endDate', filters.endDate);
       if (filters.urologistId) params.append('urologistId', filters.urologistId);
+      if (filters.search && filters.search.trim()) params.append('search', filters.search.trim());
       
       const response = await apiClient.get(`/booking/appointments?${params.toString()}`);
       return { success: true, data: response.data.data };

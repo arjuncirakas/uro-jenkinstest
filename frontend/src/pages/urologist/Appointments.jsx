@@ -19,6 +19,7 @@ const Appointments = () => {
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [appointmentsError, setAppointmentsError] = useState(null);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Get current urologist ID from authentication
   const currentUrologistId = tokenService.getUserId();
@@ -31,7 +32,8 @@ const Appointments = () => {
       
       try {
         const result = await bookingService.getAllAppointments({
-          urologistId: showAllPatients ? null : currentUrologistId
+          urologistId: showAllPatients ? null : currentUrologistId,
+          search: searchQuery
         });
         
         if (result.success) {
@@ -48,10 +50,16 @@ const Appointments = () => {
       }
     };
     
-    fetchAppointments();
-  }, [showAllPatients, currentUrologistId]);
-  
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      fetchAppointments();
+    }, searchQuery ? 300 : 0); // 300ms delay when searching, immediate when clearing
+    
+    return () => clearTimeout(timeoutId);
+  }, [showAllPatients, currentUrologistId, searchQuery]);
+
   // Filter appointments based on toggle state
+  // NOTE: Search is now handled server-side, so we just use the appointments as-is
   // NOTE: Include all appointments including 'missed'/'no_show' so they appear in the calendar
   const filteredAppointments = useMemo(() => {
     return allAppointments; // Show all appointments including missed/no-show
@@ -73,6 +81,7 @@ const Appointments = () => {
     const dateString = `${year}-${month}-${day}`;
     
     // Filter appointments for the selected date
+    // Note: Search is handled server-side, so appointments are already filtered
     const dayAppointments = allAppointments.filter(apt => {
       const aptDate = apt.date || apt.appointment_date;
       return aptDate === dateString;
@@ -180,6 +189,8 @@ const Appointments = () => {
                   <input
                     type="text"
                     placeholder="Search by name"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
                   />
                 </div>
