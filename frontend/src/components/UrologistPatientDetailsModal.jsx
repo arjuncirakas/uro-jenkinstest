@@ -106,32 +106,82 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
   // Check if patient has a surgery appointment
   const checkSurgeryAppointment = useCallback(async () => {
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔍 CHECKING SURGERY APPOINTMENT');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📍 Patient ID:', patient?.id);
+    
     if (!patient?.id) {
+      console.log('❌ No patient ID, setting hasSurgeryAppointment to false');
       setHasSurgeryAppointment(false);
       return;
     }
     
     try {
       const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
+      console.log('📥 checkSurgeryAppointment API Response:', {
+        success: appointmentsResult.success,
+        data: appointmentsResult.data
+      });
+      
       if (appointmentsResult.success) {
         const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
-        const surgeryAppointment = appointments.find(apt => {
-          const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
-          // Check for various surgery appointment type formats
-          return aptType === 'surgery' || 
-                 aptType === 'surgical' || 
-                 aptType.includes('surgery') ||
-                 aptType.includes('surgical');
+        console.log('📋 Total appointments in check:', appointments.length);
+        
+        appointments.forEach((apt, idx) => {
+          const aptType = (apt.appointmentType || apt.type || apt.appointment_type || '').toLowerCase();
+          const surgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
+          console.log(`📌 Appointment ${idx + 1} in check:`, {
+            id: apt.id,
+            appointmentType: apt.appointmentType,
+            type: apt.type,
+            appointment_type: apt.appointment_type,
+            aptType: aptType,
+            surgeryType: surgeryType,
+            allKeys: Object.keys(apt)
+          });
         });
+        
+        const surgeryAppointment = appointments.find(apt => {
+          const aptType = (apt.appointmentType || apt.type || apt.appointment_type || '').toLowerCase();
+          const surgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
+          // Check for various surgery appointment type formats
+          const isSurgery = aptType === 'surgery' || 
+                           aptType === 'surgical' || 
+                           aptType.includes('surgery') ||
+                           aptType.includes('surgical') ||
+                           surgeryType.includes('surgery');
+          
+          console.log('🔎 Check - Appointment:', {
+            id: apt.id,
+            aptType: aptType,
+            surgeryType: surgeryType,
+            isSurgery: isSurgery
+          });
+          
+          return isSurgery;
+        });
+        
         const hasAppointment = !!surgeryAppointment;
-        console.log('🔍 Surgery appointment check:', { hasAppointment, appointments, surgeryAppointment });
+        console.log('📊 checkSurgeryAppointment Result:', {
+          hasAppointment: hasAppointment,
+          surgeryAppointment: surgeryAppointment ? {
+            id: surgeryAppointment.id,
+            type: surgeryAppointment.appointmentType || surgeryAppointment.type,
+            surgeryType: surgeryAppointment.surgeryType || surgeryAppointment.surgery_type
+          } : null
+        });
+        console.log('═══════════════════════════════════════════════════════════\n');
         setHasSurgeryAppointment(hasAppointment);
       } else {
-        console.log('⚠️ Failed to fetch appointments:', appointmentsResult.error);
+        console.log('⚠️ checkSurgeryAppointment - Failed to fetch appointments:', appointmentsResult.error);
+        console.log('═══════════════════════════════════════════════════════════\n');
         setHasSurgeryAppointment(false);
       }
     } catch (error) {
-      console.error('Error checking surgery appointment:', error);
+      console.error('❌ checkSurgeryAppointment - Exception:', error);
+      console.error('Error Stack:', error.stack);
+      console.log('═══════════════════════════════════════════════════════════\n');
       setHasSurgeryAppointment(false);
     }
   }, [patient]);
@@ -1474,14 +1524,43 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                           
                                           // Fetch surgery appointment details
                                           try {
-                                            console.log('🔍 Edit Appointment button clicked - fetching appointments for patient:', patient.id);
+                                            console.log('═══════════════════════════════════════════════════════════');
+                                            console.log('🔍 EDIT APPOINTMENT BUTTON CLICKED');
+                                            console.log('═══════════════════════════════════════════════════════════');
+                                            console.log('📍 Patient ID:', patient.id);
+                                            console.log('📍 Patient Name:', patient.name);
+                                            console.log('📍 Note Content Preview:', noteContent.substring(0, 200));
+                                            
                                             const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
+                                            console.log('📥 API Response Success:', appointmentsResult.success);
+                                            console.log('📥 API Response Data:', JSON.stringify(appointmentsResult.data, null, 2));
+                                            
                                             if (appointmentsResult.success) {
                                               const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
-                                              console.log('🔍 All appointments fetched:', appointments);
+                                              console.log('📋 Total Appointments Found:', appointments.length);
+                                              console.log('📋 All Appointments:', JSON.stringify(appointments, null, 2));
+                                              
+                                              // Log each appointment's structure
+                                              appointments.forEach((apt, idx) => {
+                                                console.log(`\n📌 Appointment ${idx + 1}:`, {
+                                                  id: apt.id,
+                                                  appointmentType: apt.appointmentType,
+                                                  type: apt.type,
+                                                  appointment_type: apt.appointment_date,
+                                                  surgeryType: apt.surgeryType,
+                                                  surgery_type: apt.surgery_type,
+                                                  notes: apt.notes?.substring(0, 100),
+                                                  date: apt.appointmentDate || apt.appointment_date,
+                                                  time: apt.appointmentTime || apt.appointment_time,
+                                                  allKeys: Object.keys(apt)
+                                                });
+                                              });
                                               
                                               // More robust search for surgery appointment
-                                              let surgeryAppointment = appointments.find(apt => {
+                                              let surgeryAppointment = null;
+                                              let foundIndex = -1;
+                                              
+                                              appointments.forEach((apt, idx) => {
                                                 const aptType = (apt.appointmentType || apt.type || apt.appointment_type || '').toLowerCase();
                                                 const surgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
                                                 const notes = (apt.notes || '').toLowerCase();
@@ -1494,38 +1573,79 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                                  surgeryType.includes('surgery') ||
                                                                  notes.includes('surgery scheduled');
                                                 
-                                                console.log('🔍 Checking appointment:', {
+                                                console.log(`\n🔎 Checking Appointment ${idx + 1}:`, {
                                                   id: apt.id,
-                                                  type: aptType,
+                                                  aptType: aptType,
                                                   surgeryType: surgeryType,
+                                                  notesPreview: notes.substring(0, 50),
                                                   isSurgery: isSurgery,
-                                                  fullApt: apt
+                                                  checks: {
+                                                    'aptType === surgery': aptType === 'surgery',
+                                                    'aptType === surgical': aptType === 'surgical',
+                                                    'aptType.includes(surgery)': aptType.includes('surgery'),
+                                                    'aptType.includes(surgical)': aptType.includes('surgical'),
+                                                    'surgeryType.includes(surgery)': surgeryType.includes('surgery'),
+                                                    'notes.includes(surgery scheduled)': notes.includes('surgery scheduled')
+                                                  }
                                                 });
                                                 
-                                                return isSurgery;
+                                                if (isSurgery && !surgeryAppointment) {
+                                                  surgeryAppointment = apt;
+                                                  foundIndex = idx;
+                                                  console.log(`✅ FOUND SURGERY APPOINTMENT at index ${idx}!`);
+                                                }
                                               });
                                               
                                               // Fallback: If no surgery appointment found by type, try to find by surgeryType field or notes
                                               if (!surgeryAppointment && appointments.length > 0) {
-                                                console.log('⚠️ No surgery appointment found by type, trying fallback search...');
-                                                surgeryAppointment = appointments.find(apt => {
+                                                console.log('\n⚠️ PRIMARY SEARCH FAILED - Trying fallback search...');
+                                                appointments.forEach((apt, idx) => {
                                                   const surgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
                                                   const notes = (apt.notes || '').toLowerCase();
-                                                  // Only consider it a surgery appointment if it has surgeryType field or notes mention surgery
-                                                  return (surgeryType && surgeryType.length > 0) || 
-                                                         notes.includes('surgery scheduled') ||
-                                                         notes.includes('surgery:');
+                                                  const hasSurgeryType = surgeryType && surgeryType.length > 0;
+                                                  const hasSurgeryInNotes = notes.includes('surgery scheduled') || notes.includes('surgery:');
+                                                  
+                                                  console.log(`🔎 Fallback Check ${idx + 1}:`, {
+                                                    id: apt.id,
+                                                    hasSurgeryType: hasSurgeryType,
+                                                    surgeryType: surgeryType,
+                                                    hasSurgeryInNotes: hasSurgeryInNotes,
+                                                    notesPreview: notes.substring(0, 50)
+                                                  });
+                                                  
+                                                  if ((hasSurgeryType || hasSurgeryInNotes) && !surgeryAppointment) {
+                                                    surgeryAppointment = apt;
+                                                    foundIndex = idx;
+                                                    console.log(`✅ FOUND via FALLBACK at index ${idx}!`);
+                                                  }
                                                 });
                                                 
                                                 // Last resort: If patient has only one appointment and we're on a Surgery Pathway note,
                                                 // it's likely the surgery appointment even if type doesn't match
                                                 if (!surgeryAppointment && appointments.length === 1) {
-                                                  console.log('⚠️ Only one appointment found, using it as surgery appointment');
+                                                  console.log('\n⚠️ LAST RESORT: Only one appointment found, using it as surgery appointment');
                                                   surgeryAppointment = appointments[0];
+                                                  foundIndex = 0;
                                                 }
                                               }
                                               
-                                              console.log('🔍 Surgery appointment found:', surgeryAppointment);
+                                              console.log('\n═══════════════════════════════════════════════════════════');
+                                              console.log('📊 SEARCH RESULT:');
+                                              console.log('═══════════════════════════════════════════════════════════');
+                                              console.log('Found:', !!surgeryAppointment);
+                                              console.log('Found at index:', foundIndex);
+                                              if (surgeryAppointment) {
+                                                console.log('Selected Appointment:', JSON.stringify(surgeryAppointment, null, 2));
+                                              } else {
+                                                console.log('❌ NO SURGERY APPOINTMENT FOUND');
+                                                console.log('Available appointments:', appointments.map(apt => ({
+                                                  id: apt.id,
+                                                  type: apt.appointmentType || apt.type || apt.appointment_type,
+                                                  surgeryType: apt.surgeryType || apt.surgery_type,
+                                                  notes: apt.notes?.substring(0, 50)
+                                                })));
+                                              }
+                                              console.log('═══════════════════════════════════════════════════════════\n');
                                               
                                               if (surgeryAppointment) {
                                                 setSelectedSurgeryAppointment({
@@ -1536,19 +1656,26 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                   additionalNotes: parsedData.additionalNotes || ''
                                                 });
                                                 setIsEditSurgeryAppointmentModalOpen(true);
+                                                console.log('✅ Edit Appointment Modal Opened Successfully');
                                               } else {
-                                                console.error('❌ No surgery appointment found. Available appointments:', appointments);
+                                                console.error('❌ ERROR: No surgery appointment found after all search attempts');
+                                                console.error('Available appointments structure:', appointments);
                                                 showErrorModal('Appointment Not Found', 'No surgery appointment found for this patient. Please schedule a surgery appointment first.');
                                                 // Refresh the appointment check
                                                 await checkSurgeryAppointment();
                                               }
                                             } else {
-                                              console.error('❌ Failed to fetch appointments:', appointmentsResult.error);
-                                              showErrorModal('Failed to Fetch', 'Failed to fetch appointment details.');
+                                              console.error('❌ API CALL FAILED');
+                                              console.error('Error:', appointmentsResult.error);
+                                              console.error('Full Response:', appointmentsResult);
+                                              showErrorModal('Failed to Fetch', `Failed to fetch appointment details: ${appointmentsResult.error || 'Unknown error'}`);
                                             }
                                           } catch (error) {
-                                            console.error('❌ Error fetching surgery appointment:', error);
-                                            showErrorModal('Error', 'Error fetching appointment details.');
+                                            console.error('❌ EXCEPTION CAUGHT');
+                                            console.error('Error:', error);
+                                            console.error('Error Stack:', error.stack);
+                                            console.error('Error Message:', error.message);
+                                            showErrorModal('Error', `Error fetching appointment details: ${error.message}`);
                                           }
                                         }}
                                         className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center gap-1"
