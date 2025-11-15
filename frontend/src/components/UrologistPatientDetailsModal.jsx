@@ -1266,26 +1266,30 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     </div>
                   ) : clinicalNotes.length > 0 ? (
                     <div className="space-y-6">
-                      {clinicalNotes.map((note, index) => (
-                        <div key={note.id || index} className="flex gap-4">
+                      {clinicalNotes.map((note, index) => {
+                        const noteContent = note.content || '';
+                        const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                        
+                        return (
+                        <div key={note.id || index} className={`flex gap-4 ${isRescheduleNote ? 'ml-8' : ''}`}>
                           {/* Timeline indicator */}
                           <div className="flex flex-col items-center">
-                            <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
                               {getNoteIcon(note.type)}
                             </div>
                             {index < clinicalNotes.length - 1 && (
-                              <div className="w-0.5 h-16 bg-teal-100 mt-2"></div>
+                              <div className={`w-0.5 h-16 mt-2 ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}></div>
                             )}
                           </div>
                           
                           {/* Note content */}
                           <div className="flex-1 pb-4">
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                            <div className={`rounded-lg p-4 border ${isRescheduleNote ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'}`}>
                               {/* Header */}
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
-                                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-teal-100 text-teal-700">
-                                    {note.type || 'Clinical Note'}
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${isRescheduleNote ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
+                                    {isRescheduleNote ? 'Reschedule Note' : (note.type || 'Clinical Note')}
                                   </span>
                                   <span className="text-sm text-gray-500 flex items-center">
                                     <IoTimeSharp className="mr-1" />
@@ -1446,7 +1450,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-12">

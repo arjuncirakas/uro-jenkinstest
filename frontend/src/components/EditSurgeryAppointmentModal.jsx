@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { IoClose, IoCalendar } from 'react-icons/io5';
 import { FaStethoscope } from 'react-icons/fa';
 import { bookingService } from '../services/bookingService';
+import { notesService } from '../services/notesService';
 import authService from '../services/authService';
 
 const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, onUpdate }) => {
@@ -89,6 +90,52 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
       const result = await bookingService.rescheduleNoShowAppointment(appointment.id, updateData);
 
       if (result.success) {
+        // Create a reschedule note as a sub-note to the original surgery transfer note
+        if (patient?.id) {
+          try {
+            const oldDate = appointment.appointmentDate || appointment.appointment_date;
+            const oldTime = appointment.appointmentTime || appointment.appointment_time;
+            const formattedOldDate = oldDate ? new Date(oldDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            }) : 'N/A';
+            const formattedNewDate = new Date(formData.surgeryDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            
+            const rescheduleNoteContent = `SURGERY APPOINTMENT RESCHEDULED
+
+Previous Appointment:
+- Date: ${formattedOldDate}
+- Time: ${oldTime || 'N/A'}
+
+New Appointment:
+- Date: ${formattedNewDate}
+- Time: ${formData.surgeryTime}
+
+Reason: ${formData.reason || 'Not specified'}
+Priority: ${formData.priority ? formData.priority.charAt(0).toUpperCase() + formData.priority.slice(1) : 'Normal'}`;
+
+            const noteResult = await notesService.addNote(patient.id, {
+              noteContent: rescheduleNoteContent,
+              noteType: 'clinical'
+            });
+            
+            if (noteResult.success) {
+              console.log('✅ Reschedule note created successfully');
+            } else {
+              console.error('⚠️ Failed to create reschedule note:', noteResult.error);
+              // Don't fail the reschedule if note creation fails
+            }
+          } catch (noteError) {
+            console.error('⚠️ Error creating reschedule note:', noteError);
+            // Don't fail the reschedule if note creation fails
+          }
+        }
+        
         // Dispatch event to refresh data
         window.dispatchEvent(new CustomEvent('surgery:updated'));
         
