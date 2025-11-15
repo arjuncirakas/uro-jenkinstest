@@ -235,11 +235,39 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       if (result.success) {
         // Use the notes data directly from backend (now provides consistent format)
         const notes = result.data.notes || result.data || [];
-        // Filter out the "Appointment type changed" notes as they're redundant with reschedule notes
+        // Filter out unwanted notes
         const filteredNotes = notes.filter(note => {
           const content = note.content || '';
+          const noteType = note.type || '';
+          
           // Remove notes that say "Appointment type changed from..."
-          return !content.includes('Appointment type changed from');
+          if (content.includes('Appointment type changed from')) {
+            return false;
+          }
+          
+          // Remove pathway_transfer notes with "Transfer To: Not specified" for Surgery Pathway
+          // (These are duplicate/unnecessary notes for surgery pathway transfers)
+          // Keep them for other pathway transfers (Active Monitoring, Medication, etc.)
+          if (noteType === 'pathway_transfer' && content.includes('Transfer To:') && content.includes('Not specified')) {
+            // Check if patient is currently in Surgery Pathway or if there are Surgery Pathway notes
+            const patientInSurgeryPathway = patient?.carePathway === 'Surgery Pathway' ||
+                                           patient?.pathway === 'Surgery Pathway';
+            
+            // Also check if there are any Surgery Pathway transfer notes in the notes array
+            const hasSurgeryPathwayNote = notes.some(n => {
+              const nContent = n.content || '';
+              return nContent.includes('Transfer To:') && 
+                     (nContent.includes('Surgery Pathway') || nContent.toLowerCase().includes('surgery pathway'));
+            });
+            
+            // Filter out only if patient is in Surgery Pathway or there's a Surgery Pathway note
+            if (patientInSurgeryPathway || hasSurgeryPathwayNote) {
+              console.log('🗑️ Filtering out pathway_transfer note with "Not specified" for Surgery Pathway patient');
+              return false; // Filter out for Surgery Pathway
+            }
+          }
+          
+          return true;
         });
         console.log('✅ UrologistPatientDetailsModal: Setting clinical notes:', filteredNotes);
         setClinicalNotes(filteredNotes);
