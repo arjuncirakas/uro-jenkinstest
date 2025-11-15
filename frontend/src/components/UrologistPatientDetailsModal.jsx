@@ -1304,15 +1304,22 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
-                                  {/* Edit Appointment button - only show for Surgery Pathway notes when patient has a surgery appointment */}
+                                  {/* Edit Appointment button - only show for Surgery Pathway notes when surgery appointment was actually scheduled */}
                                   {(() => {
                                     const noteContent = note.content || '';
                                     // Check if note is a pathway transfer to Surgery Pathway
                                     const isSurgeryPathwayNote = noteContent.includes('Transfer To:') && 
                                                                   (noteContent.includes('Surgery Pathway') || 
                                                                    noteContent.toLowerCase().includes('surgery pathway'));
-                                    // Only show button if it's a surgery pathway note AND patient has a surgery appointment
-                                    if (!isSurgeryPathwayNote || !hasSurgeryAppointment) {
+                                    // Check if this note was created when surgery appointment was scheduled
+                                    // This is indicated by the presence of "Surgery Appointment Scheduled:" in the note
+                                    const hasSurgeryAppointmentScheduled = noteContent.includes('Surgery Appointment Scheduled:');
+                                    
+                                    // Only show button if:
+                                    // 1. It's a surgery pathway note
+                                    // 2. The note indicates surgery appointment was scheduled
+                                    // 3. Patient currently has a surgery appointment
+                                    if (!isSurgeryPathwayNote || !hasSurgeryAppointmentScheduled || !hasSurgeryAppointment) {
                                       return null;
                                     }
                                     
@@ -3715,11 +3722,21 @@ ${transferDetails.additionalNotes}` : ''}
                                                    recurringAppointments.interval === '3' ? 'Every 3 months' :
                                                    recurringAppointments.interval === '6' ? 'Every 6 months' : 'Annual';
                               appointmentSection = `
-
+                              
 Follow-up Appointment Scheduled:
 - Date: ${appointmentBooking.appointmentDate}
 - Time: ${appointmentBooking.appointmentTime}
 - Frequency: ${frequencyText}`;
+                            }
+                            
+                            // Add surgery appointment section if surgery was scheduled
+                            let surgeryAppointmentSection = '';
+                            if (surgeryScheduled && selectedPathway === 'Surgery Pathway') {
+                              surgeryAppointmentSection = `
+
+Surgery Appointment Scheduled:
+- Date: ${transferDetails.surgeryDate}
+- Time: ${transferDetails.surgeryTime}`;
                             }
 
                             transferNoteContent = `
@@ -3732,7 +3749,7 @@ Reason for Transfer:
 ${transferDetails.reason || 'Not specified'}
 
 Clinical Rationale:
-${transferDetails.clinicalRationale || 'Not specified'}${appointmentSection}
+${transferDetails.clinicalRationale || 'Not specified'}${appointmentSection}${surgeryAppointmentSection}
 ${transferDetails.additionalNotes ? `
 
 Additional Notes:
