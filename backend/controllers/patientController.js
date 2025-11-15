@@ -167,6 +167,21 @@ export const addPatient = async (req, res) => {
       finalReferredByGpId = req.user.id;
     }
 
+    // Auto-assign patient to current user if they are a urologist/doctor and assignedUrologist is not provided
+    let finalAssignedUrologist = assignedUrologist;
+    if ((req.user.role === 'urologist' || req.user.role === 'doctor') && (!assignedUrologist || assignedUrologist.trim() === '')) {
+      // Get current user's full name
+      const userQuery = await client.query(
+        'SELECT first_name, last_name FROM users WHERE id = $1',
+        [req.user.id]
+      );
+      if (userQuery.rows.length > 0) {
+        const user = userQuery.rows[0];
+        finalAssignedUrologist = `${user.first_name} ${user.last_name}`.trim();
+        console.log(`[addPatient] Auto-assigning patient to ${finalAssignedUrologist} (current user)`);
+      }
+    }
+
     // Format date fields to prevent timezone conversion issues
     const formattedDateOfBirth = formatDateOnly(dateOfBirth);
     const formattedReferralDate = formatDateOnly(referralDate);
@@ -188,7 +203,7 @@ export const addPatient = async (req, res) => {
         upi, firstName, lastName, formattedDateOfBirth, gender, phone, email, address,
         postcode, city, state, referringDepartment, formattedReferralDate, initialPSA,
         formattedInitialPSADate, medicalHistory, currentMedications, allergies,
-        assignedUrologist, emergencyContactName, emergencyContactPhone,
+        finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
         emergencyContactRelationship, priority, notes, req.user.id, finalReferredByGpId
       ]
     );
@@ -224,7 +239,7 @@ export const addPatient = async (req, res) => {
           medicalHistory: newPatient.medical_history,
           currentMedications: newPatient.current_medications,
           allergies: newPatient.allergies,
-          assignedUrologist: newPatient.assigned_urologist,
+          assignedUrologist: newPatient.assigned_urologist || finalAssignedUrologist,
           emergencyContactName: newPatient.emergency_contact_name,
           emergencyContactPhone: newPatient.emergency_contact_phone,
           emergencyContactRelationship: newPatient.emergency_contact_relationship,
