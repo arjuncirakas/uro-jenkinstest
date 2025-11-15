@@ -1315,7 +1315,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
-                                  {/* Edit Appointment button - show for Surgery Pathway notes when patient has a surgery appointment */}
+                                  {/* Edit Appointment button - ALWAYS show for Surgery Pathway notes (not reschedule notes) */}
                                   {(() => {
                                     const noteContent = note.content || '';
                                     // Check if note is a pathway transfer to Surgery Pathway
@@ -1326,10 +1326,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                     // Don't show button on reschedule notes
                                     const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
                                     
-                                    // Show button if:
-                                    // 1. It's a surgery pathway note (not a reschedule note)
-                                    // 2. Patient currently has a surgery appointment
-                                    if (!isSurgeryPathwayNote || isRescheduleNote || !hasSurgeryAppointment) {
+                                    // ALWAYS show button if it's a surgery pathway note (not a reschedule note)
+                                    // We'll check for appointment when button is clicked
+                                    if (!isSurgeryPathwayNote || isRescheduleNote) {
                                       return null;
                                     }
                                     
@@ -1392,7 +1391,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                               const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
                                               const surgeryAppointment = appointments.find(apt => {
                                                 const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
-                                                return aptType === 'surgery' || aptType === 'surgical';
+                                                // Check for various surgery appointment type formats
+                                                return aptType === 'surgery' || 
+                                                       aptType === 'surgical' || 
+                                                       aptType.includes('surgery') ||
+                                                       aptType.includes('surgical');
                                               });
                                               
                                               if (surgeryAppointment) {
@@ -1405,8 +1408,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                 });
                                                 setIsEditSurgeryAppointmentModalOpen(true);
                                               } else {
-                                                // This shouldn't happen since we check hasSurgeryAppointment, but handle gracefully
-                                                showErrorModal('Appointment Not Found', 'No surgery appointment found for this patient.');
+                                                showErrorModal('Appointment Not Found', 'No surgery appointment found for this patient. Please schedule a surgery appointment first.');
                                                 // Refresh the appointment check
                                                 await checkSurgeryAppointment();
                                               }
