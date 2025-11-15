@@ -509,6 +509,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
                     onChange={handleInputChange}
+                    max={new Date().toISOString().split('T')[0]}
                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
                       errors.dateOfBirth 
                         ? 'border-red-300 bg-red-50' 

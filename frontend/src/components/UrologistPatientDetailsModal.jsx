@@ -27,6 +27,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successModalTitle, setSuccessModalTitle] = useState('');
   const [successModalMessage, setSuccessModalMessage] = useState('');
+  const [successModalAppointmentDetails, setSuccessModalAppointmentDetails] = useState(null);
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
   const [errorModalTitle, setErrorModalTitle] = useState('');
   const [errorModalMessage, setErrorModalMessage] = useState('');
@@ -2999,9 +3000,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       {/* Success Modal */}
       <SuccessModal
         isOpen={isSuccessModalOpen}
-        onClose={() => setIsSuccessModalOpen(false)}
+        onClose={() => {
+          setIsSuccessModalOpen(false);
+          setSuccessModalAppointmentDetails(null);
+        }}
         title={successModalTitle}
         message={successModalMessage}
+        appointmentDetails={successModalAppointmentDetails}
       />
 
       {/* Pathway Transfer Confirmation Modal */}
@@ -3653,6 +3658,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               type="date"
                               value={appointmentBooking.appointmentDate}
                               onChange={(e) => setAppointmentBooking(prev => ({ ...prev, appointmentDate: e.target.value }))}
+                              min={new Date().toISOString().split('T')[0]}
                               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
                             />
                           </div>
@@ -4196,6 +4202,7 @@ ${transferDetails.additionalNotes}` : ''}
                         }
 
                         let message = `Patient successfully transferred to ${selectedPathway}`;
+                        let appointmentDetails = null;
                         
                         // Show manual appointment confirmation if successfully created
                         if (appointmentBooked && hasManualBooking) {
@@ -4213,10 +4220,16 @@ ${transferDetails.additionalNotes}` : ''}
                                                recurringAppointments.interval === '6' ? 'Every 6 months' : 
                                                recurringAppointments.interval === '12' ? 'Annual' : `Every ${intervalMonths} months`;
                           
-                          message += `\n\n✅ Follow-up appointments scheduled:\n📅 First appointment: ${aptDate}\n⏰ Time: ${appointmentBooking.appointmentTime}\n🔄 Frequency: ${frequencyText}\n📊 Total appointments: ${numberOfAppointments} (for the next 12 months)`;
+                          appointmentDetails = {
+                            date: aptDate,
+                            time: appointmentBooking.appointmentTime,
+                            frequency: frequencyText,
+                            total: numberOfAppointments,
+                            urologist: null
+                          };
                         } 
                         // Only show auto-booking notification if NO manual scheduling was attempted
-                        else if (!hasManualBooking && selectedPathway === 'Active Monitoring' && res.data?.autoBookedAppointment) {
+                        else if (!hasManualBooking && (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') && res.data?.autoBookedAppointment) {
                           const apt = res.data.autoBookedAppointment;
                           const aptDate = new Date(apt.date).toLocaleDateString('en-US', {
                             year: 'numeric',
@@ -4232,11 +4245,18 @@ ${transferDetails.additionalNotes}` : ''}
                                                recurringAppointments.interval === '6' ? 'Every 6 months' : 
                                                recurringAppointments.interval === '12' ? 'Annual' : `Every ${intervalMonths} months`;
                           
-                          message += `\n\n✅ Follow-up appointments scheduled:\n📅 First appointment: ${aptDate}\n⏰ Time: ${apt.time}\n👨‍⚕️ Urologist: ${apt.urologistName}\n🔄 Frequency: ${frequencyText}\n📊 Total appointments: ${numberOfAppointments} (for the next 12 months)`;
+                          appointmentDetails = {
+                            date: aptDate,
+                            time: apt.time,
+                            frequency: frequencyText,
+                            total: numberOfAppointments,
+                            urologist: apt.urologistName
+                          };
                         }
                         
                         setSuccessModalTitle('Transfer Successful');
                         setSuccessModalMessage(message);
+                        setSuccessModalAppointmentDetails(appointmentDetails);
                         setIsSuccessModalOpen(true);
                         
                         // Refresh appointment check, especially important for Surgery Pathway

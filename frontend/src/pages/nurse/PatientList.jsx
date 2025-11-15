@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiEye, FiCalendar, FiTrash2 } from 'react-icons/fi';
+import { FiEye, FiCalendar, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
@@ -27,25 +27,46 @@ const PatientList = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [urologists, setUrologists] = useState([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize] = useState(20); // Patients per page
 
   // Fetch patients from API
-  const fetchPatients = async () => {
+  const fetchPatients = async (page = currentPage) => {
     setLoading(true);
     setError(null);
     
     try {
-      const result = await patientService.getPatients({
-        page: 1,
-        limit: 100, // Get more patients for the list
+      const params = {
+        page,
+        limit: pageSize,
         search: searchQuery,
         status: 'Active'
-      });
+      };
+      
+      // Add urologist filter if not 'all'
+      if (selectedUrologist !== 'all') {
+        params.assignedUrologist = selectedUrologist;
+      }
+      
+      const result = await patientService.getPatients(params);
       
       if (result.success) {
         console.log('✅ PatientList: Patient data received:', result.data);
         console.log('✅ PatientList: Number of patients:', result.data?.length || 0);
         const updatedPatients = result.data || [];
         setPatients(updatedPatients);
+        
+        // Update pagination info
+        if (result.pagination) {
+          // Update currentPage from API response (in case API adjusted the page)
+          setCurrentPage(result.pagination.page);
+          setTotalPages(result.pagination.pages);
+          setTotal(result.pagination.total);
+        }
         
         // Update selectedPatient if it exists in the updated list
         if (selectedPatient) {
@@ -55,14 +76,19 @@ const PatientList = () => {
           }
         }
         
-        // Extract unique urologists
+        // Extract unique urologists from current page
+        // Note: For a complete list, we'd need to fetch all patients or have a separate endpoint
         const uniqueUrologists = [...new Set(
           updatedPatients
             .map(patient => patient.assignedUrologist)
             .filter(urologist => urologist && urologist.trim() !== '')
         )].sort();
-        console.log('✅ PatientList: Unique urologists:', uniqueUrologists);
-        setUrologists(uniqueUrologists);
+        
+        // Merge with existing urologists to maintain full list
+        setUrologists(prev => {
+          const combined = [...new Set([...prev, ...uniqueUrologists])].sort();
+          return combined;
+        });
       } else {
         setError(result.error || 'Failed to fetch patients');
         console.error('Error fetching patients:', result.error);
@@ -75,20 +101,28 @@ const PatientList = () => {
     }
   };
 
-  // Load patients on component mount and when search query changes
+  // Load patients on component mount and when search query or urologist filter changes
   useEffect(() => {
+    // Reset to page 1 when search or filter changes
     const timeoutId = setTimeout(() => {
-      fetchPatients();
+      setCurrentPage(1);
+      fetchPatients(1);
     }, 300); // Debounce search
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+  }, [searchQuery, selectedUrologist]);
+  
+  // Handle explicit page changes (user clicking pagination)
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchPatients(newPage);
+  };
 
   // Listen for PSA update events to refresh patient list
   useEffect(() => {
     const handlePSAUpdated = (event) => {
       console.log('PSA updated event received, refreshing patient list:', event.detail);
-      fetchPatients();
+      fetchPatients(currentPage);
     };
 
     window.addEventListener('psaResultAdded', handlePSAUpdated);
@@ -98,13 +132,13 @@ const PatientList = () => {
       window.removeEventListener('psaResultAdded', handlePSAUpdated);
       window.removeEventListener('psaResultUpdated', handlePSAUpdated);
     };
-  }, []);
+  }, [currentPage]);
 
   // Listen for appointment update events to refresh patient list
   useEffect(() => {
     const handleAppointmentUpdated = (event) => {
       console.log('Appointment updated event received, refreshing patient list:', event.detail);
-      fetchPatients();
+      fetchPatients(currentPage);
     };
 
     window.addEventListener('investigationBooked', handleAppointmentUpdated);
@@ -116,7 +150,7 @@ const PatientList = () => {
       window.removeEventListener('surgery:updated', handleAppointmentUpdated);
       window.removeEventListener('appointment:updated', handleAppointmentUpdated);
     };
-  }, []);
+  }, [currentPage]);
 
   // Get initials from name
   const getInitials = (name) => {
@@ -165,49 +199,8 @@ const PatientList = () => {
   };
 
 
-  // Filter patients based on search query and urologist selection
-  // NOTE: This page shows ALL patients across ALL pathways (no pathway restriction)
-  // Search will find patients from any pathway (Active Monitoring, Surgery, Post-op, etc.)
-  const filteredPatients = patients.filter(patient => {
-    const patientPathway = getPatientPathway(patient);
-    const patientUrologist = patient.assignedUrologist || 'Unassigned';
-    
-    // If no search query, only filter by urologist
-    if (!searchQuery || searchQuery.trim() === '') {
-      const matchesUrologist = selectedUrologist === 'all' || patientUrologist === selectedUrologist;
-      return matchesUrologist;
-    }
-    
-    // Search logic - similar to superadmin panel
-    const searchLower = searchQuery.trim().toLowerCase();
-    const firstName = (patient.firstName || '').toLowerCase().trim();
-    const lastName = (patient.lastName || '').toLowerCase().trim();
-    const fullName = (patient.fullName || '').toLowerCase().trim();
-    const fullNameNoSpace = `${firstName}${lastName}`.toLowerCase();
-    const upi = (patient.upi || '').toLowerCase();
-    const pathway = patientPathway.toLowerCase();
-    const urologist = patientUrologist.toLowerCase();
-    
-    // Check multiple search criteria:
-    // 1. Full name (first + last with space)
-    // 2. Full name without space
-    // 3. First name
-    // 4. Last name
-    // 5. UPI
-    // 6. Pathway
-    // 7. Urologist
-    const matchesSearch = fullName.includes(searchLower) ||
-                         fullNameNoSpace.includes(searchLower) ||
-                         firstName.includes(searchLower) ||
-                         lastName.includes(searchLower) ||
-                         upi.includes(searchLower) ||
-                         pathway.includes(searchLower) ||
-                         urologist.includes(searchLower);
-    
-    const matchesUrologist = selectedUrologist === 'all' || patientUrologist === selectedUrologist;
-    
-    return matchesSearch && matchesUrologist;
-  });
+  // Note: Filtering is now handled by the backend API
+  // The patients array already contains the filtered results
 
   // Handle patient actions
   const handleViewDetails = (patient) => {
@@ -248,7 +241,7 @@ const PatientList = () => {
         setPatientToDelete(null);
         
         // Refresh the patient list to ensure consistency
-        fetchPatients();
+        fetchPatients(currentPage);
         
         // Dispatch event to notify other components (like OPDManagement) to refresh
         window.dispatchEvent(new CustomEvent('patientDeleted', {
@@ -369,14 +362,14 @@ const PatientList = () => {
                       </div>
                     </td>
                   </tr>
-                ) : filteredPatients.length === 0 ? (
+                ) : patients.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="text-center py-8 text-gray-500 text-sm">
                       {searchQuery ? 'No patients found matching your search' : 'No patients found'}
                     </td>
                   </tr>
                 ) : (
-                  filteredPatients.map((patient) => {
+                  patients.map((patient) => {
                     const patientPathway = getPatientPathway(patient);
                     const patientUrologist = patient.assignedUrologist || 'Unassigned';
                     
@@ -456,6 +449,92 @@ const PatientList = () => {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1 || loading}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages || loading}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+                    <span className="font-medium">
+                      {Math.min(currentPage * pageSize, total)}
+                    </span>{' '}
+                    of <span className="font-medium">{total}</span> results
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1 || loading}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">Previous</span>
+                      <FiChevronLeft className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                      // Show first page, last page, current page, and pages around current
+                      if (
+                        pageNum === 1 ||
+                        pageNum === totalPages ||
+                        (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            disabled={loading}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              currentPage === pageNum
+                                ? 'z-10 bg-teal-50 border-teal-500 text-teal-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      } else if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                        return (
+                          <span
+                            key={pageNum}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700"
+                          >
+                            ...
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+                    <button
+                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages || loading}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">Next</span>
+                      <FiChevronRight className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -476,7 +555,7 @@ const PatientList = () => {
         patient={selectedPatient}
         onSuccess={() => {
           // Refresh patient list after successful appointment update
-          fetchPatients();
+          fetchPatients(currentPage);
         }}
       />
 

@@ -62,6 +62,7 @@ export const patientService = {
       return {
         success: true,
         data: response.data.data.patients, // Access the patients array from the nested structure
+        pagination: response.data.data.pagination, // Include pagination info
         message: response.data.message
       };
     } catch (error) {

@@ -3210,6 +3210,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                               type="date"
                               value={appointmentBooking.appointmentDate}
                               onChange={(e) => setAppointmentBooking(prev => ({ ...prev, appointmentDate: e.target.value }))}
+                              min={new Date().toISOString().split('T')[0]}
                               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
                               required
                             />
