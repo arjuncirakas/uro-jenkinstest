@@ -96,13 +96,6 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
         // Create a reschedule note as a sub-note to the original surgery transfer note
         if (patient?.id) {
           try {
-            const oldDate = appointment.appointmentDate || appointment.appointment_date;
-            const oldTime = appointment.appointmentTime || appointment.appointment_time;
-            const formattedOldDate = oldDate ? new Date(oldDate).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            }) : 'N/A';
             const formattedNewDate = new Date(formData.surgeryDate).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'long',
@@ -111,16 +104,11 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
             
             const rescheduleNoteContent = `SURGERY APPOINTMENT RESCHEDULED
 
-Previous Appointment:
-- Date: ${formattedOldDate}
-- Time: ${oldTime || 'N/A'}
-
 New Appointment:
 - Date: ${formattedNewDate}
 - Time: ${formData.surgeryTime}
 
-Reason: ${formData.rescheduleReason || 'Not specified'}
-Priority: ${formData.priority ? formData.priority.charAt(0).toUpperCase() + formData.priority.slice(1) : 'Normal'}`;
+Reason: ${formData.rescheduleReason || 'Not specified'}`;
 
             const noteResult = await notesService.addNote(patient.id, {
               noteContent: rescheduleNoteContent,

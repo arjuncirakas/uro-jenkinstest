@@ -588,9 +588,58 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   };
 
+  // Helper function to render reschedule notes with structured formatting
+  const renderRescheduleNote = (content) => {
+    const lines = content.split('\n').filter(line => line.trim());
+    const data = {};
+    
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      
+      if (trimmedLine.includes('New Appointment:')) {
+        data.hasNewAppointment = true;
+      } else if (trimmedLine.startsWith('- Date:')) {
+        data.newDate = trimmedLine.replace('- Date:', '').trim();
+      } else if (trimmedLine.startsWith('- Time:')) {
+        data.newTime = trimmedLine.replace('- Time:', '').trim();
+      } else if (trimmedLine.startsWith('Reason:')) {
+        data.reason = trimmedLine.replace('Reason:', '').trim();
+      }
+    });
+    
+    return (
+      <div className="space-y-3">
+        {data.hasNewAppointment && (
+          <div>
+            <div className="text-sm font-medium text-gray-500 mb-1">New Appointment</div>
+            <div className="space-y-1">
+              {data.newDate && (
+                <div className="text-sm text-gray-900">Date: {data.newDate}</div>
+              )}
+              {data.newTime && (
+                <div className="text-sm text-gray-900">Time: {data.newTime}</div>
+              )}
+            </div>
+          </div>
+        )}
+        {data.reason && (
+          <div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Reason</div>
+            <div className="text-sm text-gray-900">{data.reason}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Helper function to render pathway transfer notes with structured formatting
   const renderPathwayTransferNote = (content, noteType = null) => {
     const lines = content.split('\n').filter(line => line.trim());
+    
+    // Check if this is a reschedule note - render it specially
+    if (content.includes('SURGERY APPOINTMENT RESCHEDULED')) {
+      return renderRescheduleNote(content);
+    }
     
     // Check if this is a pathway transfer note (either has PATHWAY TRANSFER header or is pathway_transfer type)
     const isPathwayTransferNote = content.includes('PATHWAY TRANSFER') || noteType === 'pathway_transfer';
