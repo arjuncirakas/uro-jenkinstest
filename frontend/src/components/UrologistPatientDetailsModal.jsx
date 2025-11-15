@@ -609,11 +609,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   };
 
   // Helper function to render pathway transfer notes with structured formatting
-  const renderPathwayTransferNote = (content) => {
+  const renderPathwayTransferNote = (content, noteType = null) => {
     const lines = content.split('\n').filter(line => line.trim());
     
-    // Check if this is a pathway transfer note
-    if (!content.includes('PATHWAY TRANSFER')) {
+    // Check if this is a pathway transfer note (either has PATHWAY TRANSFER header or is pathway_transfer type)
+    const isPathwayTransferNote = content.includes('PATHWAY TRANSFER') || noteType === 'pathway_transfer';
+    
+    if (!isPathwayTransferNote) {
       return <p className="text-gray-700 leading-relaxed text-sm">{content}</p>;
     }
 
@@ -628,8 +630,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       if (trimmedLine === 'PATHWAY TRANSFER' || trimmedLine === 'PATHWAY TRANSFER - MEDICATION PRESCRIBED') {
         data.title = trimmedLine;
       } else if (trimmedLine.includes('Transfer To:')) {
-        currentKey = 'transferTo';
-        data[currentKey] = trimmedLine.replace('Transfer To:', '').trim();
+        // Extract the pathway name from "Transfer To: ..."
+        const pathwayMatch = trimmedLine.match(/Transfer To:\s*(.+)/i);
+        if (pathwayMatch) {
+          currentKey = 'transferTo';
+          data[currentKey] = pathwayMatch[1].trim();
+        }
       } else if (trimmedLine.includes('Priority:')) {
         currentKey = 'priority';
         data[currentKey] = trimmedLine.replace('Priority:', '').trim();
@@ -682,9 +688,27 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     };
 
     // Get the actual pathway name - use patient's current pathway if "Not specified"
-    const displayPathway = data.transferTo && data.transferTo !== 'Not specified' 
-      ? data.transferTo 
-      : (patient?.carePathway || patient?.pathway || 'Not specified');
+    const extractedPathway = data.transferTo || '';
+    const patientPathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+    
+    const displayPathway = extractedPathway && extractedPathway !== 'Not specified' && extractedPathway.trim() !== ''
+      ? extractedPathway 
+      : (patientPathway || 'Not specified');
+    
+    // Debug logging
+    if (extractedPathway === 'Not specified' || !extractedPathway || extractedPathway.trim() === '') {
+      console.log('🔍 Pathway fallback:', {
+        extractedPathway,
+        patientPathway,
+        displayPathway,
+        patientId: patient?.id,
+        patientData: {
+          carePathway: patient?.carePathway,
+          care_pathway: patient?.care_pathway,
+          pathway: patient?.pathway
+        }
+      });
+    }
 
     return (
       <div className="space-y-3">
@@ -1745,7 +1769,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               
                               {/* Content */}
                               <div className="mb-4">
-                                {renderPathwayTransferNote(note.content || 'No content available')}
+                                {renderPathwayTransferNote(note.content || 'No content available', note.type)}
                               </div>
                               
                               {/* Author */}
