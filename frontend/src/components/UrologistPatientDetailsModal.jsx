@@ -249,20 +249,28 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           // (These are duplicate/unnecessary notes for surgery pathway transfers)
           // Keep them for other pathway transfers (Active Monitoring, Medication, etc.)
           if (noteType === 'pathway_transfer' && content.includes('Transfer To:') && content.includes('Not specified')) {
-            // Check if patient is currently in Surgery Pathway or if there are Surgery Pathway notes
+            // Check if patient is currently in Surgery Pathway
             const patientInSurgeryPathway = patient?.carePathway === 'Surgery Pathway' ||
                                            patient?.pathway === 'Surgery Pathway';
             
-            // Also check if there are any Surgery Pathway transfer notes in the notes array
+            // Check if there are any Surgery Pathway transfer notes in the notes array
+            // (This indicates the patient was transferred to Surgery Pathway)
             const hasSurgeryPathwayNote = notes.some(n => {
               const nContent = n.content || '';
               return nContent.includes('Transfer To:') && 
                      (nContent.includes('Surgery Pathway') || nContent.toLowerCase().includes('surgery pathway'));
             });
             
-            // Filter out only if patient is in Surgery Pathway or there's a Surgery Pathway note
-            if (patientInSurgeryPathway || hasSurgeryPathwayNote) {
-              console.log('🗑️ Filtering out pathway_transfer note with "Not specified" for Surgery Pathway patient');
+            // ALWAYS filter out pathway_transfer notes with "Not specified" if there's a Surgery Pathway note
+            // This removes duplicate/unnecessary notes for Surgery Pathway transfers
+            if (hasSurgeryPathwayNote) {
+              console.log('🗑️ Filtering out pathway_transfer note with "Not specified" - Surgery Pathway note exists');
+              return false; // Filter out for Surgery Pathway
+            }
+            
+            // Also filter if patient is in Surgery Pathway (even if no note found yet)
+            if (patientInSurgeryPathway) {
+              console.log('🗑️ Filtering out pathway_transfer note with "Not specified" - Patient in Surgery Pathway');
               return false; // Filter out for Surgery Pathway
             }
           }
