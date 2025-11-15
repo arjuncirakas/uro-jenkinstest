@@ -154,12 +154,63 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     }
   };
 
+  // Helper function to render reschedule notes with structured formatting
+  const renderRescheduleNote = (content) => {
+    const lines = content.split('\n').filter(line => line.trim());
+    const data = {};
+    
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      
+      if (trimmedLine.includes('New Appointment:')) {
+        data.hasNewAppointment = true;
+      } else if (trimmedLine.startsWith('- Date:')) {
+        data.newDate = trimmedLine.replace('- Date:', '').trim();
+      } else if (trimmedLine.startsWith('- Time:')) {
+        data.newTime = trimmedLine.replace('- Time:', '').trim();
+      } else if (trimmedLine.startsWith('Reason:')) {
+        data.reason = trimmedLine.replace('Reason:', '').trim();
+      }
+    });
+    
+    return (
+      <div className="space-y-3">
+        {data.hasNewAppointment && (
+          <div>
+            <div className="text-sm font-medium text-gray-500 mb-1">New Appointment</div>
+            <div className="space-y-1">
+              {data.newDate && (
+                <div className="text-sm text-gray-900">Date: {data.newDate}</div>
+              )}
+              {data.newTime && (
+                <div className="text-sm text-gray-900">Time: {data.newTime}</div>
+              )}
+            </div>
+          </div>
+        )}
+        {data.reason && (
+          <div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Reason</div>
+            <div className="text-sm text-gray-900">{data.reason}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Helper function to render pathway transfer notes with structured formatting
-  const renderPathwayTransferNote = (content) => {
+  const renderPathwayTransferNote = (content, noteType = null) => {
     const lines = content.split('\n').filter(line => line.trim());
     
-    // Check if this is a pathway transfer note
-    if (!content.includes('PATHWAY TRANSFER')) {
+    // Check if this is a reschedule note - render it specially
+    if (content.includes('SURGERY APPOINTMENT RESCHEDULED')) {
+      return renderRescheduleNote(content);
+    }
+    
+    // Check if this is a pathway transfer note (either has PATHWAY TRANSFER header or is pathway_transfer type)
+    const isPathwayTransferNote = content.includes('PATHWAY TRANSFER') || noteType === 'pathway_transfer';
+    
+    if (!isPathwayTransferNote) {
       return <p className="text-gray-700 leading-relaxed text-sm">{content}</p>;
     }
 
@@ -319,8 +370,31 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
           ? result.data 
           : (result.data.notes || []);
         
-        console.log('✅ NursePatientDetailsModal: Processed notes:', notes);
-        setClinicalNotes(notes);
+        // Filter out unwanted notes
+        const filteredNotes = notes.filter(note => {
+          const content = note.content || '';
+          const noteType = note.type || '';
+          
+          // Remove notes that say "Appointment type changed from..."
+          if (content.includes('Appointment type changed from')) {
+            return false;
+          }
+          
+          // Remove ALL pathway_transfer notes from clinical notes timeline
+          // (These are duplicate/unnecessary - the main clinical note with full details is what matters)
+          if (noteType === 'pathway_transfer') {
+            console.log('🗑️ Filtering out pathway_transfer note:', {
+              noteId: note.id,
+              content: content.substring(0, 100)
+            });
+            return false;
+          }
+          
+          return true;
+        });
+        
+        console.log('✅ NursePatientDetailsModal: Processed notes:', filteredNotes);
+        setClinicalNotes(filteredNotes);
       } else {
         setNotesError(result.error || 'Failed to fetch notes');
         console.error('❌ NursePatientDetailsModal: Error fetching notes:', result.error);
@@ -1234,52 +1308,115 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                     </div>
                   ) : clinicalNotes.length > 0 ? (
                     <div className="space-y-6">
-                      {clinicalNotes.map((note, index) => (
-                        <div key={note.id} className="flex gap-4">
+                      {(() => {
+                        // Reorganize notes to group reschedule notes with their parent Surgery Pathway notes
+                        // Surgery Pathway notes should appear first, followed by their reschedule notes (indented)
+                        const organizedNotes = [];
+                        const processedIndices = new Set();
+                        
+                        clinicalNotes.forEach((note, index) => {
+                          if (processedIndices.has(index)) return;
+                          
+                          const noteContent = note.content || '';
+                          const isSurgeryPathway = noteContent.includes('Transfer To:') && 
+                                                   (noteContent.includes('Surgery Pathway') || 
+                                                    noteContent.toLowerCase().includes('surgery pathway'));
+                          
+                          if (isSurgeryPathway) {
+                            // Add the Surgery Pathway note
+                            organizedNotes.push({ note, index, isSubNote: false });
+                            processedIndices.add(index);
+                            
+                            // Find and add any reschedule notes that follow this Surgery Pathway note
+                            // (Reschedule notes typically come after their parent note chronologically)
+                            for (let i = index + 1; i < clinicalNotes.length; i++) {
+                              if (processedIndices.has(i)) continue;
+                              
+                              const nextNoteContent = clinicalNotes[i].content || '';
+                              if (nextNoteContent.includes('SURGERY APPOINTMENT RESCHEDULED')) {
+                                organizedNotes.push({ note: clinicalNotes[i], index: i, isSubNote: true });
+                                processedIndices.add(i);
+                              } else {
+                                // Stop if we hit a non-reschedule note
+                                break;
+                              }
+                            }
+                          } else if (!noteContent.includes('SURGERY APPOINTMENT RESCHEDULED')) {
+                            // Add non-Surgery Pathway, non-reschedule notes as-is
+                            organizedNotes.push({ note, index, isSubNote: false });
+                            processedIndices.add(index);
+                          }
+                        });
+                        
+                        // Add any remaining unprocessed notes (orphaned reschedule notes, etc.)
+                        clinicalNotes.forEach((note, index) => {
+                          if (!processedIndices.has(index)) {
+                            organizedNotes.push({ note, index, isSubNote: false });
+                          }
+                        });
+                        
+                        return organizedNotes.map(({ note, isSubNote }, displayIndex) => {
+                          const noteContent = note.content || '';
+                          const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                        
+                        return (
+                        <div key={note.id || displayIndex} className={`flex gap-4 ${isSubNote ? 'ml-8 -mt-4' : ''}`}>
                           {/* Timeline indicator */}
                           <div className="flex flex-col items-center">
-                            <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-                              <IoDocumentText className="text-teal-600" />
-                            </div>
-                            {index < clinicalNotes.length - 1 && (
-                              <div className="w-0.5 h-16 bg-teal-100 mt-2"></div>
+                            {isSubNote ? (
+                              // For sub-notes, use a smaller connecting line
+                              <>
+                                <div className="w-0.5 h-4 bg-orange-200 mb-1"></div>
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
+                                  {getNoteIcon(note.type)}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
+                                  {getNoteIcon(note.type)}
+                                </div>
+                                {displayIndex < organizedNotes.length - 1 && !isSubNote && (
+                                  <div className={`w-0.5 h-16 mt-2 ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}></div>
+                                )}
+                              </>
                             )}
                           </div>
                           
                           {/* Note content */}
                           <div className="flex-1 pb-4">
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                            <div className={`rounded-lg p-4 border ${isRescheduleNote ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'}`}>
                               {/* Header */}
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
-                                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-teal-100 text-teal-700">
-                                    {note.authorRole || 'Staff'}
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${isRescheduleNote ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
+                                    {note.type || 'Clinical Note'}
+                                  </span>
+                                  <span className="text-sm text-gray-500 flex items-center">
+                                    <IoTimeSharp className="mr-1" />
+                                    {note.createdAt 
+                                      ? new Date(note.createdAt).toLocaleDateString('en-US', {
+                                          year: 'numeric',
+                                          month: '2-digit',
+                                          day: '2-digit',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          hour12: true
+                                        })
+                                      : 'No date'}
                                   </span>
                                 </div>
-                                <span className="text-sm text-gray-500 flex items-center">
-                                  <IoTimeSharp className="mr-1" />
-                                  {note.createdAt 
-                                    ? new Date(note.createdAt).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: '2-digit',
-                                        day: '2-digit',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        hour12: true
-                                      })
-                                    : 'No date'}
-                                </span>
                               </div>
                               
                               {/* Content */}
                               <div className="mb-4">
-                                {renderPathwayTransferNote(note.content || 'No content available')}
+                                {renderPathwayTransferNote(note.content || 'No content available', note.type)}
                               </div>
                               
                               {/* Author and Actions */}
                               <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                                 <div className="flex items-center gap-2">
-                                  {getDesignationIcon(note.authorRole)}
+                                  {getDesignationIcon(note.authorRole || 'urologist')}
                                   <span className="text-sm font-medium text-gray-900">{note.authorName || 'Unknown'}</span>
                                   <span className="text-xs text-gray-500">•</span>
                                   <span className="text-xs text-gray-500">{note.authorRole || 'Staff'}</span>
@@ -1310,7 +1447,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                        });
+                      })()}
                     </div>
                   ) : (
                     <div className="text-center py-12">
