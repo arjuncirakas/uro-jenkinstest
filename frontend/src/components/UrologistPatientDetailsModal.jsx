@@ -1271,7 +1271,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
                         
                         return (
-                        <div key={note.id || index} className={`flex gap-4 ${isRescheduleNote ? 'ml-8' : ''}`}>
+                        <div key={note.id || index} className="flex gap-4">
                           {/* Timeline indicator */}
                           <div className="flex flex-col items-center">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
@@ -1289,7 +1289,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
                                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${isRescheduleNote ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
-                                    {isRescheduleNote ? 'Reschedule Note' : (note.type || 'Clinical Note')}
+                                    {note.type || 'Clinical Note'}
                                   </span>
                                   <span className="text-sm text-gray-500 flex items-center">
                                     <IoTimeSharp className="mr-1" />
