@@ -1,57 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IoClose, IoCloudUpload, IoDocument, IoTrash } from 'react-icons/io5';
 import { FaFilePdf, FaFileWord, FaFileImage } from 'react-icons/fa';
 
 const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) => {
-  const [formData, setFormData] = useState({
-    admissionDate: patient?.referralDate || '',
+  const getInitialFormData = () => ({
+    admissionDate: '',
     dischargeDate: new Date().toISOString().split('T')[0],
     dischargeTime: new Date().toTimeString().slice(0, 5),
     ward: '',
     diagnosis: {
-      primary: pathway === 'Post-op Transfer' ? 'Post-surgical prostate management' : 'Elevated PSA levels',
-      secondary: patient?.medicalHistory || '',
+      primary: '',
+      secondary: '',
       procedure: ''
     },
     procedure: {
       name: '',
       date: '',
-      surgeon: patient?.assignedUrologist || '',
-      complications: 'None'
+      surgeon: '',
+      complications: ''
     },
     clinicalSummary: '',
     investigations: [],
     medications: {
-      discharge: patient?.currentMedications || '',
+      discharge: '',
       changes: '',
       instructions: ''
     },
     followUp: {
-      gpFollowUp: pathway === 'Post-op Transfer' ? 'Post-operative review with GP in 2 weeks' : 'Routine follow-up with GP in 3-6 months',
-      psaMonitoring: pathway === 'Post-op Transfer' ? 'Post-operative PSA monitoring at 6 weeks, 3 months, 6 months' : 'Continue PSA monitoring every 6-12 months',
-      redFlags: pathway === 'Post-op Transfer' 
-        ? 'Contact urology immediately if experiencing: excessive bleeding, fever >38°C, severe pain, urinary retention, or signs of infection'
-        : 'Contact urology if experiencing urinary symptoms, bone pain, or significant PSA rise',
-      nextReview: pathway === 'Post-op Transfer' ? '6 weeks post-operative review' : '6-12 months'
+      gpFollowUp: '',
+      psaMonitoring: '',
+      redFlags: '',
+      nextReview: ''
     },
-    gpActions: pathway === 'Post-op Transfer' 
-      ? [
-          'Provide routine post-operative care and monitor for complications',
-          'Remove catheter as per protocol (if applicable)',
-          'Monitor surgical site healing',
-          'Support with pelvic floor exercises and continence management'
-        ]
-      : [
-          'Continue monitoring PSA levels',
-          'Review patient general health',
-          'Refer back if PSA rises significantly'
-        ],
+    gpActions: [],
     additionalNotes: ''
   });
 
+  const [formData, setFormData] = useState(getInitialFormData());
   const [documents, setDocuments] = useState([]);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(getInitialFormData());
+      setDocuments([]);
+      setErrors({});
+    }
+  }, [isOpen]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -149,9 +146,17 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
       return;
     }
 
+    // Prepare documents array with only metadata (no file objects for JSON serialization)
+    const documentMetadata = documents.map(doc => ({
+      name: doc.name,
+      size: doc.size,
+      type: doc.type
+    }));
+
     onSubmit({
       ...formData,
-      documents: documents
+      documents: documentMetadata,
+      additionalNotes: formData.additionalNotes
     });
     onClose();
   };
@@ -335,7 +340,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                       type="text"
                       value={formData.procedure.complications}
                       onChange={(e) => handleNestedChange('procedure', 'complications', e.target.value)}
-                      placeholder="None"
+                      placeholder="Enter complications, if any"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
@@ -461,23 +466,27 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions Required by GP</h3>
               <div className="space-y-3">
-                {formData.gpActions.map((action, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={action}
-                      onChange={(e) => handleArrayChange(index, e.target.value)}
-                      placeholder={`GP Action ${index + 1}`}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                    <button
-                      onClick={() => removeGPAction(index)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <IoTrash className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
+                {formData.gpActions.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">No GP actions added yet. Click below to add one.</p>
+                ) : (
+                  formData.gpActions.map((action, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={action}
+                        onChange={(e) => handleArrayChange(index, e.target.value)}
+                        placeholder={`GP Action ${index + 1}`}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                      <button
+                        onClick={() => removeGPAction(index)}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <IoTrash className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))
+                )}
                 <button
                   onClick={addGPAction}
                   className="w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-teal-500 hover:text-teal-600 transition-colors"

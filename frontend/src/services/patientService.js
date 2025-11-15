@@ -278,6 +278,25 @@ export const patientService = {
         details: error.response?.data?.errors || null
       };
     }
+  },
+
+  // Create discharge summary for a patient
+  createDischargeSummary: async (patientId, dischargeSummaryData) => {
+    try {
+      const response = await apiClient.post(`/patients/${patientId}/discharge-summary`, dischargeSummaryData);
+      return {
+        success: true,
+        data: response.data.data || null,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Error creating discharge summary:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to create discharge summary',
+        details: error.response?.data?.errors || null
+      };
+    }
   }
 };
 

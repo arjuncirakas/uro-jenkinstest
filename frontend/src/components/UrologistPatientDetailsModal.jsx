@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Trash, Eye } from 'lucide-react';
 import SuccessModal from './SuccessModal';
+import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddInvestigationModal from './AddInvestigationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
@@ -26,6 +27,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successModalTitle, setSuccessModalTitle] = useState('');
   const [successModalMessage, setSuccessModalMessage] = useState('');
+  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+  const [errorModalTitle, setErrorModalTitle] = useState('');
+  const [errorModalMessage, setErrorModalMessage] = useState('');
   const [isPSAHistoryModalOpen, setIsPSAHistoryModalOpen] = useState(false);
   const [isOtherTestsHistoryModalOpen, setIsOtherTestsHistoryModalOpen] = useState(false);
   const [isMDTSchedulingModalOpen, setIsMDTSchedulingModalOpen] = useState(false);
@@ -41,6 +45,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isDischargeSummaryModalOpen, setIsDischargeSummaryModalOpen] = useState(false);
   const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
   const [selectedSurgeryAppointment, setSelectedSurgeryAppointment] = useState(null);
+  const [hasSurgeryAppointment, setHasSurgeryAppointment] = useState(false);
   
   // Transfer form states
   const [transferDetails, setTransferDetails] = useState({
@@ -92,6 +97,38 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [requestsError, setRequestsError] = useState(null);
 
+  // Helper function to show error modal
+  const showErrorModal = (title, message) => {
+    setErrorModalTitle(title || 'Error');
+    setErrorModalMessage(message || 'An error occurred. Please try again.');
+    setIsErrorModalOpen(true);
+  };
+
+  // Check if patient has a surgery appointment
+  const checkSurgeryAppointment = useCallback(async () => {
+    if (!patient?.id) {
+      setHasSurgeryAppointment(false);
+      return;
+    }
+    
+    try {
+      const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
+      if (appointmentsResult.success) {
+        const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
+        const surgeryAppointment = appointments.find(apt => {
+          const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
+          return aptType === 'surgery' || aptType === 'surgical';
+        });
+        setHasSurgeryAppointment(!!surgeryAppointment);
+      } else {
+        setHasSurgeryAppointment(false);
+      }
+    } catch (error) {
+      console.error('Error checking surgery appointment:', error);
+      setHasSurgeryAppointment(false);
+    }
+  }, [patient]);
+
   // Load patient data when modal opens
   useEffect(() => {
     console.log('🔍 UrologistPatientDetailsModal: useEffect triggered', { isOpen, patient });
@@ -101,6 +138,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       fetchNotes();
       fetchInvestigations();
       fetchInvestigationRequests();
+      checkSurgeryAppointment();
       
       // Also set any existing data from props
       if (patient.recentNotes) {
@@ -115,8 +153,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         console.log('🔍 UrologistPatientDetailsModal: Setting other test results from props:', patient.otherTestResults);
         setOtherTestResults(patient.otherTestResults);
       }
+    } else {
+      // Reset when modal closes
+      setHasSurgeryAppointment(false);
     }
-  }, [isOpen, patient]);
+  }, [isOpen, patient, checkSurgeryAppointment]);
 
 
   // API functions
@@ -922,17 +963,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     try {
       console.log('📋 Creating discharge summary:', dischargeSummaryData);
       
-      // Create discharge summary via API
-      const response = await fetch(`/api/patients/${patient.id}/discharge-summary`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(dischargeSummaryData)
-      });
-      
-      const result = await response.json();
+      // Create discharge summary via API using patientService
+      const result = await patientService.createDischargeSummary(patient.id, dischargeSummaryData);
       
       if (result.success) {
         console.log('✅ Discharge summary created successfully');
@@ -962,14 +994,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
             onClose();
           }, 1500);
         } else {
-          alert('Failed to transfer patient pathway: ' + (pathwayRes.error || 'Unknown error'));
+          showErrorModal('Transfer Failed', 'Failed to transfer patient pathway: ' + (pathwayRes.error || 'Unknown error'));
         }
       } else {
-        alert('Failed to create discharge summary: ' + (result.message || 'Unknown error'));
+        showErrorModal('Discharge Summary Failed', 'Failed to create discharge summary: ' + (result.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error creating discharge summary:', error);
-      alert('An error occurred while creating discharge summary. Please try again.');
+      showErrorModal('Error', 'An error occurred while creating discharge summary. Please try again.');
     }
   };
   
@@ -1272,11 +1304,19 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
-                                  {/* Edit Appointment button for Surgery Pathway notes */}
+                                  {/* Edit Appointment button - only show for Surgery Pathway notes when patient has a surgery appointment */}
                                   {(() => {
                                     const noteContent = note.content || '';
-                                    const isSurgeryPathway = noteContent.includes('Surgery Pathway') || noteContent.includes('Transfer To:') && noteContent.includes('Surgery Pathway');
-                                    return isSurgeryPathway ? (
+                                    // Check if note is a pathway transfer to Surgery Pathway
+                                    const isSurgeryPathwayNote = noteContent.includes('Transfer To:') && 
+                                                                  (noteContent.includes('Surgery Pathway') || 
+                                                                   noteContent.toLowerCase().includes('surgery pathway'));
+                                    // Only show button if it's a surgery pathway note AND patient has a surgery appointment
+                                    if (!isSurgeryPathwayNote || !hasSurgeryAppointment) {
+                                      return null;
+                                    }
+                                    
+                                    return (
                                       <button 
                                         onClick={async () => {
                                           // Parse note content to extract pathway details
@@ -1348,14 +1388,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                 });
                                                 setIsEditSurgeryAppointmentModalOpen(true);
                                               } else {
-                                                alert('No surgery appointment found for this patient.');
+                                                // This shouldn't happen since we check hasSurgeryAppointment, but handle gracefully
+                                                showErrorModal('Appointment Not Found', 'No surgery appointment found for this patient.');
+                                                // Refresh the appointment check
+                                                await checkSurgeryAppointment();
                                               }
                                             } else {
-                                              alert('Failed to fetch appointment details.');
+                                              showErrorModal('Failed to Fetch', 'Failed to fetch appointment details.');
                                             }
                                           } catch (error) {
                                             console.error('Error fetching surgery appointment:', error);
-                                            alert('Error fetching appointment details.');
+                                            showErrorModal('Error', 'Error fetching appointment details.');
                                           }
                                         }}
                                         className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center gap-1"
@@ -1363,7 +1406,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                         <IoCalendar className="w-3 h-3" />
                                         Edit Appointment
                                       </button>
-                                    ) : null;
+                                    );
                                   })()}
                                   <button 
                                     onClick={() => handleDeleteClick(note.id)}
@@ -2254,6 +2297,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         onClose={() => setIsSuccessModalOpen(false)}
         title={successModalTitle}
         message={successModalMessage}
+      />
+      
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={isErrorModalOpen}
+        onClose={() => setIsErrorModalOpen(false)}
+        title={errorModalTitle}
+        message={errorModalMessage}
       />
 
       {/* Delete Confirmation Modal */}
@@ -3329,28 +3380,28 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         med.name.trim() && med.dosage.trim() && med.frequency.trim()
                       );
                       if (!hasValidMedications) {
-                        alert('Please fill in all required medication fields');
+                        showErrorModal('Validation Error', 'Please fill in all required medication fields');
                         return;
                       }
                     } else if (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') {
                       if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
-                        alert('Please fill in all required fields');
+                        showErrorModal('Validation Error', 'Please fill in all required fields');
                         return;
                       }
                     } else if (selectedPathway === 'Surgery Pathway') {
                       // Validate surgery pathway fields including scheduling
                       if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
-                        alert('Please provide reason and clinical rationale');
+                        showErrorModal('Validation Error', 'Please provide reason and clinical rationale');
                         return;
                       }
                       // Validate surgery scheduling fields
                       if (!transferDetails.surgeryDate || !transferDetails.surgeryTime) {
-                        alert('Please fill in all surgery scheduling fields (date and time)');
+                        showErrorModal('Validation Error', 'Please fill in all surgery scheduling fields (date and time)');
                         return;
                       }
                     } else {
                       if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
-                        alert('Please provide reason and clinical rationale');
+                        showErrorModal('Validation Error', 'Please provide reason and clinical rationale');
                         return;
                       }
                     }
@@ -3480,12 +3531,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         } else {
                           console.error('❌ Failed to create manual appointment:', appointmentResult.error);
                           // Show error and STOP the entire process
-                          alert(`Failed to schedule appointment: ${appointmentResult.error}\n\nPathway transfer has been cancelled. Please try again.`);
+                          showErrorModal('Appointment Scheduling Failed', `Failed to schedule appointment: ${appointmentResult.error}\n\nPathway transfer has been cancelled. Please try again.`);
                           return; // Exit early - don't proceed with pathway transfer
                         }
                       } catch (appointmentError) {
                         console.error('❌ Error creating manual appointment:', appointmentError);
-                        alert(`An error occurred while scheduling the appointment: ${appointmentError.message}\n\nPathway transfer has been cancelled. Please try again.`);
+                        showErrorModal('Appointment Scheduling Error', `An error occurred while scheduling the appointment: ${appointmentError.message}\n\nPathway transfer has been cancelled. Please try again.`);
                         return; // Exit early - don't proceed with pathway transfer
                       }
                     }
@@ -3540,12 +3591,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           surgeryScheduled = true;
                         } else {
                           console.error('❌ Failed to schedule surgery:', surgeryResult.error);
-                          alert(`Failed to schedule surgery: ${surgeryResult.error}\n\nPathway transfer has been cancelled. Please try again.`);
+                          showErrorModal('Surgery Scheduling Failed', `Failed to schedule surgery: ${surgeryResult.error}\n\nPathway transfer has been cancelled. Please try again.`);
                           return; // Exit early - don't proceed with pathway transfer
                         }
                       } catch (surgeryError) {
                         console.error('❌ Error scheduling surgery:', surgeryError);
-                        alert(`An error occurred while scheduling surgery: ${surgeryError.message}\n\nPathway transfer has been cancelled. Please try again.`);
+                        showErrorModal('Surgery Scheduling Error', `An error occurred while scheduling surgery: ${surgeryError.message}\n\nPathway transfer has been cancelled. Please try again.`);
                         return; // Exit early - don't proceed with pathway transfer
                       }
                     }
@@ -3753,6 +3804,12 @@ ${transferDetails.additionalNotes}` : ''}
                         setSuccessModalMessage(message);
                         setIsSuccessModalOpen(true);
                         
+                        // Refresh appointment check, especially important for Surgery Pathway
+                        checkSurgeryAppointment();
+                        
+                        // Refresh clinical notes to show the new transfer note
+                        fetchNotes();
+                        
                         // Dispatch event if transferred to Surgery Pathway
                         if (selectedPathway === 'Surgery Pathway') {
                           window.dispatchEvent(new CustomEvent('surgery:updated'));
@@ -3957,6 +4014,8 @@ ${transferDetails.additionalNotes}` : ''}
       onUpdate={() => {
         // Refresh clinical notes after update
         fetchNotes();
+        // Refresh appointment check to ensure hasSurgeryAppointment is up to date
+        checkSurgeryAppointment();
         // Dispatch event to refresh other components
         window.dispatchEvent(new CustomEvent('surgery:updated'));
       }}
