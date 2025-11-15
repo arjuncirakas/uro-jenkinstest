@@ -117,10 +117,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
         const surgeryAppointment = appointments.find(apt => {
           const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
-          return aptType === 'surgery' || aptType === 'surgical';
+          // Check for various surgery appointment type formats
+          return aptType === 'surgery' || 
+                 aptType === 'surgical' || 
+                 aptType.includes('surgery') ||
+                 aptType.includes('surgical');
         });
-        setHasSurgeryAppointment(!!surgeryAppointment);
+        const hasAppointment = !!surgeryAppointment;
+        console.log('🔍 Surgery appointment check:', { hasAppointment, appointments, surgeryAppointment });
+        setHasSurgeryAppointment(hasAppointment);
       } else {
+        console.log('⚠️ Failed to fetch appointments:', appointmentsResult.error);
         setHasSurgeryAppointment(false);
       }
     } catch (error) {
@@ -1308,22 +1315,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 
                                 {/* Actions */}
                                 <div className="flex items-center gap-2">
-                                  {/* Edit Appointment button - only show for Surgery Pathway notes when surgery appointment was actually scheduled */}
+                                  {/* Edit Appointment button - show for Surgery Pathway notes when patient has a surgery appointment */}
                                   {(() => {
                                     const noteContent = note.content || '';
                                     // Check if note is a pathway transfer to Surgery Pathway
                                     const isSurgeryPathwayNote = noteContent.includes('Transfer To:') && 
                                                                   (noteContent.includes('Surgery Pathway') || 
                                                                    noteContent.toLowerCase().includes('surgery pathway'));
-                                    // Check if this note was created when surgery appointment was scheduled
-                                    // This is indicated by the presence of "Surgery Appointment Scheduled:" in the note
-                                    const hasSurgeryAppointmentScheduled = noteContent.includes('Surgery Appointment Scheduled:');
                                     
-                                    // Only show button if:
-                                    // 1. It's a surgery pathway note
-                                    // 2. The note indicates surgery appointment was scheduled
-                                    // 3. Patient currently has a surgery appointment
-                                    if (!isSurgeryPathwayNote || !hasSurgeryAppointmentScheduled || !hasSurgeryAppointment) {
+                                    // Don't show button on reschedule notes
+                                    const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                                    
+                                    // Show button if:
+                                    // 1. It's a surgery pathway note (not a reschedule note)
+                                    // 2. Patient currently has a surgery appointment
+                                    if (!isSurgeryPathwayNote || isRescheduleNote || !hasSurgeryAppointment) {
                                       return null;
                                     }
                                     
@@ -4033,11 +4039,11 @@ ${transferDetails.additionalNotes}` : ''}
       }}
       appointment={selectedSurgeryAppointment}
       patient={patient}
-      onUpdate={() => {
-        // Refresh clinical notes after update
-        fetchNotes();
-        // Refresh appointment check to ensure hasSurgeryAppointment is up to date
-        checkSurgeryAppointment();
+      onUpdate={async () => {
+        // First refresh appointment check to ensure hasSurgeryAppointment is up to date
+        await checkSurgeryAppointment();
+        // Then refresh clinical notes after appointment check completes
+        await fetchNotes();
         // Dispatch event to refresh other components
         window.dispatchEvent(new CustomEvent('surgery:updated'));
       }}
