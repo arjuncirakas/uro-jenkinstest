@@ -30,10 +30,10 @@ const UrologistLayout = () => {
     });
     setIsSuccessModalOpen(true);
     
-    // You can add additional logic here like:
-    // - Updating a global state (Redux/Zustand)
-    // - Refreshing patient lists
-    // - Redirecting to patient details
+    // Dispatch custom event to notify other components (like Patients page) to refresh
+    window.dispatchEvent(new CustomEvent('patient:added', {
+      detail: { patient: newPatient }
+    }));
   };
 
   const handleSuccessModalClose = () => {

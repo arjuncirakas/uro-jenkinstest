@@ -61,22 +61,39 @@ const Patients = () => {
     new: 'new'
   };
 
-  useEffect(() => {
-    const fetchPatients = async () => {
-      setLoading(true);
-      setError(null);
-      const cat = apiCategoryMap[category] || 'all';
-      const res = await patientService.getAssignedPatients(cat);
-      if (res.success) {
-        setPatients(res.data || []);
-      } else {
-        setError(res.error || 'Failed to fetch patients');
-        setPatients([]);
-      }
-      setLoading(false);
-    };
-    fetchPatients();
+  const fetchPatients = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const cat = apiCategoryMap[category] || 'all';
+    const res = await patientService.getAssignedPatients(cat);
+    if (res.success) {
+      setPatients(res.data || []);
+    } else {
+      setError(res.error || 'Failed to fetch patients');
+      setPatients([]);
+    }
+    setLoading(false);
   }, [category]);
+
+  useEffect(() => {
+    fetchPatients();
+  }, [fetchPatients]);
+
+  // Listen for patient added event to refresh the list
+  useEffect(() => {
+    const handlePatientAdded = () => {
+      console.log('🔄 Patient added event received, refreshing patient list...');
+      // Only refresh if we're on the "new" patients page
+      if (category === 'new') {
+        fetchPatients();
+      }
+    };
+
+    window.addEventListener('patient:added', handlePatientAdded);
+    return () => {
+      window.removeEventListener('patient:added', handlePatientAdded);
+    };
+  }, [category, fetchPatients]);
 
   const handleViewPatient = (patient) => {
     patientDetailsModalRef.current?.openPatientDetails(patient.name, null, category);
