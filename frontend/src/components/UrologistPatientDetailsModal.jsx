@@ -185,8 +185,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       if (result.success) {
         // Use the notes data directly from backend (now provides consistent format)
         const notes = result.data.notes || result.data || [];
-        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes:', notes);
-        setClinicalNotes(notes);
+        // Filter out the "Appointment type changed" notes as they're redundant with reschedule notes
+        const filteredNotes = notes.filter(note => {
+          const content = note.content || '';
+          // Remove notes that say "Appointment type changed from..."
+          return !content.includes('Appointment type changed from');
+        });
+        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes:', filteredNotes);
+        setClinicalNotes(filteredNotes);
       } else {
         console.log('❌ UrologistPatientDetailsModal: Failed to fetch notes:', result.error);
         setNotesError(result.error || 'Failed to fetch notes');
@@ -1273,19 +1279,78 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     </div>
                   ) : clinicalNotes.length > 0 ? (
                     <div className="space-y-6">
-                      {clinicalNotes.map((note, index) => {
-                        const noteContent = note.content || '';
-                        const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                      {(() => {
+                        // Reorganize notes to group reschedule notes with their parent Surgery Pathway notes
+                        // Surgery Pathway notes should appear first, followed by their reschedule notes (indented)
+                        const organizedNotes = [];
+                        const processedIndices = new Set();
+                        
+                        clinicalNotes.forEach((note, index) => {
+                          if (processedIndices.has(index)) return;
+                          
+                          const noteContent = note.content || '';
+                          const isSurgeryPathway = noteContent.includes('Transfer To:') && 
+                                                   (noteContent.includes('Surgery Pathway') || 
+                                                    noteContent.toLowerCase().includes('surgery pathway'));
+                          
+                          if (isSurgeryPathway) {
+                            // Add the Surgery Pathway note
+                            organizedNotes.push({ note, index, isSubNote: false });
+                            processedIndices.add(index);
+                            
+                            // Find and add any reschedule notes that follow this Surgery Pathway note
+                            // (Reschedule notes typically come after their parent note chronologically)
+                            for (let i = index + 1; i < clinicalNotes.length; i++) {
+                              if (processedIndices.has(i)) continue;
+                              
+                              const nextNoteContent = clinicalNotes[i].content || '';
+                              if (nextNoteContent.includes('SURGERY APPOINTMENT RESCHEDULED')) {
+                                organizedNotes.push({ note: clinicalNotes[i], index: i, isSubNote: true });
+                                processedIndices.add(i);
+                              } else {
+                                // Stop if we hit a non-reschedule note
+                                break;
+                              }
+                            }
+                          } else if (!noteContent.includes('SURGERY APPOINTMENT RESCHEDULED')) {
+                            // Add non-Surgery Pathway, non-reschedule notes as-is
+                            organizedNotes.push({ note, index, isSubNote: false });
+                            processedIndices.add(index);
+                          }
+                        });
+                        
+                        // Add any remaining unprocessed notes (orphaned reschedule notes, etc.)
+                        clinicalNotes.forEach((note, index) => {
+                          if (!processedIndices.has(index)) {
+                            organizedNotes.push({ note, index, isSubNote: false });
+                          }
+                        });
+                        
+                        return organizedNotes.map(({ note, isSubNote }, displayIndex) => {
+                          const noteContent = note.content || '';
+                          const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
                         
                         return (
-                        <div key={note.id || index} className="flex gap-4">
+                        <div key={note.id || displayIndex} className={`flex gap-4 ${isSubNote ? 'ml-8 -mt-4' : ''}`}>
                           {/* Timeline indicator */}
                           <div className="flex flex-col items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
-                              {getNoteIcon(note.type)}
-                            </div>
-                            {index < clinicalNotes.length - 1 && (
-                              <div className={`w-0.5 h-16 mt-2 ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}></div>
+                            {isSubNote ? (
+                              // For sub-notes, use a smaller connecting line
+                              <>
+                                <div className="w-0.5 h-4 bg-orange-200 mb-1"></div>
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
+                                  {getNoteIcon(note.type)}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
+                                  {getNoteIcon(note.type)}
+                                </div>
+                                {displayIndex < organizedNotes.length - 1 && !isSubNote && (
+                                  <div className={`w-0.5 h-16 mt-2 ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}></div>
+                                )}
+                              </>
                             )}
                           </div>
                           
@@ -1482,7 +1547,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           </div>
                         </div>
                         );
-                      })}
+                        });
+                      })()}
                     </div>
                   ) : (
                     <div className="text-center py-12">
