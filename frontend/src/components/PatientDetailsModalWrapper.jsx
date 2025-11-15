@@ -105,6 +105,19 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
         console.log('🔍 PatientDetailsModalWrapper: Investigations data is array:', Array.isArray(investigationsResult.data));
         console.log('🔍 PatientDetailsModalWrapper: Investigations data:', investigationsResult.data);
         
+            // Determine category based on care pathway if category is 'all' or not provided
+            let determinedCategory = category;
+            if (category === 'all' || !category) {
+              const carePathway = patientData.carePathway || patientData.care_pathway || patientData.pathway || '';
+              if (carePathway === 'Surgery Pathway') {
+                determinedCategory = 'surgery-pathway';
+              } else if (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') {
+                determinedCategory = 'post-op-followup';
+              } else if (!carePathway || carePathway === '' || carePathway === 'OPD Queue') {
+                determinedCategory = 'new';
+              }
+            }
+            
             const patientWithData = {
               id: patientData.id,
               name: patientData.fullName || `${patientData.firstName || patientData.first_name || ''} ${patientData.lastName || patientData.last_name || ''}`.trim(),
@@ -114,7 +127,8 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
               patientId: patientData.patient_id || patientData.id || appointmentData?.upi || 'N/A',
               mrn: patientData.mrn || 'N/A',
               lastAppointment: patientData.last_appointment || 'N/A',
-              category: category || patientData.category || 'new', // Use passed category or fallback to patient data category
+              category: determinedCategory, // Use determined category based on pathway
+              carePathway: patientData.carePathway || patientData.care_pathway || patientData.pathway || '', // Include care pathway
               recentNotes: notesResult.success ? (Array.isArray(notesResult.data) ? notesResult.data : notesResult.data?.data || []) : [],
               psaResults: investigationsResult.success ? 
                 (() => {

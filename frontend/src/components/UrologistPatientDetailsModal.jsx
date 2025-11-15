@@ -2515,8 +2515,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
             <span className="text-sm font-medium text-gray-700">Transfer to:</span>
             <div className="flex gap-3">
               {/* For New Patients: Active Monitoring, Surgery Pathway, Medication, Radiotherapy, Discharge */}
-              {console.log('🔍 DEBUG: New patients check:', { category: patient?.category, isNew: patient?.category === 'new' || !patient?.category })}
-              {patient && (patient.category === 'new' || !patient.category) && (
+              {(() => {
+                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+                const patientCategory = patient?.category || '';
+                const isNewPatient = !carePathway || carePathway === '' || carePathway === 'OPD Queue' || 
+                                    patientCategory === 'new' || !patientCategory;
+                return isNewPatient;
+              })() && (
                 <>
                   {/* Active Monitoring */}
                   <button
@@ -2576,8 +2581,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               )}
 
               {/* For Surgery Pathway Patients: Active Surveillance, Medication, Radiotherapy, Post-op Followup, Discharge */}
-              {console.log('🔍 DEBUG: Patient data:', { patient, category: patient?.category, isSurgeryPathway: patient?.category === 'surgery-pathway' })}
-              {patient && patient.category === 'surgery-pathway' && (
+              {(() => {
+                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+                const patientCategory = patient?.category || '';
+                const isSurgeryPathway = carePathway === 'Surgery Pathway' || patientCategory === 'surgery-pathway';
+                return isSurgeryPathway;
+              })() && (
                 <>
                   {/* Active Surveillance */}
                   <button
@@ -2637,7 +2646,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               )}
 
               {/* For Post-op Followup Patients: Medication, Discharge only */}
-              {patient && patient.category === 'post-op-followup' && (
+              {(() => {
+                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+                const patientCategory = patient?.category || '';
+                const isPostOp = (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') || 
+                                patientCategory === 'post-op-followup';
+                return isPostOp;
+              })() && (
                 <>
                   {/* Medication */}
                   <button
@@ -2648,6 +2663,81 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       <FaPills className="text-teal-600 text-sm" />
                     </div>
                     <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                  </button>
+
+                  {/* Discharge */}
+                  <button
+                    onClick={() => handleTransfer('Discharge')}
+                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
+                  >
+                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                      <IoCheckmark className="text-teal-600 text-sm" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                  </button>
+                </>
+              )}
+              
+              {/* Fallback: For patients on other pathways (Active Monitoring, Active Surveillance, etc.) or when category is 'all' */}
+              {(() => {
+                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+                const patientCategory = patient?.category || '';
+                
+                // Check if patient matches any of the above conditions
+                const isNewPatient = !carePathway || carePathway === '' || carePathway === 'OPD Queue' || 
+                                    patientCategory === 'new' || !patientCategory;
+                const isSurgeryPathway = carePathway === 'Surgery Pathway' || patientCategory === 'surgery-pathway';
+                const isPostOp = (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') || 
+                                patientCategory === 'post-op-followup';
+                
+                // If patient doesn't match any specific condition but has a pathway, show transfer options
+                // This handles cases like Active Monitoring, Active Surveillance, Medication, Radiotherapy, etc.
+                const shouldShowFallback = patient && carePathway && !isNewPatient && !isSurgeryPathway && !isPostOp;
+                
+                console.log('🔍 DEBUG: Fallback check:', { 
+                  carePathway, 
+                  patientCategory, 
+                  isNewPatient, 
+                  isSurgeryPathway, 
+                  isPostOp, 
+                  shouldShowFallback 
+                });
+                
+                return shouldShowFallback;
+              })() && (
+                <>
+                  {/* Show common transfer options for patients on other pathways */}
+                  {/* Surgery Pathway */}
+                  <button
+                    onClick={() => handleTransfer('Surgery Pathway')}
+                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
+                  >
+                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                      <FaStethoscope className="text-teal-600 text-sm" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
+                  </button>
+
+                  {/* Medication */}
+                  <button
+                    onClick={() => handleTransfer('Medication')}
+                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
+                  >
+                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                      <FaPills className="text-teal-600 text-sm" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                  </button>
+
+                  {/* Radiotherapy */}
+                  <button
+                    onClick={() => handleTransfer('Radiotherapy')}
+                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
+                  >
+                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                      <IoMedical className="text-teal-600 text-sm" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
                   </button>
 
                   {/* Discharge */}
