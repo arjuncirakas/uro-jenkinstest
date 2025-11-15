@@ -10,6 +10,7 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
     surgeryDate: '',
     surgeryTime: '',
     reason: '',
+    rescheduleReason: '',
     priority: 'normal',
     clinicalRationale: '',
     additionalNotes: ''
@@ -35,6 +36,7 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
         surgeryDate: formattedDate,
         surgeryTime: formattedTime,
         reason: appointment.reason || appointment.surgeryType || '',
+        rescheduleReason: '',
         priority: appointment.priority || 'normal',
         clinicalRationale: appointment.clinicalRationale || '',
         additionalNotes: appointment.additionalNotes || ''
@@ -50,8 +52,8 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
 
     try {
       // Validate form
-      if (!formData.surgeryDate || !formData.surgeryTime) {
-        setError('Please fill in all required fields (date and time)');
+      if (!formData.surgeryDate || !formData.surgeryTime || !formData.rescheduleReason) {
+        setError('Please fill in all required fields (date, time, and reason for rescheduling)');
         setLoading(false);
         return;
       }
@@ -84,6 +86,7 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
         newDoctorId: currentUser.id,
         appointmentType: 'surgery',
         surgeryType: formData.reason,
+        rescheduleReason: formData.rescheduleReason,
         notes: `Surgery scheduled: ${formData.reason}\nPriority: ${formData.priority}\nClinical Rationale: ${formData.clinicalRationale}${formData.additionalNotes ? `\n\nAdditional Notes: ${formData.additionalNotes}` : ''}`
       };
 
@@ -116,7 +119,7 @@ New Appointment:
 - Date: ${formattedNewDate}
 - Time: ${formData.surgeryTime}
 
-Reason: ${formData.reason || 'Not specified'}
+Reason: ${formData.rescheduleReason || 'Not specified'}
 Priority: ${formData.priority ? formData.priority.charAt(0).toUpperCase() + formData.priority.slice(1) : 'Normal'}`;
 
             const noteResult = await notesService.addNote(patient.id, {
@@ -275,14 +278,14 @@ Priority: ${formData.priority ? formData.priority.charAt(0).toUpperCase() + form
                 </div>
                 <div>
                   <h4 className="text-base font-semibold text-gray-900">Reschedule Surgery</h4>
-                  <p className="text-sm text-gray-600">Update surgery date and time</p>
+                  <p className="text-sm text-gray-600">Update surgery date, time, and reason</p>
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Surgery Date *
+                    New Surgery Date *
                   </label>
                   <input
                     type="date"
@@ -295,7 +298,7 @@ Priority: ${formData.priority ? formData.priority.charAt(0).toUpperCase() + form
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Surgery Time *
+                    New Surgery Time *
                   </label>
                   <input
                     type="time"
@@ -305,6 +308,20 @@ Priority: ${formData.priority ? formData.priority.charAt(0).toUpperCase() + form
                     required
                   />
                 </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Rescheduling *
+                </label>
+                <textarea
+                  value={formData.rescheduleReason}
+                  onChange={(e) => setFormData(prev => ({ ...prev, rescheduleReason: e.target.value }))}
+                  placeholder="Enter the reason for rescheduling this surgery appointment..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white resize-none"
+                  required
+                />
               </div>
             </div>
 

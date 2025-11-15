@@ -1751,7 +1751,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
   
   try {
     const { appointmentId } = req.params;
-    const { newDate, newTime, newDoctorId, appointmentType, surgeryType } = req.body;
+    const { newDate, newTime, newDoctorId, appointmentType, surgeryType, rescheduleReason } = req.body;
 
     if (!newDate || !newTime || !newDoctorId) {
       return res.status(400).json({
@@ -2135,15 +2135,20 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       await client.query(updatePatientUrologistQuery, [doctorName, patientIdForTimeline]);
       console.log(`[rescheduleNoShowAppointment] Assigned patient ${patientIdForTimeline} to urologist: ${doctorName}`);
       
-      // Add timeline entry for the update
+      // Add timeline entry for the update (if rescheduleReason is provided, include it)
       const timelineQuery = `
         INSERT INTO patient_notes (patient_id, note_content, author_id, created_at)
         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
       `;
       
-      const timelineNote = currentStatus === 'no_show' 
+      let timelineNote = currentStatus === 'no_show' 
         ? `Appointment rescheduled from no-show to ${newDate} at ${newTime} with Dr. ${doctorName}`
         : `Appointment updated to ${newDate} at ${newTime} with Dr. ${doctorName}`;
+      
+      if (rescheduleReason && rescheduleReason.trim()) {
+        timelineNote += `. Reason: ${rescheduleReason.trim()}`;
+      }
+      
       await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id]);
     }
 
