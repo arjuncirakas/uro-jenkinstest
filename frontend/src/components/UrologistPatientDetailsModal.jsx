@@ -1474,37 +1474,80 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                           
                                           // Fetch surgery appointment details
                                           try {
+                                            console.log('🔍 Edit Appointment button clicked - fetching appointments for patient:', patient.id);
                                             const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
                                             if (appointmentsResult.success) {
                                               const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
-                                              const surgeryAppointment = appointments.find(apt => {
-                                                const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
+                                              console.log('🔍 All appointments fetched:', appointments);
+                                              
+                                              // More robust search for surgery appointment
+                                              let surgeryAppointment = appointments.find(apt => {
+                                                const aptType = (apt.appointmentType || apt.type || apt.appointment_type || '').toLowerCase();
+                                                const surgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
+                                                const notes = (apt.notes || '').toLowerCase();
+                                                
                                                 // Check for various surgery appointment type formats
-                                                return aptType === 'surgery' || 
-                                                       aptType === 'surgical' || 
-                                                       aptType.includes('surgery') ||
-                                                       aptType.includes('surgical');
+                                                const isSurgery = aptType === 'surgery' || 
+                                                                 aptType === 'surgical' || 
+                                                                 aptType.includes('surgery') ||
+                                                                 aptType.includes('surgical') ||
+                                                                 surgeryType.includes('surgery') ||
+                                                                 notes.includes('surgery scheduled');
+                                                
+                                                console.log('🔍 Checking appointment:', {
+                                                  id: apt.id,
+                                                  type: aptType,
+                                                  surgeryType: surgeryType,
+                                                  isSurgery: isSurgery,
+                                                  fullApt: apt
+                                                });
+                                                
+                                                return isSurgery;
                                               });
+                                              
+                                              // Fallback: If no surgery appointment found by type, try to find by surgeryType field or notes
+                                              if (!surgeryAppointment && appointments.length > 0) {
+                                                console.log('⚠️ No surgery appointment found by type, trying fallback search...');
+                                                surgeryAppointment = appointments.find(apt => {
+                                                  const surgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
+                                                  const notes = (apt.notes || '').toLowerCase();
+                                                  // Only consider it a surgery appointment if it has surgeryType field or notes mention surgery
+                                                  return (surgeryType && surgeryType.length > 0) || 
+                                                         notes.includes('surgery scheduled') ||
+                                                         notes.includes('surgery:');
+                                                });
+                                                
+                                                // Last resort: If patient has only one appointment and we're on a Surgery Pathway note,
+                                                // it's likely the surgery appointment even if type doesn't match
+                                                if (!surgeryAppointment && appointments.length === 1) {
+                                                  console.log('⚠️ Only one appointment found, using it as surgery appointment');
+                                                  surgeryAppointment = appointments[0];
+                                                }
+                                              }
+                                              
+                                              console.log('🔍 Surgery appointment found:', surgeryAppointment);
                                               
                                               if (surgeryAppointment) {
                                                 setSelectedSurgeryAppointment({
                                                   ...surgeryAppointment,
-                                                  reason: parsedData.reason || '',
-                                                  priority: parsedData.priority || 'normal',
+                                                  reason: parsedData.reason || surgeryAppointment.surgeryType || surgeryAppointment.surgery_type || '',
+                                                  priority: parsedData.priority || surgeryAppointment.priority || 'normal',
                                                   clinicalRationale: parsedData.clinicalRationale || '',
                                                   additionalNotes: parsedData.additionalNotes || ''
                                                 });
                                                 setIsEditSurgeryAppointmentModalOpen(true);
                                               } else {
+                                                console.error('❌ No surgery appointment found. Available appointments:', appointments);
                                                 showErrorModal('Appointment Not Found', 'No surgery appointment found for this patient. Please schedule a surgery appointment first.');
                                                 // Refresh the appointment check
                                                 await checkSurgeryAppointment();
                                               }
                                             } else {
+                                              console.error('❌ Failed to fetch appointments:', appointmentsResult.error);
                                               showErrorModal('Failed to Fetch', 'Failed to fetch appointment details.');
                                             }
                                           } catch (error) {
-                                            console.error('Error fetching surgery appointment:', error);
+                                            console.error('❌ Error fetching surgery appointment:', error);
                                             showErrorModal('Error', 'Error fetching appointment details.');
                                           }
                                         }}
