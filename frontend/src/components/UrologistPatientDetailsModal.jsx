@@ -4327,10 +4327,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
                     // Handle surgery scheduling for Surgery Pathway (BEFORE pathway transfer)
                     let surgeryScheduled = false;
+                    // Store surgery time range for use in clinical note creation
+                    let surgeryStartTime = '';
+                    let surgeryEndTime = '';
+                    
                     if (selectedPathway === 'Surgery Pathway') {
                       try {
                         console.log('🔍 Scheduling surgery BEFORE pathway transfer');
                         console.log('📋 Surgery details:', transferDetails);
+                        
+                        // Capture start and end times for use in clinical note
+                        surgeryStartTime = selectedStartSlot || transferDetails.surgeryTime || '';
+                        surgeryEndTime = selectedEndSlot || '';
                         
                         const currentUser = authService.getCurrentUser();
                         if (!currentUser || !currentUser.id) {
@@ -4357,15 +4365,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         
                         const surgeryData = {
                           appointmentDate: transferDetails.surgeryDate,
-                          appointmentTime: selectedStartSlot, // Use selected start time
+                          appointmentTime: surgeryStartTime, // Use selected start time
                           urologistId: urologistId,
                           urologistName: urologistName.trim(),
                           appointmentType: 'surgery',
                           surgeryType: transferDetails.reason,
-                          notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nSurgery Time: ${selectedStartSlot} - ${selectedEndSlot}\nClinical Rationale: ${transferDetails.clinicalRationale}${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
+                          notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nSurgery Time: ${surgeryStartTime}${surgeryEndTime ? ` - ${surgeryEndTime}` : ''}\nClinical Rationale: ${transferDetails.clinicalRationale}${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
                           priority: transferDetails.priority,
-                          surgeryStartTime: selectedStartSlot,
-                          surgeryEndTime: selectedEndSlot
+                          surgeryStartTime: surgeryStartTime,
+                          surgeryEndTime: surgeryEndTime
                         };
                         
                         console.log('📤 Surgery data being sent:', JSON.stringify(surgeryData, null, 2));
@@ -4511,10 +4519,10 @@ Follow-up Appointment Scheduled:
                             // Add surgery appointment section if surgery was scheduled
                             let surgeryAppointmentSection = '';
                             if (surgeryScheduled && selectedPathway === 'Surgery Pathway') {
-                              // Use start and end slots if available, otherwise fall back to surgeryTime
-                              const timeDisplay = (selectedStartSlot && selectedEndSlot) 
-                                ? `${selectedStartSlot} - ${selectedEndSlot}`
-                                : transferDetails.surgeryTime || 'Not specified';
+                              // Use captured start and end times, or fall back to surgeryTime
+                              const timeDisplay = (surgeryStartTime && surgeryEndTime) 
+                                ? `${surgeryStartTime} - ${surgeryEndTime}`
+                                : surgeryStartTime || transferDetails.surgeryTime || 'Not specified';
                               
                               surgeryAppointmentSection = `
 
