@@ -2278,9 +2278,9 @@ export const getAvailableTimeSlots = async (req, res) => {
       AND ib.status NOT IN ('cancelled', 'no_show')
     `;
     
-    // Query 2: Check urologist appointments for this doctor
+    // Query 2: Check urologist appointments for this doctor (including surgery appointments)
     const appointmentsQuery = `
-      SELECT a.appointment_time, a.status,
+      SELECT a.appointment_time, a.status, a.notes, a.appointment_type, a.surgery_type,
              p.first_name || ' ' || p.last_name as patient_name
       FROM appointments a
       JOIN patients p ON a.patient_id = p.id
@@ -2306,17 +2306,63 @@ export const getAvailableTimeSlots = async (req, res) => {
       return formattedTime;
     }).filter(time => time !== null);
     
-    const bookedTimesFromAppointments = appointmentsResult.rows.map(row => {
+    const bookedTimesFromAppointments = [];
+    const surgeryTimeRanges = []; // Store surgery time ranges to block intermediate slots
+    
+    appointmentsResult.rows.forEach(row => {
       const timeValue = row.appointment_time;
       const formattedTime = timeValue ? timeValue.substring(0, 5) : null;
-      if (formattedTime) {
+      
+      // Check if this is a surgery appointment (has surgery_type or appointment_type contains 'surgery')
+      const isSurgery = row.surgery_type || 
+                       (row.appointment_type && row.appointment_type.toLowerCase().includes('surgery'));
+      
+      if (isSurgery && row.notes) {
+        // Try to extract surgery time range from notes: "Surgery Time: HH:MM - HH:MM"
+        const timeRangeMatch = row.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+        if (timeRangeMatch) {
+          const startTime = timeRangeMatch[1];
+          const endTime = timeRangeMatch[2];
+          surgeryTimeRanges.push({ startTime, endTime, patientName: row.patient_name });
+          console.log(`[getAvailableTimeSlots] Surgery appointment found: ${startTime} - ${endTime} for ${row.patient_name}`);
+        } else if (formattedTime) {
+          // Fallback: if no time range in notes, just use appointment_time
+          bookedTimesFromAppointments.push(formattedTime);
+          console.log(`[getAvailableTimeSlots] Surgery appointment booked (single time): ${formattedTime} for ${row.patient_name}`);
+        }
+      } else if (formattedTime) {
+        // Regular appointment (not surgery)
+        bookedTimesFromAppointments.push(formattedTime);
         console.log(`[getAvailableTimeSlots] Urologist appointment booked: ${formattedTime} for ${row.patient_name}`);
       }
-      return formattedTime;
-    }).filter(time => time !== null);
+    });
     
-    // Merge both arrays and remove duplicates
-    const bookedTimes = [...new Set([...bookedTimesFromInvestigations, ...bookedTimesFromAppointments])];
+    // Generate all slots that fall within surgery time ranges
+    const surgeryBlockedSlots = new Set();
+    surgeryTimeRanges.forEach(({ startTime, endTime }) => {
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
+      
+      // Generate all 30-minute slots between start and end time (inclusive)
+      for (let minutes = startMinutes; minutes <= endMinutes; minutes += 30) {
+        const hour = Math.floor(minutes / 60);
+        const min = minutes % 60;
+        const slotTime = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        surgeryBlockedSlots.add(slotTime);
+      }
+    });
+    
+    // Convert Set to Array and log
+    const surgeryBlockedSlotsArray = Array.from(surgeryBlockedSlots);
+    if (surgeryBlockedSlotsArray.length > 0) {
+      console.log(`[getAvailableTimeSlots] Surgery blocked slots: ${JSON.stringify(surgeryBlockedSlotsArray)}`);
+    }
+    
+    // Merge all booked times (regular appointments + investigation + surgery blocked slots)
+    const bookedTimes = [...new Set([...bookedTimesFromInvestigations, ...bookedTimesFromAppointments, ...surgeryBlockedSlotsArray])];
     
     console.log(`[getAvailableTimeSlots] Total booked times (combined): ${JSON.stringify(bookedTimes)}`);
 
