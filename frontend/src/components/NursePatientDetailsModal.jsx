@@ -1314,6 +1314,76 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                         const organizedNotes = [];
                         const processedIndices = new Set();
                         
+                        // First, collect all surgery pathway notes and all reschedule notes
+                        const surgeryPathwayNotes = [];
+                        const rescheduleNotes = [];
+                        
+                        clinicalNotes.forEach((note, index) => {
+                          const noteContent = note.content || '';
+                          const isSurgeryPathway = noteContent.includes('Transfer To:') && 
+                                                   (noteContent.includes('Surgery Pathway') || 
+                                                    noteContent.toLowerCase().includes('surgery pathway'));
+                          const isReschedule = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                          
+                          if (isSurgeryPathway) {
+                            surgeryPathwayNotes.push({ note, index });
+                          } else if (isReschedule) {
+                            rescheduleNotes.push({ note, index });
+                          }
+                        });
+                        
+                        // Sort surgery pathway notes by date (newest first, matching the notes order)
+                        surgeryPathwayNotes.sort((a, b) => {
+                          const dateA = new Date(a.note.createdAt || a.note.created_at);
+                          const dateB = new Date(b.note.createdAt || b.note.created_at);
+                          return dateB - dateA; // Newest first
+                        });
+                        
+                        // For each surgery pathway note, find and group its reschedule notes
+                        surgeryPathwayNotes.forEach(({ note: surgeryNote, index: surgeryIndex }, pathwayIndex) => {
+                          // Add the Surgery Pathway note
+                          organizedNotes.push({ note: surgeryNote, index: surgeryIndex, isSubNote: false });
+                          processedIndices.add(surgeryIndex);
+                          
+                          // Find all reschedule notes that belong to this surgery pathway note
+                          const surgeryDate = new Date(surgeryNote.createdAt || surgeryNote.created_at);
+                          
+                          // Get the next surgery pathway note's date (if any) to create a boundary
+                          const nextSurgeryDate = pathwayIndex < surgeryPathwayNotes.length - 1
+                            ? new Date(surgeryPathwayNotes[pathwayIndex + 1].note.createdAt || surgeryPathwayNotes[pathwayIndex + 1].note.created_at)
+                            : null;
+                          
+                          // Find reschedule notes that belong to this surgery pathway note
+                          // They should be created after this surgery note but before the next surgery note (if any)
+                          const matchingReschedules = rescheduleNotes
+                            .filter(({ note: rescheduleNote, index: rescheduleIndex }) => {
+                              if (processedIndices.has(rescheduleIndex)) return false;
+                              
+                              const rescheduleDate = new Date(rescheduleNote.createdAt || rescheduleNote.created_at);
+                              
+                              // Reschedule note must be after this surgery pathway note
+                              if (rescheduleDate < surgeryDate) return false;
+                              
+                              // If there's a next surgery pathway note, reschedule must be before it
+                              if (nextSurgeryDate && rescheduleDate >= nextSurgeryDate) return false;
+                              
+                              return true;
+                            })
+                            .sort((a, b) => {
+                              // Sort reschedule notes by date (newest first)
+                              const dateA = new Date(a.note.createdAt || a.note.created_at);
+                              const dateB = new Date(b.note.createdAt || b.note.created_at);
+                              return dateB - dateA;
+                            });
+                          
+                          // Add matching reschedule notes right after the surgery pathway note
+                          matchingReschedules.forEach(({ note: rescheduleNote, index: rescheduleIndex }) => {
+                            organizedNotes.push({ note: rescheduleNote, index: rescheduleIndex, isSubNote: true });
+                            processedIndices.add(rescheduleIndex);
+                          });
+                        });
+                        
+                        // Add any remaining non-Surgery Pathway, non-reschedule notes in their original order
                         clinicalNotes.forEach((note, index) => {
                           if (processedIndices.has(index)) return;
                           
@@ -1321,28 +1391,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           const isSurgeryPathway = noteContent.includes('Transfer To:') && 
                                                    (noteContent.includes('Surgery Pathway') || 
                                                     noteContent.toLowerCase().includes('surgery pathway'));
+                          const isReschedule = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
                           
-                          if (isSurgeryPathway) {
-                            // Add the Surgery Pathway note
-                            organizedNotes.push({ note, index, isSubNote: false });
-                            processedIndices.add(index);
-                            
-                            // Find and add any reschedule notes that follow this Surgery Pathway note
-                            // (Reschedule notes typically come after their parent note chronologically)
-                            for (let i = index + 1; i < clinicalNotes.length; i++) {
-                              if (processedIndices.has(i)) continue;
-                              
-                              const nextNoteContent = clinicalNotes[i].content || '';
-                              if (nextNoteContent.includes('SURGERY APPOINTMENT RESCHEDULED')) {
-                                organizedNotes.push({ note: clinicalNotes[i], index: i, isSubNote: true });
-                                processedIndices.add(i);
-                              } else {
-                                // Stop if we hit a non-reschedule note
-                                break;
-                              }
-                            }
-                          } else if (!noteContent.includes('SURGERY APPOINTMENT RESCHEDULED')) {
-                            // Add non-Surgery Pathway, non-reschedule notes as-is
+                          if (!isSurgeryPathway && !isReschedule) {
                             organizedNotes.push({ note, index, isSubNote: false });
                             processedIndices.add(index);
                           }
