@@ -7,7 +7,9 @@ import {
   Plus,
   Search,
   CheckCircle,
-  Loader2
+  Loader2,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
@@ -49,6 +51,18 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
   const [addMemberSuccessMessage, setAddMemberSuccessMessage] = useState('');
   const [addMemberErrorMessage, setAddMemberErrorMessage] = useState('');
   const [isAddingMember, setIsAddingMember] = useState(false);
+  
+  // Department management states
+  const [isDepartmentDropdownOpen, setIsDepartmentDropdownOpen] = useState(false);
+  const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
+  const [showEditDepartmentModal, setShowEditDepartmentModal] = useState(false);
+  const [showDeleteDepartmentModal, setShowDeleteDepartmentModal] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [newDepartment, setNewDepartment] = useState({ name: '', description: '' });
+  const [editDepartment, setEditDepartment] = useState({ name: '', description: '' });
+  const [isManagingDepartment, setIsManagingDepartment] = useState(false);
+  const [departmentError, setDepartmentError] = useState('');
+  const [departmentSuccessMessage, setDepartmentSuccessMessage] = useState('');
 
   // Close confirmation modal
   const closeConfirmModal = (save = false) => {
@@ -116,6 +130,24 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
       fetchDoctorsAndDepartments();
     }
   }, [isOpen]);
+
+  // Close department dropdown when clicking outside
+  useEffect(() => {
+    if (!isDepartmentDropdownOpen) return;
+
+    const handleClickOutside = (event) => {
+      const target = event.target;
+      // Check if click is outside the dropdown
+      if (!target.closest('.department-dropdown-container')) {
+        setIsDepartmentDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDepartmentDropdownOpen]);
 
   const handleMDTFormChange = (field, value) => {
     setMdtForm(prev => ({
@@ -234,6 +266,128 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
         setIsAddingMember(false);
       }
     }
+  };
+
+  // Department management handlers
+  const handleAddDepartment = async () => {
+    if (!newDepartment.name || newDepartment.name.trim().length < 2) {
+      setDepartmentError('Department name must be at least 2 characters');
+      return;
+    }
+
+    setIsManagingDepartment(true);
+    setDepartmentError('');
+    
+    try {
+      const response = await doctorsService.createDepartment({
+        name: newDepartment.name.trim(),
+        description: newDepartment.description.trim() || null
+      });
+
+      if (response.success) {
+        setDepartmentSuccessMessage('Department added successfully!');
+        setNewDepartment({ name: '', description: '' });
+        setShowAddDepartmentModal(false);
+        setIsDepartmentDropdownOpen(false);
+        // Refresh departments list
+        await fetchDoctorsAndDepartments();
+        // Show success message briefly
+        setTimeout(() => setDepartmentSuccessMessage(''), 3000);
+      } else {
+        setDepartmentError(response.error || 'Failed to add department');
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.error || error?.message || 'Failed to add department';
+      setDepartmentError(errorMsg);
+    } finally {
+      setIsManagingDepartment(false);
+    }
+  };
+
+  const handleEditDepartment = async () => {
+    if (!editDepartment.name || editDepartment.name.trim().length < 2) {
+      setDepartmentError('Department name must be at least 2 characters');
+      return;
+    }
+
+    if (!selectedDepartment) return;
+
+    setIsManagingDepartment(true);
+    setDepartmentError('');
+    
+    try {
+      const response = await doctorsService.updateDepartment(selectedDepartment.id, {
+        name: editDepartment.name.trim(),
+        description: editDepartment.description.trim() || null
+      });
+
+      if (response.success) {
+        setDepartmentSuccessMessage('Department updated successfully!');
+        setSelectedDepartment(null);
+        setEditDepartment({ name: '', description: '' });
+        setShowEditDepartmentModal(false);
+        setIsDepartmentDropdownOpen(false);
+        // Refresh departments list
+        await fetchDoctorsAndDepartments();
+        // Show success message briefly
+        setTimeout(() => setDepartmentSuccessMessage(''), 3000);
+      } else {
+        setDepartmentError(response.error || 'Failed to update department');
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.error || error?.message || 'Failed to update department';
+      setDepartmentError(errorMsg);
+    } finally {
+      setIsManagingDepartment(false);
+    }
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!selectedDepartment) return;
+
+    setIsManagingDepartment(true);
+    setDepartmentError('');
+    
+    try {
+      const response = await doctorsService.deleteDepartment(selectedDepartment.id);
+
+      if (response.success) {
+        setDepartmentSuccessMessage('Department deleted successfully!');
+        setSelectedDepartment(null);
+        setShowDeleteDepartmentModal(false);
+        setIsDepartmentDropdownOpen(false);
+        // If the deleted department was selected, clear the selection
+        if (newTeamMember.department === selectedDepartment.name) {
+          setNewTeamMember(prev => ({ ...prev, department: '' }));
+        }
+        // Refresh departments list
+        await fetchDoctorsAndDepartments();
+        // Show success message briefly
+        setTimeout(() => setDepartmentSuccessMessage(''), 3000);
+      } else {
+        setDepartmentError(response.error || 'Failed to delete department');
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.error || error?.message || 'Failed to delete department';
+      setDepartmentError(errorMsg);
+    } finally {
+      setIsManagingDepartment(false);
+    }
+  };
+
+  const openEditDepartmentModal = (dept) => {
+    setSelectedDepartment(dept);
+    setEditDepartment({ name: dept.name, description: dept.description || '' });
+    setDepartmentError('');
+    setShowEditDepartmentModal(true);
+    setIsDepartmentDropdownOpen(false);
+  };
+
+  const openDeleteDepartmentModal = (dept) => {
+    setSelectedDepartment(dept);
+    setDepartmentError('');
+    setShowDeleteDepartmentModal(true);
+    setIsDepartmentDropdownOpen(false);
   };
 
   const handleSubmit = async () => {
@@ -753,18 +907,96 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Department/Specialization
                 </label>
-                <select
-                  value={newTeamMember.department}
-                  onChange={(e) => setNewTeamMember(prev => ({ ...prev, department: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                >
-                  <option value="">Select Department</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.name}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative department-dropdown-container">
+                  <button
+                    type="button"
+                    onClick={() => setIsDepartmentDropdownOpen(!isDepartmentDropdownOpen)}
+                    className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <span className={newTeamMember.department ? 'text-gray-900' : 'text-gray-500'}>
+                      {newTeamMember.department || 'Select Department'}
+                    </span>
+                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${isDepartmentDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {isDepartmentDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-80 overflow-hidden">
+                      {/* Add Department Button */}
+                      <div className="p-2 border-b border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddDepartmentModal(true);
+                            setIsDepartmentDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add New Department
+                        </button>
+                      </div>
+                      
+                      {/* Departments List */}
+                      <div className="max-h-64 overflow-y-auto">
+                        {departments.length === 0 ? (
+                          <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                            No departments available
+                          </div>
+                        ) : (
+                          departments.map((dept) => (
+                            <div
+                              key={dept.id}
+                              className="flex items-center justify-between px-3 py-2 hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewTeamMember(prev => ({ ...prev, department: dept.name }));
+                                  setIsDepartmentDropdownOpen(false);
+                                }}
+                                className="flex-1 text-left text-sm text-gray-700 hover:text-gray-900"
+                              >
+                                {dept.name}
+                              </button>
+                              <div className="flex items-center space-x-1 ml-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditDepartmentModal(dept);
+                                  }}
+                                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                                  title="Edit department"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDeleteDepartmentModal(dept);
+                                  }}
+                                  className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete department"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {departmentSuccessMessage && (
+                  <p className="text-xs text-green-600 mt-1">{departmentSuccessMessage}</p>
+                )}
+                {departmentError && (
+                  <p className="text-xs text-red-600 mt-1">{departmentError}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -849,6 +1081,243 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
       title="Failed to Add Team Member"
       message={addMemberErrorMessage}
     />
+
+    {/* Add Department Modal */}
+    {showAddDepartmentModal && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[130] p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Add New Department</h2>
+            <button
+              onClick={() => {
+                setShowAddDepartmentModal(false);
+                setNewDepartment({ name: '', description: '' });
+                setDepartmentError('');
+              }}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Department Name *
+              </label>
+              <input
+                type="text"
+                value={newDepartment.name}
+                onChange={(e) => {
+                  setNewDepartment(prev => ({ ...prev, name: e.target.value }));
+                  setDepartmentError('');
+                }}
+                placeholder="e.g., Cardiology"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                maxLength={100}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description (Optional)
+              </label>
+              <textarea
+                value={newDepartment.description}
+                onChange={(e) => {
+                  setNewDepartment(prev => ({ ...prev, description: e.target.value }));
+                  setDepartmentError('');
+                }}
+                placeholder="Brief description of the department"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+                maxLength={500}
+              />
+            </div>
+            {departmentError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">
+                {departmentError}
+              </div>
+            )}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex space-x-3">
+            <button
+              onClick={handleAddDepartment}
+              disabled={!newDepartment.name || newDepartment.name.trim().length < 2 || isManagingDepartment}
+              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+            >
+              {isManagingDepartment ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Department'
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setShowAddDepartmentModal(false);
+                setNewDepartment({ name: '', description: '' });
+                setDepartmentError('');
+              }}
+              disabled={isManagingDepartment}
+              className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Edit Department Modal */}
+    {showEditDepartmentModal && selectedDepartment && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[130] p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Edit Department</h2>
+            <button
+              onClick={() => {
+                setShowEditDepartmentModal(false);
+                setSelectedDepartment(null);
+                setEditDepartment({ name: '', description: '' });
+                setDepartmentError('');
+              }}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Department Name *
+              </label>
+              <input
+                type="text"
+                value={editDepartment.name}
+                onChange={(e) => {
+                  setEditDepartment(prev => ({ ...prev, name: e.target.value }));
+                  setDepartmentError('');
+                }}
+                placeholder="e.g., Cardiology"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                maxLength={100}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description (Optional)
+              </label>
+              <textarea
+                value={editDepartment.description}
+                onChange={(e) => {
+                  setEditDepartment(prev => ({ ...prev, description: e.target.value }));
+                  setDepartmentError('');
+                }}
+                placeholder="Brief description of the department"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+                maxLength={500}
+              />
+            </div>
+            {departmentError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">
+                {departmentError}
+              </div>
+            )}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex space-x-3">
+            <button
+              onClick={handleEditDepartment}
+              disabled={!editDepartment.name || editDepartment.name.trim().length < 2 || isManagingDepartment}
+              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+            >
+              {isManagingDepartment ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Update Department'
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setShowEditDepartmentModal(false);
+                setSelectedDepartment(null);
+                setEditDepartment({ name: '', description: '' });
+                setDepartmentError('');
+              }}
+              disabled={isManagingDepartment}
+              className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Delete Department Confirmation Modal */}
+    {showDeleteDepartmentModal && selectedDepartment && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[130] p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Delete Department</h2>
+            <button
+              onClick={() => {
+                setShowDeleteDepartmentModal(false);
+                setSelectedDepartment(null);
+                setDepartmentError('');
+              }}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-gray-700 mb-4">
+              Are you sure you want to delete the department <strong>"{selectedDepartment.name}"</strong>?
+            </p>
+            <p className="text-xs text-gray-500 mb-4">
+              This action cannot be undone. If there are doctors associated with this department, you will need to remove or reassign them first.
+            </p>
+            {departmentError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2 mb-4">
+                {departmentError}
+              </div>
+            )}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex space-x-3">
+            <button
+              onClick={handleDeleteDepartment}
+              disabled={isManagingDepartment}
+              className="flex-1 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+            >
+              {isManagingDepartment ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Department'
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setShowDeleteDepartmentModal(false);
+                setSelectedDepartment(null);
+                setDepartmentError('');
+              }}
+              disabled={isManagingDepartment}
+              className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 };

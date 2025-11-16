@@ -2677,8 +2677,39 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   </button>
                 </>
               )}
+
+              {/* For Medication Pathway Patients: Active Surveillance, Discharge only */}
+              {(() => {
+                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+                const isMedication = carePathway === 'Medication';
+                return isMedication;
+              })() && (
+                <>
+                  {/* Active Surveillance */}
+                  <button
+                    onClick={() => handleTransfer('Active Surveillance')}
+                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
+                  >
+                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                      <IoHeart className="text-teal-600 text-sm" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
+                  </button>
+
+                  {/* Discharge */}
+                  <button
+                    onClick={() => handleTransfer('Discharge')}
+                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
+                  >
+                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                      <IoCheckmark className="text-teal-600 text-sm" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                  </button>
+                </>
+              )}
               
-              {/* Fallback: For patients on other pathways (Active Monitoring, Active Surveillance, etc.) or when category is 'all' */}
+              {/* Fallback: For patients on other pathways (Active Monitoring, Active Surveillance, Radiotherapy, etc.) or when category is 'all' */}
               {(() => {
                 const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
                 const patientCategory = patient?.category || '';
@@ -2689,10 +2720,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 const isSurgeryPathway = carePathway === 'Surgery Pathway' || patientCategory === 'surgery-pathway';
                 const isPostOp = (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') || 
                                 patientCategory === 'post-op-followup';
+                const isMedication = carePathway === 'Medication';
                 
                 // If patient doesn't match any specific condition but has a pathway, show transfer options
-                // This handles cases like Active Monitoring, Active Surveillance, Medication, Radiotherapy, etc.
-                const shouldShowFallback = patient && carePathway && !isNewPatient && !isSurgeryPathway && !isPostOp;
+                // This handles cases like Active Monitoring, Active Surveillance, Radiotherapy, etc.
+                // Exclude Medication pathway as it has its own specific buttons above
+                const shouldShowFallback = patient && carePathway && !isNewPatient && !isSurgeryPathway && !isPostOp && !isMedication;
                 
                 console.log('🔍 DEBUG: Fallback check:', { 
                   carePathway, 
@@ -3266,12 +3299,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               <input
                                 type="text"
                                 value={medication.duration}
-                                onChange={(e) => {
-                                  // Only allow numbers in duration field
-                                  const numericValue = e.target.value.replace(/[^0-9]/g, '');
-                                  updateMedication(medication.id, 'duration', numericValue);
-                                }}
-                                placeholder="e.g., 30"
+                                onChange={(e) => updateMedication(medication.id, 'duration', e.target.value)}
+                                placeholder="e.g., 30 days, 2 weeks, As needed"
                                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
                               />
                             </div>
