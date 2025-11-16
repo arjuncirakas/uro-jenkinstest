@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FiMail, FiCalendar, FiClock, FiUser, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import SendReminderModal from './SendReminderModal';
-import NotificationToast from './NotificationToast';
+import SuccessErrorModal from './SuccessErrorModal';
 import emailService from '../services/emailService';
 import patientService from '../services/patientService';
 
@@ -17,7 +17,7 @@ const MissedAppointmentsList = ({
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [loadingPatientData, setLoadingPatientData] = useState(false);
   const [localAppointments, setLocalAppointments] = useState(missedAppointments);
-  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
+  const [messageModal, setMessageModal] = useState({ isOpen: false, message: '', type: 'success' });
 
   // Update local appointments when prop changes
   React.useEffect(() => {
@@ -126,6 +126,10 @@ const MissedAppointmentsList = ({
       });
       
       if (result.success) {
+        // Close reminder modal first
+        setShowReminderModal(false);
+        setSelectedAppointment(null);
+        
         // Update local state to mark appointment as sent
         setLocalAppointments(prev => 
           prev.map(apt => 
@@ -140,32 +144,28 @@ const MissedAppointmentsList = ({
         newSelected.delete(appointmentId);
         setSelectedAppointments(newSelected);
         
-        // Show success toast
-        setToast({
+        // Show success modal
+        setMessageModal({
           isOpen: true,
           message: 'Reminder email sent successfully to the patient!',
           type: 'success'
         });
         
-        // Close modal
-        setShowReminderModal(false);
-        setSelectedAppointment(null);
-        
         // Refresh appointments from parent if callback provided
         if (onRefresh) {
-          setTimeout(() => onRefresh(), 500);
+          setTimeout(() => onRefresh(), 1000);
         }
       } else {
         // Extract error message from error object
         const errorMessage = result.error?.message || result.error || 'Unknown error';
-        setToast({
+        setMessageModal({
           isOpen: true,
           message: `Failed to send reminder email: ${errorMessage}`,
           type: 'error'
         });
       }
     } catch (error) {
-      setToast({
+      setMessageModal({
         isOpen: true,
         message: 'Failed to send reminder email. Please try again.',
         type: 'error'
@@ -217,13 +217,13 @@ const MissedAppointmentsList = ({
         setSelectedAppointments(new Set());
         
         if (failedCount === 0) {
-          setToast({
+          setMessageModal({
             isOpen: true,
             message: `Reminders sent successfully to ${sentCount} patient${sentCount !== 1 ? 's' : ''}!`,
             type: 'success'
           });
         } else {
-          setToast({
+          setMessageModal({
             isOpen: true,
             message: `Sent ${sentCount} reminder${sentCount !== 1 ? 's' : ''}, ${failedCount} failed.`,
             type: 'error'
@@ -232,19 +232,19 @@ const MissedAppointmentsList = ({
         
         // Refresh appointments from parent if callback provided
         if (onRefresh) {
-          setTimeout(() => onRefresh(), 500);
+          setTimeout(() => onRefresh(), 1000);
         }
       } else {
         // Extract error message from error object
         const errorMessage = result.error?.message || result.error || 'Unknown error';
-        setToast({
+        setMessageModal({
           isOpen: true,
           message: `Failed to send reminders: ${errorMessage}`,
           type: 'error'
         });
       }
     } catch (error) {
-      setToast({
+      setMessageModal({
         isOpen: true,
         message: 'Failed to send reminders. Please try again.',
         type: 'error'
@@ -512,13 +512,12 @@ const MissedAppointmentsList = ({
         onSend={handleSendReminder}
       />
 
-      {/* Toast Notification */}
-      <NotificationToast
-        isOpen={toast.isOpen}
-        onClose={() => setToast({ ...toast, isOpen: false })}
-        message={toast.message}
-        type={toast.type}
-        duration={toast.type === 'success' ? 3000 : 5000}
+      {/* Success/Error Modal */}
+      <SuccessErrorModal
+        isOpen={messageModal.isOpen}
+        onClose={() => setMessageModal({ ...messageModal, isOpen: false })}
+        message={messageModal.message}
+        type={messageModal.type}
       />
     </>
   );

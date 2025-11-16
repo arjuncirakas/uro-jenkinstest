@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { FiSearch, FiCalendar, FiList, FiArrowLeft } from 'react-icons/fi';
 import { IoNotificationsOutline } from 'react-icons/io5';
 import NotificationModal from '../../components/NotificationModal';
@@ -25,38 +25,38 @@ const Appointments = () => {
   const currentUrologistId = tokenService.getUserId();
   
   // Fetch appointments from API
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      setLoadingAppointments(true);
-      setAppointmentsError(null);
-      
-      try {
-        const result = await bookingService.getAllAppointments({
-          urologistId: showAllPatients ? null : currentUrologistId,
-          search: searchQuery
-        });
-        
-        if (result.success) {
-          setAllAppointments(result.data.appointments || []);
-        } else {
-          setAppointmentsError(result.error || 'Failed to fetch appointments');
-          console.error('Error fetching appointments:', result.error);
-        }
-      } catch (error) {
-        setAppointmentsError('Failed to fetch appointments');
-        console.error('Error fetching appointments:', error);
-      } finally {
-        setLoadingAppointments(false);
-      }
-    };
+  const fetchAppointments = useCallback(async () => {
+    setLoadingAppointments(true);
+    setAppointmentsError(null);
     
+    try {
+      const result = await bookingService.getAllAppointments({
+        urologistId: showAllPatients ? null : currentUrologistId,
+        search: searchQuery
+      });
+      
+      if (result.success) {
+        setAllAppointments(result.data.appointments || []);
+      } else {
+        setAppointmentsError(result.error || 'Failed to fetch appointments');
+        console.error('Error fetching appointments:', result.error);
+      }
+    } catch (error) {
+      setAppointmentsError('Failed to fetch appointments');
+      console.error('Error fetching appointments:', error);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, [showAllPatients, currentUrologistId, searchQuery]);
+
+  useEffect(() => {
     // Debounce search to avoid too many API calls
     const timeoutId = setTimeout(() => {
       fetchAppointments();
     }, searchQuery ? 300 : 0); // 300ms delay when searching, immediate when clearing
     
     return () => clearTimeout(timeoutId);
-  }, [showAllPatients, currentUrologistId, searchQuery]);
+  }, [fetchAppointments, searchQuery]);
 
   // Filter appointments based on toggle state
   // NOTE: Search is now handled server-side, so we just use the appointments as-is
@@ -228,12 +228,7 @@ const Appointments = () => {
               missedAppointments={filteredMissedAppointments}
               showAllPatients={showAllPatients}
               onTogglePatients={setShowAllPatients}
-              onRefresh={() => {
-                // Trigger a refresh by updating search query slightly
-                const currentQuery = searchQuery;
-                setSearchQuery(currentQuery + ' ');
-                setTimeout(() => setSearchQuery(currentQuery), 100);
-              }}
+              onRefresh={fetchAppointments}
             />
           ) : (
             <Calendar 
