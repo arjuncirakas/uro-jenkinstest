@@ -45,18 +45,27 @@ const Surgery = () => {
               const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
               
               // Check if there's a surgery appointment (appointment_type contains 'surgery' or 'surgical')
-              const hasSurgeryAppointment = appointmentsResult.success && 
-                (appointmentsResult.data?.appointments || appointmentsResult.data || []).some(apt => {
-                  const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
-                  return aptType.includes('surgery') || aptType.includes('surgical');
-                });
+              const appointmentsList = appointmentsResult.success ? 
+                (appointmentsResult.data?.appointments || appointmentsResult.data || []) : [];
+              
+              const hasSurgeryAppointmentInList = appointmentsList.some(apt => {
+                const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
+                return aptType.includes('surgery') || aptType.includes('surgical');
+              });
               
               // Get surgery appointment details if exists
-              const surgeryAppointment = hasSurgeryAppointment ? 
-                (appointmentsResult.data?.appointments || appointmentsResult.data || []).find(apt => {
+              const surgeryAppointment = hasSurgeryAppointmentInList ? 
+                appointmentsList.find(apt => {
                   const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
                   return aptType.includes('surgery') || aptType.includes('surgical');
                 }) : null;
+              
+              // Get surgery details from appointment or patient record
+              const surgeryDate = surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || null;
+              const surgeryTime = surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || null;
+              
+              // Determine if surgery is scheduled: check appointment list OR if surgery date/time is set
+              const hasSurgeryAppointment = hasSurgeryAppointmentInList || (surgeryDate || surgeryTime);
               
               return {
                 id: patient.id,
@@ -65,8 +74,8 @@ const Surgery = () => {
                 age: patient.age,
                 gender: patient.gender,
                 surgeryType: surgeryAppointment?.surgeryType || patient.surgeryType || patient.surgery_type || null,
-                surgeryDate: surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || null,
-                surgeryTime: surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || null,
+                surgeryDate: surgeryDate,
+                surgeryTime: surgeryTime,
                 surgeon: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 riskCategory: patient.priority === 'urgent' || patient.priority === 'high' ? 'High Risk' : 'Normal',
                 hasSurgeryAppointment: hasSurgeryAppointment,
@@ -75,6 +84,11 @@ const Surgery = () => {
             } catch (err) {
               console.error(`Error fetching appointments for patient ${patient.id}:`, err);
               // Return patient without appointment info if fetch fails
+              // But still check if surgery is scheduled based on patient's surgery date/time
+              const surgeryDate = patient.surgeryDate || patient.surgery_date || null;
+              const surgeryTime = patient.surgeryTime || patient.surgery_time || null;
+              const hasSurgeryAppointment = !!(surgeryDate || surgeryTime);
+              
               return {
                 id: patient.id,
                 name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
@@ -82,11 +96,11 @@ const Surgery = () => {
                 age: patient.age,
                 gender: patient.gender,
                 surgeryType: patient.surgeryType || patient.surgery_type || null,
-                surgeryDate: patient.surgeryDate || patient.surgery_date || null,
-                surgeryTime: patient.surgeryTime || patient.surgery_time || null,
+                surgeryDate: surgeryDate,
+                surgeryTime: surgeryTime,
                 surgeon: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 riskCategory: patient.priority === 'urgent' || patient.priority === 'high' ? 'High Risk' : 'Normal',
-                hasSurgeryAppointment: false,
+                hasSurgeryAppointment: hasSurgeryAppointment,
                 surgeryAppointmentId: null
               };
             }
