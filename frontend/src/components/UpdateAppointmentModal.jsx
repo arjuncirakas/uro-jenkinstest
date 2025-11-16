@@ -108,7 +108,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         if (result.success) {
           const apiSlots = result.data || [];
           // For surgery appointments, generate all slots (9:00 AM to 5:00 PM, 30-minute intervals)
-          if (appointmentType === 'surgery') {
+          if (appointmentType === 'surgery' || appointmentTypeSelected === 'surgery') {
             const allSlots = [];
             for (let hour = 9; hour <= 17; hour++) {
               for (let minute = 0; minute < 60; minute += 30) {
@@ -149,7 +149,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       }
     }
     // Reset slot selection when date changes for surgery appointments
-    if (appointmentType === 'surgery' && selectedDate) {
+    if ((appointmentType === 'surgery' || appointmentTypeSelected === 'surgery') && selectedDate) {
       // Don't reset if we're just loading existing data
       if (!patient?.hasSurgeryAppointment || !patient?.surgeryDate) {
         setSelectedStartSlot('');
@@ -158,6 +158,45 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
+
+  // Update time slots when appointment type changes to surgery and patient has surgery data
+  useEffect(() => {
+    if ((appointmentType === 'surgery' || appointmentTypeSelected === 'surgery') && 
+        patient?.hasSurgeryAppointment && 
+        patient?.surgeryDate && 
+        patient.surgeryDate !== 'TBD') {
+      
+      console.log('🔄 Appointment type changed to surgery, updating time slots');
+      
+      // Get start time
+      const surgeryStartTime = patient.surgeryStartTime || patient.surgeryTime || '';
+      const normalizedSurgeryTime = surgeryStartTime && surgeryStartTime !== 'TBD' ? surgeryStartTime.substring(0, 5) : '';
+      
+      if (normalizedSurgeryTime) {
+        setSelectedStartSlot(normalizedSurgeryTime);
+        setSelectedTime(normalizedSurgeryTime);
+        console.log('✅ Updated start slot from appointment type change:', normalizedSurgeryTime);
+      }
+      
+      // Get end time
+      let endTime = patient.surgeryEndTime || null;
+      if (!endTime && patient.notes) {
+        const timeRangeMatch = patient.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+        if (timeRangeMatch) {
+          endTime = timeRangeMatch[2];
+          console.log('✅ Extracted end time from notes:', endTime);
+        }
+      }
+      
+      if (endTime) {
+        const normalizedEndTime = endTime.substring(0, 5);
+        setSelectedEndSlot(normalizedEndTime);
+        console.log('✅ Updated end slot from appointment type change:', normalizedEndTime);
+      } else {
+        console.log('⚠️ No end time found when appointment type changed to surgery');
+      }
+    }
+  }, [appointmentTypeSelected, appointmentType, patient?.hasSurgeryAppointment, patient?.surgeryDate, patient?.surgeryStartTime, patient?.surgeryTime, patient?.surgeryEndTime, patient?.notes]);
 
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -184,8 +223,18 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
   useEffect(() => {
     if (patient && isOpen && !loading && urologists.length > 0) {
       // Determine appointment type based on existing appointment
-      // Check if patient has surgery appointment first (surgery appointments are stored as 'urologist' type with surgeryType)
-      if (patient.hasSurgeryAppointment && patient.surgeryAppointmentId) {
+      // Check if patient is in surgery pathway or has surgery appointment
+      const isSurgeryPathway = appointmentType === 'surgery' || 
+                               patient?.pathway === 'Surgery Pathway' || 
+                               patient?.pathway === 'Surgical Pathway' ||
+                               patient?.carePathway === 'Surgery Pathway' ||
+                               patient?.care_pathway === 'Surgery Pathway' ||
+                               patient?.hasSurgeryAppointment;
+      
+      if (isSurgeryPathway) {
+        // Set appointment type to 'surgery' for surgery pathway patients
+        setAppointmentTypeSelected('surgery');
+      } else if (patient.hasSurgeryAppointment && patient.surgeryAppointmentId) {
         // Surgery appointments are stored with appointmentType='urologist' and surgeryType set
         setAppointmentTypeSelected('urologist');
       } else if (patient.nextAppointmentType) {
@@ -193,9 +242,6 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         setAppointmentTypeSelected(patient.nextAppointmentType);
       } else if (patient.nextAppointmentDate || patient.nextAppointmentTime) {
         // If patient has appointment but type is not specified, default to urologist
-        setAppointmentTypeSelected('urologist');
-      } else if (appointmentType === 'surgery') {
-        // If this is a new surgery appointment, set to urologist (surgery appointments use urologist type)
         setAppointmentTypeSelected('urologist');
       }
       // Set default doctor to assigned urologist (surgeon) if available
@@ -255,29 +301,76 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         }
         setSelectedDate(formattedDate);
         
-        const surgeryTime = patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '';
+        // Get start time - prefer surgeryStartTime if available, otherwise use surgeryTime
+        const surgeryStartTime = patient.surgeryStartTime || patient.surgeryTime || '';
+        const surgeryTime = surgeryStartTime && surgeryStartTime !== 'TBD' ? surgeryStartTime : '';
         // Normalize time format to HH:MM
         const normalizedSurgeryTime = surgeryTime ? surgeryTime.substring(0, 5) : '';
         setSelectedTime(normalizedSurgeryTime);
         
-        // Set start and end slots for surgery appointments
-        if (appointmentType === 'surgery') {
-          setSelectedStartSlot(normalizedSurgeryTime);
-          // Try to get end time from patient data first, then from notes
+        // ALWAYS set start and end slots for surgery appointments
+        // Check multiple conditions to ensure we catch all surgery appointment cases
+        const shouldSetSurgerySlots = isSurgeryPathway || 
+                                     appointmentType === 'surgery' || 
+                                     patient.hasSurgeryAppointment ||
+                                     (patient.surgeryStartTime && patient.surgeryEndTime) ||
+                                     (patient.notes && patient.notes.includes('Surgery Time:'));
+        
+        if (shouldSetSurgerySlots) {
+          console.log('🔍 Setting surgery time slots - patient data:', {
+            isSurgeryPathway,
+            appointmentType,
+            hasSurgeryAppointment: patient.hasSurgeryAppointment,
+            surgeryStartTime: patient.surgeryStartTime,
+            surgeryTime: patient.surgeryTime,
+            surgeryEndTime: patient.surgeryEndTime,
+            notes: patient.notes?.substring(0, 150),
+            hasTimeInNotes: patient.notes?.includes('Surgery Time:')
+          });
+          
+          // Set start slot from surgeryStartTime or surgeryTime
+          if (normalizedSurgeryTime) {
+            setSelectedStartSlot(normalizedSurgeryTime);
+            console.log('✅ Set start slot:', normalizedSurgeryTime);
+          } else {
+            console.log('⚠️ No start time found');
+          }
+          
+          // Get end time - prefer surgeryEndTime if available, then try notes
           let endTime = patient.surgeryEndTime || null;
           if (!endTime && patient.notes) {
             // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
             const timeRangeMatch = patient.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
             if (timeRangeMatch) {
               endTime = timeRangeMatch[2];
+              console.log('✅ Extracted end time from notes:', endTime);
+            } else {
+              console.log('⚠️ No time range pattern found in notes. Notes preview:', patient.notes?.substring(0, 200));
             }
           }
+          
           if (endTime) {
             const normalizedEndTime = endTime.substring(0, 5);
             setSelectedEndSlot(normalizedEndTime);
+            console.log('✅ Set end slot:', normalizedEndTime);
           } else {
             setSelectedEndSlot('');
+            console.log('⚠️ No end time found for surgery appointment');
           }
+          
+          console.log('📋 Final time slots:', {
+            startSlot: normalizedSurgeryTime || 'not set',
+            endSlot: endTime ? endTime.substring(0, 5) : 'not set'
+          });
+        } else {
+          console.log('⚠️ Not setting surgery slots - conditions not met:', {
+            isSurgeryPathway,
+            appointmentType,
+            hasSurgeryAppointment: patient.hasSurgeryAppointment,
+            hasSurgeryStartTime: !!patient.surgeryStartTime,
+            hasSurgeryEndTime: !!patient.surgeryEndTime,
+            hasNotes: !!patient.notes
+          });
         }
         
         // Set surgery type if available
@@ -343,7 +436,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     if (e) e.preventDefault();
     
     // Validate required fields based on appointment type
-    if (appointmentType === 'surgery') {
+    if (appointmentType === 'surgery' || appointmentTypeSelected === 'surgery') {
       // For surgery appointments, validate start and end slots
       if (!selectedDoctorId || !selectedDate || !selectedStartSlot) {
         setError('Please fill in all required fields (doctor, date, and start time)');
@@ -357,10 +450,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         setError('End time must be after start time');
         return;
       }
-      if (!surgeryType) {
-        setError('Please specify the surgery type');
-        return;
-      }
+      // Surgery type is optional - removed validation
       // Validate that the selected start time is not in the past
       if (isTimeInPast(selectedDate, selectedStartSlot)) {
         setError('Cannot book or reschedule appointments for past time slots. Please select a future time.');
@@ -399,9 +489,10 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         // Use the selected appointment type from the dropdown (appointmentTypeSelected)
         // This allows changing from urologist to investigation or vice versa
         // For surgery appointments, use start slot as the time and include time range in notes
-        const appointmentTime = appointmentType === 'surgery' ? selectedStartSlot : selectedTime;
+        const isSurgery = appointmentType === 'surgery' || appointmentTypeSelected === 'surgery';
+        const appointmentTime = isSurgery ? selectedStartSlot : selectedTime;
         let appointmentNotes = notes;
-        if (appointmentType === 'surgery' && selectedStartSlot && selectedEndSlot) {
+        if (isSurgery && selectedStartSlot && selectedEndSlot) {
           const timeRangeNote = `Surgery Time: ${selectedStartSlot} - ${selectedEndSlot}`;
           appointmentNotes = notes ? `${timeRangeNote}\n${notes}` : timeRangeNote;
         }
@@ -413,14 +504,14 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             newTime: appointmentTime,
             newDoctorId: selectedDoctorId,
             appointmentType: appointmentTypeSelected, // Use the selected type, not the original
-            surgeryType: appointmentType === 'surgery' ? surgeryType : null,
+            surgeryType: isSurgery ? surgeryType : null,
             notes: appointmentNotes
           }
         );
 
         if (result.success) {
           // Dispatch appropriate events based on the selected appointment type
-          if (appointmentType === 'surgery') {
+          if (isSurgery) {
             window.dispatchEvent(new CustomEvent('surgery:updated', {
               detail: { patientId: patient.id, appointmentData: result.data }
             }));
@@ -467,9 +558,10 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         } else {
           // Book urologist appointment
           // For surgery appointments, use start slot as the time and include time range in notes
-          const appointmentTime = appointmentType === 'surgery' ? selectedStartSlot : selectedTime;
+          const isSurgery = appointmentType === 'surgery' || appointmentTypeSelected === 'surgery';
+          const appointmentTime = isSurgery ? selectedStartSlot : selectedTime;
           let appointmentNotes = notes;
-          if (appointmentType === 'surgery' && selectedStartSlot && selectedEndSlot) {
+          if (isSurgery && selectedStartSlot && selectedEndSlot) {
             const timeRangeNote = `Surgery Time: ${selectedStartSlot} - ${selectedEndSlot}`;
             appointmentNotes = notes ? `${timeRangeNote}\n${notes}` : timeRangeNote;
           }
@@ -479,14 +571,14 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             appointmentTime: appointmentTime,
             urologistId: selectedDoctorId,
             urologistName: selectedDoctor,
-            surgeryType: appointmentType === 'surgery' ? surgeryType : null,
+            surgeryType: isSurgery ? surgeryType : null,
             notes: appointmentNotes,
-            appointmentType: appointmentType === 'surgery' ? 'surgery' : 'urologist'
+            appointmentType: isSurgery ? 'surgery' : 'urologist'
           });
 
           if (result.success) {
             // Dispatch event if it's a surgery appointment
-            if (appointmentType === 'surgery') {
+            if (isSurgery) {
               window.dispatchEvent(new CustomEvent('surgery:updated', {
                 detail: { patientId: patient.id, appointmentData: result.data }
               }));
@@ -554,14 +646,26 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         }
       }
       setSelectedDate(formattedDate);
-      const surgeryTime = patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '';
-      const normalizedSurgeryTime = surgeryTime ? surgeryTime.substring(0, 5) : '';
+      
+      // Get start time - prefer surgeryStartTime if available, otherwise use surgeryTime
+      const surgeryStartTime = patient.surgeryStartTime || patient.surgeryTime || '';
+      const normalizedSurgeryTime = surgeryStartTime && surgeryStartTime !== 'TBD' ? surgeryStartTime.substring(0, 5) : '';
       setSelectedTime(normalizedSurgeryTime);
       
+      // Check if this is a surgery appointment (use same logic as above)
+      const isSurgeryPathway = appointmentType === 'surgery' || 
+                               patient?.pathway === 'Surgery Pathway' || 
+                               patient?.pathway === 'Surgical Pathway' ||
+                               patient?.carePathway === 'Surgery Pathway' ||
+                               patient?.care_pathway === 'Surgery Pathway' ||
+                               patient?.hasSurgeryAppointment;
+      
       // Set start and end slots for surgery appointments
-      if (appointmentType === 'surgery') {
+      if (isSurgeryPathway || appointmentType === 'surgery') {
+        // Set start slot from surgeryStartTime or surgeryTime
         setSelectedStartSlot(normalizedSurgeryTime);
-        // Try to get end time from patient data first, then from notes
+        
+        // Get end time - prefer surgeryEndTime if available, then try notes
         let endTime = patient.surgeryEndTime || null;
         if (!endTime && patient.notes) {
           // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
@@ -570,6 +674,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             endTime = timeRangeMatch[2];
           }
         }
+        
         if (endTime) {
           const normalizedEndTime = endTime.substring(0, 5);
           setSelectedEndSlot(normalizedEndTime);
@@ -600,7 +705,8 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     }
     
     // Don't pre-fill notes for surgery appointments - let user add notes when updating
-    if (!patient?.hasSurgeryAppointment || appointmentType !== 'surgery') {
+    const isSurgery = appointmentType === 'surgery' || appointmentTypeSelected === 'surgery';
+    if (!patient?.hasSurgeryAppointment || !isSurgery) {
       setNotes(patient?.notes || '');
     } else {
       setNotes('');
@@ -711,6 +817,8 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
                   setSelectedDoctor('');
                   setSelectedDoctorId(null);
                   setSelectedTime('');
+                  setSelectedStartSlot('');
+                  setSelectedEndSlot('');
                   setAvailableSlots([]);
                 }}
                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 appearance-none text-gray-900"
@@ -718,6 +826,15 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               >
                 <option value="urologist">Urologist Consultation</option>
                 <option value="investigation">Investigation</option>
+                {/* Show Surgery option for surgery pathway patients or when appointmentType prop is 'surgery' */}
+                {(appointmentType === 'surgery' || 
+                  patient?.pathway === 'Surgery Pathway' || 
+                  patient?.pathway === 'Surgical Pathway' ||
+                  patient?.carePathway === 'Surgery Pathway' ||
+                  patient?.care_pathway === 'Surgery Pathway' ||
+                  patient?.hasSurgeryAppointment) && (
+                  <option value="surgery">Surgery</option>
+                )}
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                 <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -726,7 +843,9 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-1.5">
-              Select whether this is a consultation appointment or an investigation booking
+              {appointmentTypeSelected === 'surgery' 
+                ? 'Select Surgery to schedule a surgery appointment with start and end time slots'
+                : 'Select whether this is a consultation appointment or an investigation booking'}
             </p>
           </div>
 
@@ -780,20 +899,19 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             </div>
           </div>
 
-          {/* Surgery Type Field (only for surgery appointments) */}
-          {appointmentType === 'surgery' && (
+          {/* Surgery Type Field - Hidden for surgery appointments (user doesn't want it) */}
+          {false && (appointmentType === 'surgery' || appointmentTypeSelected === 'surgery') && (
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                 <FiFileText className="w-4 h-4 text-teal-600" />
                 Surgery Type
-                <span className="text-red-500">*</span>
+                <span className="text-gray-400 text-xs">(Optional)</span>
               </label>
               <div className="relative">
                 <select
                   value={surgeryType}
                   onChange={(e) => setSurgeryType(e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200 appearance-none text-gray-900"
-                  required
                 >
                   <option value="">Select surgery type...</option>
                   <option value="Robot-assisted Laparoscopic Prostatectomy">Robot-assisted Laparoscopic Prostatectomy</option>
@@ -837,33 +955,65 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               />
             </div>
 
-            {/* Selected Time Display */}
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                <FiClock className="w-4 h-4 text-teal-600" />
-                Selected Time
-              </label>
-              <div className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 flex items-center justify-between">
-                <span className={selectedTime ? 'font-medium text-teal-700' : 'text-gray-500'}>
-                  {selectedTime || 'No time selected'}
-                </span>
-                {selectedTime && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTime('')}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                    aria-label="Clear selected time"
-                  >
-                    <FiX className="w-4 h-4" />
-                  </button>
-                )}
+            {/* Selected Time Display - Show start/end for surgery, single time for others */}
+            {(appointmentType === 'surgery' || appointmentTypeSelected === 'surgery') ? (
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  <FiClock className="w-4 h-4 text-teal-600" />
+                  Surgery Time Range
+                </label>
+                <div className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 flex items-center justify-between">
+                  <span className={selectedStartSlot && selectedEndSlot ? 'font-medium text-teal-700' : 'text-gray-500'}>
+                    {selectedStartSlot && selectedEndSlot 
+                      ? `${selectedStartSlot} - ${selectedEndSlot}`
+                      : selectedStartSlot 
+                        ? `${selectedStartSlot} - (End time not selected)`
+                        : 'No time selected'}
+                  </span>
+                  {(selectedStartSlot || selectedEndSlot) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTime('');
+                        setSelectedStartSlot('');
+                        setSelectedEndSlot('');
+                      }}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      aria-label="Clear selected time"
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  <FiClock className="w-4 h-4 text-teal-600" />
+                  Selected Time
+                </label>
+                <div className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 flex items-center justify-between">
+                  <span className={selectedTime ? 'font-medium text-teal-700' : 'text-gray-500'}>
+                    {selectedTime || 'No time selected'}
+                  </span>
+                  {selectedTime && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTime('')}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      aria-label="Clear selected time"
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Time Slots - Show start/end selection for surgery pathway patients, single selection for others */}
-          {/* Check if patient is in surgery pathway: appointmentType is 'surgery' OR patient has surgery appointment */}
-          {(appointmentType === 'surgery' || patient?.hasSurgeryAppointment) ? (
+          {/* Check if patient is in surgery pathway: appointmentType is 'surgery' OR appointmentTypeSelected is 'surgery' OR patient has surgery appointment */}
+          {(appointmentType === 'surgery' || appointmentTypeSelected === 'surgery' || patient?.hasSurgeryAppointment) ? (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-3 block">
                 Select Surgery Time Range <span className="text-red-500">*</span>

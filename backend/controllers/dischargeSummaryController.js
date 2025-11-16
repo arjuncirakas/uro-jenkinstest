@@ -6,7 +6,7 @@ import pool from '../config/database.js';
  */
 export const getDischargeSummary = async (req, res) => {
   try {
-    const { patientId } = req.params;
+    const { id: patientId } = req.params;
     
     // Get discharge summary from database
     const result = await pool.query(
@@ -80,7 +80,7 @@ export const createDischargeSummary = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { patientId } = req.params;
+    const { id: patientId } = req.params;
     const {
       admissionDate,
       dischargeDate,
@@ -247,7 +247,7 @@ export const createDischargeSummary = async (req, res) => {
  */
 export const updateDischargeSummary = async (req, res) => {
   try {
-    const { patientId, summaryId } = req.params;
+    const { id: patientId, summaryId } = req.params;
     const updateFields = req.body;
     const userId = req.user.id;
     
@@ -319,7 +319,7 @@ export const updateDischargeSummary = async (req, res) => {
  */
 export const deleteDischargeSummary = async (req, res) => {
   try {
-    const { patientId, summaryId } = req.params;
+    const { id: patientId, summaryId } = req.params;
     
     const result = await pool.query(
       `UPDATE discharge_summaries

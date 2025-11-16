@@ -69,9 +69,11 @@ const Surgery = () => {
               
               // Get surgery details from appointment or patient record
               const rawSurgeryDate = surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || null;
-              const surgeryTime = surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || null;
               
-              // Extract surgery end time from appointment notes or surgeryEndTime field
+              // Use surgeryStartTime if available (from backend extraction), otherwise use appointmentTime
+              const surgeryStartTime = surgeryAppointment?.surgeryStartTime || surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || null;
+              
+              // Use surgeryEndTime if available (from backend extraction), otherwise extract from notes
               let surgeryEndTime = surgeryAppointment?.surgeryEndTime || null;
               if (!surgeryEndTime && surgeryAppointment?.notes) {
                 // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
@@ -80,6 +82,9 @@ const Surgery = () => {
                   surgeryEndTime = timeRangeMatch[2];
                 }
               }
+              
+              // Use surgeryStartTime as the main surgeryTime for backward compatibility
+              const surgeryTime = surgeryStartTime;
               
               // Format date to YYYY-MM-DD for date input field
               const surgeryDate = formatDateForInput(rawSurgeryDate);
@@ -96,6 +101,7 @@ const Surgery = () => {
                 surgeryType: surgeryAppointment?.surgeryType || patient.surgeryType || patient.surgery_type || null,
                 surgeryDate: surgeryDate,
                 surgeryTime: surgeryTime,
+                surgeryStartTime: surgeryStartTime, // Include surgeryStartTime for proper start/end time handling
                 surgeryEndTime: surgeryEndTime,
                 surgeon: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 assignedUrologist: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
