@@ -228,6 +228,12 @@ const Appointments = () => {
               missedAppointments={filteredMissedAppointments}
               showAllPatients={showAllPatients}
               onTogglePatients={setShowAllPatients}
+              onRefresh={() => {
+                // Trigger a refresh by updating search query slightly
+                const currentQuery = searchQuery;
+                setSearchQuery(currentQuery + ' ');
+                setTimeout(() => setSearchQuery(currentQuery), 100);
+              }}
             />
           ) : (
             <Calendar 

@@ -1,20 +1,28 @@
 import React, { useState } from 'react';
 import { FiMail, FiCalendar, FiClock, FiUser, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import SendReminderModal from './SendReminderModal';
+import NotificationToast from './NotificationToast';
 import emailService from '../services/emailService';
-import { bookingService } from '../services/bookingService';
 import patientService from '../services/patientService';
 
 const MissedAppointmentsList = ({ 
   missedAppointments = [], 
   showAllPatients = false,
-  onTogglePatients = null 
+  onTogglePatients = null,
+  onRefresh = null // Callback to refresh appointments from parent
 }) => {
   const [selectedAppointments, setSelectedAppointments] = useState(new Set());
   const [sendingReminders, setSendingReminders] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [loadingPatientData, setLoadingPatientData] = useState(false);
+  const [localAppointments, setLocalAppointments] = useState(missedAppointments);
+  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
+
+  // Update local appointments when prop changes
+  React.useEffect(() => {
+    setLocalAppointments(missedAppointments);
+  }, [missedAppointments]);
 
   // Helper function to convert 24-hour time to 12-hour format
   const convertTo12Hour = (time24) => {
@@ -106,7 +114,7 @@ const MissedAppointmentsList = ({
   const handleSendReminder = async (appointmentId, additionalMessage) => {
     setSendingReminders(true);
     try {
-      // Send email via email service
+      // Send email via email service (backend already updates reminder_sent status)
       const result = await emailService.sendAppointmentReminder({
         appointmentId,
         patientEmail: selectedAppointment.email || selectedAppointment.patient_email || selectedAppointment.patientEmail,
@@ -118,36 +126,50 @@ const MissedAppointmentsList = ({
       });
       
       if (result.success) {
-        // Update appointment status via API
-        try {
-          await bookingService.updateAppointmentStatus(appointmentId, { reminderSent: true });
-        } catch (err) {
-          console.error('Error updating appointment status:', err);
-        }
+        // Update local state to mark appointment as sent
+        setLocalAppointments(prev => 
+          prev.map(apt => 
+            apt.id === appointmentId 
+              ? { ...apt, reminderSent: true }
+              : apt
+          )
+        );
         
         // Remove from selected if it was selected
         const newSelected = new Set(selectedAppointments);
         newSelected.delete(appointmentId);
         setSelectedAppointments(newSelected);
         
-        // Show success message (in a real app, you'd use a toast notification)
-        alert('Reminder email sent successfully to the patient!');
+        // Show success toast
+        setToast({
+          isOpen: true,
+          message: 'Reminder email sent successfully to the patient!',
+          type: 'success'
+        });
         
         // Close modal
         setShowReminderModal(false);
         setSelectedAppointment(null);
         
-        // Trigger parent refresh to update the list
-        if (window.location.reload) {
-          window.location.reload();
+        // Refresh appointments from parent if callback provided
+        if (onRefresh) {
+          setTimeout(() => onRefresh(), 500);
         }
       } else {
         // Extract error message from error object
         const errorMessage = result.error?.message || result.error || 'Unknown error';
-        alert(`Failed to send reminder email: ${errorMessage}`);
+        setToast({
+          isOpen: true,
+          message: `Failed to send reminder email: ${errorMessage}`,
+          type: 'error'
+        });
       }
     } catch (error) {
-      alert('Failed to send reminder email. Please try again.');
+      setToast({
+        isOpen: true,
+        message: 'Failed to send reminder email. Please try again.',
+        type: 'error'
+      });
       console.error('Error sending reminder:', error);
     } finally {
       setSendingReminders(false);
@@ -161,7 +183,7 @@ const MissedAppointmentsList = ({
     setSendingReminders(true);
     try {
       // Prepare reminders data for bulk send
-      const selectedAppointmentsList = missedAppointments.filter(apt => 
+      const selectedAppointmentsList = localAppointments.filter(apt => 
         selectedAppointments.has(apt.id)
       );
       
@@ -175,32 +197,58 @@ const MissedAppointmentsList = ({
         additionalMessage: ''
       }));
       
-      // Send bulk reminders via email service
+      // Send bulk reminders via email service (backend already updates reminder_sent status)
       const result = await emailService.sendBulkReminders(reminders);
       
       if (result.success) {
-        // Update all appointment statuses via API
-        const updatePromises = Array.from(selectedAppointments).map(appointmentId =>
-          bookingService.updateAppointmentStatus(appointmentId, { reminderSent: true })
-            .catch(err => console.error(`Error updating appointment ${appointmentId}:`, err))
+        // Update local state to mark all sent appointments
+        const sentIds = new Set(result.data?.sent?.map(s => s.appointmentId) || []);
+        setLocalAppointments(prev => 
+          prev.map(apt => 
+            sentIds.has(apt.id)
+              ? { ...apt, reminderSent: true }
+              : apt
+          )
         );
         
-        await Promise.all(updatePromises);
+        const sentCount = result.data?.sent?.length || reminders.length;
+        const failedCount = result.data?.failed?.length || 0;
         
         setSelectedAppointments(new Set());
-        alert(`Reminders sent successfully to ${reminders.length} patients!`);
         
-        // Trigger refresh
-        if (window.location.reload) {
-          window.location.reload();
+        if (failedCount === 0) {
+          setToast({
+            isOpen: true,
+            message: `Reminders sent successfully to ${sentCount} patient${sentCount !== 1 ? 's' : ''}!`,
+            type: 'success'
+          });
+        } else {
+          setToast({
+            isOpen: true,
+            message: `Sent ${sentCount} reminder${sentCount !== 1 ? 's' : ''}, ${failedCount} failed.`,
+            type: 'error'
+          });
+        }
+        
+        // Refresh appointments from parent if callback provided
+        if (onRefresh) {
+          setTimeout(() => onRefresh(), 500);
         }
       } else {
         // Extract error message from error object
         const errorMessage = result.error?.message || result.error || 'Unknown error';
-        alert(`Failed to send some reminders: ${errorMessage}`);
+        setToast({
+          isOpen: true,
+          message: `Failed to send reminders: ${errorMessage}`,
+          type: 'error'
+        });
       }
     } catch (error) {
-      alert('Failed to send some reminders. Please try again.');
+      setToast({
+        isOpen: true,
+        message: 'Failed to send reminders. Please try again.',
+        type: 'error'
+      });
       console.error('Error sending bulk reminders:', error);
     } finally {
       setSendingReminders(false);
@@ -208,9 +256,9 @@ const MissedAppointmentsList = ({
   };
 
   // Filter appointments based on reminder status
-  const [reminderFilter, setReminderFilter] = useState('all'); // 'all', 'sent', 'not-sent'
+  const [reminderFilter, setReminderFilter] = useState('not-sent'); // 'all', 'sent', 'not-sent' - default to 'not-sent'
   
-  const filteredAppointments = missedAppointments.filter(appointment => {
+  const filteredAppointments = localAppointments.filter(appointment => {
     if (reminderFilter === 'sent') return appointment.reminderSent;
     if (reminderFilter === 'not-sent') return !appointment.reminderSent;
     return true;
@@ -229,6 +277,11 @@ const MissedAppointmentsList = ({
             </h2>
             <p className="text-gray-500 text-sm mt-1">
               {filteredAppointments.length} missed appointment{filteredAppointments.length !== 1 ? 's' : ''}
+              {reminderFilter === 'not-sent' && localAppointments.filter(a => a.reminderSent).length > 0 && (
+                <span className="text-teal-600 ml-2">
+                  ({localAppointments.filter(a => a.reminderSent).length} reminder{localAppointments.filter(a => a.reminderSent).length !== 1 ? 's' : ''} sent)
+                </span>
+              )}
             </p>
           </div>
           
@@ -457,6 +510,15 @@ const MissedAppointmentsList = ({
         }}
         appointment={selectedAppointment}
         onSend={handleSendReminder}
+      />
+
+      {/* Toast Notification */}
+      <NotificationToast
+        isOpen={toast.isOpen}
+        onClose={() => setToast({ ...toast, isOpen: false })}
+        message={toast.message}
+        type={toast.type}
+        duration={toast.type === 'success' ? 3000 : 5000}
       />
     </>
   );
