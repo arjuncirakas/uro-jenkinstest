@@ -3568,9 +3568,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                                 {availableSlots.map((slot) => {
                                   const isAvailable = slot.available;
-                                  const isBeforeStart = selectedStartSlot && slot.time < selectedStartSlot;
                                   const isSelected = slot.time === selectedStartSlot;
-                                  const isDisabled = !isAvailable || isBeforeStart;
+                                  // Only disable if slot is not available - allow changing start slot selection
+                                  const isDisabled = !isAvailable;
 
                                   return (
                                     <button
@@ -3579,12 +3579,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       onClick={() => {
                                         if (!isDisabled) {
                                           setSelectedStartSlot(slot.time);
-                                          setSelectedEndSlot('');
+                                          // Reset end slot if new start is after current end
+                                          if (selectedEndSlot && slot.time >= selectedEndSlot) {
+                                            setSelectedEndSlot('');
+                                            setTransferDetails(prev => ({ 
+                                              ...prev, 
+                                              surgeryEndTime: ''
+                                            }));
+                                          }
                                           setTransferDetails(prev => ({ 
                                             ...prev, 
                                             surgeryTime: slot.time,
-                                            surgeryStartTime: slot.time,
-                                            surgeryEndTime: ''
+                                            surgeryStartTime: slot.time
                                           }));
                                         }
                                       }}
