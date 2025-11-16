@@ -14,7 +14,9 @@ import {
   removeNoShowNote,
   getAvailableTimeSlots,
   rescheduleNoShowAppointment,
-  getAllAppointments
+  getAllAppointments,
+  sendAppointmentReminder,
+  sendBulkAppointmentReminders
 } from '../controllers/bookingController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
@@ -141,6 +143,22 @@ router.get('/appointments',
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor']),
   getAllAppointments
+);
+
+// Send appointment reminder email
+router.post('/appointments/send-reminder',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
+  sendAppointmentReminder
+);
+
+// Send bulk appointment reminders
+router.post('/appointments/send-bulk-reminders',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
+  sendBulkAppointmentReminders
 );
 
 export default router;

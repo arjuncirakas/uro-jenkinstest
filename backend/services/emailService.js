@@ -331,6 +331,137 @@ export const sendPasswordSetupEmail = async (to, firstName, token) => {
   }
 };
 
+// Send appointment reminder email
+export const sendAppointmentReminderEmail = async (reminderData) => {
+  try {
+    const {
+      patientEmail,
+      patientName,
+      appointmentDate,
+      appointmentTime,
+      appointmentType,
+      additionalMessage = ''
+    } = reminderData;
+
+    // Validate required fields
+    if (!patientEmail || !patientName || !appointmentDate || !appointmentTime) {
+      throw new Error('Missing required fields: patientEmail, patientName, appointmentDate, appointmentTime');
+    }
+
+    // Validate email address
+    if (!patientEmail.includes('@')) {
+      throw new Error(`Invalid email address: ${patientEmail}`);
+    }
+
+    const transporter = createTransporter();
+
+    // Format date for display
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    };
+
+    // Format time for display (convert 24-hour to 12-hour)
+    const formatTime = (time24) => {
+      if (!time24) return '';
+      const [hours, minutes] = time24.split(':');
+      const hour = parseInt(hours, 10);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return `${displayHour}:${minutes} ${period}`;
+    };
+
+    const formattedDate = formatDate(appointmentDate);
+    const formattedTime = formatTime(appointmentTime);
+
+    // Build email content
+    const emailSubject = 'Appointment Reminder - Urology Care';
+    
+    let emailContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px;">
+          <h2 style="color: #2c3e50; margin-bottom: 20px;">Appointment Reminder</h2>
+          <p style="color: #555; font-size: 16px; margin-bottom: 20px;">
+            Dear ${patientName},
+          </p>
+          <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #e74c3c;">
+            <p style="color: #333; font-size: 16px; margin-bottom: 15px;">
+              This is a reminder that you missed your appointment scheduled for <strong>${formattedDate}</strong> at <strong>${formattedTime}</strong>.
+            </p>
+            <p style="color: #333; font-size: 16px; margin-bottom: 15px;">
+              We would like to reschedule your appointment at your earliest convenience. Please contact us to book a new appointment.
+            </p>
+            ${appointmentType ? `<p style="color: #666; font-size: 14px; margin-top: 10px;"><strong>Appointment Type:</strong> ${appointmentType}</p>` : ''}
+          </div>
+    `;
+
+    // Add additional message if provided
+    if (additionalMessage && additionalMessage.trim()) {
+      emailContent += `
+          <div style="background-color: #ecfdf5; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
+            <p style="color: #333; font-size: 14px; margin: 0;"><strong>Additional Message:</strong></p>
+            <p style="color: #333; font-size: 14px; margin-top: 10px; white-space: pre-wrap;">${additionalMessage.replace(/\n/g, '<br>')}</p>
+          </div>
+      `;
+    }
+
+    emailContent += `
+          <p style="color: #555; font-size: 16px; margin-top: 20px;">
+            Best regards,<br>
+            <strong>Urology Care Team</strong>
+          </p>
+        </div>
+        <div style="background-color: #e5e7eb; padding: 15px; text-align: center; font-size: 12px; color: #6b7280; margin-top: 20px; border-radius: 8px;">
+          <p style="margin: 0;">This is an automated reminder from the Urology Patient Management System.</p>
+          <p style="margin: 5px 0;">Please contact us if you have any questions or need to reschedule.</p>
+        </div>
+      </div>
+    `;
+
+    const mailOptions = {
+      from: {
+        name: 'Urology Patient Management System',
+        address: process.env.SMTP_USER
+      },
+      to: patientEmail,
+      subject: emailSubject,
+      html: emailContent,
+      text: `Dear ${patientName},\n\nThis is a reminder that you missed your appointment scheduled for ${formattedDate} at ${formattedTime}.\n\nWe would like to reschedule your appointment at your earliest convenience. Please contact us to book a new appointment.\n\n${additionalMessage ? `Additional Message: ${additionalMessage}\n\n` : ''}Best regards,\nUrology Care Team`
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log(`📧 Appointment reminder email sent successfully to ${patientEmail} (Message ID: ${result.messageId})`);
+    
+    return {
+      success: true,
+      messageId: result.messageId,
+      message: 'Appointment reminder email sent successfully'
+    };
+
+  } catch (error) {
+    console.error('❌ Error sending appointment reminder email:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
+    return {
+      success: false,
+      error: error.message,
+      errorCode: error.code,
+      errorResponse: error.response,
+      message: 'Failed to send appointment reminder email'
+    };
+  }
+};
+
 // Test email functionality
 export const testEmailService = async (testEmail) => {
   try {

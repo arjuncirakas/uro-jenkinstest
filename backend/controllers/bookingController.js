@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { sendAppointmentReminderEmail } from '../services/emailService.js';
 
 // Book urologist appointment
 export const bookUrologistAppointment = async (req, res) => {
@@ -2700,5 +2701,200 @@ export const getAllAppointments = async (req, res) => {
       console.log(`📅 [getAllAppointments ${requestId}] Releasing database connection`);
       client.release();
     }
+  }
+};
+
+// Send appointment reminder email
+export const sendAppointmentReminder = async (req, res) => {
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n📧 [sendAppointmentReminder ${requestId}] Starting`);
+  console.log(`📧 [sendAppointmentReminder ${requestId}] Request body:`, req.body);
+  
+  let client;
+  try {
+    const {
+      appointmentId,
+      patientEmail,
+      patientName,
+      appointmentDate,
+      appointmentTime,
+      appointmentType,
+      additionalMessage
+    } = req.body;
+
+    // Validate required fields
+    if (!appointmentId || !patientEmail || !patientName || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: appointmentId, patientEmail, patientName, appointmentDate, appointmentTime'
+      });
+    }
+
+    // Verify appointment exists and belongs to the user (optional - for security)
+    client = await pool.connect();
+    const appointmentCheck = await client.query(
+      'SELECT id, patient_id, appointment_date, appointment_time, status FROM appointments WHERE id = $1',
+      [appointmentId]
+    );
+
+    if (appointmentCheck.rows.length === 0) {
+      client.release();
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found'
+      });
+    }
+
+    client.release();
+
+    // Send reminder email
+    const emailResult = await sendAppointmentReminderEmail({
+      patientEmail,
+      patientName,
+      appointmentDate,
+      appointmentTime,
+      appointmentType,
+      additionalMessage: additionalMessage || ''
+    });
+
+    if (!emailResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send reminder email',
+        error: emailResult.error || emailResult.message
+      });
+    }
+
+    // Optionally update appointment to mark reminder as sent
+    try {
+      client = await pool.connect();
+      await client.query(
+        'UPDATE appointments SET reminder_sent = true, reminder_sent_at = NOW() WHERE id = $1',
+        [appointmentId]
+      );
+      client.release();
+    } catch (updateError) {
+      console.error(`⚠️ [sendAppointmentReminder ${requestId}] Failed to update appointment reminder status:`, updateError);
+      // Don't fail the request if update fails
+      if (client) client.release();
+    }
+
+    console.log(`✅ [sendAppointmentReminder ${requestId}] Reminder sent successfully`);
+    return res.json({
+      success: true,
+      message: 'Reminder email sent successfully',
+      data: {
+        messageId: emailResult.messageId,
+        appointmentId
+      }
+    });
+
+  } catch (error) {
+    console.error(`❌ [sendAppointmentReminder ${requestId}] Error:`, error);
+    if (client) client.release();
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Send bulk appointment reminders
+export const sendBulkAppointmentReminders = async (req, res) => {
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n📧 [sendBulkAppointmentReminders ${requestId}] Starting`);
+  console.log(`📧 [sendBulkAppointmentReminders ${requestId}] Request body:`, req.body);
+  
+  try {
+    const { reminders } = req.body;
+
+    if (!reminders || !Array.isArray(reminders) || reminders.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reminders array is required and must not be empty'
+      });
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Send reminders in parallel
+    const reminderPromises = reminders.map(async (reminder) => {
+      try {
+        // Validate required fields
+        if (!reminder.appointmentId || !reminder.patientEmail || !reminder.patientName || 
+            !reminder.appointmentDate || !reminder.appointmentTime) {
+          throw new Error('Missing required fields');
+        }
+
+        // Send email
+        const emailResult = await sendAppointmentReminderEmail({
+          patientEmail: reminder.patientEmail,
+          patientName: reminder.patientName,
+          appointmentDate: reminder.appointmentDate,
+          appointmentTime: reminder.appointmentTime,
+          appointmentType: reminder.appointmentType,
+          additionalMessage: reminder.additionalMessage || ''
+        });
+
+        if (emailResult.success) {
+          // Update appointment reminder status
+          const client = await pool.connect();
+          try {
+            await client.query(
+              'UPDATE appointments SET reminder_sent = true, reminder_sent_at = NOW() WHERE id = $1',
+              [reminder.appointmentId]
+            );
+          } finally {
+            client.release();
+          }
+
+          return {
+            appointmentId: reminder.appointmentId,
+            success: true,
+            messageId: emailResult.messageId
+          };
+        } else {
+          throw new Error(emailResult.error || emailResult.message);
+        }
+      } catch (error) {
+        return {
+          appointmentId: reminder.appointmentId,
+          success: false,
+          error: error.message
+        };
+      }
+    });
+
+    const reminderResults = await Promise.all(reminderPromises);
+
+    // Separate successes and errors
+    reminderResults.forEach(result => {
+      if (result.success) {
+        results.push(result);
+      } else {
+        errors.push(result);
+      }
+    });
+
+    console.log(`✅ [sendBulkAppointmentReminders ${requestId}] Completed: ${results.length} sent, ${errors.length} failed`);
+
+    return res.json({
+      success: errors.length === 0,
+      message: `Sent ${results.length} reminder(s)${errors.length > 0 ? `, ${errors.length} failed` : ''}`,
+      data: {
+        sent: results,
+        failed: errors
+      }
+    });
+
+  } catch (error) {
+    console.error(`❌ [sendBulkAppointmentReminders ${requestId}] Error:`, error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };

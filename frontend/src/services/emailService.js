@@ -15,7 +15,7 @@ class EmailService {
    */
   async sendAppointmentReminder(reminderData) {
     try {
-      const response = await apiClient.post('/appointments/send-reminder', {
+      const response = await apiClient.post('/booking/appointments/send-reminder', {
         appointmentId: reminderData.appointmentId,
         patientEmail: reminderData.patientEmail,
         patientName: reminderData.patientName,
@@ -47,7 +47,7 @@ class EmailService {
    */
   async sendBulkReminders(reminders) {
     try {
-      const response = await apiClient.post('/appointments/send-bulk-reminders', {
+      const response = await apiClient.post('/booking/appointments/send-bulk-reminders', {
         reminders
       });
       
