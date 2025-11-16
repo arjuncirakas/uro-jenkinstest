@@ -4511,11 +4511,16 @@ Follow-up Appointment Scheduled:
                             // Add surgery appointment section if surgery was scheduled
                             let surgeryAppointmentSection = '';
                             if (surgeryScheduled && selectedPathway === 'Surgery Pathway') {
+                              // Use start and end slots if available, otherwise fall back to surgeryTime
+                              const timeDisplay = (selectedStartSlot && selectedEndSlot) 
+                                ? `${selectedStartSlot} - ${selectedEndSlot}`
+                                : transferDetails.surgeryTime || 'Not specified';
+                              
                               surgeryAppointmentSection = `
 
 Surgery Appointment Scheduled:
 - Date: ${transferDetails.surgeryDate}
-- Time: ${transferDetails.surgeryTime}`;
+- Time: ${timeDisplay}`;
                             }
 
                             transferNoteContent = `
