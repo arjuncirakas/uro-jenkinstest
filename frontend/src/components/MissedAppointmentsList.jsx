@@ -142,7 +142,9 @@ const MissedAppointmentsList = ({
           window.location.reload();
         }
       } else {
-        alert(`Failed to send reminder email: ${result.error || 'Unknown error'}`);
+        // Extract error message from error object
+        const errorMessage = result.error?.message || result.error || 'Unknown error';
+        alert(`Failed to send reminder email: ${errorMessage}`);
       }
     } catch (error) {
       alert('Failed to send reminder email. Please try again.');
@@ -193,7 +195,9 @@ const MissedAppointmentsList = ({
           window.location.reload();
         }
       } else {
-        alert(`Failed to send some reminders: ${result.error || 'Unknown error'}`);
+        // Extract error message from error object
+        const errorMessage = result.error?.message || result.error || 'Unknown error';
+        alert(`Failed to send some reminders: ${errorMessage}`);
       }
     } catch (error) {
       alert('Failed to send some reminders. Please try again.');
