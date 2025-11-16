@@ -71,6 +71,16 @@ const Surgery = () => {
               const rawSurgeryDate = surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || null;
               const surgeryTime = surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || null;
               
+              // Extract surgery end time from appointment notes or surgeryEndTime field
+              let surgeryEndTime = surgeryAppointment?.surgeryEndTime || null;
+              if (!surgeryEndTime && surgeryAppointment?.notes) {
+                // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
+                const timeRangeMatch = surgeryAppointment.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+                if (timeRangeMatch) {
+                  surgeryEndTime = timeRangeMatch[2];
+                }
+              }
+              
               // Format date to YYYY-MM-DD for date input field
               const surgeryDate = formatDateForInput(rawSurgeryDate);
               
@@ -86,11 +96,14 @@ const Surgery = () => {
                 surgeryType: surgeryAppointment?.surgeryType || patient.surgeryType || patient.surgery_type || null,
                 surgeryDate: surgeryDate,
                 surgeryTime: surgeryTime,
+                surgeryEndTime: surgeryEndTime,
                 surgeon: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 assignedUrologist: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 riskCategory: patient.priority === 'urgent' || patient.priority === 'high' ? 'High Risk' : 'Normal',
                 hasSurgeryAppointment: hasSurgeryAppointment,
                 surgeryAppointmentId: surgeryAppointment?.id || null,
+                // Include appointment notes for extracting time range
+                notes: surgeryAppointment?.notes || null,
                 // Include full patient data for the modal
                 fullName: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
                 firstName: patient.firstName,

@@ -263,11 +263,20 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         // Set start and end slots for surgery appointments
         if (appointmentType === 'surgery') {
           setSelectedStartSlot(normalizedSurgeryTime);
-          // Try to get end time from notes or patient data
-          const endTime = patient.surgeryEndTime || (patient.notes && patient.notes.match(/Surgery Time:.*?-\s*(\d{2}:\d{2})/)?.[1]) || '';
+          // Try to get end time from patient data first, then from notes
+          let endTime = patient.surgeryEndTime || null;
+          if (!endTime && patient.notes) {
+            // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
+            const timeRangeMatch = patient.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+            if (timeRangeMatch) {
+              endTime = timeRangeMatch[2];
+            }
+          }
           if (endTime) {
             const normalizedEndTime = endTime.substring(0, 5);
             setSelectedEndSlot(normalizedEndTime);
+          } else {
+            setSelectedEndSlot('');
           }
         }
         
@@ -552,8 +561,15 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       // Set start and end slots for surgery appointments
       if (appointmentType === 'surgery') {
         setSelectedStartSlot(normalizedSurgeryTime);
-        // Try to get end time from notes or patient data
-        const endTime = patient.surgeryEndTime || (patient.notes && patient.notes.match(/Surgery Time:.*?-\s*(\d{2}:\d{2})/)?.[1]) || '';
+        // Try to get end time from patient data first, then from notes
+        let endTime = patient.surgeryEndTime || null;
+        if (!endTime && patient.notes) {
+          // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
+          const timeRangeMatch = patient.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+          if (timeRangeMatch) {
+            endTime = timeRangeMatch[2];
+          }
+        }
         if (endTime) {
           const normalizedEndTime = endTime.substring(0, 5);
           setSelectedEndSlot(normalizedEndTime);
@@ -845,8 +861,9 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             </div>
           </div>
 
-          {/* Time Slots - Show start/end selection for surgery, single selection for others */}
-          {appointmentType === 'surgery' ? (
+          {/* Time Slots - Show start/end selection for surgery pathway patients, single selection for others */}
+          {/* Check if patient is in surgery pathway: appointmentType is 'surgery' OR patient has surgery appointment */}
+          {(appointmentType === 'surgery' || patient?.hasSurgeryAppointment) ? (
             <div>
               <label className="text-sm font-medium text-gray-700 mb-3 block">
                 Select Surgery Time Range <span className="text-red-500">*</span>
