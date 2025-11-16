@@ -263,9 +263,15 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         setSurgeryType('');
       }
       
-      setNotes(patient.notes || '');
+      // Don't pre-fill notes for surgery appointments - let user add notes when updating
+      // Only pre-fill notes for non-surgery appointments
+      if (!patient.hasSurgeryAppointment || appointmentType !== 'surgery') {
+        setNotes(patient.notes || '');
+      } else {
+        setNotes('');
+      }
     }
-  }, [patient, isOpen, urologists, loading]);
+  }, [patient, isOpen, urologists, loading, appointmentType]);
 
   const getPathwayStyle = (pathway) => {
     switch (pathway) {
@@ -480,7 +486,12 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       setSurgeryType('');
     }
     
-    setNotes(patient?.notes || '');
+    // Don't pre-fill notes for surgery appointments - let user add notes when updating
+    if (!patient?.hasSurgeryAppointment || appointmentType !== 'surgery') {
+      setNotes(patient?.notes || '');
+    } else {
+      setNotes('');
+    }
   };
 
   // Handle confirmation modal actions

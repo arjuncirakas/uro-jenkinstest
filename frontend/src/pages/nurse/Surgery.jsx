@@ -94,8 +94,8 @@ const Surgery = () => {
                 // Include full patient data for the modal
                 fullName: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
                 firstName: patient.firstName,
-                lastName: patient.lastName,
-                notes: surgeryAppointment?.notes || patient.notes || null
+                lastName: patient.lastName
+                // Don't pre-fill notes - let user add notes when updating surgery details
               };
             } catch (err) {
               console.error(`Error fetching appointments for patient ${patient.id}:`, err);
@@ -125,8 +125,8 @@ const Surgery = () => {
                 // Include full patient data for the modal
                 fullName: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
                 firstName: patient.firstName,
-                lastName: patient.lastName,
-                notes: patient.notes || null
+                lastName: patient.lastName
+                // Don't pre-fill notes - let user add notes when updating surgery details
               };
             }
           })
