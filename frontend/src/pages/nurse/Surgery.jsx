@@ -44,20 +44,27 @@ const Surgery = () => {
               // Fetch appointments for this patient
               const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
               
-              // Check if there's a surgery appointment (appointment_type contains 'surgery' or 'surgical')
+              // Check if there's a surgery appointment
+              // A surgery appointment can be identified by:
+              // 1. appointmentType contains 'surgery' or 'surgical'
+              // 2. OR the appointment has a surgeryType field (indicates it's a surgery appointment)
               const appointmentsList = appointmentsResult.success ? 
                 (appointmentsResult.data?.appointments || appointmentsResult.data || []) : [];
               
               const hasSurgeryAppointmentInList = appointmentsList.some(apt => {
                 const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
-                return aptType.includes('surgery') || aptType.includes('surgical');
+                const hasSurgeryType = !!(apt.surgeryType || apt.surgery_type);
+                // Check if it's a surgery appointment: has surgeryType field OR appointmentType mentions surgery/surgical
+                return hasSurgeryType || aptType.includes('surgery') || aptType.includes('surgical');
               });
               
-              // Get surgery appointment details if exists
+              // Get surgery appointment details if exists (prioritize appointments with surgeryType)
               const surgeryAppointment = hasSurgeryAppointmentInList ? 
                 appointmentsList.find(apt => {
                   const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
-                  return aptType.includes('surgery') || aptType.includes('surgical');
+                  const hasSurgeryType = !!(apt.surgeryType || apt.surgery_type);
+                  // Prioritize finding appointments with surgeryType, then check appointmentType
+                  return hasSurgeryType || aptType.includes('surgery') || aptType.includes('surgical');
                 }) : null;
               
               // Get surgery details from appointment or patient record
