@@ -2507,7 +2507,7 @@ export const getAllAppointments = async (req, res) => {
         a.urologist_id,
         d.first_name as urologist_first_name,
         d.last_name as urologist_last_name,
-        a.reminder_sent,
+        COALESCE(a.reminder_sent, false) as reminder_sent,
         a.reminder_sent_at,
         a.created_at,
         a.updated_at
@@ -2537,7 +2537,7 @@ export const getAllAppointments = async (req, res) => {
         NULL as urologist_id,
         ib.investigation_name as urologist_first_name,
         '' as urologist_last_name,
-        NULL as reminder_sent,
+        false as reminder_sent,
         NULL as reminder_sent_at,
         ib.created_at,
         ib.updated_at

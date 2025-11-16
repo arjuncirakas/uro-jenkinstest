@@ -567,6 +567,25 @@ export const initializeDatabase = async () => {
         console.log(`⚠️  Surgery_type column might already exist: ${err.message}`);
       }
       
+      // Add reminder_sent and reminder_sent_at columns if they don't exist
+      try {
+        await client.query(`
+          ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
+        `);
+        console.log('✅ Added reminder_sent column to appointments table');
+      } catch (err) {
+        console.log(`⚠️  reminder_sent column might already exist: ${err.message}`);
+      }
+      
+      try {
+        await client.query(`
+          ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;
+        `);
+        console.log('✅ Added reminder_sent_at column to appointments table');
+      } catch (err) {
+        console.log(`⚠️  reminder_sent_at column might already exist: ${err.message}`);
+      }
+      
       // Try to update foreign key constraint to reference doctors(id) instead of users(id)
       // This is safe to run multiple times - it will only update if the constraint exists
       try {
