@@ -359,24 +359,41 @@ export const getPatientAppointments = async (req, res) => {
     const result = await client.query(query, queryParams);
 
     // Format results for frontend
-    const formattedAppointments = result.rows.map(row => ({
-      id: row.id,
-      appointmentType: row.appointment_type,
-      appointmentDate: row.appointment_date,
-      appointmentTime: row.appointment_time,
-      urologistId: row.urologist_id,
-      urologistName: row.urologist_name,
-      surgeryType: row.surgery_type,
-      status: row.status,
-      notes: row.notes,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      formattedDate: new Date(row.appointment_date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      })
-    }));
+    const formattedAppointments = result.rows.map(row => {
+      // Extract surgery start and end times from notes if available
+      let surgeryStartTime = null;
+      let surgeryEndTime = null;
+      
+      if (row.notes) {
+        // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
+        const timeRangeMatch = row.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+        if (timeRangeMatch) {
+          surgeryStartTime = timeRangeMatch[1];
+          surgeryEndTime = timeRangeMatch[2];
+        }
+      }
+      
+      return {
+        id: row.id,
+        appointmentType: row.appointment_type,
+        appointmentDate: row.appointment_date,
+        appointmentTime: row.appointment_time,
+        urologistId: row.urologist_id,
+        urologistName: row.urologist_name,
+        surgeryType: row.surgery_type,
+        status: row.status,
+        notes: row.notes,
+        surgeryStartTime: surgeryStartTime,
+        surgeryEndTime: surgeryEndTime,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        formattedDate: new Date(row.appointment_date).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        })
+      };
+    });
 
     res.json({
       success: true,
