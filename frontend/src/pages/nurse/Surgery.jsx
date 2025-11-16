@@ -68,8 +68,11 @@ const Surgery = () => {
                 }) : null;
               
               // Get surgery details from appointment or patient record
-              const surgeryDate = surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || null;
+              const rawSurgeryDate = surgeryAppointment?.appointmentDate || surgeryAppointment?.date || patient.surgeryDate || patient.surgery_date || null;
               const surgeryTime = surgeryAppointment?.appointmentTime || surgeryAppointment?.time || patient.surgeryTime || patient.surgery_time || null;
+              
+              // Format date to YYYY-MM-DD for date input field
+              const surgeryDate = formatDateForInput(rawSurgeryDate);
               
               // Determine if surgery is scheduled: check appointment list OR if surgery date/time is set
               const hasSurgeryAppointment = hasSurgeryAppointmentInList || (surgeryDate || surgeryTime);
@@ -84,16 +87,25 @@ const Surgery = () => {
                 surgeryDate: surgeryDate,
                 surgeryTime: surgeryTime,
                 surgeon: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
+                assignedUrologist: surgeryAppointment?.urologistName || surgeryAppointment?.urologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 riskCategory: patient.priority === 'urgent' || patient.priority === 'high' ? 'High Risk' : 'Normal',
                 hasSurgeryAppointment: hasSurgeryAppointment,
-                surgeryAppointmentId: surgeryAppointment?.id || null
+                surgeryAppointmentId: surgeryAppointment?.id || null,
+                // Include full patient data for the modal
+                fullName: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+                firstName: patient.firstName,
+                lastName: patient.lastName,
+                notes: surgeryAppointment?.notes || patient.notes || null
               };
             } catch (err) {
               console.error(`Error fetching appointments for patient ${patient.id}:`, err);
               // Return patient without appointment info if fetch fails
               // But still check if surgery is scheduled based on patient's surgery date/time
-              const surgeryDate = patient.surgeryDate || patient.surgery_date || null;
+              const rawSurgeryDate = patient.surgeryDate || patient.surgery_date || null;
               const surgeryTime = patient.surgeryTime || patient.surgery_time || null;
+              
+              // Format date to YYYY-MM-DD for date input field
+              const surgeryDate = formatDateForInput(rawSurgeryDate);
               const hasSurgeryAppointment = !!(surgeryDate || surgeryTime);
               
               return {
@@ -106,9 +118,15 @@ const Surgery = () => {
                 surgeryDate: surgeryDate,
                 surgeryTime: surgeryTime,
                 surgeon: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
+                assignedUrologist: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
                 riskCategory: patient.priority === 'urgent' || patient.priority === 'high' ? 'High Risk' : 'Normal',
                 hasSurgeryAppointment: hasSurgeryAppointment,
-                surgeryAppointmentId: null
+                surgeryAppointmentId: null,
+                // Include full patient data for the modal
+                fullName: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+                firstName: patient.firstName,
+                lastName: patient.lastName,
+                notes: patient.notes || null
               };
             }
           })
@@ -133,6 +151,23 @@ const Surgery = () => {
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  };
+
+  // Format date to YYYY-MM-DD for date input field
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return null;
+    try {
+      // If it's already in YYYY-MM-DD format, return as is
+      if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        return dateString;
+      }
+      // Otherwise, parse and format
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      return date.toISOString().split('T')[0];
+    } catch (error) {
+      return null;
+    }
   };
 
   // Format date for display

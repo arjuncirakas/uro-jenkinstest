@@ -155,12 +155,18 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
   useEffect(() => {
     if (patient && isOpen && !loading && urologists.length > 0) {
       // Determine appointment type based on existing appointment
-      // Check if patient has investigation booking or urologist appointment
-      if (patient.nextAppointmentType) {
+      // Check if patient has surgery appointment first (surgery appointments are stored as 'urologist' type with surgeryType)
+      if (patient.hasSurgeryAppointment && patient.surgeryAppointmentId) {
+        // Surgery appointments are stored with appointmentType='urologist' and surgeryType set
+        setAppointmentTypeSelected('urologist');
+      } else if (patient.nextAppointmentType) {
         // Set appointment type based on what patient already has
         setAppointmentTypeSelected(patient.nextAppointmentType);
       } else if (patient.nextAppointmentDate || patient.nextAppointmentTime) {
         // If patient has appointment but type is not specified, default to urologist
+        setAppointmentTypeSelected('urologist');
+      } else if (appointmentType === 'surgery') {
+        // If this is a new surgery appointment, set to urologist (surgery appointments use urologist type)
         setAppointmentTypeSelected('urologist');
       }
       // Set default doctor to assigned urologist (surgeon) if available
@@ -206,12 +212,35 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
       // Set appointment details if exists
       // Check for surgery appointment first
       if (patient.hasSurgeryAppointment && patient.surgeryDate && patient.surgeryDate !== 'TBD') {
-        setSelectedDate(patient.surgeryDate);
+        // Format date to YYYY-MM-DD for date input field
+        let formattedDate = patient.surgeryDate;
+        if (typeof patient.surgeryDate === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(patient.surgeryDate)) {
+          try {
+            const date = new Date(patient.surgeryDate);
+            if (!isNaN(date.getTime())) {
+              formattedDate = date.toISOString().split('T')[0];
+            }
+          } catch (error) {
+            console.error('Error formatting surgery date:', error);
+          }
+        }
+        setSelectedDate(formattedDate);
+        
         const surgeryTime = patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '';
         // Normalize time format to HH:MM
         const normalizedSurgeryTime = surgeryTime ? surgeryTime.substring(0, 5) : '';
         setSelectedTime(normalizedSurgeryTime);
-        setSurgeryType(patient.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '');
+        
+        // Set surgery type if available
+        const surgeryTypeValue = patient.surgeryType && patient.surgeryType !== 'TBD' ? patient.surgeryType : '';
+        setSurgeryType(surgeryTypeValue);
+        
+        console.log('Setting surgery appointment details:', {
+          date: formattedDate,
+          time: normalizedSurgeryTime,
+          surgeryType: surgeryTypeValue,
+          hasSurgeryAppointment: patient.hasSurgeryAppointment
+        });
       } 
       // Check for regular appointment (nextAppointmentDate/nextAppointmentTime)
       else if (patient.nextAppointmentDate || patient.nextAppointmentTime) {
@@ -419,7 +448,19 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
     
     // Reset appointment details - check for surgery first, then regular appointment
     if (patient?.hasSurgeryAppointment && patient?.surgeryDate && patient.surgeryDate !== 'TBD') {
-      setSelectedDate(patient.surgeryDate);
+      // Format date to YYYY-MM-DD for date input field
+      let formattedDate = patient.surgeryDate;
+      if (typeof patient.surgeryDate === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(patient.surgeryDate)) {
+        try {
+          const date = new Date(patient.surgeryDate);
+          if (!isNaN(date.getTime())) {
+            formattedDate = date.toISOString().split('T')[0];
+          }
+        } catch (error) {
+          console.error('Error formatting surgery date:', error);
+        }
+      }
+      setSelectedDate(formattedDate);
       const surgeryTime = patient.surgeryTime && patient.surgeryTime !== 'TBD' ? patient.surgeryTime : '';
       const normalizedSurgeryTime = surgeryTime ? surgeryTime.substring(0, 5) : '';
       setSelectedTime(normalizedSurgeryTime);
