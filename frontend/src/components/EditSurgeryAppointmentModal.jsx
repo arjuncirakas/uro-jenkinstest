@@ -19,11 +19,6 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Surgery slot selection states
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [selectedStartSlot, setSelectedStartSlot] = useState('');
-  const [selectedEndSlot, setSelectedEndSlot] = useState('');
 
   useEffect(() => {
     if (isOpen && appointment) {
@@ -39,28 +34,23 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
         ? (appointmentTime.length === 5 ? appointmentTime : appointmentTime.substring(0, 5))
         : '';
 
-      // Extract start and end times from appointment
-      let startTime = formattedTime;
-      let endTime = '';
+      // Extract surgery time from appointment
+      let surgeryTime = formattedTime;
       
-      // Try to get end time from appointment data or notes
-      if (appointment.surgeryEndTime || appointment.surgery_end_time) {
-        const endTimeRaw = appointment.surgeryEndTime || appointment.surgery_end_time;
-        endTime = endTimeRaw.length === 5 ? endTimeRaw : endTimeRaw.substring(0, 5);
-      } else if (appointment.notes) {
-        // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
-        const timeRangeMatch = appointment.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+      // Try to extract from notes if time is in range format: "Surgery Time: HH:MM - HH:MM"
+      // Use the start time if it's a range
+      if (!surgeryTime && appointment.notes) {
+        const timeRangeMatch = appointment.notes.match(/Surgery Time:\s*(\d{2}:\d{2})(?:\s*-\s*\d{2}:\d{2})?/);
         if (timeRangeMatch) {
-          startTime = timeRangeMatch[1];
-          endTime = timeRangeMatch[2];
+          surgeryTime = timeRangeMatch[1];
         }
       }
 
       setFormData({
         surgeryDate: formattedDate,
-        surgeryTime: startTime,
-        surgeryStartTime: startTime,
-        surgeryEndTime: endTime,
+        surgeryTime: surgeryTime,
+        surgeryStartTime: surgeryTime,
+        surgeryEndTime: '',
         reason: appointment.reason || appointment.surgeryType || '',
         rescheduleReason: '',
         priority: appointment.priority || 'normal',
@@ -68,70 +58,16 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
         additionalNotes: appointment.additionalNotes || ''
       });
       
-      // Set slot selections
-      setSelectedStartSlot(startTime);
-      setSelectedEndSlot(endTime);
-      
       setError(null);
     }
   }, [isOpen, appointment]);
 
-  // Fetch available time slots when date is selected
-  useEffect(() => {
-    const fetchAvailableSlots = async () => {
-      if (!formData.surgeryDate || !isOpen) {
-        setAvailableSlots([]);
-        return;
-      }
-
-      const currentUser = authService.getCurrentUser();
-      if (!currentUser || !currentUser.id) {
-        return;
-      }
-
-      const urologistId = currentUser.id;
-      setLoadingSlots(true);
-
-      try {
-        const result = await bookingService.getAvailableTimeSlots(urologistId, formData.surgeryDate, 'urologist');
-        if (result.success) {
-          const apiSlots = result.data || [];
-          // Generate all possible time slots (9:00 AM to 5:00 PM, 30-minute intervals)
-          const allSlots = [];
-          for (let hour = 9; hour <= 17; hour++) {
-            for (let minute = 0; minute < 60; minute += 30) {
-              const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-              // Check if this slot is available from API response
-              const apiSlot = apiSlots.find(s => s.time === timeString);
-              allSlots.push({
-                time: timeString,
-                available: apiSlot ? apiSlot.available : false
-              });
-            }
-          }
-          setAvailableSlots(allSlots);
-        } else {
-          console.error('Failed to fetch available slots:', result.error);
-          setAvailableSlots([]);
-        }
-      } catch (error) {
-        console.error('Error fetching available slots:', error);
-        setAvailableSlots([]);
-      } finally {
-        setLoadingSlots(false);
-      }
-    };
-
-    fetchAvailableSlots();
-  }, [formData.surgeryDate, isOpen]);
-
-  // Reset slot selection when date changes
+  // Reset surgery time when date changes (only for new appointments, not when editing)
   useEffect(() => {
     if (formData.surgeryDate && !appointment) {
-      setSelectedStartSlot('');
-      setSelectedEndSlot('');
+      setFormData(prev => ({ ...prev, surgeryTime: '' }));
     }
-  }, [formData.surgeryDate]);
+  }, [formData.surgeryDate, appointment]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -140,18 +76,8 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
 
     try {
       // Validate form
-      if (!formData.surgeryDate || !selectedStartSlot || !formData.rescheduleReason) {
-        setError('Please fill in all required fields (date, start time, and reason for rescheduling)');
-        setLoading(false);
-        return;
-      }
-      if (!selectedEndSlot) {
-        setError('Please select both start and end time for the surgery duration');
-        setLoading(false);
-        return;
-      }
-      if (selectedEndSlot <= selectedStartSlot) {
-        setError('End time must be after start time');
+      if (!formData.surgeryDate || !formData.surgeryTime || !formData.rescheduleReason) {
+        setError('Please fill in all required fields (date, time, and reason for rescheduling)');
         setLoading(false);
         return;
       }
@@ -178,19 +104,19 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
       }
 
       // Update appointment using reschedule endpoint
-      // Include time range in notes
-      const timeRangeNote = `Surgery Time: ${selectedStartSlot} - ${selectedEndSlot}`;
-      const baseNotes = `Surgery scheduled: ${formData.reason}\nPriority: ${formData.priority}\n${timeRangeNote}\nClinical Rationale: ${formData.clinicalRationale}${formData.additionalNotes ? `\n\nAdditional Notes: ${formData.additionalNotes}` : ''}`;
+      // Include surgery time in notes
+      const timeNote = `Surgery Time: ${formData.surgeryTime}`;
+      const baseNotes = `Surgery scheduled: ${formData.reason}\nPriority: ${formData.priority}\n${timeNote}\nClinical Rationale: ${formData.clinicalRationale}${formData.additionalNotes ? `\n\nAdditional Notes: ${formData.additionalNotes}` : ''}`;
       
       const updateData = {
         newDate: formData.surgeryDate,
-        newTime: selectedStartSlot, // Use start slot as the appointment time
+        newTime: formData.surgeryTime, // Use surgery time
         newDoctorId: currentUser.id,
         appointmentType: 'surgery',
         surgeryType: formData.reason,
         rescheduleReason: formData.rescheduleReason,
-        surgeryStartTime: selectedStartSlot,
-        surgeryEndTime: selectedEndSlot,
+        surgeryStartTime: formData.surgeryTime,
+        surgeryEndTime: '', // No end time needed
         notes: baseNotes
       };
 
@@ -210,7 +136,7 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
 
 New Appointment:
 - Date: ${formattedNewDate}
-- Time: ${selectedStartSlot} - ${selectedEndSlot}
+- Time: ${formData.surgeryTime}
 
 Reason: ${formData.rescheduleReason || 'Not specified'}`;
 
@@ -388,123 +314,22 @@ Reason: ${formData.rescheduleReason || 'Not specified'}`;
                 />
               </div>
 
-              {/* Available Time Slots Selection */}
-              {formData.surgeryDate && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Surgery Time Range *
-                  </label>
-                  {loadingSlots ? (
-                    <div className="text-sm text-gray-500 py-4">Loading available slots...</div>
-                  ) : (
-                    <div>
-                      {/* Start Time Selection */}
-                      <div className="mb-3">
-                        <label className="block text-xs font-medium text-gray-600 mb-2">
-                          Start Time: {selectedStartSlot || 'Not selected'}
-                        </label>
-                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 max-h-48 overflow-y-auto p-1">
-                          {availableSlots.map((slot) => {
-                            const isAvailable = slot.available;
-                            const slotTime = slot.time ? slot.time.substring(0, 5) : '';
-                            const isSelected = slotTime === selectedStartSlot;
-                            const isDisabled = !isAvailable;
-
-                            return (
-                              <button
-                                key={slot.time}
-                                type="button"
-                                onClick={() => {
-                                  if (!isDisabled) {
-                                    setSelectedStartSlot(slotTime);
-                                    setFormData(prev => ({ 
-                                      ...prev, 
-                                      surgeryTime: slotTime,
-                                      surgeryStartTime: slotTime
-                                    }));
-                                    // Reset end slot if new start is after current end
-                                    if (selectedEndSlot && slotTime >= selectedEndSlot) {
-                                      setSelectedEndSlot('');
-                                      setFormData(prev => ({ ...prev, surgeryEndTime: '' }));
-                                    }
-                                  }
-                                }}
-                                disabled={isDisabled}
-                                className={`
-                                  px-3 py-2 text-xs rounded-md border transition-colors
-                                  ${isSelected 
-                                    ? 'bg-teal-600 text-white border-teal-600 font-semibold' 
-                                    : isDisabled
-                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-teal-50 hover:border-teal-400'
-                                  }
-                                `}
-                              >
-                                {slotTime}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* End Time Selection */}
-                      {selectedStartSlot && (
-                        <div className="mt-4">
-                          <label className="block text-xs font-medium text-gray-600 mb-2">
-                            End Time: {selectedEndSlot || 'Not selected'}
-                          </label>
-                          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 max-h-48 overflow-y-auto p-1">
-                            {availableSlots.map((slot) => {
-                              const isAvailable = slot.available;
-                              const slotTime = slot.time ? slot.time.substring(0, 5) : '';
-                              const isBeforeStart = slotTime <= selectedStartSlot;
-                              const isSelected = slotTime === selectedEndSlot;
-                              const isDisabled = !isAvailable || isBeforeStart;
-
-                              return (
-                                <button
-                                  key={slot.time}
-                                  type="button"
-                                  onClick={() => {
-                                    if (!isDisabled) {
-                                      setSelectedEndSlot(slotTime);
-                                      setFormData(prev => ({ 
-                                        ...prev, 
-                                        surgeryEndTime: slotTime
-                                      }));
-                                    }
-                                  }}
-                                  disabled={isDisabled}
-                                  className={`
-                                    px-3 py-2 text-xs rounded-md border transition-colors
-                                    ${isSelected 
-                                      ? 'bg-orange-600 text-white border-orange-600 font-semibold' 
-                                      : isDisabled
-                                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                      : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50 hover:border-orange-400'
-                                    }
-                                  `}
-                                >
-                                  {slotTime}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {selectedStartSlot && !selectedEndSlot && (
-                            <p className="text-xs text-amber-600 mt-2">
-                              Please select an end time for the surgery duration
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {availableSlots.length === 0 && !loadingSlots && (
-                        <p className="text-sm text-gray-500 py-4">No available slots for this date</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Surgery Time Input */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Surgery Time *
+                </label>
+                <input
+                  type="time"
+                  value={formData.surgeryTime}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    surgeryTime: e.target.value 
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                  required
+                />
+              </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
