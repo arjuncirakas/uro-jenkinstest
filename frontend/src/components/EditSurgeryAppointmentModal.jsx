@@ -82,26 +82,17 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
         return;
       }
 
-      const currentUser = authService.getCurrentUser();
-      if (!currentUser || !currentUser.id) {
-        throw new Error('User data is incomplete. Please log in again.');
+      // Get the doctor/urologist ID from the appointment
+      // The appointment should have urologistId or urologist_id field
+      // This is the doctor's ID from the doctors table, not the user's ID
+      const doctorId = appointment.urologistId || appointment.urologist_id || appointment.doctorId || appointment.doctor_id;
+      
+      if (!doctorId) {
+        throw new Error('Doctor information not found in appointment. Please contact support.');
       }
 
-      // Get urologist name
-      let urologistName = '';
-      if (currentUser.firstName && currentUser.lastName) {
-        urologistName = `${currentUser.firstName} ${currentUser.lastName}`;
-      } else if (currentUser.first_name && currentUser.last_name) {
-        urologistName = `${currentUser.first_name} ${currentUser.last_name}`;
-      } else if (currentUser.name) {
-        urologistName = currentUser.name;
-      } else if (currentUser.username) {
-        urologistName = currentUser.username;
-      }
-
-      if (!urologistName || urologistName.trim() === '') {
-        throw new Error('Urologist name could not be determined. Please update your profile.');
-      }
+      // Get urologist name from appointment
+      const urologistName = appointment.urologistName || appointment.urologist_name || appointment.urologist || 'Unknown';
 
       // Update appointment using reschedule endpoint
       // Include surgery time in notes
@@ -111,7 +102,7 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
       const updateData = {
         newDate: formData.surgeryDate,
         newTime: formData.surgeryTime, // Use surgery time
-        newDoctorId: currentUser.id,
+        newDoctorId: doctorId, // Use the doctor ID from the appointment
         appointmentType: 'surgery',
         surgeryType: formData.reason,
         rescheduleReason: formData.rescheduleReason,
