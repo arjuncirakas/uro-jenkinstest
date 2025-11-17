@@ -25,6 +25,7 @@ import { corsOptions, validateCorsConfig, corsLoggingMiddleware } from './middle
 import { initAutoNoShowScheduler } from './schedulers/autoNoShowScheduler.js';
 import { protectApiRoutes } from './middleware/apiAuth.js';
 import { restrictHealthCheckAccess } from './middleware/healthCheckAuth.js';
+import { auditMiddleware, auditAuthMiddleware } from './middleware/auditMiddleware.js';
 
 // Load environment variables
 dotenv.config();
@@ -144,12 +145,15 @@ app.get('/api', (req, res) => {
 // Serve uploaded files statically (for debugging)
 app.use('/uploads', express.static('uploads'));
 
+// Apply audit middleware for API routes
+app.use('/api', auditMiddleware);
+
 // Apply global API authentication middleware
 // This protects ALL /api/* routes except public auth endpoints
 app.use(protectApiRoutes);
 
-// Register API routes
-app.use('/api/auth', authRoutes);
+// Register API routes with audit logging
+app.use('/api/auth', auditAuthMiddleware, authRoutes);
 app.use('/api/superadmin', superadminRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api', notesRoutes);

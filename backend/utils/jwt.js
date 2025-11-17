@@ -53,3 +53,17 @@ export const verifyRefreshToken = (token) => {
     throw error;
   }
 };
+
+// Cookie configuration helper
+export const getCookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  return {
+    httpOnly: true, // Prevent JavaScript access
+    secure: isProduction, // Only send over HTTPS in production
+    sameSite: 'strict', // CSRF protection
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
+    ...(isProduction && process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }) // Set domain in production if needed
+  };
+};
