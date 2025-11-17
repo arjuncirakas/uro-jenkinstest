@@ -1880,18 +1880,33 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                       </button>
                                     );
                                   })()}
-                                  <button
-                                    onClick={() => handleDeleteNote(note.id)}
-                                    disabled={deletingNote === note.id}
-                                    className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Delete note"
-                                  >
-                                    {deletingNote === note.id ? (
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-                                    ) : (
-                                      <Trash className="w-4 h-4" />
-                                    )}
-                                  </button>
+                                  {/* Don't show delete button for pathway transfer notes or reschedule notes */}
+                                  {(() => {
+                                    const noteContent = note.content || '';
+                                    const noteType = note.type || '';
+                                    const isPathwayTransfer = noteType === 'pathway_transfer' || noteContent.includes('PATHWAY TRANSFER');
+                                    const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                                    
+                                    // Only show delete button if it's not a pathway transfer note and not a reschedule note
+                                    if (isPathwayTransfer || isRescheduleNote) {
+                                      return null;
+                                    }
+                                    
+                                    return (
+                                      <button
+                                        onClick={() => handleDeleteNote(note.id)}
+                                        disabled={deletingNote === note.id}
+                                        className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Delete note"
+                                      >
+                                        {deletingNote === note.id ? (
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                                        ) : (
+                                          <Trash className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             </div>
