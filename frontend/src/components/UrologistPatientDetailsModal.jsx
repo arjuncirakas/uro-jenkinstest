@@ -225,61 +225,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   }, [isOpen, patient, checkSurgeryAppointment]);
 
-  // Fetch available time slots when surgery date is selected
+  // Reset surgery time when date changes
   useEffect(() => {
-    const fetchAvailableSlots = async () => {
-      if (!transferDetails.surgeryDate || selectedPathway !== 'Surgery Pathway') {
-        setAvailableSlots([]);
-        setSelectedStartSlot('');
-        setSelectedEndSlot('');
-        return;
-      }
-
-      const currentUser = authService.getCurrentUser();
-      if (!currentUser || !currentUser.id) {
-        return;
-      }
-
-      const urologistId = currentUser.id;
-      setLoadingSlots(true);
-
-      try {
-        const result = await bookingService.getAvailableTimeSlots(urologistId, transferDetails.surgeryDate, 'urologist');
-        if (result.success) {
-          const apiSlots = result.data || [];
-          // Generate all possible time slots (9:00 AM to 5:00 PM, 30-minute intervals)
-          const allSlots = [];
-          for (let hour = 9; hour <= 17; hour++) {
-            for (let minute = 0; minute < 60; minute += 30) {
-              const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-              // Check if this slot is available from API response
-              const apiSlot = apiSlots.find(s => s.time === timeString);
-              allSlots.push({
-                time: timeString,
-                available: apiSlot ? apiSlot.available : false
-              });
-            }
-          }
-          setAvailableSlots(allSlots);
-        } else {
-          console.error('Failed to fetch available slots:', result.error);
-          setAvailableSlots([]);
-        }
-      } catch (error) {
-        console.error('Error fetching available slots:', error);
-        setAvailableSlots([]);
-      } finally {
-        setLoadingSlots(false);
-      }
-    };
-
-    fetchAvailableSlots();
-  }, [transferDetails.surgeryDate, selectedPathway]);
-
-  // Reset slot selection when date changes
-  useEffect(() => {
-    setSelectedStartSlot('');
-    setSelectedEndSlot('');
     setTransferDetails(prev => ({ ...prev, surgeryTime: '', surgeryStartTime: '', surgeryEndTime: '' }));
   }, [transferDetails.surgeryDate]);
 
@@ -3602,123 +3549,22 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       />
                     </div>
 
-                    {/* Available Time Slots Selection */}
-                    {transferDetails.surgeryDate && (
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Select Surgery Time Range *
-                        </label>
-                        {loadingSlots ? (
-                          <div className="text-sm text-gray-500 py-4">Loading available slots...</div>
-                        ) : (
-                          <div>
-                            <div className="mb-3">
-                              <label className="block text-xs font-medium text-gray-600 mb-2">
-                                Start Time: {selectedStartSlot || 'Not selected'}
-                              </label>
-                              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-                                {availableSlots.map((slot) => {
-                                  const isAvailable = slot.available;
-                                  const isSelected = slot.time === selectedStartSlot;
-                                  // Only disable if slot is not available - allow changing start slot selection
-                                  const isDisabled = !isAvailable;
-
-                                  return (
-                                    <button
-                                      key={slot.time}
-                                      type="button"
-                                      onClick={() => {
-                                        if (!isDisabled) {
-                                          setSelectedStartSlot(slot.time);
-                                          // Reset end slot if new start is after current end
-                                          if (selectedEndSlot && slot.time >= selectedEndSlot) {
-                                            setSelectedEndSlot('');
-                                            setTransferDetails(prev => ({ 
-                                              ...prev, 
-                                              surgeryEndTime: ''
-                                            }));
-                                          }
-                                          setTransferDetails(prev => ({ 
-                                            ...prev, 
-                                            surgeryTime: slot.time,
-                                            surgeryStartTime: slot.time
-                                          }));
-                                        }
-                                      }}
-                                      disabled={isDisabled}
-                                      className={`
-                                        px-3 py-2 text-xs rounded-md border transition-colors
-                                        ${isSelected 
-                                          ? 'bg-teal-600 text-white border-teal-600 font-semibold' 
-                                          : isDisabled
-                                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                          : 'bg-white text-gray-700 border-gray-300 hover:bg-teal-50 hover:border-teal-400'
-                                        }
-                                      `}
-                                    >
-                                      {slot.time}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {selectedStartSlot && (
-                              <div className="mt-4">
-                                <label className="block text-xs font-medium text-gray-600 mb-2">
-                                  End Time: {selectedEndSlot || 'Not selected'}
-                                </label>
-                                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-                                  {availableSlots.map((slot) => {
-                                    const isAvailable = slot.available;
-                                    const isBeforeStart = slot.time <= selectedStartSlot;
-                                    const isSelected = slot.time === selectedEndSlot;
-                                    const isDisabled = !isAvailable || isBeforeStart;
-
-                                    return (
-                                      <button
-                                        key={slot.time}
-                                        type="button"
-                                        onClick={() => {
-                                          if (!isDisabled) {
-                                            setSelectedEndSlot(slot.time);
-                                            setTransferDetails(prev => ({ 
-                                              ...prev, 
-                                              surgeryEndTime: slot.time
-                                            }));
-                                          }
-                                        }}
-                                        disabled={isDisabled}
-                                        className={`
-                                          px-3 py-2 text-xs rounded-md border transition-colors
-                                          ${isSelected 
-                                            ? 'bg-orange-600 text-white border-orange-600 font-semibold' 
-                                            : isDisabled
-                                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50 hover:border-orange-400'
-                                          }
-                                        `}
-                                      >
-                                        {slot.time}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                {selectedStartSlot && !selectedEndSlot && (
-                                  <p className="text-xs text-amber-600 mt-2">
-                                    Please select an end time for the surgery duration
-                                  </p>
-                                )}
-                              </div>
-                            )}
-
-                            {availableSlots.length === 0 && !loadingSlots && (
-                              <p className="text-sm text-gray-500 py-4">No available slots for this date</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {/* Surgery Time Input */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Surgery Time *
+                      </label>
+                      <input
+                        type="time"
+                        value={transferDetails.surgeryTime}
+                        onChange={(e) => setTransferDetails(prev => ({ 
+                          ...prev, 
+                          surgeryTime: e.target.value 
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -4122,12 +3968,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         return;
                       }
                       // Validate surgery scheduling fields
-                      if (!transferDetails.surgeryDate || !selectedStartSlot) {
-                        showErrorModal('Validation Error', 'Please select surgery date and start time');
-                        return;
-                      }
-                      if (!selectedEndSlot) {
-                        showErrorModal('Validation Error', 'Please select both start and end time for the surgery duration');
+                      if (!transferDetails.surgeryDate || !transferDetails.surgeryTime) {
+                        showErrorModal('Validation Error', 'Please select surgery date and time');
                         return;
                       }
                       // Validate surgery date is not in the past
@@ -4137,11 +3979,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       surgeryDate.setHours(0, 0, 0, 0);
                       if (surgeryDate < today) {
                         showErrorModal('Validation Error', 'Surgery date cannot be in the past');
-                        return;
-                      }
-                      // Validate end time is after start time
-                      if (selectedEndSlot <= selectedStartSlot) {
-                        showErrorModal('Validation Error', 'End time must be after start time');
                         return;
                       }
                     } else if (selectedPathway === 'Post-op Transfer') {
@@ -4327,18 +4164,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
                     // Handle surgery scheduling for Surgery Pathway (BEFORE pathway transfer)
                     let surgeryScheduled = false;
-                    // Store surgery time range for use in clinical note creation
-                    let surgeryStartTime = '';
-                    let surgeryEndTime = '';
+                    // Store surgery time for use in clinical note creation
+                    let surgeryTime = '';
                     
                     if (selectedPathway === 'Surgery Pathway') {
                       try {
                         console.log('🔍 Scheduling surgery BEFORE pathway transfer');
                         console.log('📋 Surgery details:', transferDetails);
                         
-                        // Capture start and end times for use in clinical note
-                        surgeryStartTime = selectedStartSlot || transferDetails.surgeryTime || '';
-                        surgeryEndTime = selectedEndSlot || '';
+                        // Capture surgery time for use in clinical note
+                        surgeryTime = transferDetails.surgeryTime || '';
                         
                         const currentUser = authService.getCurrentUser();
                         if (!currentUser || !currentUser.id) {
@@ -4365,15 +4200,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         
                         const surgeryData = {
                           appointmentDate: transferDetails.surgeryDate,
-                          appointmentTime: surgeryStartTime, // Use selected start time
+                          appointmentTime: surgeryTime, // Use surgery time
                           urologistId: urologistId,
                           urologistName: urologistName.trim(),
                           appointmentType: 'surgery',
                           surgeryType: transferDetails.reason,
-                          notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nSurgery Time: ${surgeryStartTime}${surgeryEndTime ? ` - ${surgeryEndTime}` : ''}\nClinical Rationale: ${transferDetails.clinicalRationale}${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
+                          notes: `Surgery scheduled: ${transferDetails.reason}\nPriority: ${transferDetails.priority}\nSurgery Time: ${surgeryTime}\nClinical Rationale: ${transferDetails.clinicalRationale}${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
                           priority: transferDetails.priority,
-                          surgeryStartTime: surgeryStartTime,
-                          surgeryEndTime: surgeryEndTime
+                          surgeryStartTime: surgeryTime,
+                          surgeryEndTime: '' // No end time needed
                         };
                         
                         console.log('📤 Surgery data being sent:', JSON.stringify(surgeryData, null, 2));
@@ -4519,10 +4354,8 @@ Follow-up Appointment Scheduled:
                             // Add surgery appointment section if surgery was scheduled
                             let surgeryAppointmentSection = '';
                             if (surgeryScheduled && selectedPathway === 'Surgery Pathway') {
-                              // Use captured start and end times, or fall back to surgeryTime
-                              const timeDisplay = (surgeryStartTime && surgeryEndTime) 
-                                ? `${surgeryStartTime} - ${surgeryEndTime}`
-                                : surgeryStartTime || transferDetails.surgeryTime || 'Not specified';
+                              // Use captured surgery time
+                              const timeDisplay = surgeryTime || transferDetails.surgeryTime || 'Not specified';
                               
                               surgeryAppointmentSection = `
 

@@ -22,37 +22,59 @@ const PostOpFollowup = () => {
     setError(null);
     
     try {
-      // Fetch all patients and filter by Post-op Followup pathway
-      const result = await patientService.getPatients({
-        page: 1,
-        limit: 100,
-        status: 'Active'
-      });
+      // Fetch both Active and Discharged patients to include discharged patients in post-op followup
+      const [activeResult, dischargedResult] = await Promise.all([
+        patientService.getPatients({
+          page: 1,
+          limit: 100,
+          status: 'Active'
+        }),
+        patientService.getPatients({
+          page: 1,
+          limit: 100,
+          status: 'Discharged'
+        })
+      ]);
       
-      if (result.success) {
-        // Filter patients by Post-op Transfer or Post-op Followup pathway
-        const postOpPatientsList = (result.data || []).filter(patient => {
+      // Combine results from both statuses
+      const allPatients = [
+        ...(activeResult.success ? (activeResult.data || []) : []),
+        ...(dischargedResult.success ? (dischargedResult.data || []) : [])
+      ];
+      
+      if (activeResult.success || dischargedResult.success) {
+        // Filter patients by Post-op Transfer, Post-op Followup, or Discharge pathway
+        // This ensures discharged patients are also listed in post-op followup
+        const postOpPatientsList = allPatients.filter(patient => {
           const pathway = patient.carePathway || patient.care_pathway || patient.pathway || '';
-          return pathway === 'Post-op Transfer' || pathway === 'Post-op Followup';
+          return pathway === 'Post-op Transfer' || pathway === 'Post-op Followup' || pathway === 'Discharge';
         });
         
         // Transform to match expected format
-        const transformedPatients = postOpPatientsList.map(patient => ({
-          id: patient.id,
-          name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
-          upi: patient.upi,
-          age: patient.age,
-          gender: patient.gender,
-          surgeryType: patient.surgeryType || patient.surgery_type || 'N/A',
-          surgeryDate: patient.surgeryDate || patient.surgery_date || '-',
-          surgeon: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
-          latestPsa: patient.initialPSA || patient.initial_psa || '-',
-          nextAppointment: patient.nextAppointment || 'TBD'
-        }));
+        const transformedPatients = postOpPatientsList.map(patient => {
+          const pathway = patient.carePathway || patient.care_pathway || patient.pathway || '';
+          return {
+            id: patient.id,
+            name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
+            upi: patient.upi,
+            age: patient.age,
+            gender: patient.gender,
+            surgeryType: patient.surgeryType || patient.surgery_type || 'N/A',
+            surgeryDate: patient.surgeryDate || patient.surgery_date || '-',
+            surgeon: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
+            latestPsa: patient.initialPSA || patient.initial_psa || '-',
+            nextAppointment: patient.nextAppointment || 'TBD',
+            category: 'post-op-followup', // Set category for post-op followup patients
+            carePathway: pathway, // Include pathway for modal checks
+            care_pathway: pathway // Include both formats
+          };
+        });
         
         setPostOpPatients(transformedPatients);
       } else {
-        setError(result.error || 'Failed to fetch post-op patients');
+        // Handle error if both requests failed
+        const errorMsg = activeResult.error || dischargedResult.error || 'Failed to fetch post-op patients';
+        setError(errorMsg);
       }
     } catch (err) {
       setError('Failed to fetch post-op patients');
@@ -86,8 +108,8 @@ const PostOpFollowup = () => {
   };
 
   // Filter patients based on search query
-  // NOTE: This search only filters within Post-op Transfer/Post-op Followup pathway patients
-  // The postOpPatients array is already pre-filtered to only include patients from these pathways
+  // NOTE: This search filters within Post-op Transfer/Post-op Followup/Discharge pathway patients
+  // The postOpPatients array is already pre-filtered to include patients from these pathways (including discharged patients)
   const filteredPatients = postOpPatients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||

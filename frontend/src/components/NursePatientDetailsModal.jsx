@@ -810,8 +810,140 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       const { patientService } = await import('../services/patientService');
       const result = await patientService.getDischargeSummary(patient.id);
       
-      if (result.success) {
-        setDischargeSummary(result.data);
+      if (result.success && result.data) {
+        // Parse JSON fields if they are strings (PostgreSQL JSON fields might be strings)
+        const summary = { ...result.data };
+        
+        // Parse JSON fields if needed
+        if (typeof summary.diagnosis === 'string') {
+          try {
+            summary.diagnosis = JSON.parse(summary.diagnosis);
+          } catch (e) {
+            console.warn('Failed to parse diagnosis JSON:', e);
+          }
+        }
+        // Normalize diagnosis structure - ensure secondary is an array
+        if (summary.diagnosis) {
+          if (!summary.diagnosis.primary) summary.diagnosis.primary = '';
+          if (!summary.diagnosis.secondary) {
+            summary.diagnosis.secondary = [];
+          } else if (typeof summary.diagnosis.secondary === 'string') {
+            // If secondary is a string, try to parse it or convert to array
+            try {
+              const parsed = JSON.parse(summary.diagnosis.secondary);
+              summary.diagnosis.secondary = Array.isArray(parsed) ? parsed : [parsed];
+            } catch (e) {
+              // If it's just a string, convert to array
+              summary.diagnosis.secondary = summary.diagnosis.secondary ? [summary.diagnosis.secondary] : [];
+            }
+          } else if (!Array.isArray(summary.diagnosis.secondary)) {
+            // If it's not an array, convert to array
+            summary.diagnosis.secondary = summary.diagnosis.secondary ? [summary.diagnosis.secondary] : [];
+          }
+        }
+        
+        if (typeof summary.procedure === 'string') {
+          try {
+            summary.procedure = JSON.parse(summary.procedure);
+          } catch (e) {
+            console.warn('Failed to parse procedure JSON:', e);
+          }
+        }
+        // Normalize procedure structure
+        if (summary.procedure) {
+          if (!summary.procedure.name) summary.procedure.name = '';
+          if (!summary.procedure.date) summary.procedure.date = '';
+          if (!summary.procedure.surgeon) summary.procedure.surgeon = '';
+          if (!summary.procedure.findings) summary.procedure.findings = '';
+        }
+        
+        if (typeof summary.investigations === 'string') {
+          try {
+            summary.investigations = JSON.parse(summary.investigations);
+          } catch (e) {
+            console.warn('Failed to parse investigations JSON:', e);
+          }
+        }
+        // Ensure investigations is an array
+        if (!Array.isArray(summary.investigations)) {
+          summary.investigations = summary.investigations ? [summary.investigations] : [];
+        }
+        
+        if (typeof summary.medications === 'string') {
+          try {
+            summary.medications = JSON.parse(summary.medications);
+          } catch (e) {
+            console.warn('Failed to parse medications JSON:', e);
+          }
+        }
+        // Normalize medications structure
+        if (summary.medications) {
+          if (!summary.medications.discharged) {
+            // Check if it's the old format (discharge, changes, instructions)
+            if (summary.medications.discharge) {
+              summary.medications.discharged = [];
+            } else {
+              summary.medications.discharged = Array.isArray(summary.medications.discharged) 
+                ? summary.medications.discharged 
+                : [];
+            }
+          } else if (!Array.isArray(summary.medications.discharged)) {
+            summary.medications.discharged = [];
+          }
+          if (!summary.medications.stopped) {
+            summary.medications.stopped = [];
+          } else if (!Array.isArray(summary.medications.stopped)) {
+            summary.medications.stopped = [];
+          }
+        }
+        
+        if (typeof summary.followUp === 'string') {
+          try {
+            summary.followUp = JSON.parse(summary.followUp);
+          } catch (e) {
+            console.warn('Failed to parse followUp JSON:', e);
+          }
+        }
+        // Normalize followUp structure
+        if (summary.followUp) {
+          if (!summary.followUp.catheterRemoval) {
+            summary.followUp.catheterRemoval = { date: '', location: '', instructions: '' };
+          }
+          if (!summary.followUp.postOpReview) {
+            summary.followUp.postOpReview = { date: '', location: '', instructions: '' };
+          }
+          if (!summary.followUp.additionalInstructions) {
+            summary.followUp.additionalInstructions = [];
+          } else if (!Array.isArray(summary.followUp.additionalInstructions)) {
+            summary.followUp.additionalInstructions = [summary.followUp.additionalInstructions];
+          }
+        }
+        
+        if (typeof summary.gpActions === 'string') {
+          try {
+            summary.gpActions = JSON.parse(summary.gpActions);
+          } catch (e) {
+            console.warn('Failed to parse gpActions JSON:', e);
+          }
+        }
+        // Ensure gpActions is an array
+        if (!Array.isArray(summary.gpActions)) {
+          summary.gpActions = summary.gpActions ? [summary.gpActions] : [];
+        }
+        
+        if (typeof summary.documents === 'string') {
+          try {
+            summary.documents = JSON.parse(summary.documents);
+          } catch (e) {
+            console.warn('Failed to parse documents JSON:', e);
+          }
+        }
+        // Ensure documents is an array
+        if (!Array.isArray(summary.documents)) {
+          summary.documents = summary.documents ? [summary.documents] : [];
+        }
+        
+        setDischargeSummary(summary);
       } else {
         setDischargeSummaryError(result.error || 'Failed to fetch discharge summary');
         setDischargeSummary(null);
@@ -897,6 +1029,17 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   // Handle Escape key with unsaved changes check
   const [showConfirmModal, closeConfirmModal] = useEscapeKey(onClose, isOpen, hasUnsavedChanges, handleSaveChanges);
 
+  // Check if patient is a post-op followup patient
+  const isPostOpFollowupPatient = useCallback(() => {
+    if (!patient) return false;
+    const pathway = patient.carePathway || patient.care_pathway || patient.pathway || '';
+    const category = patient.category || '';
+    return category === 'post-op-followup' || 
+           pathway === 'Post-op Transfer' || 
+           pathway === 'Post-op Followup' || 
+           pathway === 'Discharge';
+  }, [patient]);
+
   // Load notes and investigations when patient changes - MUST be before early return
   useEffect(() => {
     console.log('🔍 NursePatientDetailsModal: useEffect triggered, isOpen:', isOpen, 'patient:', patient);
@@ -906,11 +1049,14 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       fetchInvestigations();
       fetchInvestigationRequests();
       fetchMDTMeetings();
-      fetchDischargeSummary();
+      // Fetch discharge summary for post-op followup patients
+      if (isPostOpFollowupPatient()) {
+        fetchDischargeSummary();
+      }
     } else {
       console.log('❌ NursePatientDetailsModal: Cannot fetch data - isOpen:', isOpen, 'patient?.id:', patient?.id);
     }
-  }, [isOpen, patient?.id, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchDischargeSummary]);
+  }, [isOpen, patient?.id, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchDischargeSummary, isPostOpFollowupPatient]);
 
   // Listen for image viewer events
   useEffect(() => {
@@ -1036,11 +1182,128 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   };
 
   // Handle view document
-  const handleViewDocument = (document) => {
-    console.log('Viewing document:', document.name);
-    setSuccessModalTitle('View Document');
-    setSuccessModalMessage(`Opening ${document.name}...`);
-    setIsSuccessModalOpen(true);
+  const handleViewDocument = async (doc) => {
+    console.log('Viewing document:', doc);
+    
+    // Check if document has a URL or path
+    if (doc.url) {
+      // If it's an image, use ImageViewerModal
+      if (doc.type?.includes('image')) {
+        setImageViewerUrl(doc.url);
+        setImageViewerFileName(doc.name);
+        setIsImageViewerModalOpen(true);
+      } else if (doc.type?.includes('pdf')) {
+        // For PDFs, open in new tab
+        window.open(doc.url, '_blank');
+      } else {
+        // For other file types, try to download or open
+        const link = document.createElement('a');
+        link.href = doc.url;
+        link.target = '_blank';
+        link.download = doc.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } else if (doc.path) {
+      // If document has a path, construct URL
+      const documentUrl = `/api/files/${doc.path}`;
+      if (doc.type?.includes('image')) {
+        setImageViewerUrl(documentUrl);
+        setImageViewerFileName(doc.name);
+        setIsImageViewerModalOpen(true);
+      } else if (doc.type?.includes('pdf')) {
+        window.open(documentUrl, '_blank');
+      } else {
+        window.open(documentUrl, '_blank');
+      }
+    } else if (doc.id || doc.name) {
+      // Try to construct URL from document metadata or fetch from API
+      try {
+        // First, try to fetch from a potential API endpoint
+        const apiUrl = `/api/patients/${patient.id}/discharge-summary/document/${doc.id || doc.name}`;
+        const response = await fetch(apiUrl, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          if (doc.type?.includes('image')) {
+            setImageViewerUrl(blobUrl);
+            setImageViewerFileName(doc.name);
+            setImageViewerBlobUrl(blobUrl);
+            setIsImageViewerModalOpen(true);
+          } else if (doc.type?.includes('pdf')) {
+            // Open PDF in new tab with blob URL
+            const newWindow = window.open(blobUrl, '_blank');
+            if (!newWindow) {
+              // If popup blocked, create download link
+              const link = document.createElement('a');
+              link.href = blobUrl;
+              link.download = doc.name;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }
+          } else {
+            // Download other file types
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = doc.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+          }
+        } else {
+          // If API endpoint doesn't exist, try to construct URL from document name
+          // This assumes documents might be stored in a public/uploads folder
+          const possibleUrl = `/uploads/discharge-summaries/${doc.name}`;
+          
+          if (doc.type?.includes('image')) {
+            setImageViewerUrl(possibleUrl);
+            setImageViewerFileName(doc.name);
+            setIsImageViewerModalOpen(true);
+          } else if (doc.type?.includes('pdf')) {
+            window.open(possibleUrl, '_blank');
+          } else {
+            // Show error if we can't find the document
+            setSuccessModalTitle('Document Not Available');
+            setSuccessModalMessage(`Unable to retrieve ${doc.name}. The document may not be available. Please check if the file exists.`);
+            setIsSuccessModalOpen(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching document:', error);
+        // Fallback: try to open as data URL if document has file data
+        if (doc.file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            if (doc.type?.includes('image')) {
+              setImageViewerUrl(e.target.result);
+              setImageViewerFileName(doc.name);
+              setIsImageViewerModalOpen(true);
+            } else if (doc.type?.includes('pdf')) {
+              window.open(e.target.result, '_blank');
+            }
+          };
+          reader.readAsDataURL(doc.file);
+        } else {
+          setSuccessModalTitle('Document Not Available');
+          setSuccessModalMessage(`Unable to retrieve ${doc.name}. Please contact support if this issue persists.`);
+          setIsSuccessModalOpen(true);
+        }
+      }
+    } else {
+      // No URL, path, or ID - show error
+      setSuccessModalTitle('Document Not Available');
+      setSuccessModalMessage(`Unable to view ${doc.name || 'document'}. Document location not specified.`);
+      setIsSuccessModalOpen(true);
+    }
   };
 
   // Handle view test report
@@ -1183,7 +1446,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
             )}
             
             {/* Discharge Summary tab - only visible for post-op-followup patients */}
-            {patient.category === 'post-op-followup' && (
+            {isPostOpFollowupPatient() && (
               <button
                 onClick={() => setActiveTab('dischargeSummary')}
                 className={`px-4 py-3 font-medium text-sm relative flex items-center ${
@@ -1991,7 +2254,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
           )}
 
           {/* Discharge Summary Tab - only for post-op-followup patients */}
-          {activeTab === 'dischargeSummary' && patient.category === 'post-op-followup' && (
+          {activeTab === 'dischargeSummary' && isPostOpFollowupPatient() && (
             <div className="flex w-full h-full overflow-y-auto p-6">
               <div className="w-full mx-auto space-y-6">
                 {loadingDischargeSummary ? (
@@ -2077,9 +2340,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                   <div className="space-y-3">
                     <div>
                       <p className="text-sm font-medium text-gray-700">Primary Diagnosis:</p>
-                      <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">{dischargeSummary.diagnosis.primary}</p>
+                      <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">
+                        {dischargeSummary.diagnosis?.primary || 'Not specified'}
+                      </p>
                     </div>
-                    {dischargeSummary.diagnosis.secondary.length > 0 && (
+                    {dischargeSummary.diagnosis?.secondary && 
+                     Array.isArray(dischargeSummary.diagnosis.secondary) && 
+                     dischargeSummary.diagnosis.secondary.length > 0 && (
                       <div>
                         <p className="text-sm font-medium text-gray-700">Secondary Diagnosis:</p>
                         <ul className="mt-1 space-y-1">
@@ -2093,32 +2360,36 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 </div>
 
                 {/* Procedure Section */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <FaStethoscope className="mr-2 text-teal-600" />
-                    Procedure Details
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">Procedure:</p>
-                        <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure.name}</p>
+                {dischargeSummary.procedure && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FaStethoscope className="mr-2 text-teal-600" />
+                      Procedure Details
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Procedure:</p>
+                          <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.name || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Date:</p>
+                          <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.date || 'Not specified'}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-sm font-medium text-gray-700">Surgeon:</p>
+                          <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.surgeon || 'Not specified'}</p>
+                        </div>
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-700">Date:</p>
-                        <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure.date}</p>
+                        <p className="text-sm font-medium text-gray-700">Operative Findings:</p>
+                        <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">
+                          {dischargeSummary.procedure?.findings || 'Not specified'}
+                        </p>
                       </div>
-                      <div className="col-span-2">
-                        <p className="text-sm font-medium text-gray-700">Surgeon:</p>
-                        <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure.surgeon}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Operative Findings:</p>
-                      <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">{dischargeSummary.procedure.findings}</p>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Clinical Summary */}
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -2126,127 +2397,173 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                     <IoDocumentText className="mr-2 text-teal-600" />
                     Clinical Summary
                   </h3>
-                  <p className="text-sm text-gray-900 leading-relaxed bg-gray-50 p-4 rounded">{dischargeSummary.clinicalSummary}</p>
+                  <p className="text-sm text-gray-900 leading-relaxed bg-gray-50 p-4 rounded">
+                    {dischargeSummary.clinicalSummary || 'No clinical summary available'}
+                  </p>
                 </div>
 
                 {/* Investigations */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <IoAnalytics className="mr-2 text-teal-600" />
-                    Investigations
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200 bg-gray-50">
-                          <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Test</th>
-                          <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Result</th>
-                          <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dischargeSummary.investigations.map((inv, idx) => (
-                          <tr key={idx} className="border-b border-gray-100">
-                            <td className="py-3 px-4 text-sm text-gray-900">{inv.test}</td>
-                            <td className="py-3 px-4 text-sm text-gray-900">{inv.result}</td>
-                            <td className="py-3 px-4 text-sm text-gray-600">{inv.date}</td>
+                {dischargeSummary.investigations && Array.isArray(dischargeSummary.investigations) && dischargeSummary.investigations.length > 0 && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <IoAnalytics className="mr-2 text-teal-600" />
+                      Investigations
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50">
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Test</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Result</th>
+                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Date</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {dischargeSummary.investigations.map((inv, idx) => (
+                            <tr key={idx} className="border-b border-gray-100">
+                              <td className="py-3 px-4 text-sm text-gray-900">{inv?.test || 'N/A'}</td>
+                              <td className="py-3 px-4 text-sm text-gray-900">{inv?.result || 'N/A'}</td>
+                              <td className="py-3 px-4 text-sm text-gray-600">{inv?.date || 'N/A'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Medications */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <FaPills className="mr-2 text-teal-600" />
-                    Medications on Discharge
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-2">Current Medications:</p>
-                      <div className="space-y-2">
-                        {dischargeSummary.medications.discharged.map((med, idx) => (
-                          <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-gray-900">{med.name} - {med.dose}</p>
-                                <p className="text-xs text-gray-600 mt-1">{med.frequency} for {med.duration}</p>
-                                <p className="text-xs text-gray-600 mt-1 italic">{med.instructions}</p>
+                {dischargeSummary.medications && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FaPills className="mr-2 text-teal-600" />
+                      Medications on Discharge
+                    </h3>
+                    <div className="space-y-4">
+                      {dischargeSummary.medications.discharged && 
+                       Array.isArray(dischargeSummary.medications.discharged) && 
+                       dischargeSummary.medications.discharged.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Current Medications:</p>
+                          <div className="space-y-2">
+                            {dischargeSummary.medications.discharged.map((med, idx) => (
+                              <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-semibold text-gray-900">
+                                      {med?.name || 'N/A'} - {med?.dose || 'N/A'}
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                      {med?.frequency || 'N/A'} for {med?.duration || 'N/A'}
+                                    </p>
+                                    {med?.instructions && (
+                                      <p className="text-xs text-gray-600 mt-1 italic">{med.instructions}</p>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {dischargeSummary.medications.stopped.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium text-gray-700 mb-2">Medications Stopped:</p>
-                        <div className="space-y-2">
-                          {dischargeSummary.medications.stopped.map((med, idx) => (
-                            <div key={idx} className="bg-red-50 p-3 rounded border border-red-200">
-                              <p className="text-sm font-semibold text-gray-900">{med.name}</p>
-                              <p className="text-xs text-gray-600 mt-1">Reason: {med.reason}</p>
-                            </div>
-                          ))}
                         </div>
-                      </div>
-                    )}
+                      )}
+                      
+                      {dischargeSummary.medications.stopped && 
+                       Array.isArray(dischargeSummary.medications.stopped) && 
+                       dischargeSummary.medications.stopped.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Medications Stopped:</p>
+                          <div className="space-y-2">
+                            {dischargeSummary.medications.stopped.map((med, idx) => (
+                              <div key={idx} className="bg-red-50 p-3 rounded border border-red-200">
+                                <p className="text-sm font-semibold text-gray-900">{med?.name || 'N/A'}</p>
+                                {med?.reason && (
+                                  <p className="text-xs text-gray-600 mt-1">Reason: {med.reason}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Follow-up Arrangements */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <IoCalendar className="mr-2 text-teal-600" />
-                    Follow-up Arrangements
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="bg-blue-50 p-4 rounded border border-blue-200">
-                      <p className="text-sm font-semibold text-gray-900 mb-2">Catheter Removal</p>
-                      <p className="text-sm text-gray-700"><span className="font-medium">Date:</span> {dischargeSummary.followUp.catheterRemoval.date}</p>
-                      <p className="text-sm text-gray-700"><span className="font-medium">Location:</span> {dischargeSummary.followUp.catheterRemoval.location}</p>
-                      <p className="text-sm text-gray-700 mt-2">{dischargeSummary.followUp.catheterRemoval.instructions}</p>
-                    </div>
-                    
-                    <div className="bg-green-50 p-4 rounded border border-green-200">
-                      <p className="text-sm font-semibold text-gray-900 mb-2">Post-Operative Review</p>
-                      <p className="text-sm text-gray-700"><span className="font-medium">Date:</span> {dischargeSummary.followUp.postOpReview.date}</p>
-                      <p className="text-sm text-gray-700"><span className="font-medium">Location:</span> {dischargeSummary.followUp.postOpReview.location}</p>
-                      <p className="text-sm text-gray-700 mt-2">{dischargeSummary.followUp.postOpReview.instructions}</p>
-                    </div>
+                {dischargeSummary.followUp && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <IoCalendar className="mr-2 text-teal-600" />
+                      Follow-up Arrangements
+                    </h3>
+                    <div className="space-y-4">
+                      {dischargeSummary.followUp.catheterRemoval && (
+                        <div className="bg-blue-50 p-4 rounded border border-blue-200">
+                          <p className="text-sm font-semibold text-gray-900 mb-2">Catheter Removal</p>
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Date:</span> {dischargeSummary.followUp.catheterRemoval?.date || 'Not specified'}
+                          </p>
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Location:</span> {dischargeSummary.followUp.catheterRemoval?.location || 'Not specified'}
+                          </p>
+                          {dischargeSummary.followUp.catheterRemoval?.instructions && (
+                            <p className="text-sm text-gray-700 mt-2">{dischargeSummary.followUp.catheterRemoval.instructions}</p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {dischargeSummary.followUp.postOpReview && (
+                        <div className="bg-green-50 p-4 rounded border border-green-200">
+                          <p className="text-sm font-semibold text-gray-900 mb-2">Post-Operative Review</p>
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Date:</span> {dischargeSummary.followUp.postOpReview?.date || 'Not specified'}
+                          </p>
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Location:</span> {dischargeSummary.followUp.postOpReview?.location || 'Not specified'}
+                          </p>
+                          {dischargeSummary.followUp.postOpReview?.instructions && (
+                            <p className="text-sm text-gray-700 mt-2">{dischargeSummary.followUp.postOpReview.instructions}</p>
+                          )}
+                        </div>
+                      )}
 
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-2">Additional Instructions:</p>
-                      <ul className="space-y-1">
-                        {dischargeSummary.followUp.additionalInstructions.map((instruction, idx) => (
-                          <li key={idx} className="text-sm text-gray-900 bg-gray-50 p-2 rounded flex items-start">
-                            <IoCheckmarkCircle className="text-teal-600 mr-2 mt-0.5 flex-shrink-0" />
-                            <span>{instruction}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      {dischargeSummary.followUp.additionalInstructions && 
+                       Array.isArray(dischargeSummary.followUp.additionalInstructions) && 
+                       dischargeSummary.followUp.additionalInstructions.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Additional Instructions:</p>
+                          <ul className="space-y-1">
+                            {dischargeSummary.followUp.additionalInstructions.map((instruction, idx) => (
+                              <li key={idx} className="text-sm text-gray-900 bg-gray-50 p-2 rounded flex items-start">
+                                <IoCheckmarkCircle className="text-teal-600 mr-2 mt-0.5 flex-shrink-0" />
+                                <span>{instruction}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* GP Actions */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <FaUserMd className="mr-2 text-teal-600" />
-                    Actions Required by GP
-                  </h3>
-                  <ul className="space-y-2">
-                    {dischargeSummary.gpActions.map((action, idx) => (
-                      <li key={idx} className="text-sm text-gray-900 bg-yellow-50 p-3 rounded border border-yellow-200 flex items-start">
-                        <IoAlertCircle className="text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
-                        <span>{action}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                {dischargeSummary.gpActions && 
+                 Array.isArray(dischargeSummary.gpActions) && 
+                 dischargeSummary.gpActions.length > 0 && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <FaUserMd className="mr-2 text-teal-600" />
+                      Actions Required by GP
+                    </h3>
+                    <ul className="space-y-2">
+                      {dischargeSummary.gpActions.map((action, idx) => (
+                        <li key={idx} className="text-sm text-gray-900 bg-yellow-50 p-3 rounded border border-yellow-200 flex items-start">
+                          <IoAlertCircle className="text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>{action}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Documents */}
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
