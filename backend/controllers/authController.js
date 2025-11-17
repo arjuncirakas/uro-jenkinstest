@@ -1,9 +1,7 @@
 import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
-import { generateTokens, verifyRefreshToken, getCookieOptions } from '../utils/jwt.js';
+import { generateTokens, verifyRefreshToken } from '../utils/jwt.js';
 import { storeOTP, verifyOTP, incrementOTPAttempts } from '../services/otpService.js';
-import { logFailedAccess, logAuthEvent } from '../services/auditLogger.js';
-import { checkAccountLockout, incrementFailedAttempts, resetFailedAttempts } from '../middleware/accountLockout.js';
 
 // Register a new user (Step 1: Send OTP)
 export const register = async (req, res) => {
@@ -212,17 +210,6 @@ export const resendRegistrationOTP = async (req, res) => {
 
 // Login user (Step 1: Send OTP)
 export const login = async (req, res) => {
-  // Check account lockout first
-  const lockoutCheck = await new Promise((resolve) => {
-    checkAccountLockout(req, { 
-      status: (code) => ({ json: (data) => resolve({ blocked: true, data, code }) })
-    }, () => resolve({ blocked: false }));
-  });
-  
-  if (lockoutCheck?.blocked) {
-    return res.status(lockoutCheck.code || 423).json(lockoutCheck.data);
-  }
-  
   const client = await pool.connect();
   
   try {
@@ -238,7 +225,6 @@ export const login = async (req, res) => {
 
     if (result.rows.length === 0) {
       console.log(`❌ Login failed: User not found - ${email}`);
-      await logFailedAccess(req, 'User not found');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -250,7 +236,6 @@ export const login = async (req, res) => {
     // Check if account is active
     if (!user.is_active) {
       console.log(`❌ Login failed: Account deactivated - ${email}`);
-      await logFailedAccess(req, 'Account deactivated');
       return res.status(401).json({
         success: false,
         message: 'Account is deactivated'
@@ -260,7 +245,6 @@ export const login = async (req, res) => {
     // Check if account is verified
     if (!user.is_verified) {
       console.log(`❌ Login failed: Account not verified - ${email}`);
-      await logFailedAccess(req, 'Account not verified');
       return res.status(401).json({
         success: false,
         message: 'Account not verified. Please verify your email first.'
@@ -272,17 +256,11 @@ export const login = async (req, res) => {
     
     if (!isPasswordValid) {
       console.log(`❌ Login failed: Invalid password - ${email}`);
-      await incrementFailedAttempts(email);
-      await logFailedAccess(req, 'Invalid password');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
     }
-    
-    // Reset failed attempts on successful password verification
-    await resetFailedAttempts(user.id);
-    await logAuthEvent(req, 'login.password_verified', 'success');
 
     console.log(`✅ Password verified for: ${email}, role: ${user.role}`);
 
@@ -298,9 +276,6 @@ export const login = async (req, res) => {
         'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
         [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
       );
-
-      // Set secure HTTP-only cookie for refresh token
-      res.cookie('refreshToken', tokens.refreshToken, getCookieOptions());
 
       // Return tokens directly for superadmin
       res.json({
@@ -415,9 +390,6 @@ export const verifyLoginOTP = async (req, res) => {
       'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
       [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
     );
-
-    // Set secure HTTP-only cookie for refresh token
-    res.cookie('refreshToken', tokens.refreshToken, getCookieOptions());
 
     res.json({
       success: true,

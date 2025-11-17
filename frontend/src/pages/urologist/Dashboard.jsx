@@ -1067,7 +1067,7 @@ const UrologistDashboard = () => {
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <button
-                                  onClick={() => patientModalRef.current?.openPatientDetails(patient.patient, { age: patient.age })}
+                                  onClick={() => patientModalRef.current?.openPatientDetails(patient.patient, { age: patient.age }, 'surgery-pathway')}
                                   className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
                                   aria-label={`View details for ${patient.patient}`}
                                 >

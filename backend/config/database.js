@@ -917,11 +917,6 @@ export const initializeDatabase = async () => {
     `);
 
     console.log('✅ Database tables initialized successfully');
-    
-    // Initialize audit logs table
-    const { initializeAuditLogsTable } = await import('../services/auditLogger.js');
-    await initializeAuditLogsTable();
-    
     client.release();
     return true;
   } catch (err) {

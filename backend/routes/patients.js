@@ -22,7 +22,6 @@ import { generalLimiter } from '../middleware/rateLimiter.js';
 import { xssProtection } from '../middleware/sanitizer.js';
 import { validateRequest, addPatientSchema, updatePatientSchema } from '../utils/validation.js';
 import { validatePatientInput, validatePatientUpdateInput } from '../middleware/patientValidation.js';
-import { checkPatientAccess } from '../middleware/idorProtection.js';
 
 const router = express.Router();
 
@@ -104,8 +103,7 @@ router.get('/due-for-review',
 router.get('/:id', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
-  checkPatientAccess,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
   getPatientById
 );
 
@@ -113,8 +111,7 @@ router.get('/:id',
 router.put('/:id', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
+  requireRole(['urologist', 'doctor', 'urology_nurse']), 
   validatePatientUpdateInput,
   updatePatient
 );
@@ -124,7 +121,6 @@ router.put('/:id/pathway',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
   updatePatientPathway
 );
 
@@ -132,8 +128,7 @@ router.put('/:id/pathway',
 router.delete('/:id', 
   generalLimiter, 
   authenticateToken, 
-  requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
+  requireRole(['urologist', 'doctor', 'urology_nurse']), 
   deletePatient
 );
 
@@ -142,7 +137,6 @@ router.get('/:id/discharge-summary',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
-  checkPatientAccess,
   getDischargeSummary
 );
 
@@ -151,7 +145,6 @@ router.post('/:id/discharge-summary',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
   createDischargeSummary
 );
 
@@ -160,7 +153,6 @@ router.put('/:id/discharge-summary/:summaryId',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
   updateDischargeSummary
 );
 
@@ -169,7 +161,6 @@ router.delete('/:id/discharge-summary/:summaryId',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
   deleteDischargeSummary
 );
 
