@@ -1857,17 +1857,29 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                       </button>
                                     );
                                   })()}
-                                  {/* Don't show edit button for pathway transfer notes */}
-                                  {note.type !== 'pathway_transfer' && !(note.content || '').includes('PATHWAY TRANSFER') && (
-                                    <button
-                                      onClick={() => handleEditNote(note)}
-                                      disabled={deletingNote === note.id}
-                                      className="text-blue-500 hover:text-blue-700 transition-colors p-1 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      title="Edit note"
-                                    >
-                                      <Edit className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                  {/* Don't show edit button for pathway transfer notes or reschedule notes */}
+                                  {(() => {
+                                    const noteContent = note.content || '';
+                                    const noteType = note.type || '';
+                                    const isPathwayTransfer = noteType === 'pathway_transfer' || noteContent.includes('PATHWAY TRANSFER');
+                                    const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                                    
+                                    // Only show edit button if it's not a pathway transfer note and not a reschedule note
+                                    if (isPathwayTransfer || isRescheduleNote) {
+                                      return null;
+                                    }
+                                    
+                                    return (
+                                      <button
+                                        onClick={() => handleEditNote(note)}
+                                        disabled={deletingNote === note.id}
+                                        className="text-blue-500 hover:text-blue-700 transition-colors p-1 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Edit note"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </button>
+                                    );
+                                  })()}
                                   <button
                                     onClick={() => handleDeleteNote(note.id)}
                                     disabled={deletingNote === note.id}
