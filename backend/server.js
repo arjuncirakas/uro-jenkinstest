@@ -25,6 +25,7 @@ import { corsOptions, validateCorsConfig, corsLoggingMiddleware } from './middle
 import { initAutoNoShowScheduler } from './schedulers/autoNoShowScheduler.js';
 import { protectApiRoutes } from './middleware/apiAuth.js';
 import { restrictHealthCheckAccess } from './middleware/healthCheckAuth.js';
+import { auditMiddleware, auditAuthMiddleware } from './middleware/auditMiddleware.js';
 
 // Load environment variables
 dotenv.config();
@@ -56,20 +57,47 @@ const getAllowedCSPOrigins = () => {
   return origins;
 };
 
+// Build CSP directive
+const buildCSPDirective = () => {
+  const allowedOrigins = getAllowedCSPOrigins();
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  const cspDirective = {
+    defaultSrc: ["'self'"],
+    scriptSrc: isDevelopment 
+      ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...allowedOrigins.filter(o => o !== "'self'")]
+      : ["'self'", ...allowedOrigins.filter(o => o !== "'self'")],
+    styleSrc: ["'self'", "'unsafe-inline'", ...allowedOrigins.filter(o => o !== "'self'")],
+    imgSrc: ["'self'", "data:", "https:"],
+    fontSrc: ["'self'", "data:"],
+    connectSrc: ["'self'", ...allowedOrigins.filter(o => o !== "'self'")],
+    frameSrc: ["'none'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+    upgradeInsecureRequests: !isDevelopment
+  };
+  
+  return cspDirective;
+};
+
 // Security middleware with environment-aware CSP
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: buildCSPDirective()
+  },
   strictTransportSecurity: {
     maxAge: 31536000,
     includeSubDomains: true,
     preload: true
   },
-  contentTypeOptions: 'nosniff',
+  contentTypeOptions: true,
   xssFilter: true,
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   crossOriginEmbedderPolicy: false,
-  // Allow cross-origin resources to work with CORS "*" configuration
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  frameguard: { action: 'deny' }
 }));
 
 // Additional security headers middleware
@@ -82,6 +110,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
 
@@ -144,12 +173,15 @@ app.get('/api', (req, res) => {
 // Serve uploaded files statically (for debugging)
 app.use('/uploads', express.static('uploads'));
 
+// Apply audit middleware before routes
+app.use('/api', auditMiddleware);
+
 // Apply global API authentication middleware
 // This protects ALL /api/* routes except public auth endpoints
 app.use(protectApiRoutes);
 
-// Register API routes
-app.use('/api/auth', authRoutes);
+// Register API routes with audit logging
+app.use('/api/auth', auditAuthMiddleware, authRoutes);
 app.use('/api/superadmin', superadminRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api', notesRoutes);
