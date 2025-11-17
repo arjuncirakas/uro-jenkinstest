@@ -738,13 +738,33 @@ export const rescheduleMDTMeeting = async (req, res) => {
       });
     }
 
-    // Ensure meeting exists
+    // Ensure meeting exists and check if it's already completed
     const existing = await client.query(
-      'SELECT id, patient_id FROM mdt_meetings WHERE id = $1',
+      'SELECT id, patient_id, notes FROM mdt_meetings WHERE id = $1',
       [meetingId]
     );
     if (existing.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'MDT meeting not found' });
+    }
+
+    // Check if meeting has outcome/data entered (meeting is complete)
+    const meeting = existing.rows[0];
+    if (meeting.notes) {
+      try {
+        const parsedNotes = typeof meeting.notes === 'string' ? JSON.parse(meeting.notes) : meeting.notes;
+        const hasOutcome = parsedNotes?.mdtOutcome && parsedNotes.mdtOutcome.trim() !== '';
+        const hasContent = parsedNotes?.content && parsedNotes.content.trim() !== '';
+        
+        if (hasOutcome && hasContent) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot reschedule: MDT meeting data has already been entered',
+          });
+        }
+      } catch (error) {
+        // If notes parsing fails, continue (backward compatibility)
+        console.warn('Could not parse notes for reschedule check:', error);
+      }
     }
 
     const update = await client.query(

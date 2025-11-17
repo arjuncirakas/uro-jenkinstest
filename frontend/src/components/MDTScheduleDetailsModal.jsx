@@ -293,6 +293,39 @@ const MDTScheduleDetailsModal = ({ isOpen, onClose, schedule }) => {
                            followUpActions.length > 0 || 
                            documents.length > 0;
 
+  // Check if meeting is complete (has outcome and content entered)
+  // Check both from meeting data and local state
+  const getMeetingOutcome = () => {
+    if (meeting?.mdtOutcome) return meeting.mdtOutcome;
+    if (meeting?.notes) {
+      try {
+        const parsed = typeof meeting.notes === 'string' ? JSON.parse(meeting.notes) : meeting.notes;
+        return parsed?.mdtOutcome || '';
+      } catch {
+        return '';
+      }
+    }
+    return mdtOutcome || '';
+  };
+
+  const getMeetingContent = () => {
+    if (meeting?.notes) {
+      try {
+        const parsed = typeof meeting.notes === 'string' ? JSON.parse(meeting.notes) : meeting.notes;
+        return parsed?.content || '';
+      } catch {
+        return '';
+      }
+    }
+    return discussionNotes || '';
+  };
+
+  const isMeetingComplete = (() => {
+    const outcome = getMeetingOutcome();
+    const content = getMeetingContent();
+    return outcome && outcome.trim() !== '' && content && content.trim() !== '';
+  })();
+
   // Handle save function for Escape key
   const handleSaveChanges = (e) => {
     if (e) e.preventDefault();
@@ -361,7 +394,13 @@ const MDTScheduleDetailsModal = ({ isOpen, onClose, schedule }) => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowRescheduleModal(true)}
-                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm font-medium"
+                disabled={isMeetingComplete}
+                className={`px-3 py-1.5 rounded-lg text-white text-sm font-medium ${
+                  isMeetingComplete
+                    ? 'bg-white/5 opacity-50 cursor-not-allowed'
+                    : 'bg-white/10 hover:bg-white/20'
+                }`}
+                title={isMeetingComplete ? 'Cannot reschedule: Meeting data has been entered' : 'Reschedule meeting'}
               >
                 Reschedule
               </button>
@@ -715,7 +754,13 @@ const MDTScheduleDetailsModal = ({ isOpen, onClose, schedule }) => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowRescheduleModal(true)}
-              className="px-4 py-2.5 bg-white border border-amber-300 text-amber-900 text-sm font-medium rounded-lg hover:bg-amber-50"
+              disabled={isMeetingComplete}
+              className={`px-4 py-2.5 text-sm font-medium rounded-lg ${
+                isMeetingComplete
+                  ? 'bg-gray-100 border border-gray-300 text-gray-400 cursor-not-allowed'
+                  : 'bg-white border border-amber-300 text-amber-900 hover:bg-amber-50'
+              }`}
+              title={isMeetingComplete ? 'Cannot reschedule: Meeting data has been entered' : 'Reschedule meeting'}
             >
               Reschedule
             </button>
