@@ -441,59 +441,10 @@ const OPDManagement = () => {
       patientData = patientOrAppointment;
     }
     
-    if (patientData && patientData.id) {
+    if (patientData) {
       console.log('✅ OPDManagement: Final patient data:', patientData);
       console.log('✅ OPDManagement: Patient ID:', patientData.id);
-      
-      // Fetch full patient details to ensure all fields are available
-      try {
-        const fullPatientResult = await patientService.getPatientById(patientData.id);
-        if (fullPatientResult.success && fullPatientResult.data) {
-          // Merge the full patient data with the existing patient data
-          const fullPatientData = {
-            ...patientData,
-            ...fullPatientResult.data,
-            // Ensure all fields are properly mapped
-            email: fullPatientResult.data.email || patientData.email,
-            phone: fullPatientResult.data.phone || patientData.phone,
-            address: fullPatientResult.data.address || patientData.address,
-            postcode: fullPatientResult.data.postcode || patientData.postcode,
-            city: fullPatientResult.data.city || patientData.city,
-            state: fullPatientResult.data.state || patientData.state,
-            dateOfBirth: fullPatientResult.data.dateOfBirth || fullPatientResult.data.date_of_birth || patientData.dateOfBirth,
-            referringDepartment: fullPatientResult.data.referringDepartment || fullPatientResult.data.referring_department || patientData.referringDepartment,
-            referralDate: fullPatientResult.data.referralDate || fullPatientResult.data.referral_date || patientData.referralDate,
-            initialPSA: fullPatientResult.data.initialPSA || fullPatientResult.data.initial_psa || patientData.initialPSA,
-            initialPSADate: fullPatientResult.data.initialPSADate || fullPatientResult.data.initial_psa_date || patientData.initialPSADate,
-            medicalHistory: fullPatientResult.data.medicalHistory || fullPatientResult.data.medical_history || patientData.medicalHistory,
-            allergies: fullPatientResult.data.allergies || patientData.allergies,
-            currentMedications: fullPatientResult.data.currentMedications || fullPatientResult.data.current_medications || patientData.currentMedications,
-            assignedUrologist: fullPatientResult.data.assignedUrologist || fullPatientResult.data.assigned_urologist || patientData.assignedUrologist,
-            referredByGP: fullPatientResult.data.referredByGP || patientData.referredByGP,
-            priority: fullPatientResult.data.priority || patientData.priority,
-            notes: fullPatientResult.data.notes || patientData.notes,
-            emergencyContactName: fullPatientResult.data.emergencyContactName || fullPatientResult.data.emergency_contact_name || patientData.emergencyContactName,
-            emergencyContactPhone: fullPatientResult.data.emergencyContactPhone || fullPatientResult.data.emergency_contact_phone || patientData.emergencyContactPhone,
-            emergencyContactRelationship: fullPatientResult.data.emergencyContactRelationship || fullPatientResult.data.emergency_contact_relationship || patientData.emergencyContactRelationship,
-            // Triage and Exam & Prior Tests
-            triageSymptoms: fullPatientResult.data.triageSymptoms || null,
-            dreDone: fullPatientResult.data.dreDone || false,
-            dreFindings: fullPatientResult.data.dreFindings || null,
-            priorBiopsy: fullPatientResult.data.priorBiopsy || 'no',
-            priorBiopsyDate: fullPatientResult.data.priorBiopsyDate || null,
-            gleasonScore: fullPatientResult.data.gleasonScore || null,
-            comorbidities: fullPatientResult.data.comorbidities || []
-          };
-          setSelectedPatient(fullPatientData);
-        } else {
-          // Fallback to original patient data if fetch fails
-          setSelectedPatient(patientData);
-        }
-      } catch (error) {
-        console.error('Error fetching full patient details:', error);
-        // Fallback to original patient data on error
-        setSelectedPatient(patientData);
-      }
+      setSelectedPatient(patientData);
       setIsPatientDetailsModalOpen(true);
     } else {
       console.error('❌ OPDManagement: Could not prepare patient data!');

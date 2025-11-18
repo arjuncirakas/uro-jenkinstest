@@ -84,29 +84,16 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
         }
       }
       
-      // If we found a patient, fetch full patient details by ID
-      if (patientData && patientData.id) {
-        console.log('✅ PatientDetailsModalWrapper: Patient found! Fetching full details for ID:', patientData.id);
-        
-        // Fetch full patient details using getPatientById to get all fields
-        const fullPatientResult = await patientService.getPatientById(patientData.id);
-        let fullPatientData = patientData;
-        
-        if (fullPatientResult.success && fullPatientResult.data) {
-          fullPatientData = fullPatientResult.data;
-          console.log('✅ PatientDetailsModalWrapper: Full patient data fetched:', fullPatientData);
-        } else {
-          console.log('⚠️ PatientDetailsModalWrapper: Could not fetch full patient details, using search result');
-        }
-        
-        console.log('🔍 PatientDetailsModalWrapper: Patient category field:', fullPatientData.category);
-        console.log('🔍 PatientDetailsModalWrapper: All patient fields:', Object.keys(fullPatientData));
-        
+      // If we found a patient, process it
+      if (patientData) {
+        console.log('✅ PatientDetailsModalWrapper: Patient found!', patientData);
+        console.log('🔍 PatientDetailsModalWrapper: Patient category field:', patientData.category);
+        console.log('🔍 PatientDetailsModalWrapper: All patient fields:', Object.keys(patientData));
         // Fetch additional data for the patient
-        console.log('🔍 PatientDetailsModalWrapper: Fetching notes and investigations for patient ID:', fullPatientData.id);
+        console.log('🔍 PatientDetailsModalWrapper: Fetching notes and investigations for patient ID:', patientData.id);
         const [notesResult, investigationsResult] = await Promise.all([
-          notesService.getPatientNotes(fullPatientData.id),
-          investigationService.getInvestigationResults(fullPatientData.id)
+          notesService.getPatientNotes(patientData.id),
+          investigationService.getInvestigationResults(patientData.id)
         ]);
         
         console.log('🔍 PatientDetailsModalWrapper: Notes result:', notesResult);
@@ -121,7 +108,7 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
             // Determine category based on care pathway if category is 'all' or not provided
             let determinedCategory = category;
             if (category === 'all' || !category) {
-              const carePathway = fullPatientData.carePathway || fullPatientData.care_pathway || fullPatientData.pathway || '';
+              const carePathway = patientData.carePathway || patientData.care_pathway || patientData.pathway || '';
               if (carePathway === 'Surgery Pathway') {
                 determinedCategory = 'surgery-pathway';
               } else if (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') {
@@ -132,16 +119,16 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
             }
             
             const patientWithData = {
-              id: fullPatientData.id,
-              name: fullPatientData.fullName || `${fullPatientData.firstName || fullPatientData.first_name || ''} ${fullPatientData.lastName || fullPatientData.last_name || ''}`.trim(),
-              age: fullPatientData.age || appointmentData?.age || '-',
-              gender: fullPatientData.gender || appointmentData?.gender || '-',
-              upi: fullPatientData.upi || appointmentData?.upi || 'N/A',
-              patientId: fullPatientData.patient_id || fullPatientData.id || appointmentData?.upi || 'N/A',
-              mrn: fullPatientData.mrn || 'N/A',
-              lastAppointment: fullPatientData.last_appointment || 'N/A',
+              id: patientData.id,
+              name: patientData.fullName || `${patientData.firstName || patientData.first_name || ''} ${patientData.lastName || patientData.last_name || ''}`.trim(),
+              age: patientData.age || appointmentData?.age || '-',
+              gender: patientData.gender || appointmentData?.gender || '-',
+              upi: patientData.upi || appointmentData?.upi || 'N/A',
+              patientId: patientData.patient_id || patientData.id || appointmentData?.upi || 'N/A',
+              mrn: patientData.mrn || 'N/A',
+              lastAppointment: patientData.last_appointment || 'N/A',
               category: determinedCategory, // Use determined category based on pathway
-              carePathway: fullPatientData.carePathway || fullPatientData.care_pathway || fullPatientData.pathway || '', // Include care pathway
+              carePathway: patientData.carePathway || patientData.care_pathway || patientData.pathway || '', // Include care pathway
               recentNotes: notesResult.success ? (Array.isArray(notesResult.data) ? notesResult.data : notesResult.data?.data || []) : [],
               psaResults: investigationsResult.success ? 
                 (() => {
@@ -161,41 +148,15 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
                     inv.testType !== 'psa' && inv.test_type !== 'PSA' && inv.test_type !== 'psa'
                   );
                 })() : [],
-              // Personal Information
-              email: fullPatientData.email,
-              phone: fullPatientData.phone || fullPatientData.phoneNumber,
-              address: fullPatientData.address,
-              postcode: fullPatientData.postcode,
-              city: fullPatientData.city,
-              state: fullPatientData.state,
-              dateOfBirth: fullPatientData.dateOfBirth || fullPatientData.date_of_birth,
-              // Medical Information
-              referringDepartment: fullPatientData.referringDepartment || fullPatientData.referring_department,
-              referralDate: fullPatientData.referralDate || fullPatientData.referral_date,
-              initialPSA: fullPatientData.initialPSA || fullPatientData.initial_psa,
-              initialPSADate: fullPatientData.initialPSADate || fullPatientData.initial_psa_date,
-              medicalHistory: fullPatientData.medicalHistory || fullPatientData.medical_history,
-              allergies: fullPatientData.allergies,
-              currentMedications: fullPatientData.currentMedications || fullPatientData.current_medications,
-              assignedUrologist: fullPatientData.assignedUrologist || fullPatientData.assigned_urologist,
-              referredByGP: fullPatientData.referredByGP || null,
-              priority: fullPatientData.priority,
-              notes: fullPatientData.notes,
-              // Emergency Contact
-              emergencyContactName: fullPatientData.emergencyContactName || fullPatientData.emergency_contact_name,
-              emergencyContactPhone: fullPatientData.emergencyContactPhone || fullPatientData.emergency_contact_phone,
-              emergencyContactRelationship: fullPatientData.emergencyContactRelationship || fullPatientData.emergency_contact_relationship,
-              // Triage and Exam & Prior Tests
-              triageSymptoms: fullPatientData.triageSymptoms || null,
-              dreDone: fullPatientData.dreDone || false,
-              dreFindings: fullPatientData.dreFindings || null,
-              priorBiopsy: fullPatientData.priorBiopsy || 'no',
-              priorBiopsyDate: fullPatientData.priorBiopsyDate || null,
-              gleasonScore: fullPatientData.gleasonScore || null,
-              comorbidities: fullPatientData.comorbidities || [],
-              // Latest PSA if available
-              latest_psa: fullPatientData.latest_psa || null,
-              latest_psa_date: fullPatientData.latest_psa_date || null
+              email: patientData.email,
+              phone: patientData.phone,
+              address: patientData.address,
+              dateOfBirth: patientData.dateOfBirth || patientData.date_of_birth,
+              emergencyContact: patientData.emergencyContact || patientData.emergency_contact,
+              medicalHistory: patientData.medicalHistory || patientData.medical_history,
+              allergies: patientData.allergies,
+              currentMedications: patientData.currentMedications || patientData.current_medications,
+              referredByGP: patientData.referredByGP || null
             };
         
         console.log('✅ PatientDetailsModalWrapper: Setting selected patient with data:', patientWithData);

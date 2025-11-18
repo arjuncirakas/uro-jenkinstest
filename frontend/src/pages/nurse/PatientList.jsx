@@ -203,60 +203,8 @@ const PatientList = () => {
   // The patients array already contains the filtered results
 
   // Handle patient actions
-  const handleViewDetails = async (patient) => {
-    // Fetch full patient details to ensure all fields are available
-    if (patient && patient.id) {
-      try {
-        const result = await patientService.getPatientById(patient.id);
-        if (result.success && result.data) {
-          // Merge the full patient data with the existing patient data
-          const fullPatientData = {
-            ...patient,
-            ...result.data,
-            // Ensure all fields are properly mapped
-            email: result.data.email || patient.email,
-            phone: result.data.phone || patient.phone,
-            address: result.data.address || patient.address,
-            postcode: result.data.postcode || patient.postcode,
-            city: result.data.city || patient.city,
-            state: result.data.state || patient.state,
-            dateOfBirth: result.data.dateOfBirth || result.data.date_of_birth || patient.dateOfBirth,
-            referringDepartment: result.data.referringDepartment || result.data.referring_department || patient.referringDepartment,
-            referralDate: result.data.referralDate || result.data.referral_date || patient.referralDate,
-            initialPSA: result.data.initialPSA || result.data.initial_psa || patient.initialPSA,
-            initialPSADate: result.data.initialPSADate || result.data.initial_psa_date || patient.initialPSADate,
-            medicalHistory: result.data.medicalHistory || result.data.medical_history || patient.medicalHistory,
-            allergies: result.data.allergies || patient.allergies,
-            currentMedications: result.data.currentMedications || result.data.current_medications || patient.currentMedications,
-            assignedUrologist: result.data.assignedUrologist || result.data.assigned_urologist || patient.assignedUrologist,
-            referredByGP: result.data.referredByGP || patient.referredByGP,
-            priority: result.data.priority || patient.priority,
-            notes: result.data.notes || patient.notes,
-            emergencyContactName: result.data.emergencyContactName || result.data.emergency_contact_name || patient.emergencyContactName,
-            emergencyContactPhone: result.data.emergencyContactPhone || result.data.emergency_contact_phone || patient.emergencyContactPhone,
-            emergencyContactRelationship: result.data.emergencyContactRelationship || result.data.emergency_contact_relationship || patient.emergencyContactRelationship,
-            // Triage and Exam & Prior Tests
-            triageSymptoms: result.data.triageSymptoms || null,
-            dreDone: result.data.dreDone || false,
-            dreFindings: result.data.dreFindings || null,
-            priorBiopsy: result.data.priorBiopsy || 'no',
-            priorBiopsyDate: result.data.priorBiopsyDate || null,
-            gleasonScore: result.data.gleasonScore || null,
-            comorbidities: result.data.comorbidities || []
-          };
-          setSelectedPatient(fullPatientData);
-        } else {
-          // Fallback to original patient data if fetch fails
-          setSelectedPatient(patient);
-        }
-      } catch (error) {
-        console.error('Error fetching full patient details:', error);
-        // Fallback to original patient data on error
-        setSelectedPatient(patient);
-      }
-    } else {
-      setSelectedPatient(patient);
-    }
+  const handleViewDetails = (patient) => {
+    setSelectedPatient(patient);
     setIsPatientDetailsModalOpen(true);
   };
 
