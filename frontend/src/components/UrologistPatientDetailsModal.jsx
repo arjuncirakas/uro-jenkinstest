@@ -2319,6 +2319,178 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           {activeTab === 'generalInfo' && (
             <div className="flex w-full h-full overflow-y-auto p-6">
               <div className="w-full mx-auto space-y-6">
+                {/* Personal Information */}
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <IoHeart className="mr-2 text-teal-600" />
+                    Personal Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-gray-600">Date of Birth:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.dateOfBirth || patient.date_of_birth 
+                          ? new Date(patient.dateOfBirth || patient.date_of_birth).toLocaleDateString('en-GB', { 
+                              day: '2-digit', 
+                              month: 'short', 
+                              year: 'numeric' 
+                            })
+                          : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Age:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.age || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Email:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.email || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Phone:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.phone || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Postcode:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.postcode || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">City:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.city || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Gender:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.gender || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">State:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.state || 'N/A'}</span>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="text-gray-600">Address:</span>
+                      <span className="ml-2 font-medium text-gray-900">{patient.address || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PSA Information */}
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <IoAnalytics className="mr-2 text-teal-600" />
+                    PSA Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-gray-600">Initial PSA Level:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.initialPSA || patient.initial_psa 
+                          ? `${parseFloat(patient.initialPSA || patient.initial_psa).toFixed(2)} ng/mL`
+                          : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">PSA Test Date:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.initialPSADate || patient.initial_psa_date 
+                          ? new Date(patient.initialPSADate || patient.initial_psa_date).toLocaleDateString('en-GB', { 
+                              day: '2-digit', 
+                              month: 'short', 
+                              year: 'numeric' 
+                            })
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Medical Information */}
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <IoDocument className="mr-2 text-teal-600" />
+                    Medical Information
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <span className="text-gray-600">Referral Date:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.referralDate || patient.referral_date 
+                          ? new Date(patient.referralDate || patient.referral_date).toLocaleDateString('en-GB', { 
+                              day: '2-digit', 
+                              month: 'short', 
+                              year: 'numeric' 
+                            })
+                          : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Assigned Urologist:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.assignedUrologist || patient.assigned_urologist || 'Not assigned'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Priority:</span>
+                      <span className="ml-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          (patient.priority || 'normal').toLowerCase() === 'urgent' 
+                            ? 'bg-red-100 text-red-700' 
+                            : (patient.priority || 'normal').toLowerCase() === 'high'
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {patient.priority || 'Normal'}
+                        </span>
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Medical History:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.medicalHistory || patient.medical_history || 'No prior medical conditions'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Current Medications:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.currentMedications || patient.current_medications || 'None'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Allergies:</span>
+                      <span className={`ml-2 font-medium ${patient.allergies ? 'text-gray-900' : 'text-gray-500'}`}>
+                        {patient.allergies || 'None'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Emergency Contact */}
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <IoHeart className="mr-2 text-teal-600" />
+                    Emergency Contact
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <span className="text-gray-600">Contact Name:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.emergencyContactName || patient.emergency_contact_name || 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Contact Phone:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.emergencyContactPhone || patient.emergency_contact_phone || 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Relationship:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {patient.emergencyContactRelationship || patient.emergency_contact_relationship || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Nurse Triage Information */}
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
