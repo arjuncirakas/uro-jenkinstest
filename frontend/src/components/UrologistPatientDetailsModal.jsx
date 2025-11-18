@@ -89,6 +89,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   });
 
 
+  // Patient data state - store full patient details fetched from API
+  const [fullPatientData, setFullPatientData] = useState(null);
+  const [loadingPatientData, setLoadingPatientData] = useState(false);
+  
   // API state management
   const [clinicalNotes, setClinicalNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -195,11 +199,40 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   }, [patient]);
 
+  // Fetch full patient details when modal opens
+  const fetchFullPatientData = async () => {
+    if (!patient?.id) {
+      console.log('❌ UrologistPatientDetailsModal: No patient ID, cannot fetch full details');
+      return;
+    }
+    
+    try {
+      setLoadingPatientData(true);
+      console.log('🔍 UrologistPatientDetailsModal: Fetching full patient details for ID:', patient.id);
+      const result = await patientService.getPatientById(patient.id);
+      
+      if (result.success && result.data) {
+        console.log('✅ UrologistPatientDetailsModal: Fetched full patient details:', result.data);
+        setFullPatientData(result.data);
+      } else {
+        console.error('❌ UrologistPatientDetailsModal: Failed to fetch patient details:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ UrologistPatientDetailsModal: Error fetching patient details:', error);
+    } finally {
+      setLoadingPatientData(false);
+    }
+  };
+
   // Load patient data when modal opens
   useEffect(() => {
     console.log('🔍 UrologistPatientDetailsModal: useEffect triggered', { isOpen, patient });
     if (isOpen && patient) {
       console.log('🔍 UrologistPatientDetailsModal: Modal opened with patient:', patient);
+      
+      // Fetch full patient details from API
+      fetchFullPatientData();
+      
       // Fetch fresh data from API
       fetchNotes();
       fetchInvestigations();
@@ -222,8 +255,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     } else {
       // Reset when modal closes
       setHasSurgeryAppointment(false);
+      setFullPatientData(null);
     }
-  }, [isOpen, patient, checkSurgeryAppointment]);
+  }, [isOpen, patient?.id, checkSurgeryAppointment]);
 
   // Reset surgery time when date changes
   useEffect(() => {
@@ -2319,18 +2353,32 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           {activeTab === 'generalInfo' && (
             <div className="flex w-full h-full overflow-y-auto p-6">
               <div className="w-full mx-auto space-y-6">
-                {/* Personal Information */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <IoHeart className="mr-2 text-teal-600" />
-                    Personal Information
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-gray-600">Date of Birth:</span>
-                      <span className="ml-2 font-medium text-gray-900">
-                        {patient.dateOfBirth || patient.date_of_birth 
-                          ? new Date(patient.dateOfBirth || patient.date_of_birth).toLocaleDateString('en-GB', { 
+                {loadingPatientData ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                      <span className="text-gray-600 text-sm">Loading patient details...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Use fullPatientData if available, otherwise fallback to patient prop */}
+                    {(() => {
+                      const displayPatient = fullPatientData || patient;
+                      return (
+                        <>
+                          {/* Personal Information */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <IoHeart className="mr-2 text-teal-600" />
+                              Personal Information
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <span className="text-gray-600">Date of Birth:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.dateOfBirth || displayPatient.date_of_birth 
+                          ? new Date(displayPatient.dateOfBirth || displayPatient.date_of_birth).toLocaleDateString('en-GB', { 
                               day: '2-digit', 
                               month: 'short', 
                               year: 'numeric' 
@@ -2340,35 +2388,35 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     </div>
                     <div>
                       <span className="text-gray-600">Age:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.age || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.age || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Email:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.email || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.email || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Phone:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.phone || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.phone || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Postcode:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.postcode || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.postcode || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">City:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.city || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.city || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Gender:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.gender || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.gender || 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">State:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.state || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.state || 'N/A'}</span>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-gray-600">Address:</span>
-                      <span className="ml-2 font-medium text-gray-900">{patient.address || 'N/A'}</span>
+                      <span className="ml-2 font-medium text-gray-900">{displayPatient.address || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
@@ -2383,16 +2431,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     <div>
                       <span className="text-gray-600">Initial PSA Level:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.initialPSA || patient.initial_psa 
-                          ? `${parseFloat(patient.initialPSA || patient.initial_psa).toFixed(2)} ng/mL`
+                        {displayPatient.initialPSA || displayPatient.initial_psa 
+                          ? `${parseFloat(displayPatient.initialPSA || displayPatient.initial_psa).toFixed(2)} ng/mL`
                           : 'N/A'}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">PSA Test Date:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.initialPSADate || patient.initial_psa_date 
-                          ? new Date(patient.initialPSADate || patient.initial_psa_date).toLocaleDateString('en-GB', { 
+                        {displayPatient.initialPSADate || displayPatient.initial_psa_date 
+                          ? new Date(displayPatient.initialPSADate || displayPatient.initial_psa_date).toLocaleDateString('en-GB', { 
                               day: '2-digit', 
                               month: 'short', 
                               year: 'numeric' 
@@ -2413,8 +2461,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     <div>
                       <span className="text-gray-600">Referral Date:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.referralDate || patient.referral_date 
-                          ? new Date(patient.referralDate || patient.referral_date).toLocaleDateString('en-GB', { 
+                        {displayPatient.referralDate || displayPatient.referral_date 
+                          ? new Date(displayPatient.referralDate || displayPatient.referral_date).toLocaleDateString('en-GB', { 
                               day: '2-digit', 
                               month: 'short', 
                               year: 'numeric' 
@@ -2425,39 +2473,39 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     <div>
                       <span className="text-gray-600">Assigned Urologist:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.assignedUrologist || patient.assigned_urologist || 'Not assigned'}
+                        {displayPatient.assignedUrologist || displayPatient.assigned_urologist || 'Not assigned'}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Priority:</span>
                       <span className="ml-2">
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          (patient.priority || 'normal').toLowerCase() === 'urgent' 
+                          (displayPatient.priority || 'normal').toLowerCase() === 'urgent' 
                             ? 'bg-red-100 text-red-700' 
-                            : (patient.priority || 'normal').toLowerCase() === 'high'
+                            : (displayPatient.priority || 'normal').toLowerCase() === 'high'
                             ? 'bg-orange-100 text-orange-700'
                             : 'bg-blue-100 text-blue-700'
                         }`}>
-                          {patient.priority || 'Normal'}
+                          {displayPatient.priority || 'Normal'}
                         </span>
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Medical History:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.medicalHistory || patient.medical_history || 'No prior medical conditions'}
+                        {displayPatient.medicalHistory || displayPatient.medical_history || 'No prior medical conditions'}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Current Medications:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.currentMedications || patient.current_medications || 'None'}
+                        {displayPatient.currentMedications || displayPatient.current_medications || 'None'}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Allergies:</span>
-                      <span className={`ml-2 font-medium ${patient.allergies ? 'text-gray-900' : 'text-gray-500'}`}>
-                        {patient.allergies || 'None'}
+                      <span className={`ml-2 font-medium ${displayPatient.allergies ? 'text-gray-900' : 'text-gray-500'}`}>
+                        {displayPatient.allergies || 'None'}
                       </span>
                     </div>
                   </div>
@@ -2473,19 +2521,19 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     <div>
                       <span className="text-gray-600">Contact Name:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.emergencyContactName || patient.emergency_contact_name || 'N/A'}
+                        {displayPatient.emergencyContactName || displayPatient.emergency_contact_name || 'N/A'}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Contact Phone:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.emergencyContactPhone || patient.emergency_contact_phone || 'N/A'}
+                        {displayPatient.emergencyContactPhone || displayPatient.emergency_contact_phone || 'N/A'}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Relationship:</span>
                       <span className="ml-2 font-medium text-gray-900">
-                        {patient.emergencyContactRelationship || patient.emergency_contact_relationship || 'N/A'}
+                        {displayPatient.emergencyContactRelationship || displayPatient.emergency_contact_relationship || 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -2500,9 +2548,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-3">Symptoms & Presentation - Chief Complaint</h4>
-                      {(patient.triageSymptoms || patient.triage_symptoms) && (patient.triageSymptoms || patient.triage_symptoms).length > 0 ? (
+                      {(displayPatient.triageSymptoms || displayPatient.triage_symptoms) && (displayPatient.triageSymptoms || displayPatient.triage_symptoms).length > 0 ? (
                         <div className="space-y-3">
-                          {(patient.triageSymptoms || patient.triage_symptoms || []).map((symptom, index) => (
+                          {(displayPatient.triageSymptoms || displayPatient.triage_symptoms || []).map((symptom, index) => (
                             <div key={index} className={`border border-gray-200 rounded-lg p-4 ${symptom.isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -2550,13 +2598,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         <div>
                           <span className="text-gray-600">DRE Done:</span>
                           <span className="ml-2 font-medium text-gray-900">
-                            {(patient.dreDone || patient.dre_done) ? 'Yes' : 'No'}
+                            {(displayPatient.dreDone || displayPatient.dre_done) ? 'Yes' : 'No'}
                           </span>
                         </div>
-                        {(patient.dreDone || patient.dre_done) && (patient.dreFindings || patient.dre_findings) && (
+                        {(displayPatient.dreDone || displayPatient.dre_done) && (displayPatient.dreFindings || displayPatient.dre_findings) && (
                           <div>
                             <span className="text-gray-600">DRE Findings:</span>
-                            <span className="ml-2 font-medium text-gray-900">{patient.dreFindings || patient.dre_findings}</span>
+                            <span className="ml-2 font-medium text-gray-900">{displayPatient.dreFindings || displayPatient.dre_findings}</span>
                           </div>
                         )}
                       </div>
@@ -2569,14 +2617,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         <div>
                           <span className="text-gray-600">Prior Biopsy:</span>
                           <span className="ml-2 font-medium text-gray-900">
-                            {(patient.priorBiopsy || patient.prior_biopsy) === 'yes' ? 'Yes' : 'No'}
+                            {(displayPatient.priorBiopsy || displayPatient.prior_biopsy) === 'yes' ? 'Yes' : 'No'}
                           </span>
                         </div>
-                        {(patient.priorBiopsy || patient.prior_biopsy) === 'yes' && (patient.priorBiopsyDate || patient.prior_biopsy_date) && (
+                        {(displayPatient.priorBiopsy || displayPatient.prior_biopsy) === 'yes' && (displayPatient.priorBiopsyDate || displayPatient.prior_biopsy_date) && (
                           <div>
                             <span className="text-gray-600">Biopsy Date:</span>
                             <span className="ml-2 font-medium text-gray-900">
-                              {new Date(patient.priorBiopsyDate || patient.prior_biopsy_date).toLocaleDateString('en-GB', { 
+                              {new Date(displayPatient.priorBiopsyDate || displayPatient.prior_biopsy_date).toLocaleDateString('en-GB', { 
                                 day: '2-digit', 
                                 month: 'short', 
                                 year: 'numeric' 
@@ -2584,21 +2632,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             </span>
                           </div>
                         )}
-                        {(patient.priorBiopsy || patient.prior_biopsy) === 'yes' && (patient.gleasonScore || patient.gleason_score) && (
+                        {(displayPatient.priorBiopsy || displayPatient.prior_biopsy) === 'yes' && (displayPatient.gleasonScore || displayPatient.gleason_score) && (
                           <div>
                             <span className="text-gray-600">Gleason Score:</span>
-                            <span className="ml-2 font-medium text-gray-900">{patient.gleasonScore || patient.gleason_score}</span>
+                            <span className="ml-2 font-medium text-gray-900">{displayPatient.gleasonScore || displayPatient.gleason_score}</span>
                           </div>
                         )}
                       </div>
                     </div>
 
                     {/* Comorbidities */}
-                    {(patient.comorbidities || []) && (patient.comorbidities || []).length > 0 && (
+                    {(displayPatient.comorbidities || []) && (displayPatient.comorbidities || []).length > 0 && (
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Comorbidities</h4>
                         <div className="flex flex-wrap gap-2">
-                          {(patient.comorbidities || []).map((comorbidity, index) => (
+                          {(displayPatient.comorbidities || []).map((comorbidity, index) => (
                             <span
                               key={index}
                               className="px-3 py-1 bg-teal-100 text-teal-700 text-sm rounded-full font-medium"
@@ -2611,13 +2659,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     )}
 
                     {/* Show message if no data */}
-                    {!(patient.dreDone || patient.dre_done) && (patient.priorBiopsy || patient.prior_biopsy) !== 'yes' && (!patient.comorbidities || patient.comorbidities.length === 0) && (
+                    {!(displayPatient.dreDone || displayPatient.dre_done) && (displayPatient.priorBiopsy || displayPatient.prior_biopsy) !== 'yes' && (!displayPatient.comorbidities || displayPatient.comorbidities.length === 0) && (
                       <div className="text-center py-8 text-gray-500">
                         <p>No exam or prior test information available.</p>
                       </div>
                     )}
                   </div>
                 </div>
+                        </>
+                      );
+                    })()}
+                  </>
+                )}
               </div>
             </div>
           )}
