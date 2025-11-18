@@ -2328,9 +2328,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-3">Symptoms & Presentation - Chief Complaint</h4>
-                      {patient.triageSymptoms && patient.triageSymptoms.length > 0 ? (
+                      {(patient.triageSymptoms || patient.triage_symptoms) && (patient.triageSymptoms || patient.triage_symptoms).length > 0 ? (
                         <div className="space-y-3">
-                          {patient.triageSymptoms.map((symptom, index) => (
+                          {(patient.triageSymptoms || patient.triage_symptoms || []).map((symptom, index) => (
                             <div key={index} className={`border border-gray-200 rounded-lg p-4 ${symptom.isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -2378,13 +2378,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         <div>
                           <span className="text-gray-600">DRE Done:</span>
                           <span className="ml-2 font-medium text-gray-900">
-                            {patient.dreDone ? 'Yes' : 'No'}
+                            {(patient.dreDone || patient.dre_done) ? 'Yes' : 'No'}
                           </span>
                         </div>
-                        {patient.dreDone && patient.dreFindings && (
+                        {(patient.dreDone || patient.dre_done) && (patient.dreFindings || patient.dre_findings) && (
                           <div>
                             <span className="text-gray-600">DRE Findings:</span>
-                            <span className="ml-2 font-medium text-gray-900">{patient.dreFindings}</span>
+                            <span className="ml-2 font-medium text-gray-900">{patient.dreFindings || patient.dre_findings}</span>
                           </div>
                         )}
                       </div>
@@ -2397,14 +2397,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         <div>
                           <span className="text-gray-600">Prior Biopsy:</span>
                           <span className="ml-2 font-medium text-gray-900">
-                            {patient.priorBiopsy === 'yes' ? 'Yes' : 'No'}
+                            {(patient.priorBiopsy || patient.prior_biopsy) === 'yes' ? 'Yes' : 'No'}
                           </span>
                         </div>
-                        {patient.priorBiopsy === 'yes' && patient.priorBiopsyDate && (
+                        {(patient.priorBiopsy || patient.prior_biopsy) === 'yes' && (patient.priorBiopsyDate || patient.prior_biopsy_date) && (
                           <div>
                             <span className="text-gray-600">Biopsy Date:</span>
                             <span className="ml-2 font-medium text-gray-900">
-                              {new Date(patient.priorBiopsyDate).toLocaleDateString('en-GB', { 
+                              {new Date(patient.priorBiopsyDate || patient.prior_biopsy_date).toLocaleDateString('en-GB', { 
                                 day: '2-digit', 
                                 month: 'short', 
                                 year: 'numeric' 
@@ -2412,21 +2412,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             </span>
                           </div>
                         )}
-                        {patient.priorBiopsy === 'yes' && patient.gleasonScore && (
+                        {(patient.priorBiopsy || patient.prior_biopsy) === 'yes' && (patient.gleasonScore || patient.gleason_score) && (
                           <div>
                             <span className="text-gray-600">Gleason Score:</span>
-                            <span className="ml-2 font-medium text-gray-900">{patient.gleasonScore}</span>
+                            <span className="ml-2 font-medium text-gray-900">{patient.gleasonScore || patient.gleason_score}</span>
                           </div>
                         )}
                       </div>
                     </div>
 
                     {/* Comorbidities */}
-                    {patient.comorbidities && patient.comorbidities.length > 0 && (
+                    {(patient.comorbidities || []) && (patient.comorbidities || []).length > 0 && (
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Comorbidities</h4>
                         <div className="flex flex-wrap gap-2">
-                          {patient.comorbidities.map((comorbidity, index) => (
+                          {(patient.comorbidities || []).map((comorbidity, index) => (
                             <span
                               key={index}
                               className="px-3 py-1 bg-teal-100 text-teal-700 text-sm rounded-full font-medium"
@@ -2439,7 +2439,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     )}
 
                     {/* Show message if no data */}
-                    {!patient.dreDone && patient.priorBiopsy !== 'yes' && (!patient.comorbidities || patient.comorbidities.length === 0) && (
+                    {!(patient.dreDone || patient.dre_done) && (patient.priorBiopsy || patient.prior_biopsy) !== 'yes' && (!patient.comorbidities || patient.comorbidities.length === 0) && (
                       <div className="text-center py-8 text-gray-500">
                         <p>No exam or prior test information available.</p>
                       </div>
@@ -2728,277 +2728,168 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           <div className="flex items-center justify-center gap-4">
             <span className="text-sm font-medium text-gray-700">Transfer to:</span>
             <div className="flex gap-3">
-              {/* For New Patients: Active Monitoring, Surgery Pathway, Medication, Radiotherapy, Discharge */}
-              {(() => {
-                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
-                const patientCategory = patient?.category || '';
-                const isNewPatient = !carePathway || carePathway === '' || carePathway === 'OPD Queue' || 
-                                    patientCategory === 'new' || !patientCategory;
-                return isNewPatient;
-              })() && (
-                <>
-                  {/* Active Monitoring */}
-                  <button
-                    onClick={() => handleTransfer('Active Monitoring')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoHeart className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Monitoring</span>
-                  </button>
-
-                  {/* Surgery Pathway */}
-                  <button
-                    onClick={() => handleTransfer('Surgery Pathway')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <FaStethoscope className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
-                  </button>
-
-                  {/* Medication */}
-                  <button
-                    onClick={() => handleTransfer('Medication')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <FaPills className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                  </button>
-
-                  {/* Radiotherapy */}
-                  <button
-                    onClick={() => handleTransfer('Radiotherapy')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoMedical className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
-                  </button>
-
-                  {/* Discharge */}
-                  <button
-                    onClick={() => handleTransfer('Discharge')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoCheckmark className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                  </button>
-                </>
-              )}
-
-              {/* For Surgery Pathway Patients: Active Surveillance, Medication, Radiotherapy, Post-op Followup, Discharge */}
-              {(() => {
-                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
-                const patientCategory = patient?.category || '';
-                const isSurgeryPathway = carePathway === 'Surgery Pathway' || patientCategory === 'surgery-pathway';
-                return isSurgeryPathway;
-              })() && (
-                <>
-                  {/* Active Surveillance */}
-                  <button
-                    onClick={() => handleTransfer('Active Surveillance')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoHeart className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
-                  </button>
-
-                  {/* Medication */}
-                  <button
-                    onClick={() => handleTransfer('Medication')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <FaPills className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                  </button>
-
-                  {/* Radiotherapy */}
-                  <button
-                    onClick={() => handleTransfer('Radiotherapy')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoMedical className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
-                  </button>
-
-                  {/* Post-op Followup */}
-                  <button
-                    onClick={() => handleTransfer('Post-op Followup')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <FaStethoscope className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Post-op Followup</span>
-                  </button>
-
-                  {/* Discharge */}
-                  <button
-                    onClick={() => handleTransfer('Discharge')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoCheckmark className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                  </button>
-                </>
-              )}
-
-              {/* For Post-op Followup Patients: Medication, Discharge only */}
-              {(() => {
-                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
-                const patientCategory = patient?.category || '';
-                const isPostOp = (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') || 
-                                patientCategory === 'post-op-followup';
-                return isPostOp;
-              })() && (
-                <>
-                  {/* Medication */}
-                  <button
-                    onClick={() => handleTransfer('Medication')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <FaPills className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                  </button>
-
-                  {/* Discharge */}
-                  <button
-                    onClick={() => handleTransfer('Discharge')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoCheckmark className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                  </button>
-                </>
-              )}
-
-              {/* For Medication Pathway Patients: Active Surveillance, Discharge only */}
-              {(() => {
-                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
-                const isMedication = carePathway === 'Medication';
-                return isMedication;
-              })() && (
-                <>
-                  {/* Active Surveillance */}
-                  <button
-                    onClick={() => handleTransfer('Active Surveillance')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoHeart className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
-                  </button>
-
-                  {/* Discharge */}
-                  <button
-                    onClick={() => handleTransfer('Discharge')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoCheckmark className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                  </button>
-                </>
-              )}
-              
-              {/* Fallback: For patients on other pathways (Active Monitoring, Active Surveillance, Radiotherapy, etc.) or when category is 'all' */}
               {(() => {
                 const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
                 const patientCategory = patient?.category || '';
                 
-                // Check if patient matches any of the above conditions
-                const isNewPatient = !carePathway || carePathway === '' || carePathway === 'OPD Queue' || 
-                                    patientCategory === 'new' || !patientCategory;
+                // Determine patient type - check in order of specificity (most specific first)
                 const isSurgeryPathway = carePathway === 'Surgery Pathway' || patientCategory === 'surgery-pathway';
                 const isPostOp = (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') || 
                                 patientCategory === 'post-op-followup';
                 const isMedication = carePathway === 'Medication';
+                const isNewPatient = !carePathway || carePathway === '' || carePathway === 'OPD Queue' || 
+                                    patientCategory === 'new' || !patientCategory;
                 
-                // If patient doesn't match any specific condition but has a pathway, show transfer options
-                // This handles cases like Active Monitoring, Active Surveillance, Radiotherapy, etc.
-                // Exclude Medication pathway as it has its own specific buttons above
-                const shouldShowFallback = patient && carePathway && !isNewPatient && !isSurgeryPathway && !isPostOp && !isMedication;
+                // For Surgery Pathway Patients: Active Surveillance, Medication, Radiotherapy, Post-op Followup, Discharge */}
+                if (isSurgeryPathway) {
+                  return (
+                    <>
+                      <button onClick={() => handleTransfer('Active Surveillance')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoHeart className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <FaPills className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoMedical className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Post-op Followup')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <FaStethoscope className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Post-op Followup</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoCheckmark className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                      </button>
+                    </>
+                  );
+                }
                 
-                console.log('🔍 DEBUG: Fallback check:', { 
-                  carePathway, 
-                  patientCategory, 
-                  isNewPatient, 
-                  isSurgeryPathway, 
-                  isPostOp, 
-                  shouldShowFallback 
-                });
+                // For Post-op Followup Patients: Medication, Discharge only
+                if (isPostOp) {
+                  return (
+                    <>
+                      <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <FaPills className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoCheckmark className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                      </button>
+                    </>
+                  );
+                }
                 
-                return shouldShowFallback;
-              })() && (
-                <>
-                  {/* Show common transfer options for patients on other pathways */}
-                  {/* Surgery Pathway */}
-                  <button
-                    onClick={() => handleTransfer('Surgery Pathway')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <FaStethoscope className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
-                  </button>
-
-                  {/* Medication */}
-                  <button
-                    onClick={() => handleTransfer('Medication')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <FaPills className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                  </button>
-
-                  {/* Radiotherapy */}
-                  <button
-                    onClick={() => handleTransfer('Radiotherapy')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoMedical className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
-                  </button>
-
-                  {/* Discharge */}
-                  <button
-                    onClick={() => handleTransfer('Discharge')}
-                    className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200"
-                  >
-                    <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                      <IoCheckmark className="text-teal-600 text-sm" />
-                    </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                  </button>
-                </>
-              )}
+                // For Medication Pathway Patients: Active Surveillance, Discharge only
+                if (isMedication) {
+                  return (
+                    <>
+                      <button onClick={() => handleTransfer('Active Surveillance')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoHeart className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoCheckmark className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                      </button>
+                    </>
+                  );
+                }
+                
+                // For New Patients: Active Monitoring, Surgery Pathway, Medication, Radiotherapy, Discharge
+                if (isNewPatient) {
+                  return (
+                    <>
+                      <button onClick={() => handleTransfer('Active Monitoring')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoHeart className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Monitoring</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Surgery Pathway')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <FaStethoscope className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <FaPills className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoMedical className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoCheckmark className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                      </button>
+                    </>
+                  );
+                }
+                
+                // Fallback: For patients on other pathways (Active Monitoring, Active Surveillance, Radiotherapy, etc.)
+                if (patient && carePathway) {
+                  return (
+                    <>
+                      <button onClick={() => handleTransfer('Surgery Pathway')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <FaStethoscope className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <FaPills className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoMedical className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
+                      </button>
+                      <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                        <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                          <IoCheckmark className="text-teal-600 text-sm" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                      </button>
+                    </>
+                  );
+                }
+                
+                return null;
+              })()}
             </div>
           </div>
         </div>
