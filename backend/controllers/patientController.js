@@ -231,6 +231,11 @@ export const addPatient = async (req, res) => {
     // Calculate age
     const age = new Date().getFullYear() - new Date(dateOfBirth).getFullYear();
 
+    // Format prior biopsy date if exists
+    const formattedPriorBiopsyDate = newPatient.prior_biopsy_date 
+      ? new Date(newPatient.prior_biopsy_date).toISOString().split('T')[0]
+      : null;
+
     res.status(201).json({
       success: true,
       message: 'Patient added successfully',
@@ -266,7 +271,29 @@ export const addPatient = async (req, res) => {
           status: newPatient.status,
           createdBy: newPatient.created_by,
           createdAt: newPatient.created_at,
-          updatedAt: newPatient.updated_at
+          updatedAt: newPatient.updated_at,
+          // Triage and Exam & Prior Tests
+          triageSymptoms: newPatient.triage_symptoms ? (() => {
+            try {
+              return JSON.parse(newPatient.triage_symptoms);
+            } catch (e) {
+              console.error('Error parsing triage_symptoms:', e);
+              return null;
+            }
+          })() : null,
+          dreDone: newPatient.dre_done || false,
+          dreFindings: newPatient.dre_findings || null,
+          priorBiopsy: newPatient.prior_biopsy || 'no',
+          priorBiopsyDate: formattedPriorBiopsyDate,
+          gleasonScore: newPatient.gleason_score || null,
+          comorbidities: newPatient.comorbidities ? (() => {
+            try {
+              return JSON.parse(newPatient.comorbidities);
+            } catch (e) {
+              console.error('Error parsing comorbidities:', e);
+              return [];
+            }
+          })() : []
         }
       }
     });
