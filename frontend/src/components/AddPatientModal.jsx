@@ -14,7 +14,9 @@ import {
   MessageSquare,
   Activity,
   Save,
-  Loader2
+  Loader2,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
@@ -60,8 +62,43 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     
     // Initial Assessment
     priority: 'Normal',
-    notes: ''
+    notes: '',
+    
+    // Exam & Prior Tests
+    dreFindings: '',
+    dreDone: false,
+    priorBiopsy: 'no',
+    priorBiopsyDate: '',
+    gleasonScore: '',
+    comorbidities: [] // Array of selected comorbidities
   });
+
+  // Predefined symptoms for triage
+  const predefinedSymptoms = [
+    'LUTS',
+    'Hematuria',
+    'Nocturia',
+    'Erectile dysfunction',
+    'Bone pain'
+  ];
+
+  // State for nurse triage symptoms
+  const [triageSymptoms, setTriageSymptoms] = useState(
+    predefinedSymptoms.map(symptom => ({
+      name: symptom,
+      checked: false,
+      ipssScore: '',
+      duration: '',
+      durationUnit: 'months',
+      isCustom: false
+    }))
+  );
+
+  const [showCustomSymptomModal, setShowCustomSymptomModal] = useState(false);
+  const [customSymptomName, setCustomSymptomName] = useState('');
+  const [customSymptomIpssScore, setCustomSymptomIpssScore] = useState('');
+  const [customSymptomDuration, setCustomSymptomDuration] = useState('');
+  const [customSymptomDurationUnit, setCustomSymptomDurationUnit] = useState('months');
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -227,6 +264,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         }
       };
 
+      // Prepare triage symptoms data (only checked symptoms with required fields)
+      const triageData = triageSymptoms
+        .filter(symptom => symptom.checked && symptom.ipssScore && symptom.duration)
+        .map(symptom => ({
+          name: symptom.name,
+          ipssScore: symptom.ipssScore,
+          duration: symptom.duration,
+          durationUnit: symptom.durationUnit,
+          isCustom: symptom.isCustom || false
+        }));
+
       // Prepare patient data for API
       const patientData = {
         firstName: formData.firstName,
@@ -252,7 +300,15 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         emergencyContactRelationship: formData.emergencyContactRelationship || '',
         priority: formData.priority || 'Normal',
         notes: formData.notes || '',
-        referredByGpId: formData.referringGP || null // Add referring GP ID
+        referredByGpId: formData.referringGP || null, // Add referring GP ID
+        triageSymptoms: triageData.length > 0 ? JSON.stringify(triageData) : null, // Add triage symptoms as JSON
+        // Exam & Prior Tests
+        dreDone: formData.dreDone || false,
+        dreFindings: formData.dreFindings || '',
+        priorBiopsy: formData.priorBiopsy || 'no',
+        priorBiopsyDate: formData.priorBiopsyDate ? convertToISODate(formData.priorBiopsyDate) : '',
+        gleasonScore: formData.gleasonScore || '',
+        comorbidities: formData.comorbidities || []
       };
 
       // Call the API
@@ -351,8 +407,24 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       emergencyContactPhone: '',
       emergencyContactRelationship: '',
       priority: 'Normal',
-      notes: ''
+      notes: '',
+      dreFindings: '',
+      dreDone: false,
+      priorBiopsy: 'no',
+      priorBiopsyDate: '',
+      gleasonScore: '',
+      comorbidities: []
     });
+    setTriageSymptoms(
+      predefinedSymptoms.map(symptom => ({
+        name: symptom,
+        checked: false,
+        ipssScore: '',
+        duration: '',
+        durationUnit: 'months',
+        isCustom: false
+      }))
+    );
     setErrors({});
   };
 
@@ -366,7 +438,9 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                            formData.address.trim() !== '' || 
                            formData.initialPSA !== '' || 
                            formData.medicalHistory.trim() !== '' || 
-                           formData.notes.trim() !== '';
+                           formData.notes.trim() !== '' ||
+                           triageSymptoms.some(s => s.checked || s.isCustom) ||
+                           formData.dreDone || formData.priorBiopsy === 'yes' || formData.comorbidities.length > 0;
 
   // Handle save function for Escape key
   const handleSaveChanges = (e) => {
@@ -407,6 +481,67 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       onClose();
     }
     setShowConfirmModal(false);
+  };
+
+  // Handle triage symptom checkbox change
+  const handleSymptomCheckboxChange = (index) => {
+    setTriageSymptoms(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        checked: !updated[index].checked
+      };
+      return updated;
+    });
+  };
+
+  // Handle triage symptom field changes
+  const handleSymptomFieldChange = (index, field, value) => {
+    setTriageSymptoms(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        [field]: value
+      };
+      return updated;
+    });
+  };
+
+  // Handle add custom symptom
+  const handleAddCustomSymptom = () => {
+    if (!customSymptomName.trim()) {
+      return;
+    }
+    
+    // Capitalize first letter of each word
+    const capitalizeFirstLetter = (str) => {
+      return str.trim().split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    };
+    
+    const newSymptom = {
+      name: capitalizeFirstLetter(customSymptomName),
+      checked: true,
+      ipssScore: customSymptomIpssScore,
+      duration: customSymptomDuration,
+      durationUnit: customSymptomDurationUnit,
+      isCustom: true
+    };
+
+    setTriageSymptoms(prev => [...prev, newSymptom]);
+    
+    // Reset custom symptom form
+    setCustomSymptomName('');
+    setCustomSymptomIpssScore('');
+    setCustomSymptomDuration('');
+    setCustomSymptomDurationUnit('months');
+    setShowCustomSymptomModal(false);
+  };
+
+  // Handle remove custom symptom
+  const handleRemoveCustomSymptom = (index) => {
+    setTriageSymptoms(prev => prev.filter((_, i) => i !== index));
   };
 
   if (!isOpen) return null;
@@ -912,6 +1047,257 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
               </div>
             </div>
 
+            {/* Exam & Prior Tests */}
+            <div className="bg-white border border-gray-200 rounded p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-teal-600" />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold text-gray-900">Exam & Prior Tests</h4>
+                  <p className="text-sm text-gray-600">Physical examination findings and prior test results</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {/* DRE Findings */}
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <input
+                      type="checkbox"
+                      name="dreDone"
+                      checked={formData.dreDone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, dreDone: e.target.checked, dreFindings: e.target.checked ? prev.dreFindings : '' }))}
+                      className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                    />
+                    <label className="block text-sm font-medium text-gray-700">
+                      DRE (Digital Rectal Exam) Done
+                    </label>
+                  </div>
+                  
+                  {formData.dreDone && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        DRE Findings *
+                      </label>
+                      <select
+                        name="dreFindings"
+                        value={formData.dreFindings}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+                      >
+                        <option value="">Select DRE Findings</option>
+                        <option value="Normal">Normal</option>
+                        <option value="Enlarged">Enlarged</option>
+                        <option value="Nodule">Nodule</option>
+                        <option value="Suspicious">Suspicious</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Prior Prostate Biopsy */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Prior Prostate Biopsy
+                  </label>
+                  <div className="flex items-center gap-4 mb-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="priorBiopsy"
+                        value="no"
+                        checked={formData.priorBiopsy === 'no'}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                      />
+                      <span className="text-sm text-gray-700">No</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="priorBiopsy"
+                        value="yes"
+                        checked={formData.priorBiopsy === 'yes'}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                      />
+                      <span className="text-sm text-gray-700">Yes</span>
+                    </label>
+                  </div>
+                  
+                  {formData.priorBiopsy === 'yes' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Biopsy Date *
+                        </label>
+                        <input
+                          type="date"
+                          name="priorBiopsyDate"
+                          value={formData.priorBiopsyDate}
+                          onChange={handleInputChange}
+                          max={new Date().toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Gleason Score *
+                        </label>
+                        <input
+                          type="text"
+                          name="gleasonScore"
+                          value={formData.gleasonScore}
+                          onChange={handleInputChange}
+                          placeholder="e.g., 3+3=6"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Comorbidities */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Comorbidities
+                  </label>
+                  <div className="space-y-2">
+                    {['CVD', 'Diabetes', 'Smoking Status'].map((comorbidity) => (
+                      <label key={comorbidity} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={formData.comorbidities.includes(comorbidity)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData(prev => ({
+                                ...prev,
+                                comorbidities: [...prev.comorbidities, comorbidity]
+                              }));
+                            } else {
+                              setFormData(prev => ({
+                                ...prev,
+                                comorbidities: prev.comorbidities.filter(c => c !== comorbidity)
+                              }));
+                            }
+                          }}
+                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                        />
+                        <span className="text-sm text-gray-700">{comorbidity}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Nurse Triage Information */}
+            <div className="bg-white border border-gray-200 rounded p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                  <Stethoscope className="w-6 h-6 text-teal-600" />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold text-gray-900">Nurse Triage Information</h4>
+                  <p className="text-sm text-gray-600">Symptoms & Presentation - Chief Complaint</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Predefined and Custom Symptoms - List all together */}
+                {triageSymptoms.map((symptom, index) => (
+                  <div 
+                    key={index} 
+                    className={`border border-gray-200 rounded-lg p-4 ${symptom.isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={symptom.checked}
+                        onChange={() => handleSymptomCheckboxChange(index)}
+                        className="mt-1 w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="block text-sm font-medium text-gray-700">
+                            {symptom.name}
+                            {symptom.isCustom && <span className="text-xs text-blue-600 ml-2">(Custom)</span>}
+                          </label>
+                          {symptom.isCustom && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCustomSymptom(index)}
+                              className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        
+                        {symptom.checked && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                IPSS Score
+                              </label>
+                              <select
+                                value={symptom.ipssScore}
+                                onChange={(e) => handleSymptomFieldChange(index, 'ipssScore', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+                              >
+                                <option value="">Select IPSS Score</option>
+                                <option value="Mild">Mild</option>
+                                <option value="Moderate">Moderate</option>
+                                <option value="Severe">Severe</option>
+                                {Array.from({ length: 36 }, (_, i) => (
+                                  <option key={i} value={i.toString()}>{i}</option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Duration of Symptoms
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={symptom.duration}
+                                  onChange={(e) => handleSymptomFieldChange(index, 'duration', e.target.value)}
+                                  placeholder="Duration"
+                                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+                                />
+                                <select
+                                  value={symptom.durationUnit}
+                                  onChange={(e) => handleSymptomFieldChange(index, 'durationUnit', e.target.value)}
+                                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+                                >
+                                  <option value="months">Months</option>
+                                  <option value="years">Years</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add Custom Symptom Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowCustomSymptomModal(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-teal-600 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Custom Symptom
+                </button>
+              </div>
+            </div>
+
             {/* Notes */}
             <div className="bg-white border border-gray-200 rounded p-4">
               <div className="flex items-center gap-3 mb-4">
@@ -992,6 +1378,112 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       title="Unsaved Changes"
       message="You have unsaved changes. Do you want to save before closing?"
     />
+
+    {/* Custom Symptom Modal */}
+    {showCustomSymptomModal && (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg w-full max-w-md border border-gray-200">
+          <div className="bg-teal-600 px-6 py-4 flex items-center justify-between border-b border-teal-700">
+            <h3 className="text-lg font-semibold text-white">Add Custom Symptom</h3>
+            <button
+              onClick={() => {
+                setShowCustomSymptomModal(false);
+                setCustomSymptomName('');
+                setCustomSymptomIpssScore('');
+                setCustomSymptomDuration('');
+                setCustomSymptomDurationUnit('months');
+              }}
+              className="p-1 hover:bg-white/10 rounded transition-colors"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
+          
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Symptom Name *
+              </label>
+              <input
+                type="text"
+                value={customSymptomName}
+                onChange={(e) => setCustomSymptomName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="Enter symptom name"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                IPSS Score
+              </label>
+              <select
+                value={customSymptomIpssScore}
+                onChange={(e) => setCustomSymptomIpssScore(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              >
+                <option value="">Select IPSS Score</option>
+                <option value="Mild">Mild</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Severe">Severe</option>
+                {Array.from({ length: 36 }, (_, i) => (
+                  <option key={i} value={i.toString()}>{i}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Duration of Symptoms
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={customSymptomDuration}
+                  onChange={(e) => setCustomSymptomDuration(e.target.value)}
+                  placeholder="Duration"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+                <select
+                  value={customSymptomDurationUnit}
+                  onChange={(e) => setCustomSymptomDurationUnit(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                >
+                  <option value="months">Months</option>
+                  <option value="years">Years</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowCustomSymptomModal(false);
+                setCustomSymptomName('');
+                setCustomSymptomIpssScore('');
+                setCustomSymptomDuration('');
+                setCustomSymptomDurationUnit('months');
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleAddCustomSymptom}
+              disabled={!customSymptomName.trim()}
+              className="px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Symptom
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 };

@@ -73,7 +73,15 @@ export const addPatient = async (req, res) => {
       emergencyContactRelationship,
       priority = 'Normal',
       notes,
-      referredByGpId // Added to accept referring GP from frontend
+      referredByGpId, // Added to accept referring GP from frontend
+      triageSymptoms, // Nurse triage symptoms data (JSON string)
+      // Exam & Prior Tests
+      dreDone,
+      dreFindings,
+      priorBiopsy,
+      priorBiopsyDate,
+      gleasonScore,
+      comorbidities // Array of comorbidities
     } = req.body;
 
     // Validate required fields
@@ -187,6 +195,14 @@ export const addPatient = async (req, res) => {
     const formattedReferralDate = formatDateOnly(referralDate);
     const formattedInitialPSADate = formatDateOnly(initialPSADate);
 
+    // Format prior biopsy date if provided
+    const formattedPriorBiopsyDate = priorBiopsyDate ? formatDateOnly(priorBiopsyDate) : null;
+    
+    // Convert comorbidities array to JSON string if provided
+    const comorbiditiesJson = Array.isArray(comorbidities) && comorbidities.length > 0 
+      ? JSON.stringify(comorbidities) 
+      : null;
+
     // Insert new patient
     const result = await client.query(
       `INSERT INTO patients (
@@ -194,17 +210,19 @@ export const addPatient = async (req, res) => {
         postcode, city, state, referring_department, referral_date, initial_psa, 
         initial_psa_date, medical_history, current_medications, allergies, 
         assigned_urologist, emergency_contact_name, emergency_contact_phone, 
-        emergency_contact_relationship, priority, notes, created_by, referred_by_gp_id
+        emergency_contact_relationship, priority, notes, created_by, referred_by_gp_id, triage_symptoms,
+        dre_done, dre_findings, prior_biopsy, prior_biopsy_date, gleason_score, comorbidities
       ) VALUES (
         $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12, $13::date, $14, $15::date, $16, 
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31::date, $32, $33
       ) RETURNING *`,
       [
         upi, firstName, lastName, formattedDateOfBirth, gender, phone, email, address,
         postcode, city, state, referringDepartment, formattedReferralDate, initialPSA,
         formattedInitialPSADate, medicalHistory, currentMedications, allergies,
         finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
-        emergencyContactRelationship, priority, notes, req.user.id, finalReferredByGpId
+        emergencyContactRelationship, priority, notes, req.user.id, finalReferredByGpId, triageSymptoms || null,
+        dreDone || false, dreFindings || null, priorBiopsy || 'no', formattedPriorBiopsyDate, gleasonScore || null, comorbiditiesJson
       ]
     );
 
@@ -373,9 +391,12 @@ export const getPatients = async (req, res) => {
         p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
         p.emergency_contact_relationship, p.priority, p.notes, p.status,
         p.care_pathway, p.created_by, p.created_at, p.updated_at,
+        p.triage_symptoms, p.dre_done, p.dre_findings, p.prior_biopsy,
+        p.prior_biopsy_date, p.gleason_score, p.comorbidities,
         TO_CHAR(p.date_of_birth, 'YYYY-MM-DD') as date_of_birth,
         TO_CHAR(p.referral_date, 'YYYY-MM-DD') as referral_date,
         TO_CHAR(p.initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,
+        TO_CHAR(p.prior_biopsy_date, 'YYYY-MM-DD') as prior_biopsy_date_formatted,
         u.first_name as created_by_first_name,
         u.last_name as created_by_last_name,
         gp.first_name as gp_first_name,
@@ -532,7 +553,29 @@ export const getPatients = async (req, res) => {
         nextAppointmentId: patient.next_appointment_id, // Appointment ID for updating
         nextAppointmentType: patient.next_appointment_type, // 'urologist' or 'investigation'
         hasAppointment, // Boolean flag to easily check if patient has an appointment
-        monitoringStatus
+        monitoringStatus,
+        // Triage and Exam & Prior Tests
+        triageSymptoms: patient.triage_symptoms ? (() => {
+          try {
+            return JSON.parse(patient.triage_symptoms);
+          } catch (e) {
+            console.error('Error parsing triage_symptoms:', e);
+            return null;
+          }
+        })() : null,
+        dreDone: patient.dre_done || false,
+        dreFindings: patient.dre_findings || null,
+        priorBiopsy: patient.prior_biopsy || 'no',
+        priorBiopsyDate: patient.prior_biopsy_date_formatted || null,
+        gleasonScore: patient.gleason_score || null,
+        comorbidities: patient.comorbidities ? (() => {
+          try {
+            return JSON.parse(patient.comorbidities);
+          } catch (e) {
+            console.error('Error parsing comorbidities:', e);
+            return [];
+          }
+        })() : []
       };
     });
 
@@ -774,9 +817,12 @@ export const getPatientById = async (req, res) => {
         p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
         p.emergency_contact_relationship, p.priority, p.notes, p.status,
         p.care_pathway, p.created_by, p.created_at, p.updated_at,
+        p.triage_symptoms, p.dre_done, p.dre_findings, p.prior_biopsy,
+        p.prior_biopsy_date, p.gleason_score, p.comorbidities,
         TO_CHAR(p.date_of_birth, 'YYYY-MM-DD') as date_of_birth,
         TO_CHAR(p.referral_date, 'YYYY-MM-DD') as referral_date,
         TO_CHAR(p.initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,
+        TO_CHAR(p.prior_biopsy_date, 'YYYY-MM-DD') as prior_biopsy_date_formatted,
         u.first_name as created_by_first_name,
         u.last_name as created_by_last_name,
         gp.first_name as gp_first_name,
@@ -858,7 +904,29 @@ export const getPatientById = async (req, res) => {
           createdAt: patient.created_at,
           updatedAt: patient.updated_at,
           latest_psa: latestPSA,
-          latest_psa_date: latestPSADate
+          latest_psa_date: latestPSADate,
+          // Triage and Exam & Prior Tests
+          triageSymptoms: patient.triage_symptoms ? (() => {
+            try {
+              return JSON.parse(patient.triage_symptoms);
+            } catch (e) {
+              console.error('Error parsing triage_symptoms:', e);
+              return null;
+            }
+          })() : null,
+          dreDone: patient.dre_done || false,
+          dreFindings: patient.dre_findings || null,
+          priorBiopsy: patient.prior_biopsy || 'no',
+          priorBiopsyDate: patient.prior_biopsy_date_formatted || null,
+          gleasonScore: patient.gleason_score || null,
+          comorbidities: patient.comorbidities ? (() => {
+            try {
+              return JSON.parse(patient.comorbidities);
+            } catch (e) {
+              console.error('Error parsing comorbidities:', e);
+              return [];
+            }
+          })() : []
         }
       }
     });
@@ -901,10 +969,13 @@ export const updatePatient = async (req, res) => {
       'address', 'postcode', 'city', 'state', 'referring_department', 'referral_date',
       'initial_psa', 'initial_psa_date', 'medical_history', 'current_medications',
       'allergies', 'assigned_urologist', 'emergency_contact_name', 'emergency_contact_phone',
-      'emergency_contact_relationship', 'priority', 'notes', 'status'
+      'emergency_contact_relationship', 'priority', 'notes', 'status',
+      // Triage and Exam & Prior Tests
+      'triage_symptoms', 'dre_done', 'dre_findings', 'prior_biopsy',
+      'prior_biopsy_date', 'gleason_score', 'comorbidities'
     ];
 
-    const dateFields = ['date_of_birth', 'referral_date', 'initial_psa_date'];
+    const dateFields = ['date_of_birth', 'referral_date', 'initial_psa_date', 'prior_biopsy_date'];
     const updateFields = [];
     const updateValues = [];
     let paramCount = 0;
@@ -916,7 +987,15 @@ export const updatePatient = async (req, res) => {
         // Format dates and cast them as DATE type in PostgreSQL
         if (dateFields.includes(dbField)) {
           updateFields.push(`${dbField} = $${paramCount}::date`);
-          updateValues.push(formatDateOnly(value));
+          updateValues.push(value ? formatDateOnly(value) : null);
+        } else if (dbField === 'triage_symptoms' || dbField === 'comorbidities') {
+          // Handle JSON fields
+          updateFields.push(`${dbField} = $${paramCount}`);
+          updateValues.push(value ? (typeof value === 'string' ? value : JSON.stringify(value)) : null);
+        } else if (dbField === 'dre_done') {
+          // Handle boolean field
+          updateFields.push(`${dbField} = $${paramCount}`);
+          updateValues.push(value || false);
         } else {
           updateFields.push(`${dbField} = $${paramCount}`);
           updateValues.push(value);
@@ -949,10 +1028,13 @@ export const updatePatient = async (req, res) => {
                 initial_psa, medical_history, current_medications, allergies,
                 assigned_urologist, emergency_contact_name, emergency_contact_phone,
                 emergency_contact_relationship, priority, notes, status,
+                triage_symptoms, dre_done, dre_findings, prior_biopsy,
+                prior_biopsy_date, gleason_score, comorbidities,
                 created_by, created_at, updated_at,
                 TO_CHAR(date_of_birth, 'YYYY-MM-DD') as date_of_birth,
                 TO_CHAR(referral_date, 'YYYY-MM-DD') as referral_date,
-                TO_CHAR(initial_psa_date, 'YYYY-MM-DD') as initial_psa_date
+                TO_CHAR(initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,
+                TO_CHAR(prior_biopsy_date, 'YYYY-MM-DD') as prior_biopsy_date_formatted
     `;
 
     const result = await client.query(updateQuery, updateValues);
@@ -995,7 +1077,29 @@ export const updatePatient = async (req, res) => {
           status: updatedPatient.status,
           createdBy: updatedPatient.created_by,
           createdAt: updatedPatient.created_at,
-          updatedAt: updatedPatient.updated_at
+          updatedAt: updatedPatient.updated_at,
+          // Triage and Exam & Prior Tests
+          triageSymptoms: updatedPatient.triage_symptoms ? (() => {
+            try {
+              return JSON.parse(updatedPatient.triage_symptoms);
+            } catch (e) {
+              console.error('Error parsing triage_symptoms:', e);
+              return null;
+            }
+          })() : null,
+          dreDone: updatedPatient.dre_done || false,
+          dreFindings: updatedPatient.dre_findings || null,
+          priorBiopsy: updatedPatient.prior_biopsy || 'no',
+          priorBiopsyDate: updatedPatient.prior_biopsy_date_formatted || null,
+          gleasonScore: updatedPatient.gleason_score || null,
+          comorbidities: updatedPatient.comorbidities ? (() => {
+            try {
+              return JSON.parse(updatedPatient.comorbidities);
+            } catch (e) {
+              console.error('Error parsing comorbidities:', e);
+              return [];
+            }
+          })() : []
         }
       }
     });

@@ -412,6 +412,27 @@ export const initializeDatabase = async () => {
       console.log('⚠️  Ensuring care_pathway columns:', e.message);
     }
 
+    // Ensure triage_symptoms column exists on patients
+    try {
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS triage_symptoms TEXT`);
+      console.log('✅ Ensured patients.triage_symptoms column');
+    } catch (e) {
+      console.log('⚠️  Ensuring triage_symptoms column:', e.message);
+    }
+
+    // Ensure exam & prior tests columns exist on patients
+    try {
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS dre_done BOOLEAN DEFAULT FALSE`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS dre_findings VARCHAR(50)`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS prior_biopsy VARCHAR(10) DEFAULT 'no'`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS prior_biopsy_date DATE`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS gleason_score VARCHAR(20)`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS comorbidities TEXT`);
+      console.log('✅ Ensured patients exam & prior tests columns');
+    } catch (e) {
+      console.log('⚠️  Ensuring exam & prior tests columns:', e.message);
+    }
+
     // Create patient_notes table
     const notesTableExists = await client.query(`
       SELECT EXISTS (
