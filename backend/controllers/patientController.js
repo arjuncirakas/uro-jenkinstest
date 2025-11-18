@@ -231,8 +231,8 @@ export const addPatient = async (req, res) => {
     // Calculate age
     const age = new Date().getFullYear() - new Date(dateOfBirth).getFullYear();
 
-    // Format prior biopsy date if exists
-    const formattedPriorBiopsyDate = newPatient.prior_biopsy_date 
+    // Format prior biopsy date from database result for response
+    const responsePriorBiopsyDate = newPatient.prior_biopsy_date 
       ? new Date(newPatient.prior_biopsy_date).toISOString().split('T')[0]
       : null;
 
@@ -284,7 +284,7 @@ export const addPatient = async (req, res) => {
           dreDone: newPatient.dre_done || false,
           dreFindings: newPatient.dre_findings || null,
           priorBiopsy: newPatient.prior_biopsy || 'no',
-          priorBiopsyDate: formattedPriorBiopsyDate,
+          priorBiopsyDate: responsePriorBiopsyDate,
           gleasonScore: newPatient.gleason_score || null,
           comorbidities: newPatient.comorbidities ? (() => {
             try {
