@@ -376,7 +376,15 @@ const OPDManagement = () => {
               type: patientOrAppointment.type,
               mri: patientOrAppointment.mri,
               biopsy: patientOrAppointment.biopsy,
-              trus: patientOrAppointment.trus
+              trus: patientOrAppointment.trus,
+              // Ensure all triage and exam data is included
+              triageSymptoms: fullPatientData.triageSymptoms || null,
+              dreDone: fullPatientData.dreDone || false,
+              dreFindings: fullPatientData.dreFindings || null,
+              priorBiopsy: fullPatientData.priorBiopsy || 'no',
+              priorBiopsyDate: fullPatientData.priorBiopsyDate || null,
+              gleasonScore: fullPatientData.gleasonScore || null,
+              comorbidities: fullPatientData.comorbidities || []
             };
           } else {
             console.error('❌ OPDManagement: Failed to fetch patient:', result.error);

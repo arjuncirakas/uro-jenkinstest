@@ -3,6 +3,7 @@ import { FiEye, FiSearch } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import { investigationService } from '../../services/investigationService';
+import { patientService } from '../../services/patientService';
 
 const InvestigationManagement = () => {
   // State for search and modals
@@ -224,8 +225,26 @@ const InvestigationManagement = () => {
   });
 
   // Handle patient actions
-  const handleViewEdit = (patient) => {
-    setSelectedPatient(patient);
+  const handleViewEdit = async (patient) => {
+    // Fetch full patient details to ensure all fields are available
+    if (patient.id) {
+      try {
+        const result = await patientService.getPatientById(patient.id);
+        if (result.success && result.data) {
+          setSelectedPatient({
+            ...result.data,
+            fullName: result.data.fullName || `${result.data.firstName || result.data.first_name || ''} ${result.data.lastName || result.data.last_name || ''}`.trim()
+          });
+        } else {
+          setSelectedPatient(patient);
+        }
+      } catch (error) {
+        console.error('Error fetching patient details:', error);
+        setSelectedPatient(patient);
+      }
+    } else {
+      setSelectedPatient(patient);
+    }
     setIsPatientDetailsModalOpen(true);
   };
 

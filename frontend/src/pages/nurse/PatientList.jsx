@@ -203,8 +203,28 @@ const PatientList = () => {
   // The patients array already contains the filtered results
 
   // Handle patient actions
-  const handleViewDetails = (patient) => {
-    setSelectedPatient(patient);
+  const handleViewDetails = async (patient) => {
+    // Fetch full patient details to ensure all fields are available
+    if (patient.id) {
+      try {
+        const result = await patientService.getPatientById(patient.id);
+        if (result.success && result.data) {
+          setSelectedPatient({
+            ...result.data,
+            fullName: result.data.fullName || `${result.data.firstName || result.data.first_name || ''} ${result.data.lastName || result.data.last_name || ''}`.trim()
+          });
+        } else {
+          // Fallback to patient data from list
+          setSelectedPatient(patient);
+        }
+      } catch (error) {
+        console.error('Error fetching patient details:', error);
+        // Fallback to patient data from list
+        setSelectedPatient(patient);
+      }
+    } else {
+      setSelectedPatient(patient);
+    }
     setIsPatientDetailsModalOpen(true);
   };
 

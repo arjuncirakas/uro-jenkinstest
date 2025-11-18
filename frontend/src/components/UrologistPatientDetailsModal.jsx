@@ -2320,15 +2320,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
             <div className="flex w-full h-full overflow-y-auto p-6">
               <div className="w-full mx-auto space-y-6">
                 {/* Nurse Triage Information */}
-                {patient.triageSymptoms && patient.triageSymptoms.length > 0 && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <FaStethoscope className="mr-2 text-teal-600" />
-                      Nurse Triage Information
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Symptoms & Presentation - Chief Complaint</h4>
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <FaStethoscope className="mr-2 text-teal-600" />
+                    Nurse Triage Information
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Symptoms & Presentation - Chief Complaint</h4>
+                      {patient.triageSymptoms && patient.triageSymptoms.length > 0 ? (
                         <div className="space-y-3">
                           {patient.triageSymptoms.map((symptom, index) => (
                             <div key={index} className={`border border-gray-200 rounded-lg p-4 ${symptom.isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
@@ -2355,10 +2355,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             </div>
                           ))}
                         </div>
-                      </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <p>No triage symptoms recorded.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
+                </div>
 
                 {/* Exam & Prior Tests */}
                 <div className="bg-white rounded-lg border border-gray-200 p-6">

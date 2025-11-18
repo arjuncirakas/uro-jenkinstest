@@ -89,6 +89,21 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
         console.log('✅ PatientDetailsModalWrapper: Patient found!', patientData);
         console.log('🔍 PatientDetailsModalWrapper: Patient category field:', patientData.category);
         console.log('🔍 PatientDetailsModalWrapper: All patient fields:', Object.keys(patientData));
+        
+        // Fetch full patient details using getPatientById to get all fields including triage and exam data
+        let fullPatientDetails = null;
+        if (patientData.id) {
+          console.log('🔍 PatientDetailsModalWrapper: Fetching full patient details for ID:', patientData.id);
+          const fullDetailsResult = await patientService.getPatientById(patientData.id);
+          if (fullDetailsResult.success && fullDetailsResult.data) {
+            fullPatientDetails = fullDetailsResult.data;
+            console.log('✅ PatientDetailsModalWrapper: Fetched full patient details:', fullPatientDetails);
+          }
+        }
+        
+        // Use full patient details if available, otherwise use patientData
+        const sourceData = fullPatientDetails || patientData;
+        
         // Fetch additional data for the patient
         console.log('🔍 PatientDetailsModalWrapper: Fetching notes and investigations for patient ID:', patientData.id);
         const [notesResult, investigationsResult] = await Promise.all([
@@ -108,7 +123,7 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
             // Determine category based on care pathway if category is 'all' or not provided
             let determinedCategory = category;
             if (category === 'all' || !category) {
-              const carePathway = patientData.carePathway || patientData.care_pathway || patientData.pathway || '';
+              const carePathway = sourceData.carePathway || sourceData.care_pathway || sourceData.pathway || '';
               if (carePathway === 'Surgery Pathway') {
                 determinedCategory = 'surgery-pathway';
               } else if (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') {
@@ -119,16 +134,16 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
             }
             
             const patientWithData = {
-              id: patientData.id,
-              name: patientData.fullName || `${patientData.firstName || patientData.first_name || ''} ${patientData.lastName || patientData.last_name || ''}`.trim(),
-              age: patientData.age || appointmentData?.age || '-',
-              gender: patientData.gender || appointmentData?.gender || '-',
-              upi: patientData.upi || appointmentData?.upi || 'N/A',
-              patientId: patientData.patient_id || patientData.id || appointmentData?.upi || 'N/A',
-              mrn: patientData.mrn || 'N/A',
-              lastAppointment: patientData.last_appointment || 'N/A',
+              id: sourceData.id,
+              name: sourceData.fullName || sourceData.name || `${sourceData.firstName || sourceData.first_name || ''} ${sourceData.lastName || sourceData.last_name || ''}`.trim(),
+              age: sourceData.age || appointmentData?.age || '-',
+              gender: sourceData.gender || appointmentData?.gender || '-',
+              upi: sourceData.upi || appointmentData?.upi || 'N/A',
+              patientId: sourceData.patient_id || sourceData.id || appointmentData?.upi || 'N/A',
+              mrn: sourceData.mrn || 'N/A',
+              lastAppointment: sourceData.last_appointment || 'N/A',
               category: determinedCategory, // Use determined category based on pathway
-              carePathway: patientData.carePathway || patientData.care_pathway || patientData.pathway || '', // Include care pathway
+              carePathway: sourceData.carePathway || sourceData.care_pathway || sourceData.pathway || '', // Include care pathway
               recentNotes: notesResult.success ? (Array.isArray(notesResult.data) ? notesResult.data : notesResult.data?.data || []) : [],
               psaResults: investigationsResult.success ? 
                 (() => {
@@ -148,15 +163,23 @@ const PatientDetailsModalWrapper = forwardRef(({ onTransferSuccess }, ref) => {
                     inv.testType !== 'psa' && inv.test_type !== 'PSA' && inv.test_type !== 'psa'
                   );
                 })() : [],
-              email: patientData.email,
-              phone: patientData.phone,
-              address: patientData.address,
-              dateOfBirth: patientData.dateOfBirth || patientData.date_of_birth,
-              emergencyContact: patientData.emergencyContact || patientData.emergency_contact,
-              medicalHistory: patientData.medicalHistory || patientData.medical_history,
-              allergies: patientData.allergies,
-              currentMedications: patientData.currentMedications || patientData.current_medications,
-              referredByGP: patientData.referredByGP || null
+              email: sourceData.email,
+              phone: sourceData.phone,
+              address: sourceData.address,
+              dateOfBirth: sourceData.dateOfBirth || sourceData.date_of_birth,
+              emergencyContact: sourceData.emergencyContact || sourceData.emergency_contact,
+              medicalHistory: sourceData.medicalHistory || sourceData.medical_history,
+              allergies: sourceData.allergies,
+              currentMedications: sourceData.currentMedications || sourceData.current_medications,
+              referredByGP: sourceData.referredByGP || null,
+              // Triage and Exam & Prior Tests data
+              triageSymptoms: sourceData.triageSymptoms || null,
+              dreDone: sourceData.dreDone || false,
+              dreFindings: sourceData.dreFindings || null,
+              priorBiopsy: sourceData.priorBiopsy || 'no',
+              priorBiopsyDate: sourceData.priorBiopsyDate || null,
+              gleasonScore: sourceData.gleasonScore || null,
+              comorbidities: sourceData.comorbidities || []
             };
         
         console.log('✅ PatientDetailsModalWrapper: Setting selected patient with data:', patientWithData);
