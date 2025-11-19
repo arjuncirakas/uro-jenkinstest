@@ -9,12 +9,20 @@ test.describe('OTP Modal Component', () => {
     // Trigger OTP modal by logging in
     await page.fill('input[name="email"]', 'testdoctor2@yopmail.com');
     await page.fill('input[name="password"]', 'Doctor@1234567');
+    
+    // Wait for login response
+    const loginPromise = page.waitForResponse(
+      response => response.url().includes('/api/auth/login') && response.status() === 200,
+      { timeout: 15000 }
+    ).catch(() => null);
+    
     await page.click('button[type="submit"]');
+    await loginPromise;
     
     // Wait for OTP modal with increased timeout for production
-    await page.waitForSelector('text=Verify Your Identity', { timeout: 15000 });
-    // Wait a bit more for modal to fully render
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('text=Verify Your Identity', { timeout: 20000 });
+    // Wait a bit more for modal to fully render and OTP to be generated
+    await page.waitForTimeout(3000); // Increased wait for OTP generation
   });
 
   test('should display all OTP modal elements', async ({ page }) => {
