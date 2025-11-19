@@ -37,15 +37,17 @@ test.describe('Login Flow', () => {
   });
 
   test('should show error for invalid email format', async ({ page }) => {
-    await page.fill('input[name="email"]', 'invalid-email');
-    await page.fill('input[name="password"]', 'password123');
-    await page.blur('input[name="email"]');
+    const emailField = page.locator('input[name="email"]');
+    const passwordField = page.locator('input[name="password"]');
+    
+    await emailField.fill('invalid-email');
+    await passwordField.fill('password123');
+    await emailField.blur(); // Use locator.blur() instead of page.blur()
     
     // Wait for validation
     await page.waitForTimeout(1000);
     
     // Check for email validation error (HTML5 or custom)
-    const emailField = page.locator('input[name="email"]');
     const isValid = await emailField.evaluate(el => el.validity.valid);
     
     // Should be invalid - either HTML5 validation or custom validation should catch it

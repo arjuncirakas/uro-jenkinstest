@@ -53,6 +53,18 @@ const OTPModal = ({
     setOtp(value);
   };
 
+  // Handle input events (catches all input methods including programmatic changes)
+  const handleOtpInput = (e) => {
+    // Filter out non-numeric characters and limit to 6 digits
+    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    // Only update if value actually changed (prevents infinite loops)
+    if (value !== otp) {
+      setOtp(value);
+      // Also update the input value directly to ensure it's always numeric
+      e.target.value = value;
+    }
+  };
+
   // Handle paste events to ensure validation
   const handleOtpPaste = (e) => {
     e.preventDefault();
@@ -60,6 +72,21 @@ const OTPModal = ({
     const numericOnly = pastedData.replace(/\D/g, '').slice(0, 6);
     setOtp(numericOnly);
   };
+
+  // Validate OTP value whenever it changes (handles programmatic changes)
+  useEffect(() => {
+    if (otp && !/^\d*$/.test(otp)) {
+      // If OTP contains non-numeric characters, filter them out
+      const filtered = otp.replace(/\D/g, '').slice(0, 6);
+      if (filtered !== otp) {
+        setOtp(filtered);
+      }
+    }
+    // Also ensure length doesn't exceed 6
+    if (otp.length > 6) {
+      setOtp(otp.slice(0, 6));
+    }
+  }, [otp]);
 
   if (!isOpen) return null;
 
@@ -111,6 +138,7 @@ const OTPModal = ({
               pattern="[0-9]*"
               value={otp}
               onChange={handleOtpChange}
+              onInput={handleOtpInput}
               onPaste={handleOtpPaste}
               autoComplete="one-time-code"
               className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
