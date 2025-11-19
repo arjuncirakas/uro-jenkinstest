@@ -42,11 +42,13 @@ test.describe('Login Flow', () => {
     await page.blur('input[name="email"]');
     
     // Wait for validation
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
     
-    // Check for email validation error
+    // Check for email validation error (HTML5 or custom)
     const emailField = page.locator('input[name="email"]');
     const isValid = await emailField.evaluate(el => el.validity.valid);
+    
+    // Should be invalid - either HTML5 validation or custom validation should catch it
     expect(isValid).toBe(false);
   });
 

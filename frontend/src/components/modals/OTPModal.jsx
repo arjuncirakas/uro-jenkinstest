@@ -48,8 +48,17 @@ const OTPModal = ({
   };
 
   const handleOtpChange = (e) => {
+    // Filter out non-numeric characters and limit to 6 digits
     const value = e.target.value.replace(/\D/g, '').slice(0, 6);
     setOtp(value);
+  };
+
+  // Handle paste events to ensure validation
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text');
+    const numericOnly = pastedData.replace(/\D/g, '').slice(0, 6);
+    setOtp(numericOnly);
   };
 
   if (!isOpen) return null;
@@ -74,7 +83,9 @@ const OTPModal = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close modal"
             className="text-gray-400 hover:text-gray-600 transition-colors"
+            type="button"
           >
             <X className="w-6 h-6" />
           </button>
@@ -96,9 +107,12 @@ const OTPModal = ({
             <input
               id="otp"
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={otp}
               onChange={handleOtpChange}
-              autoComplete="off"
+              onPaste={handleOtpPaste}
+              autoComplete="one-time-code"
               className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               placeholder="000000"
               maxLength={6}

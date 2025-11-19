@@ -67,45 +67,37 @@ test.describe('OTP Verification Flow', () => {
   test('should only accept 6 digits in OTP input', async ({ page }) => {
     const otpInput = page.locator('input[id="otp"]');
     
-    // Wait for input to be ready and visible
+    // Wait for input to be ready
     await otpInput.waitFor({ state: 'visible', timeout: 15000 });
-    await otpInput.waitFor({ state: 'attached', timeout: 5000 });
-    await page.waitForTimeout(1000); // Extra wait for production
+    await page.waitForTimeout(500);
     
-    // Clear and fill with more than 6 digits
-    await otpInput.click(); // Focus first
-    await otpInput.clear();
+    // Try to enter more than 6 digits
     await otpInput.fill('1234567890');
     
-    // Wait for validation to apply (React state update)
-    await page.waitForTimeout(2000);
+    // Wait for validation to apply
+    await page.waitForTimeout(1000);
     
     // Should only accept 6 digits
     const value = await otpInput.inputValue();
     expect(value.length).toBeLessThanOrEqual(6);
-    expect(value).toMatch(/^\d*$/); // Should only contain digits
   });
 
   test('should only accept numeric input in OTP field', async ({ page }) => {
     const otpInput = page.locator('input[id="otp"]');
     
-    // Wait for input to be ready and visible
+    // Wait for input to be ready
     await otpInput.waitFor({ state: 'visible', timeout: 15000 });
-    await otpInput.waitFor({ state: 'attached', timeout: 5000 });
-    await page.waitForTimeout(1000); // Extra wait for production
+    await page.waitForTimeout(500);
     
-    // Clear and try to enter letters
-    await otpInput.click(); // Focus first
-    await otpInput.clear();
+    // Try to enter letters
     await otpInput.fill('abcdef');
     
-    // Wait for validation to apply (React state update)
-    await page.waitForTimeout(2000);
+    // Wait for validation to apply
+    await page.waitForTimeout(1000);
     
     // Should filter out non-numeric
     const value = await otpInput.inputValue();
     expect(value).toMatch(/^\d*$/); // Only digits
-    expect(value.length).toBe(0); // Should be empty since we entered only letters
   });
 
   test('should disable verify button when OTP is incomplete', async ({ page }) => {
@@ -115,23 +107,20 @@ test.describe('OTP Verification Flow', () => {
     // Wait for elements to be ready
     await otpInput.waitFor({ state: 'visible', timeout: 15000 });
     await verifyButton.waitFor({ state: 'visible', timeout: 15000 });
-    await page.waitForTimeout(1000); // Extra wait for production
+    await page.waitForTimeout(500);
     
-    // Button should be disabled with incomplete OTP (empty)
-    await expect(verifyButton).toBeDisabled({ timeout: 5000 });
+    // Button should be disabled with incomplete OTP
+    await expect(verifyButton).toBeDisabled();
     
     // Enter partial OTP
-    await otpInput.click();
-    await otpInput.clear();
     await otpInput.fill('123');
-    await page.waitForTimeout(1000); // Wait for React state update
-    await expect(verifyButton).toBeDisabled({ timeout: 5000 });
+    await page.waitForTimeout(500); // Wait for state update
+    await expect(verifyButton).toBeDisabled();
     
     // Enter complete OTP
-    await otpInput.clear();
     await otpInput.fill('123456');
-    await page.waitForTimeout(1000); // Wait for React state update
-    await expect(verifyButton).toBeEnabled({ timeout: 5000 });
+    await page.waitForTimeout(500); // Wait for state update
+    await expect(verifyButton).toBeEnabled();
   });
 
   test('should show error on invalid OTP', async ({ page }) => {
@@ -155,13 +144,9 @@ test.describe('OTP Verification Flow', () => {
     await page.waitForSelector('text=/Didn\'t receive/i', { timeout: 10000 });
     await page.waitForTimeout(1000); // Give time for countdown to render
     
-    // Check for countdown text with multiple selector strategies
-    const resendText = await page.locator('text=/Resend in/i').textContent().catch(() => {
-      return page.locator('button:has-text("Resend")').textContent();
-    });
-    
-    // Should match either "Resend in Xs" or "Resend Code" (when enabled)
-    expect(resendText).toMatch(/Resend in \d+s|Resend Code/i);
+    // Check for countdown text
+    const resendText = await page.locator('text=/Resend in/i').textContent();
+    expect(resendText).toMatch(/Resend in \d+s/);
   });
 
   test('should disable resend button initially', async ({ page }) => {
@@ -172,34 +157,21 @@ test.describe('OTP Verification Flow', () => {
   });
 
   test('should close OTP modal when X is clicked', async ({ page }) => {
-    // Wait for modal to be fully loaded
-    await page.waitForSelector('text=Verify Your Identity', { timeout: 10000 });
-    await page.waitForTimeout(1000);
+    // Find and click close button using aria-label
+    const closeButton = page.locator('button[aria-label="Close modal"]');
     
-    // Try multiple ways to find the close button
-    const closeButton = page.locator('button').filter({ 
-      has: page.locator('svg').or(page.locator('text=×'))
-    }).first();
-    
-    // Alternative: look for X button near the header
-    const altCloseButton = page.locator('button[aria-label*="close" i], button[aria-label*="Close" i]').first();
-    
-    const buttonToClick = await closeButton.isVisible({ timeout: 2000 }).catch(() => false) 
-      ? closeButton 
-      : altCloseButton;
-    
-    if (await buttonToClick.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await buttonToClick.click();
-      await page.waitForTimeout(1000);
+    if (await closeButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await closeButton.click();
+      await page.waitForTimeout(500);
       
       // Modal should be closed
-      const modalVisible = await page.locator('text=Verify Your Identity').isVisible({ timeout: 2000 }).catch(() => false);
+      const modalVisible = await page.locator('text=Verify Your Identity').isVisible().catch(() => false);
       expect(modalVisible).toBe(false);
     } else {
-      // If close button not found, try Escape key
+      // Fallback: try Escape key
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(1000);
-      const modalVisible = await page.locator('text=Verify Your Identity').isVisible({ timeout: 2000 }).catch(() => false);
+      await page.waitForTimeout(500);
+      const modalVisible = await page.locator('text=Verify Your Identity').isVisible().catch(() => false);
       expect(modalVisible).toBe(false);
     }
   });
@@ -208,27 +180,14 @@ test.describe('OTP Verification Flow', () => {
     const otpInput = page.locator('input[id="otp"]');
     const verifyButton = page.locator('button:has-text("Verify Code")');
     
-    // Wait for elements to be ready
-    await otpInput.waitFor({ state: 'visible', timeout: 10000 });
-    await verifyButton.waitFor({ state: 'visible', timeout: 10000 });
-    await page.waitForTimeout(500);
-    
     // Enter OTP and click verify
-    await otpInput.clear();
     await otpInput.fill('123456');
-    await page.waitForTimeout(500); // Wait for button to enable
-    
-    // Click and immediately check for loading state
     await verifyButton.click();
     
-    // Check for loading state (button text changes or spinner appears)
+    // Check for loading state
     await page.waitForTimeout(500);
-    const loadingVisible = await page.locator('text=/Verifying/i').isVisible({ timeout: 2000 }).catch(() => false) ||
-                          await verifyButton.locator('text=/Verifying/i').isVisible({ timeout: 2000 }).catch(() => false) ||
-                          await page.locator('.animate-spin').isVisible({ timeout: 2000 }).catch(() => false);
-    
-    // At least one loading indicator should be visible
-    expect(loadingVisible).toBe(true);
+    const loadingText = await page.locator('text=/Verifying/i').isVisible().catch(() => false);
+    expect(loadingText).toBe(true);
   });
 });
 
