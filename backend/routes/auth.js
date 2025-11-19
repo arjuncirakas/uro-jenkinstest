@@ -132,4 +132,57 @@ router.get('/profile',
   getProfile
 );
 
+// Test endpoint to get OTP (only for testing)
+// This should be disabled in production or protected with a secret
+router.get('/test/get-otp/:email', generalLimiter, async (req, res) => {
+  // Only allow in test/development environment or if explicitly enabled
+  if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_TEST_OTP) {
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Test endpoint not available in production' 
+    });
+  }
+  
+  const { email } = req.params;
+  const { type = 'login_verification' } = req.query;
+  
+  // Import pool here to avoid circular dependencies
+  const pool = (await import('../config/database.js')).default;
+  const client = await pool.connect();
+  
+  try {
+    const result = await client.query(
+      `SELECT otp_code, expires_at, is_used, created_at 
+       FROM otp_verifications 
+       WHERE email = $1 AND type = $2 
+       AND expires_at > NOW() AND is_used = false
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [email, type]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.json({ 
+        success: false, 
+        message: 'No valid OTP found for this email' 
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      otp: result.rows[0].otp_code,
+      expiresAt: result.rows[0].expires_at,
+      createdAt: result.rows[0].created_at
+    });
+  } catch (error) {
+    console.error('Error getting test OTP:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;
