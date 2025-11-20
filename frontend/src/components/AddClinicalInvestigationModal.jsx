@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { IoClose } from 'react-icons/io5';
-import { FaFlask, FaStethoscope, FaXRay, FaMicroscope } from 'react-icons/fa';
-import { investigationService } from '../services/investigationService';
+import { FaFlask, FaXRay, FaMicroscope } from 'react-icons/fa';
+import { notesService } from '../services/notesService';
 
-const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
+const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const [investigationType, setInvestigationType] = useState('');
   const [testNames, setTestNames] = useState([]); // Changed to array for multi-select
   const [customTestName, setCustomTestName] = useState('');
   const [priority, setPriority] = useState('routine');
   const [notes, setNotes] = useState('');
-  const [scheduledDate, setScheduledDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -47,10 +46,16 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         return;
       }
 
-      // Handle form submission logic here
-      // For custom, use customTestName; for others, use selected testNames array
+      // Validate required fields
+      if (!investigationType) {
+        setError('Please select an investigation type');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Get selected test names
       const testsToSubmit = investigationType === 'custom' 
-        ? [customTestName] 
+        ? (customTestName ? [customTestName] : [])
         : testNames.filter(name => name && name.trim() !== '' && name !== 'other');
       
       if (testsToSubmit.length === 0) {
@@ -58,44 +63,44 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         setIsSubmitting(false);
         return;
       }
-      
-      // Only include scheduledDate if it's explicitly provided and not empty
-      // This ensures investigations without dates don't create appointments
-      const hasScheduledDate = scheduledDate && scheduledDate.trim() !== '';
-      
-      // Create single investigation request with multiple test names
-      const requestData = {
-        investigationType,
-        testNames: investigationType !== 'custom' ? testsToSubmit : null, // Send as array
-        customTestName: investigationType === 'custom' ? customTestName : null,
-        priority,
-        notes,
-        scheduledDate: hasScheduledDate ? scheduledDate.trim() : null,
-        scheduledTime: null
-      };
 
-      console.log('🔍 Submitting investigation request with multiple tests:', requestData);
-      
-      // Call the API - backend will create multiple requests
-      const result = await investigationService.createInvestigationRequest(patient.id, requestData);
+      // Format test names for display (comma-separated or list)
+      const testNamesDisplay = testsToSubmit.join(', ');
+
+      // Create clinical note content for clinical investigation
+      // This is different from investigation requests - it goes directly to clinical notes
+      const noteContent = `CLINICAL INVESTIGATION
+
+Investigation Type: ${investigationType.toUpperCase()}
+Test/Procedure Name: ${testNamesDisplay}
+Priority: ${priority.charAt(0).toUpperCase() + priority.slice(1)}
+${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
+
+      console.log('🔍 Creating clinical investigation note:', { patientId: patient.id, noteContent });
+
+      // Create clinical note directly (not an appointment)
+      const result = await notesService.addNote(patient.id, {
+        noteContent,
+        noteType: 'clinical_investigation'
+      });
       
       if (result.success) {
-        console.log('✅ Investigation request(s) created:', result.data);
+        console.log('✅ Clinical investigation note created:', result.data);
         
         // Call success callback
         if (onSuccess) {
-          onSuccess(result.message || 'Investigation request(s) created successfully!');
+          onSuccess('Clinical investigation added successfully!');
         }
         
         // Reset form and close
         handleClose();
       } else {
-        console.error('❌ Failed to create investigation request:', result.error);
-        setError(result.error || 'Failed to create investigation request');
+        console.error('❌ Failed to create clinical investigation note:', result.error);
+        setError(result.error || 'Failed to add clinical investigation');
         setIsSubmitting(false);
       }
     } catch (err) {
-      console.error('❌ Error creating investigation request:', err);
+      console.error('❌ Error creating clinical investigation note:', err);
       setError('An unexpected error occurred');
       setIsSubmitting(false);
     }
@@ -107,7 +112,6 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     setCustomTestName('');
     setPriority('routine');
     setNotes('');
-    setScheduledDate('');
     setError('');
     setIsSubmitting(false);
     onClose();
@@ -137,7 +141,7 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         {/* Header */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Request New Investigation</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Add Clinical Investigation</h2>
             {patient && (
               <p className="text-sm text-gray-600 mt-1">
                 Patient: <span className="font-medium">{patient.name}</span>
@@ -244,7 +248,6 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
             </div>
           </div>
 
-
           {/* Priority */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -272,39 +275,10 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
             </div>
           </div>
 
-          {/* Scheduled Date - Optional */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Scheduled Date <span className="text-gray-400 text-xs">(Optional - leave blank for request only)</span>
-            </label>
-            <input
-              type="date"
-              value={scheduledDate}
-              onChange={(e) => setScheduledDate(e.target.value)}
-              onBlur={(e) => {
-                // Clear if empty string
-                if (!e.target.value || e.target.value.trim() === '') {
-                  setScheduledDate('');
-                }
-              }}
-              min={(() => {
-                const now = new Date();
-                return now.getFullYear() + '-' + 
-                       String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                       String(now.getDate()).padStart(2, '0');
-              })()}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-              placeholder="Leave blank to create request only (no appointment)"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Leave blank to create an investigation request without scheduling an appointment
-            </p>
-          </div>
-
           {/* Clinical Notes */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Clinical Notes / Reason for Request
+              Clinical Notes / Reason for Investigation
             </label>
             <textarea
               value={notes}
@@ -345,10 +319,10 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Requesting...
+                  Adding...
                 </>
               ) : (
-                'Request Investigation'
+                'Add Clinical Investigation'
               )}
             </button>
           </div>
@@ -358,5 +332,5 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   );
 };
 
-export default AddInvestigationModal;
+export default AddClinicalInvestigationModal;
 

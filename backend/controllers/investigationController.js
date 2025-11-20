@@ -844,7 +844,8 @@ export const createInvestigationRequest = async (req, res) => {
     const { patientId } = req.params;
     const { 
       investigationType,
-      testName,
+      testName, // Can be string or array
+      testNames, // Array of test names (for multi-select)
       customTestName,
       priority = 'routine',
       notes,
@@ -861,13 +862,30 @@ export const createInvestigationRequest = async (req, res) => {
       });
     }
 
-    // Determine the final test name
-    const finalTestName = investigationType === 'custom' ? customTestName : testName;
+    // Handle multiple test names - support both single testName and array testNames
+    let testNamesArray = [];
+    if (investigationType === 'custom') {
+      if (customTestName && customTestName.trim() !== '') {
+        testNamesArray = [customTestName.trim()];
+      }
+    } else {
+      // Support both testName (single/string) and testNames (array)
+      if (testNames && Array.isArray(testNames) && testNames.length > 0) {
+        testNamesArray = testNames.filter(name => name && name.trim() !== '' && name !== 'other');
+      } else if (testName) {
+        // Backward compatibility: single testName
+        if (typeof testName === 'string' && testName.trim() !== '') {
+          testNamesArray = [testName.trim()];
+        } else if (Array.isArray(testName)) {
+          testNamesArray = testName.filter(name => name && name.trim() !== '' && name !== 'other');
+        }
+      }
+    }
     
-    if (!finalTestName || finalTestName.trim() === '') {
+    if (testNamesArray.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Test name is required'
+        message: 'At least one test name is required'
       });
     }
 
@@ -922,28 +940,34 @@ export const createInvestigationRequest = async (req, res) => {
       console.log('📋 [createInvestigationRequest] Creating investigation request (no appointment) with status:', finalStatus);
     }
 
-    // Insert investigation request (only as booking if scheduled date is provided)
-    const result = await client.query(
-      `INSERT INTO investigation_bookings (
-        patient_id, investigation_type, investigation_name, 
-        scheduled_date, scheduled_time, status, notes, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *`,
-      [
-        patientId,
-        investigationType,
-        finalTestName,
-        hasScheduledDate ? scheduledDate : null, // NULL if no scheduled date
-        hasScheduledDate ? (scheduledTime || '09:00:00') : null, // NULL if no scheduled date
-        finalStatus,
-        notes || '',
-        userId
-      ]
-    );
+    // Create multiple investigation requests - one for each test name
+    const createdRequests = [];
+    
+    for (const testNameItem of testNamesArray) {
+      const result = await client.query(
+        `INSERT INTO investigation_bookings (
+          patient_id, investigation_type, investigation_name, 
+          scheduled_date, scheduled_time, status, notes, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *`,
+        [
+          patientId,
+          investigationType,
+          testNameItem, // Individual test name
+          hasScheduledDate ? scheduledDate : null, // NULL if no scheduled date
+          hasScheduledDate ? (scheduledTime || '09:00:00') : null, // NULL if no scheduled date
+          finalStatus,
+          notes || '',
+          userId
+        ]
+      );
+      
+      createdRequests.push(result.rows[0]);
+    }
 
-    const newRequest = result.rows[0];
+    const newRequest = createdRequests[0]; // Use first one for response
 
-    // Create a clinical note for the investigation request
+    // Create a clinical note for the investigation request with all test names
     try {
       const formattedDate = scheduledDate 
         ? new Date(scheduledDate).toLocaleDateString('en-US', { 
@@ -953,11 +977,14 @@ export const createInvestigationRequest = async (req, res) => {
           })
         : null;
       
+      // Format test names - if multiple, show as comma-separated list
+      const testNamesDisplay = testNamesArray.join(', ');
+      
       const noteContent = `
 INVESTIGATION REQUEST
 
 Investigation Type: ${investigationType.toUpperCase()}
-Test/Procedure Name: ${finalTestName}
+Test/Procedure Name: ${testNamesDisplay}
 Priority: ${priority.charAt(0).toUpperCase() + priority.slice(1)}
 ${formattedDate ? `Scheduled Date: ${formattedDate}` : 'Scheduled Date: Not scheduled'}
 ${notes ? `Clinical Notes:\n${notes}` : ''}
@@ -978,8 +1005,24 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}
 
     res.json({
       success: true,
-      message: 'Investigation request created successfully',
+      message: testNamesArray.length === 1 
+        ? 'Investigation request created successfully'
+        : `${testNamesArray.length} investigation requests created successfully`,
       data: {
+        // Return all created requests
+        requests: createdRequests.map(req => ({
+          id: req.id,
+          patientId: req.patient_id,
+          investigationType: req.investigation_type,
+          investigationName: req.investigation_name,
+          scheduledDate: req.scheduled_date,
+          scheduledTime: req.scheduled_time,
+          status: req.status,
+          notes: req.notes,
+          createdAt: req.created_at,
+          updatedAt: req.updated_at
+        })),
+        // For backward compatibility, also return the first request
         id: newRequest.id,
         patientId: newRequest.patient_id,
         investigationType: newRequest.investigation_type,

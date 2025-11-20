@@ -6,7 +6,7 @@ import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
-import AddInvestigationModal from './AddInvestigationModal';
+import AddClinicalInvestigationModal from './AddClinicalInvestigationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
 import AddTestResultModal from './modals/AddTestResultModal';
 import AddInvestigationResultModal from './AddInvestigationResultModal';
@@ -594,6 +594,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     if (!type) return <IoDocumentText className="text-teal-600" />;
     
     switch (type.toLowerCase()) {
+      case 'clinical_investigation':
+      case 'investigation_request':
+        return <FaFlask className="text-teal-600" />;
       case 'post-op check':
         return <IoCheckmarkCircle className="text-green-600" />;
       case 'follow-up appointment':
@@ -693,12 +696,20 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     // Check if this is an investigation request note
     const isInvestigationRequest = content.includes('INVESTIGATION REQUEST') || noteType === 'investigation_request';
     
+    // Check if this is a clinical investigation note
+    const isClinicalInvestigation = content.includes('CLINICAL INVESTIGATION') || noteType === 'clinical_investigation';
+    
     // Check if this is a pathway transfer note (either has PATHWAY TRANSFER header or is pathway_transfer type)
     const isPathwayTransferNote = content.includes('PATHWAY TRANSFER') || noteType === 'pathway_transfer';
     
     // Handle investigation request notes
     if (isInvestigationRequest) {
-      return renderInvestigationRequestNote(content);
+      return renderInvestigationRequestNote(content, 'investigation_request');
+    }
+    
+    // Handle clinical investigation notes (same format as investigation request, but no scheduled date)
+    if (isClinicalInvestigation) {
+      return renderInvestigationRequestNote(content, 'clinical_investigation');
     }
     
     if (!isPathwayTransferNote) {
@@ -855,21 +866,27 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   };
 
   // Render investigation request notes with structured formatting
-  const renderInvestigationRequestNote = (content) => {
+  const renderInvestigationRequestNote = (content, noteType = null) => {
     const lines = content.split('\n').filter(line => line.trim());
     
     const data = {};
+    const isClinicalInvestigation = content.includes('CLINICAL INVESTIGATION') || noteType === 'clinical_investigation';
     
     // Parse the content
     lines.forEach(line => {
       const trimmedLine = line.trim();
       
-      if (trimmedLine === 'INVESTIGATION REQUEST') {
+      if (trimmedLine === 'INVESTIGATION REQUEST' || trimmedLine === 'CLINICAL INVESTIGATION') {
         data.title = trimmedLine;
       } else if (trimmedLine.includes('Investigation Type:')) {
         data.investigationType = trimmedLine.replace('Investigation Type:', '').trim();
       } else if (trimmedLine.includes('Test/Procedure Name:')) {
-        data.testName = trimmedLine.replace('Test/Procedure Name:', '').trim();
+        const testNameValue = trimmedLine.replace('Test/Procedure Name:', '').trim();
+        // Handle comma-separated test names (for multi-select)
+        data.testName = testNameValue;
+        data.testNames = testNameValue.includes(',') 
+          ? testNameValue.split(',').map(t => t.trim()).filter(t => t)
+          : [testNameValue];
       } else if (trimmedLine.includes('Priority:')) {
         data.priority = trimmedLine.replace('Priority:', '').trim();
       } else if (trimmedLine.includes('Scheduled Date:')) {
@@ -904,24 +921,44 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           </div>
           <div>
             <div className="text-sm font-medium text-gray-500 mb-1">Test/Procedure Name</div>
-            <div className="text-base text-gray-900">{data.testName || 'Not specified'}</div>
+            {data.testNames && data.testNames.length > 1 ? (
+              <div className="space-y-1">
+                {data.testNames.map((test, index) => (
+                  <div key={index} className="text-base text-gray-900">
+                    • {test}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-base text-gray-900">{data.testName || 'Not specified'}</div>
+            )}
           </div>
         </div>
 
-        {/* Priority and Scheduled Date */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1">
-            <div className="text-sm font-medium text-gray-500 mb-1">Scheduled Date</div>
-            <div className={`text-base ${data.scheduledDate && !data.scheduledDate.includes('Not scheduled') ? 'text-gray-900' : 'text-gray-400 italic'}`}>
-              {data.scheduledDate || 'Not scheduled'}
-            </div>
+        {/* Priority - Only show scheduled date for investigation requests, not clinical investigations */}
+        {isClinicalInvestigation ? (
+          <div className="flex items-start justify-end">
+            {data.priority && (
+              <span className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${getPriorityColor(data.priority)}`}>
+                {data.priority} Priority
+              </span>
+            )}
           </div>
-          {data.priority && (
-            <span className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${getPriorityColor(data.priority)}`}>
-              {data.priority} Priority
-            </span>
-          )}
-        </div>
+        ) : (
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <div className="text-sm font-medium text-gray-500 mb-1">Scheduled Date</div>
+              <div className={`text-base ${data.scheduledDate && !data.scheduledDate.includes('Not scheduled') ? 'text-gray-900' : 'text-gray-400 italic'}`}>
+                {data.scheduledDate || 'Not scheduled'}
+              </div>
+            </div>
+            {data.priority && (
+              <span className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${getPriorityColor(data.priority)}`}>
+                {data.priority} Priority
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Clinical Notes */}
         {data.clinicalNotes && data.clinicalNotes.trim() && (
@@ -1549,7 +1586,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         className="flex-1 px-3 py-3 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center"
                       >
                         <FaFlask className="mr-2" />
-                        Add Investigation
+                        Add Clinical Investigation
                       </button>
                     </div>
                   </div>
@@ -1709,7 +1746,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
                                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${isRescheduleNote ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
-                                    {note.type || 'Clinical Note'}
+                                    {note.type === 'clinical_investigation' ? 'Clinical Investigation' : 
+                                     note.type === 'investigation_request' ? 'Investigation Request' :
+                                     note.type || 'Clinical Note'}
                                   </span>
                                   <span className="text-sm text-gray-500 flex items-center">
                                     <IoTimeSharp className="mr-1" />
@@ -3499,18 +3538,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       />
 
       {/* Add Investigation Modal */}
-      <AddInvestigationModal
+      <AddClinicalInvestigationModal
         isOpen={isAddInvestigationModalOpen}
         onClose={() => setIsAddInvestigationModalOpen(false)}
         patient={patient}
         onSuccess={(message) => {
-          setSuccessModalTitle('Investigation Requested');
+          setSuccessModalTitle('Clinical Investigation Added');
           setSuccessModalMessage(message);
           setIsSuccessModalOpen(true);
           setIsAddInvestigationModalOpen(false);
-          // Refresh investigations and requests lists after adding
-          fetchInvestigationRequests();
-          fetchNotes(); // Also refresh notes as a clinical note is created
+          // Refresh notes to show the new clinical investigation instantly
+          fetchNotes();
         }}
       />
 
