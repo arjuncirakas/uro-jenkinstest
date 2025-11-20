@@ -3262,9 +3262,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           };
                           
                           // Format data for Recharts
-                          const rechartsData = chartData.map((psa) => {
+                          const rechartsData = chartData.map((psa, index) => {
                             const value = parsePSAValue(psa.result);
                             const date = psa.dateObj || (psa.date ? new Date(psa.date) : new Date());
+                            // For points with the same date, add a small offset to make them distinguishable
+                            // Use the index to create unique date strings if needed
                             const dateStr = date && !isNaN(date.getTime()) 
                               ? date.toLocaleDateString('en-US', { 
                                   month: 'short', 
@@ -3277,7 +3279,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                               date: dateStr,
                               dateObj: date,
                               value: value,
-                              psa: value
+                              psa: value,
+                              originalValue: value, // Store original parsed value
+                              originalResult: psa.result, // Store original result string
+                              originalIndex: index, // Keep track of original index
+                              id: psa.id || `psa-${index}` // Unique identifier
                             };
                           });
                           
@@ -3288,6 +3294,44 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           const valueRange = maxValue - minValue;
                           const padding = valueRange > 0 ? Math.max(valueRange * 0.1, 0.5) : 1;
                           const yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+                          
+                          // Custom Tooltip component to properly display values
+                          const CustomTooltip = ({ active, payload, label }) => {
+                            if (active && payload && payload.length > 0) {
+                              // payload[0] contains: { value, dataKey, name, payload, ... }
+                              // payload[0].value is the actual PSA value for this point (from the chart)
+                              // payload[0].payload is the full data object for this point
+                              const payloadItem = payload[0];
+                              const data = payloadItem.payload || {};
+                              
+                              // Get the value - prioritize payloadItem.value (the actual chart value for this specific point)
+                              // This is the most reliable as it's the exact value Recharts is displaying for the hovered point
+                              let psaValue = payloadItem.value;
+                              
+                              // Fallback chain: try originalValue, then psa, then value from data object
+                              if (psaValue === undefined || psaValue === null || isNaN(psaValue)) {
+                                psaValue = data.originalValue !== undefined ? data.originalValue :
+                                          data.psa !== undefined ? data.psa : 
+                                          data.value !== undefined ? data.value : 0;
+                              }
+                              
+                              // Ensure we have a valid number
+                              const numValue = typeof psaValue === 'number' && !isNaN(psaValue) 
+                                ? psaValue 
+                                : parseFloat(psaValue) || 0;
+                              
+                              return (
+                                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-lg">
+                                  <p className="font-semibold text-gray-900 mb-2">{data.date || label}</p>
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium">PSA Value:</span>{' '}
+                                    <span className="text-teal-600 font-semibold">{numValue.toFixed(1)} ng/mL</span>
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          };
                           
                           return (
                             <LineChart data={rechartsData} margin={{ top: 5, right: 20, left: 10, bottom: 30 }}>
@@ -3305,23 +3349,15 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 tick={{ fill: '#6b7280' }}
                                 label={{ value: 'PSA Value (ng/mL)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } }}
                               />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: 'white', 
-                                  border: '1px solid #e5e7eb',
-                                  borderRadius: '6px',
-                                  padding: '8px'
-                                }}
-                                formatter={(value) => [`${value.toFixed(1)} ng/mL`, 'PSA Value']}
-                                labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
-                              />
+                              <Tooltip content={<CustomTooltip />} />
                               <Line 
                                 type="monotone" 
                                 dataKey="psa" 
                                 stroke="#0d9488" 
                                 strokeWidth={2}
                                 dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
-                                activeDot={{ r: 7, fill: '#0d9488' }}
+                                activeDot={{ r: 7, fill: '#0d9488', stroke: '#0d9488', strokeWidth: 2 }}
+                                isAnimationActive={false}
                               />
                             </LineChart>
                           );
