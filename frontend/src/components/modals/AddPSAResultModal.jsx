@@ -161,15 +161,7 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
         
         onClose();
       } else {
-        // Check if it's a duplicate PSA result error
-        if (result.error && result.error.includes('already exists')) {
-          setErrors({ 
-            submit: result.error,
-            testDate: 'A PSA result already exists for this date. Please select a different date or update the existing result.'
-          });
-        } else {
-          setErrors({ submit: result.error || 'Failed to add PSA result' });
-        }
+        setErrors({ submit: result.error || 'Failed to add PSA result' });
       }
     } catch (error) {
       setErrors({ submit: 'An unexpected error occurred. Please try again.' });
