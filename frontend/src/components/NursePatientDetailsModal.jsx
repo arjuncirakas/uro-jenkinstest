@@ -728,6 +728,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
             const originalDate = investigation.testDate || investigation.test_date;
             const dateObj = originalDate ? new Date(originalDate) : new Date();
             
+            const resultValue = investigation.result || '';
+            const formattedResult = resultValue.toString().includes('ng/mL') 
+              ? resultValue 
+              : `${resultValue} ng/mL`;
+            
             return {
               id: investigation.id,
               date: investigation.formattedDate || (originalDate ? dateObj.toLocaleDateString('en-US', {
@@ -736,12 +741,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 day: '2-digit'
               }) : ''),
               dateObj: dateObj, // Store date object for proper sorting and charting
-              result: `${investigation.result} ng/mL`,
+              result: formattedResult,
               referenceRange: investigation.referenceRange || investigation.reference_range || '',
               status: investigation.status,
               notes: investigation.notes || 'No notes',
               filePath: (investigation.filePath || investigation.file_path || '').trim() || null,
-              fileName: (investigation.fileName || investigation.file_name || '').trim() || null
+              fileName: (investigation.fileName || investigation.file_name || '').trim() || null,
+              isInitialPSA: investigation.isInitialPSA || false
             };
           })
           .sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime()); // Sort by date descending
@@ -2033,12 +2039,22 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                       </div>
                     ) : psaResults.length > 0 ? (
                       <div className="space-y-4">
-                        {psaResults.map((psa) => (
-                          <div key={psa.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        {psaResults.map((psa, index) => {
+                          // Use ID if available, otherwise use index and date as key
+                          const psaKey = psa.id || `initial-psa-${psa.testDate}-${index}`;
+                          const isInitialPSA = psa.isInitialPSA || !psa.id;
+                          
+                          return (
+                          <div key={psaKey} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
                                   <h4 className="font-semibold text-gray-900">{(psa.testName || '').toUpperCase()}</h4>
+                                  {isInitialPSA && (
+                                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-teal-100 text-teal-700">
+                                      Initial PSA
+                                    </span>
+                                  )}
                                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(psa.status)}`}>
                                     {psa.status}
                                   </span>
@@ -2048,16 +2064,18 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={() => {
-                                    setSelectedPSAResult(psa);
-                                    setIsEditPSAModalOpen(true);
-                                  }}
-                                  className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center"
-                                  title="Edit PSA Result"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
+                                {!isInitialPSA && (
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedPSAResult(psa);
+                                      setIsEditPSAModalOpen(true);
+                                    }}
+                                    className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center"
+                                    title="Edit PSA Result"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                )}
                                 {(() => {
                                   const filePath = psa.filePath || psa.file_path;
                                   const hasFile = filePath && filePath.trim() !== '';
@@ -2080,7 +2098,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             <div className="grid grid-cols-1 gap-4 mb-3">
                               <div>
                                 <span className="text-sm font-medium text-gray-700">Result:</span>
-                                <span className="ml-2 text-sm text-gray-900">{psa.result} ng/mL</span>
+                                <span className="ml-2 text-sm text-gray-900">
+                                  {psa.result && psa.result.toString().includes('ng/mL') 
+                                    ? psa.result 
+                                    : `${psa.result} ng/mL`}
+                                </span>
                               </div>
                               <div>
                                 <span className="text-sm font-medium text-gray-700">Reference Range:</span>
@@ -2095,23 +2117,25 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                     <span className="text-sm font-medium text-gray-700">Notes:</span>
                                     <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-wrap-anywhere">{psa.notes}</p>
                                   </div>
-                                  <button
-                                    onClick={() => handleDeleteInvestigation(psa.id)}
-                                    disabled={deletingInvestigation === psa.id}
-                                    className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                                    title="Delete PSA result"
-                                  >
-                                    {deletingInvestigation === psa.id ? (
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-                                    ) : (
-                                      <Trash className="w-4 h-4" />
-                                    )}
-                                  </button>
+                                  {!isInitialPSA && (
+                                    <button
+                                      onClick={() => handleDeleteInvestigation(psa.id)}
+                                      disabled={deletingInvestigation === psa.id}
+                                      className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                      title="Delete PSA result"
+                                    >
+                                      {deletingInvestigation === psa.id ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                                      ) : (
+                                        <Trash className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             )}
                             
-                            {!psa.notes && (
+                            {!psa.notes && !isInitialPSA && (
                               <div className="pt-3 border-t border-gray-200 flex justify-end">
                                 <button
                                   onClick={() => handleDeleteInvestigation(psa.id)}
@@ -2128,7 +2152,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                               </div>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="text-center py-8">

@@ -435,9 +435,9 @@ export const getInvestigationResults = async (req, res) => {
     const { patientId } = req.params;
     const { testType } = req.query; // Optional filter by test type
 
-    // Check if patient exists
+    // Check if patient exists and get initial PSA if available
     const patientCheck = await client.query(
-      'SELECT id, first_name, last_name FROM patients WHERE id = $1',
+      'SELECT id, first_name, last_name, initial_psa, initial_psa_date FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -447,6 +447,8 @@ export const getInvestigationResults = async (req, res) => {
         message: 'Patient not found'
       });
     }
+
+    const patient = patientCheck.rows[0];
 
     // Build query with optional test type filter
     let query = `
@@ -472,7 +474,7 @@ export const getInvestigationResults = async (req, res) => {
     const queryParams = [patientId];
     
     if (testType) {
-      query += ' AND test_type = $2';
+      query += ' AND LOWER(test_type) = LOWER($2)';
       queryParams.push(testType);
     }
     
@@ -481,7 +483,7 @@ export const getInvestigationResults = async (req, res) => {
     const result = await client.query(query, queryParams);
 
     // Format results for frontend
-    const formattedResults = result.rows.map(row => ({
+    let formattedResults = result.rows.map(row => ({
       id: row.id,
       testType: row.test_type,
       testName: row.test_name,
@@ -502,6 +504,90 @@ export const getInvestigationResults = async (req, res) => {
         day: '2-digit'
       })
     }));
+
+    // If no PSA results exist and patient has initial PSA, include it as a PSA result
+    if ((!testType || testType.toLowerCase() === 'psa') && formattedResults.length === 0 && patient.initial_psa && patient.initial_psa_date) {
+      // Determine status based on PSA value
+      const psaValue = parseFloat(patient.initial_psa);
+      let status = 'Normal';
+      if (psaValue > 4.0) {
+        status = 'High';
+      } else if (psaValue > 2.5) {
+        status = 'Elevated';
+      }
+
+      // Add initial PSA as a result
+      formattedResults.push({
+        id: null, // No database ID since it's from patient record
+        testType: 'psa',
+        testName: 'PSA (Prostate Specific Antigen)',
+        testDate: patient.initial_psa_date,
+        result: patient.initial_psa.toString(),
+        referenceRange: '0.0 - 4.0',
+        status: status,
+        notes: 'Initial PSA value from patient registration',
+        filePath: null,
+        fileName: null,
+        authorName: 'System',
+        authorRole: null,
+        createdAt: patient.initial_psa_date,
+        updatedAt: patient.initial_psa_date,
+        formattedDate: new Date(patient.initial_psa_date).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }),
+        isInitialPSA: true // Flag to identify this as initial PSA from patient record
+      });
+    } else if ((!testType || testType.toLowerCase() === 'psa') && formattedResults.length > 0 && patient.initial_psa && patient.initial_psa_date) {
+      // Check if initial PSA is already in the results (by comparing date and value)
+      const hasInitialPSA = formattedResults.some(r => 
+        r.testDate && patient.initial_psa_date &&
+        new Date(r.testDate).toISOString().split('T')[0] === new Date(patient.initial_psa_date).toISOString().split('T')[0] &&
+        parseFloat(r.result) === parseFloat(patient.initial_psa)
+      );
+
+      // If initial PSA is not in results, add it
+      if (!hasInitialPSA) {
+        const psaValue = parseFloat(patient.initial_psa);
+        let status = 'Normal';
+        if (psaValue > 4.0) {
+          status = 'High';
+        } else if (psaValue > 2.5) {
+          status = 'Elevated';
+        }
+
+        formattedResults.push({
+          id: null,
+          testType: 'psa',
+          testName: 'PSA (Prostate Specific Antigen)',
+          testDate: patient.initial_psa_date,
+          result: patient.initial_psa.toString(),
+          referenceRange: '0.0 - 4.0',
+          status: status,
+          notes: 'Initial PSA value from patient registration',
+          filePath: null,
+          fileName: null,
+          authorName: 'System',
+          authorRole: null,
+          createdAt: patient.initial_psa_date,
+          updatedAt: patient.initial_psa_date,
+          formattedDate: new Date(patient.initial_psa_date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }),
+          isInitialPSA: true
+        });
+
+        // Re-sort by date descending
+        formattedResults.sort((a, b) => {
+          const dateA = new Date(a.testDate);
+          const dateB = new Date(b.testDate);
+          return dateB.getTime() - dateA.getTime();
+        });
+      }
+    }
 
     res.json({
       success: true,
