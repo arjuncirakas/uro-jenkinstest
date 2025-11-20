@@ -676,8 +676,8 @@ export const initializeDatabase = async () => {
           patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
           investigation_type VARCHAR(100) NOT NULL,
           investigation_name VARCHAR(200) NOT NULL,
-          scheduled_date DATE NOT NULL,
-          scheduled_time TIME NOT NULL,
+          scheduled_date DATE,
+          scheduled_time TIME,
           status VARCHAR(50) DEFAULT 'scheduled',
           notes TEXT,
           created_by INTEGER REFERENCES users(id),
@@ -688,6 +688,20 @@ export const initializeDatabase = async () => {
       console.log('✅ Investigation bookings table created successfully');
     } else {
       console.log('✅ Investigation bookings table already exists');
+      // Migrate existing table to allow NULL values for scheduled_date and scheduled_time
+      try {
+        await client.query(`
+          ALTER TABLE investigation_bookings 
+          ALTER COLUMN scheduled_date DROP NOT NULL,
+          ALTER COLUMN scheduled_time DROP NOT NULL
+        `);
+        console.log('✅ Investigation bookings table migrated to allow NULL scheduled dates');
+      } catch (migrationError) {
+        // Ignore error if columns are already nullable
+        if (!migrationError.message.includes('does not exist') && !migrationError.message.includes('cannot drop')) {
+          console.log('ℹ️  Investigation bookings table columns may already be nullable:', migrationError.message);
+        }
+      }
     }
 
     // Create indexes for appointments table

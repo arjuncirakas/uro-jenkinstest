@@ -894,11 +894,20 @@ export const createInvestigationRequest = async (req, res) => {
       ? `${userCheck.rows[0].first_name} ${userCheck.rows[0].last_name}`
       : 'Unknown User';
 
-    // Set default scheduled date and time if not provided
-    const finalScheduledDate = scheduledDate || new Date().toISOString().split('T')[0];
-    const finalScheduledTime = scheduledTime || '09:00:00';
+    // Only create a booking if scheduledDate is provided
+    // If no scheduledDate, create a request (not a booking) so it doesn't appear in appointments
+    const hasScheduledDate = scheduledDate && scheduledDate.trim() !== '';
+    
+    // Determine status based on whether it's scheduled or just a request
+    let finalStatus;
+    if (hasScheduledDate) {
+      finalStatus = priority === 'urgent' ? 'urgent' : 'scheduled';
+    } else {
+      // This is just a request, not a scheduled appointment
+      finalStatus = priority === 'urgent' ? 'requested_urgent' : 'requested';
+    }
 
-    // Insert investigation request/booking
+    // Insert investigation request (only as booking if scheduled date is provided)
     const result = await client.query(
       `INSERT INTO investigation_bookings (
         patient_id, investigation_type, investigation_name, 
@@ -909,9 +918,9 @@ export const createInvestigationRequest = async (req, res) => {
         patientId,
         investigationType,
         finalTestName,
-        finalScheduledDate,
-        finalScheduledTime,
-        priority === 'urgent' ? 'urgent' : 'scheduled',
+        hasScheduledDate ? scheduledDate : null, // NULL if no scheduled date
+        hasScheduledDate ? (scheduledTime || '09:00:00') : null, // NULL if no scheduled date
+        finalStatus,
         notes || '',
         userId
       ]

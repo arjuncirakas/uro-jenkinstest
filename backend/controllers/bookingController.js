@@ -862,7 +862,8 @@ export const getTodaysAppointments = async (req, res) => {
     
     if (type === 'investigation') {
       console.log(`📅 [getTodaysAppointments ${requestId}] Building investigation query`);
-      // Get investigation bookings for today
+      // Get investigation bookings for today - only show those with scheduled dates (actual appointments)
+      // Exclude investigation requests without scheduled dates
       query = `
         SELECT 
           ib.id,
@@ -883,6 +884,9 @@ export const getTodaysAppointments = async (req, res) => {
         FROM investigation_bookings ib
         JOIN patients p ON ib.patient_id = p.id
         WHERE ib.scheduled_date = $1
+          AND ib.scheduled_date IS NOT NULL
+          AND ib.scheduled_time IS NOT NULL
+          AND ib.status NOT IN ('requested', 'requested_urgent')
         ORDER BY ib.scheduled_time
       `;
     } else if (type === 'urologist') {
@@ -2607,6 +2611,9 @@ export const getAllAppointments = async (req, res) => {
       FROM investigation_bookings ib
       INNER JOIN patients p ON ib.patient_id = p.id
       WHERE ib.status != 'cancelled'
+        AND ib.scheduled_date IS NOT NULL
+        AND ib.scheduled_time IS NOT NULL
+        AND ib.status NOT IN ('requested', 'requested_urgent')
     `;
     
     // Combine inner query params with date params for final query

@@ -48,7 +48,7 @@ export const doctorsService = {
   // Update doctor
   async updateDoctor(id, doctorData) {
     try {
-      const response = await axios.put(`/doctors/${id}`, doctorData);
+      const response = await axios.put(`9`, doctorData);
       return response.data;
     } catch (error) {
       console.error('Error updating doctor:', error);

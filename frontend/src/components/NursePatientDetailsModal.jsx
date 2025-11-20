@@ -728,7 +728,21 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
             const originalDate = investigation.testDate || investigation.test_date;
             const dateObj = originalDate ? new Date(originalDate) : new Date();
             
+            // Get the raw result value from API (e.g., "9", "5", "8")
             const resultValue = investigation.result || '';
+            
+            // Parse the numeric value directly from the API response
+            // The API returns result as a string like "9", "5", "8"
+            let numericValue = 0;
+            if (typeof resultValue === 'number') {
+              numericValue = resultValue;
+            } else if (typeof resultValue === 'string') {
+              // Remove any "ng/mL" text and parse
+              const cleaned = resultValue.replace(/ ng\/mL/gi, '').trim();
+              numericValue = parseFloat(cleaned) || 0;
+            }
+            
+            // Format for display
             const formattedResult = resultValue.toString().includes('ng/mL') 
               ? resultValue 
               : `${resultValue} ng/mL`;
@@ -741,7 +755,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 day: '2-digit'
               }) : ''),
               dateObj: dateObj, // Store date object for proper sorting and charting
-              result: formattedResult,
+              result: formattedResult, // Display format
+              numericValue: numericValue, // Store the numeric value directly from API
               referenceRange: investigation.referenceRange || investigation.reference_range || '',
               status: investigation.status,
               notes: investigation.notes || 'No notes',
@@ -3247,94 +3262,57 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         {(() => {
-                          // Get the last 5 PSA results for the chart, sorted by date (oldest first)
+                          // Get the last 5 PSA results for the chart, sorted by date (oldest first for chart)
                           const chartData = psaHistory.slice(0, 5).reverse();
                           
-                          // Parse PSA values and prepare data for Recharts
-                          const parsePSAValue = (result) => {
-                            if (typeof result === 'number') return result;
-                            if (typeof result === 'string') {
-                              const cleaned = result.replace(/ ng\/mL/gi, '').trim();
-                              const parsed = parseFloat(cleaned);
-                              return isNaN(parsed) ? 0 : parsed;
-                            }
-                            return 0;
-                          };
-                          
-                          // Format data for Recharts
-                          const rechartsData = chartData.map((psa, index) => {
-                            const value = parsePSAValue(psa.result);
-                            const date = psa.dateObj || (psa.date ? new Date(psa.date) : new Date());
-                            // For points with the same date, add a small offset to make them distinguishable
-                            // Use the index to create unique date strings if needed
+                          // Build chart data directly from API response
+                          // Each point will have its unique PSA value from the API
+                          const rechartsData = chartData.map((psaItem, index) => {
+                            // Use the numericValue we stored from the API response
+                            // This is the actual value from the API (9, 5, 8, etc.)
+                            const psaValue = psaItem.numericValue || 0;
+                            
+                            // Get date
+                            const date = psaItem.dateObj || (psaItem.date ? new Date(psaItem.date) : new Date());
+                            
+                            // Format date string
                             const dateStr = date && !isNaN(date.getTime()) 
                               ? date.toLocaleDateString('en-US', { 
                                   month: 'short', 
                                   day: 'numeric',
                                   year: 'numeric' 
                                 })
-                              : psa.date || 'N/A';
+                              : psaItem.date || 'N/A';
                             
+                            // Create data point with unique PSA value for each point
                             return {
+                              id: psaItem.id, // Use actual ID from API (56, 55, 54)
                               date: dateStr,
                               dateObj: date,
-                              value: value,
-                              psa: value,
-                              originalValue: value, // Store original parsed value
-                              originalResult: psa.result, // Store original result string
-                              originalIndex: index, // Keep track of original index
-                              id: psa.id || `psa-${index}` // Unique identifier
+                              psa: psaValue, // This is the key field - unique value for each point
+                              // Store additional info for tooltip
+                              originalResult: psaItem.result,
+                              numericValue: psaValue
                             };
                           });
                           
-                          // Calculate domain for Y-axis with padding
-                          const values = rechartsData.map(d => d.value);
-                          const maxValue = Math.max(...values);
-                          const minValue = Math.min(...values);
+                          // Calculate Y-axis domain
+                          const psaValues = rechartsData.map(d => d.psa).filter(v => v > 0);
+                          if (psaValues.length === 0) {
+                            return <div className="text-center text-gray-500">No PSA data available</div>;
+                          }
+                          
+                          const maxValue = Math.max(...psaValues);
+                          const minValue = Math.min(...psaValues);
                           const valueRange = maxValue - minValue;
                           const padding = valueRange > 0 ? Math.max(valueRange * 0.1, 0.5) : 1;
                           const yDomain = [Math.max(0, minValue - padding), maxValue + padding];
                           
-                          // Custom Tooltip component to properly display values
-                          const CustomTooltip = ({ active, payload, label }) => {
-                            if (active && payload && payload.length > 0) {
-                              // payload[0] contains: { value, dataKey, name, payload, ... }
-                              // payload[0].value is the actual PSA value for this point (from the chart)
-                              // payload[0].payload is the full data object for this point
-                              const payloadItem = payload[0];
-                              const data = payloadItem.payload || {};
-                              
-                              // Get the value - prioritize payloadItem.value (the actual chart value for this specific point)
-                              // This is the most reliable as it's the exact value Recharts is displaying for the hovered point
-                              let psaValue = payloadItem.value;
-                              
-                              // Fallback chain: try originalValue, then psa, then value from data object
-                              if (psaValue === undefined || psaValue === null || isNaN(psaValue)) {
-                                psaValue = data.originalValue !== undefined ? data.originalValue :
-                                          data.psa !== undefined ? data.psa : 
-                                          data.value !== undefined ? data.value : 0;
-                              }
-                              
-                              // Ensure we have a valid number
-                              const numValue = typeof psaValue === 'number' && !isNaN(psaValue) 
-                                ? psaValue 
-                                : parseFloat(psaValue) || 0;
-                              
-                              return (
-                                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-lg">
-                                  <p className="font-semibold text-gray-900 mb-2">{data.date || label}</p>
-                                  <p className="text-sm text-gray-700">
-                                    <span className="font-medium">PSA Value:</span>{' '}
-                                    <span className="text-teal-600 font-semibold">{numValue.toFixed(1)} ng/mL</span>
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          };
-                          
                           return (
-                            <LineChart data={rechartsData} margin={{ top: 5, right: 20, left: 10, bottom: 30 }}>
+                            <LineChart 
+                              data={rechartsData} 
+                              margin={{ top: 5, right: 20, left: 10, bottom: 30 }}
+                            >
                               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                               <XAxis 
                                 dataKey="date" 
@@ -3347,9 +3325,47 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 stroke="#6b7280"
                                 style={{ fontSize: '12px' }}
                                 tick={{ fill: '#6b7280' }}
-                                label={{ value: 'PSA Value (ng/mL)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } }}
+                                label={{ 
+                                  value: 'PSA Value (ng/mL)', 
+                                  angle: -90, 
+                                  position: 'insideLeft', 
+                                  style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } 
+                                }}
                               />
-                              <Tooltip content={<CustomTooltip />} />
+                              <Tooltip 
+                                formatter={(value, name, props) => {
+                                  // This formatter is called for EACH point individually
+                                  // value is the Y-axis value (PSA) for THIS specific hovered point
+                                  // props.payload contains the full data object for THIS point from our API response
+                                  const dataPoint = props.payload || {};
+                                  
+                                  // Use the value parameter - this is the Y-axis value for THIS point
+                                  // This is calculated by Recharts from dataKey="psa" for this specific data point
+                                  // For points with values 9, 5, 8 - this will correctly show 9, 5, or 8
+                                  const psaValue = value !== undefined && value !== null ? value : 
+                                                  (dataPoint.psa !== undefined ? dataPoint.psa : 
+                                                   dataPoint.numericValue !== undefined ? dataPoint.numericValue : 0);
+                                  
+                                  const numValue = typeof psaValue === 'number' && !isNaN(psaValue) 
+                                    ? psaValue 
+                                    : parseFloat(String(psaValue)) || 0;
+                                  
+                                  // Return formatted value - this will be displayed in the tooltip
+                                  return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
+                                }}
+                                labelFormatter={(label) => {
+                                  // Return the date label
+                                  return label || 'Date';
+                                }}
+                                contentStyle={{
+                                  backgroundColor: 'white',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '0.5rem',
+                                  padding: '12px',
+                                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                }}
+                                cursor={{ stroke: '#0d9488', strokeWidth: 1, strokeDasharray: '3 3' }}
+                              />
                               <Line 
                                 type="monotone" 
                                 dataKey="psa" 
