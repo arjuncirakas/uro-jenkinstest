@@ -9,14 +9,13 @@ test.describe('Nurse Pages', () => {
 
   test('should display OPD management page', async ({ page }) => {
     await expect(page).toHaveURL(/opd-management/);
-    
-    const hasContent = await elementExists(page, 'text=/opd|outpatient|management/i');
-    expect(hasContent).toBe(true);
+
+    await expect(page.getByRole('heading', { name: /OPD Management/i })).toBeVisible({ timeout: 10000 });
   });
 
   test('should navigate to investigations page', async ({ page }) => {
     const investigationsLink = page.locator('a[href*="investigations"], text=/investigations/i').first();
-    
+
     if (await investigationsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await investigationsLink.click();
       await page.waitForURL(/investigations/, { timeout: 10000 });
@@ -26,7 +25,7 @@ test.describe('Nurse Pages', () => {
 
   test('should navigate to patient list', async ({ page }) => {
     const patientsLink = page.locator('a[href*="patients"], text=/patients/i').first();
-    
+
     if (await patientsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await patientsLink.click();
       await page.waitForURL(/patients/, { timeout: 10000 });
@@ -36,7 +35,7 @@ test.describe('Nurse Pages', () => {
 
   test('should navigate to appointments', async ({ page }) => {
     const appointmentsLink = page.locator('a[href*="appointments"], text=/appointments/i').first();
-    
+
     if (await appointmentsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await appointmentsLink.click();
       await page.waitForURL(/appointments/, { timeout: 10000 });
@@ -46,7 +45,7 @@ test.describe('Nurse Pages', () => {
 
   test('should navigate to surgery page', async ({ page }) => {
     const surgeryLink = page.locator('a[href*="surgery"], text=/surgery/i').first();
-    
+
     if (await surgeryLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await surgeryLink.click();
       await page.waitForURL(/surgery/, { timeout: 10000 });
@@ -56,7 +55,7 @@ test.describe('Nurse Pages', () => {
 
   test('should navigate to followup page', async ({ page }) => {
     const followupLink = page.locator('a[href*="followup"], text=/followup|follow-up/i').first();
-    
+
     if (await followupLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await followupLink.click();
       await page.waitForURL(/followup/, { timeout: 10000 });

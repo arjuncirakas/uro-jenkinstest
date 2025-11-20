@@ -120,14 +120,14 @@ const Doctors = () => {
         if (!value || !value.trim()) {
           error = 'First name is required';
         } else if (!validateNameInput(value)) {
-          error = 'First name can only contain letters, spaces, hyphens, and apostrophes';
+          error = 'First name can only contain letters, spaces, hyphens, apostrophes, and periods';
         }
         break;
       case 'last_name':
         if (!value || !value.trim()) {
           error = 'Last name is required';
         } else if (!validateNameInput(value)) {
-          error = 'Last name can only contain letters, spaces, hyphens, and apostrophes';
+          error = 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods';
         }
         break;
       case 'department_id':

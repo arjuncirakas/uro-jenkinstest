@@ -6,10 +6,10 @@
  */
 import DOMPurify from 'dompurify';
 
-// Validate name fields (only letters, spaces, hyphens, apostrophes)
+// Validate name fields (only letters, spaces, hyphens, apostrophes, periods)
 export const validateNameInput = (value) => {
-  // Allow letters, spaces, hyphens, apostrophes
-  const nameRegex = /^[a-zA-Z\s'-]*$/;
+  // Allow letters, spaces, hyphens, apostrophes, periods
+  const nameRegex = /^[a-zA-Z\s'.-]*$/;
   return nameRegex.test(value);
 };
 
@@ -82,9 +82,23 @@ export const validateAge = (value) => {
 // Validate date (not in future for DOB, not in past for appointments)
 export const validateDateOfBirth = (dateString) => {
   if (!dateString) return true;
-  const date = new Date(dateString);
+  
+  // Parse date string and create date in local timezone
+  // Handle both YYYY-MM-DD format and other formats
+  const dateParts = dateString.split('-');
+  let date;
+  if (dateParts.length === 3) {
+    // YYYY-MM-DD format - create date in local timezone
+    date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+  } else {
+    date = new Date(dateString);
+  }
+  
+  // Normalize both dates to midnight in local timezone for accurate comparison
+  date.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  
   return date <= today;
 };
 
@@ -191,8 +205,8 @@ export const validateNameFormat = (name, fieldName) => {
     return `${fieldName} must be less than 50 characters`;
   }
   
-  if (!/^[a-zA-Z\s'-]+$/.test(name)) {
-    return `${fieldName} can only contain letters, spaces, hyphens, and apostrophes`;
+  if (!/^[a-zA-Z\s'.-]+$/.test(name)) {
+    return `${fieldName} can only contain letters, spaces, hyphens, apostrophes, and periods`;
   }
   
   return '';
@@ -230,8 +244,8 @@ export const validatePatientForm = (formData) => {
   const lastNameError = validateRequired(formData.lastName, 'Last name');
   if (lastNameError) {
     errors.lastName = lastNameError;
-  } else if (formData.lastName && !/^[a-zA-Z\s'-]+$/.test(formData.lastName)) {
-    errors.lastName = 'Last name can only contain letters, spaces, hyphens, and apostrophes';
+  } else if (formData.lastName && !/^[a-zA-Z\s'.-]+$/.test(formData.lastName)) {
+    errors.lastName = 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods';
   }
   
   const dobError = validateRequired(formData.dateOfBirth, 'Date of birth');

@@ -178,8 +178,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       if (!isValid) return; // Don't update if invalid characters
     }
     
-    // Textarea fields - check if this is a textarea field that needs whitespace preserved
-    const textareaFields = ['medicalHistory', 'currentMedications', 'allergies', 'notes'];
+    // Textarea fields and address field - check if this is a field that needs whitespace preserved
+    const textareaFields = ['medicalHistory', 'currentMedications', 'allergies', 'notes', 'address'];
     const preserveWhitespace = textareaFields.includes(name);
     
     // Sanitize text inputs to prevent XSS

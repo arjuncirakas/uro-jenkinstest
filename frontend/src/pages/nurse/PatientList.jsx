@@ -152,6 +152,22 @@ const PatientList = () => {
     };
   }, [currentPage]);
 
+  // Listen for patient added event to refresh patient list
+  useEffect(() => {
+    const handlePatientAdded = (event) => {
+      console.log('Patient added event received, refreshing patient list:', event.detail);
+      // Reset to page 1 to show the newly added patient
+      setCurrentPage(1);
+      fetchPatients(1);
+    };
+
+    window.addEventListener('patientAdded', handlePatientAdded);
+    
+    return () => {
+      window.removeEventListener('patientAdded', handlePatientAdded);
+    };
+  }, []);
+
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();

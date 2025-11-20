@@ -100,15 +100,15 @@ const AddUser = () => {
           error = 'First name is required';
         } else if (value.trim().length < 2) {
           error = 'First name must be at least 2 characters';
-        } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
-          error = 'First name can only contain letters and spaces';
+        } else if (!/^[a-zA-Z\s'.-]+$/.test(value.trim())) {
+          error = 'First name can only contain letters, spaces, hyphens, apostrophes, and periods';
         }
         break;
       case 'lastName':
         if (!value.trim()) {
           error = 'Last name is required';
-        } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
-          error = 'Last name can only contain letters and spaces';
+        } else if (!/^[a-zA-Z\s'.-]+$/.test(value.trim())) {
+          error = 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods';
         }
         break;
       case 'email':

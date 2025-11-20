@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
-import { Plus, Upload, Trash, Eye } from 'lucide-react';
+import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
@@ -12,6 +12,7 @@ import AddTestResultModal from './modals/AddTestResultModal';
 import AddInvestigationResultModal from './AddInvestigationResultModal';
 import DischargeSummaryModal from './DischargeSummaryModal';
 import EditSurgeryAppointmentModal from './EditSurgeryAppointmentModal';
+import EditPatientModal from './EditPatientModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { notesService } from '../services/notesService';
@@ -47,6 +48,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
   const [selectedSurgeryAppointment, setSelectedSurgeryAppointment] = useState(null);
   const [hasSurgeryAppointment, setHasSurgeryAppointment] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   // Transfer form states
   const [transferDetails, setTransferDetails] = useState({
@@ -2367,6 +2369,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       const displayPatient = fullPatientData || patient;
                       return (
                         <>
+                          {/* Edit Button */}
+                          <div className="flex justify-end mb-4">
+                            <button
+                              onClick={() => setIsEditModalOpen(true)}
+                              className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center"
+                            >
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit Patient Details
+                            </button>
+                          </div>
+
                           {/* Personal Information */}
                           <div className="bg-white rounded-lg border border-gray-200 p-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -4951,6 +4964,26 @@ ${transferDetails.additionalNotes}` : ''}
       onCancel={() => closeConfirmModal(false)}
       title="Unsaved Changes"
       message="You have unsaved changes. Do you want to save before closing?"
+    />
+
+    {/* Edit Patient Modal */}
+    <EditPatientModal
+      isOpen={isEditModalOpen}
+      onClose={() => setIsEditModalOpen(false)}
+      patient={fullPatientData || patient}
+      onPatientUpdated={async (updatedPatient) => {
+        // Refresh patient data
+        await fetchFullPatientData();
+        // Dispatch event to refresh patient list
+        window.dispatchEvent(new CustomEvent('patient:updated', {
+          detail: { patient: updatedPatient }
+        }));
+        setIsEditModalOpen(false);
+      }}
+      onError={(errorData) => {
+        console.error('Error updating patient:', errorData);
+        // You can show an error modal here if needed
+      }}
     />
     </>
   );

@@ -228,6 +228,56 @@ export const addPatient = async (req, res) => {
 
     const newPatient = result.rows[0];
 
+    // Automatically create a PSA result entry if initialPSA and initialPSADate are provided
+    if (initialPSA && formattedInitialPSADate) {
+      try {
+        // Get user details for author information
+        const userQuery = await client.query(
+          'SELECT first_name, last_name FROM users WHERE id = $1',
+          [req.user.id]
+        );
+        
+        const authorName = userQuery.rows.length > 0 
+          ? `${userQuery.rows[0].first_name} ${userQuery.rows[0].last_name}`
+          : 'System';
+
+        // Determine status based on PSA value
+        const psaValue = parseFloat(initialPSA);
+        let status = 'Normal';
+        if (psaValue > 4.0) {
+          status = 'High';
+        } else if (psaValue > 2.5) {
+          status = 'Elevated';
+        }
+
+        // Insert initial PSA result into investigation_results table
+        await client.query(
+          `INSERT INTO investigation_results (
+            patient_id, test_type, test_name, test_date, result, reference_range, 
+            status, notes, author_id, author_name, author_role
+          ) VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            newPatient.id,
+            'psa',
+            'PSA (Prostate Specific Antigen)',
+            formattedInitialPSADate,
+            initialPSA.toString(),
+            '0.0 - 4.0',
+            status,
+            'Initial PSA value entered during patient registration',
+            req.user.id,
+            authorName,
+            req.user.role
+          ]
+        );
+        
+        console.log(`[addPatient] Created initial PSA result entry for patient ${newPatient.id} with PSA value ${initialPSA}`);
+      } catch (psaError) {
+        // Log error but don't fail patient creation if PSA result creation fails
+        console.error('[addPatient] Error creating initial PSA result:', psaError);
+      }
+    }
+
     // Calculate age
     const age = new Date().getFullYear() - new Date(dateOfBirth).getFullYear();
 

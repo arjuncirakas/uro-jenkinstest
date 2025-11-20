@@ -18,6 +18,8 @@ import ConfirmModal from './ConfirmModal';
 import { notesService } from '../services/notesService';
 import { investigationService } from '../services/investigationService';
 import { bookingService } from '../services/bookingService';
+import { patientService } from '../services/patientService';
+import EditPatientModal from './EditPatientModal';
 
 const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -29,6 +31,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [isOtherTestsHistoryModalOpen, setIsOtherTestsHistoryModalOpen] = useState(false);
   const [isMDTSchedulingModalOpen, setIsMDTSchedulingModalOpen] = useState(false);
   const [isAddInvestigationModalOpen, setIsAddInvestigationModalOpen] = useState(false);
+  
+  // Full patient data state
+  const [fullPatientData, setFullPatientData] = useState(null);
+  const [loadingPatientData, setLoadingPatientData] = useState(false);
+  
+  // Edit modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   // Notes API state
   const [clinicalNotes, setClinicalNotes] = useState([]);
@@ -354,6 +363,31 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       setNoteContent('');
     }
   };
+
+  // Fetch full patient details
+  const fetchFullPatientData = useCallback(async () => {
+    if (!patient?.id) {
+      console.log('❌ NursePatientDetailsModal: No patient ID, cannot fetch full details');
+      return;
+    }
+    
+    try {
+      setLoadingPatientData(true);
+      console.log('🔍 NursePatientDetailsModal: Fetching full patient details for ID:', patient.id);
+      const result = await patientService.getPatientById(patient.id);
+      
+      if (result.success && result.data) {
+        console.log('✅ NursePatientDetailsModal: Fetched full patient details:', result.data);
+        setFullPatientData(result.data);
+      } else {
+        console.error('❌ NursePatientDetailsModal: Failed to fetch patient details:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ NursePatientDetailsModal: Error fetching patient details:', error);
+    } finally {
+      setLoadingPatientData(false);
+    }
+  }, [patient?.id]);
 
   // Fetch notes for the patient
   const fetchNotes = useCallback(async () => {
@@ -1051,6 +1085,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     console.log('🔍 NursePatientDetailsModal: useEffect triggered, isOpen:', isOpen, 'patient:', patient);
     if (isOpen && patient?.id) {
       console.log('✅ NursePatientDetailsModal: Fetching notes and investigations for patient ID:', patient.id);
+      fetchFullPatientData();
       fetchNotes();
       fetchInvestigations();
       fetchInvestigationRequests();
@@ -1062,7 +1097,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     } else {
       console.log('❌ NursePatientDetailsModal: Cannot fetch data - isOpen:', isOpen, 'patient?.id:', patient?.id);
     }
-  }, [isOpen, patient?.id, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchDischargeSummary, isPostOpFollowupPatient]);
+  }, [isOpen, patient?.id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchDischargeSummary, isPostOpFollowupPatient]);
 
   // Listen for image viewer events
   useEffect(() => {
@@ -2781,133 +2816,347 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
           {activeTab === 'generalInfo' && (
             <div className="flex w-full h-full overflow-y-auto p-6">
               <div className="w-full mx-auto space-y-6">
-                {/* Nurse Triage Information */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <FaStethoscope className="mr-2 text-teal-600" />
-                    Nurse Triage Information
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-3">Symptoms & Presentation - Chief Complaint</h4>
-                      {patient.triageSymptoms && patient.triageSymptoms.length > 0 ? (
-                        <div className="space-y-3">
-                          {patient.triageSymptoms.map((symptom, index) => (
-                            <div key={index} className={`border border-gray-200 rounded-lg p-4 ${symptom.isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <span className="font-medium text-gray-900">{symptom.name}</span>
-                                    {symptom.isCustom && <span className="text-xs text-blue-600">(Custom)</span>}
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                                    <div>
-                                      <span className="text-gray-600">IPSS Score:</span>
-                                      <span className="ml-2 font-medium text-gray-900">{symptom.ipssScore || 'N/A'}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-600">Duration:</span>
-                                      <span className="ml-2 font-medium text-gray-900">
-                                        {symptom.duration ? `${symptom.duration} ${symptom.durationUnit}` : 'N/A'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
+                {loadingPatientData ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                      <span className="text-gray-600 text-sm">Loading patient details...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Use fullPatientData if available, otherwise fallback to patient prop */}
+                    {(() => {
+                      const displayPatient = fullPatientData || patient;
+                      return (
+                        <>
+                          {/* Edit Button */}
+                          <div className="flex justify-end mb-4">
+                            <button
+                              onClick={() => setIsEditModalOpen(true)}
+                              className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center"
+                            >
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit Patient Details
+                            </button>
+                          </div>
+
+                          {/* Personal Information */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <IoHeart className="mr-2 text-teal-600" />
+                              Personal Information
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <span className="text-gray-600">Date of Birth:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.dateOfBirth || displayPatient.date_of_birth 
+                                    ? new Date(displayPatient.dateOfBirth || displayPatient.date_of_birth).toLocaleDateString('en-GB', { 
+                                        day: '2-digit', 
+                                        month: 'short', 
+                                        year: 'numeric' 
+                                      })
+                                    : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Age:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.age || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Email:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.email || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Phone:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.phone || displayPatient.phoneNumber || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Postcode:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.postcode || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">City:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.city || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Gender:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.gender || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">State:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.state || 'N/A'}</span>
+                              </div>
+                              <div className="md:col-span-2">
+                                <span className="text-gray-600">Address:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.address || 'N/A'}</span>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-gray-500">
-                          <p>No triage symptoms recorded.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Exam & Prior Tests */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <IoDocumentText className="mr-2 text-teal-600" />
-                    Exam & Prior Tests
-                  </h3>
-                  <div className="space-y-4">
-                    {/* DRE Findings */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">DRE (Digital Rectal Exam)</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <span className="text-gray-600">DRE Done:</span>
-                          <span className="ml-2 font-medium text-gray-900">
-                            {patient.dreDone ? 'Yes' : 'No'}
-                          </span>
-                        </div>
-                        {patient.dreDone && patient.dreFindings && (
-                          <div>
-                            <span className="text-gray-600">DRE Findings:</span>
-                            <span className="ml-2 font-medium text-gray-900">{patient.dreFindings}</span>
                           </div>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Prior Prostate Biopsy */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Prior Prostate Biopsy</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <span className="text-gray-600">Prior Biopsy:</span>
-                          <span className="ml-2 font-medium text-gray-900">
-                            {patient.priorBiopsy === 'yes' ? 'Yes' : 'No'}
-                          </span>
-                        </div>
-                        {patient.priorBiopsy === 'yes' && patient.priorBiopsyDate && (
-                          <div>
-                            <span className="text-gray-600">Biopsy Date:</span>
-                            <span className="ml-2 font-medium text-gray-900">
-                              {new Date(patient.priorBiopsyDate).toLocaleDateString('en-GB', { 
-                                day: '2-digit', 
-                                month: 'short', 
-                                year: 'numeric' 
-                              })}
-                            </span>
+                          {/* PSA Information */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <IoAnalytics className="mr-2 text-teal-600" />
+                              PSA Information
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <span className="text-gray-600">Initial PSA Level:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.initialPSA || displayPatient.initial_psa 
+                                    ? `${parseFloat(displayPatient.initialPSA || displayPatient.initial_psa).toFixed(2)} ng/mL`
+                                    : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">PSA Test Date:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.initialPSADate || displayPatient.initial_psa_date 
+                                    ? new Date(displayPatient.initialPSADate || displayPatient.initial_psa_date).toLocaleDateString('en-GB', { 
+                                        day: '2-digit', 
+                                        month: 'short', 
+                                        year: 'numeric' 
+                                      })
+                                    : 'N/A'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {patient.priorBiopsy === 'yes' && patient.gleasonScore && (
-                          <div>
-                            <span className="text-gray-600">Gleason Score:</span>
-                            <span className="ml-2 font-medium text-gray-900">{patient.gleasonScore}</span>
+
+                          {/* Medical Information */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <IoDocument className="mr-2 text-teal-600" />
+                              Medical Information
+                            </h3>
+                            <div className="space-y-4">
+                              <div>
+                                <span className="text-gray-600">Referral Date:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.referralDate || displayPatient.referral_date 
+                                    ? new Date(displayPatient.referralDate || displayPatient.referral_date).toLocaleDateString('en-GB', { 
+                                        day: '2-digit', 
+                                        month: 'short', 
+                                        year: 'numeric' 
+                                      })
+                                    : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Assigned Urologist:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.assignedUrologist || displayPatient.assigned_urologist || 'Not assigned'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Priority:</span>
+                                <span className="ml-2">
+                                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                    (displayPatient.priority || 'normal').toLowerCase() === 'urgent' 
+                                      ? 'bg-red-100 text-red-700' 
+                                      : (displayPatient.priority || 'normal').toLowerCase() === 'high'
+                                      ? 'bg-orange-100 text-orange-700'
+                                      : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {displayPatient.priority || 'Normal'}
+                                  </span>
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Medical History:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.medicalHistory || displayPatient.medical_history || 'No prior medical conditions'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Current Medications:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.currentMedications || displayPatient.current_medications || 'None'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Allergies:</span>
+                                <span className={`ml-2 font-medium ${displayPatient.allergies ? 'text-gray-900' : 'text-gray-500'}`}>
+                                  {displayPatient.allergies || 'None'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Comorbidities */}
-                    {patient.comorbidities && patient.comorbidities.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Comorbidities</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {patient.comorbidities.map((comorbidity, index) => (
-                            <span
-                              key={index}
-                              className="px-3 py-1 bg-teal-100 text-teal-700 text-sm rounded-full font-medium"
-                            >
-                              {comorbidity}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          {/* Emergency Contact */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <IoHeart className="mr-2 text-teal-600" />
+                              Emergency Contact
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <span className="text-gray-600">Contact Name:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.emergencyContactName || displayPatient.emergency_contact_name || 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Contact Phone:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.emergencyContactPhone || displayPatient.emergency_contact_phone || 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Relationship:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.emergencyContactRelationship || displayPatient.emergency_contact_relationship || 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-                    {/* Show message if no data */}
-                    {!patient.dreDone && patient.priorBiopsy !== 'yes' && (!patient.comorbidities || patient.comorbidities.length === 0) && (
-                      <div className="text-center py-8 text-gray-500">
-                        <p>No exam or prior test information available.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                          {/* Nurse Triage Information */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <FaStethoscope className="mr-2 text-teal-600" />
+                              Nurse Triage Information
+                            </h3>
+                            <div className="space-y-4">
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-3">Symptoms & Presentation - Chief Complaint</h4>
+                                {(() => {
+                                  // Parse triage symptoms if it's a JSON string
+                                  let triageSymptoms = displayPatient.triageSymptoms || displayPatient.triage_symptoms;
+                                  if (typeof triageSymptoms === 'string') {
+                                    try {
+                                      triageSymptoms = JSON.parse(triageSymptoms);
+                                    } catch (e) {
+                                      triageSymptoms = [];
+                                    }
+                                  }
+                                  
+                                  return triageSymptoms && triageSymptoms.length > 0 ? (
+                                    <div className="space-y-3">
+                                      {triageSymptoms.map((symptom, index) => (
+                                        <div key={index} className={`border border-gray-200 rounded-lg p-4 ${symptom.isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                                          <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                              <div className="flex items-center gap-2 mb-2">
+                                                <span className="font-medium text-gray-900">{symptom.name}</span>
+                                                {symptom.isCustom && <span className="text-xs text-blue-600">(Custom)</span>}
+                                              </div>
+                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                                <div>
+                                                  <span className="text-gray-600">IPSS Score:</span>
+                                                  <span className="ml-2 font-medium text-gray-900">{symptom.ipssScore || 'N/A'}</span>
+                                                </div>
+                                                <div>
+                                                  <span className="text-gray-600">Duration:</span>
+                                                  <span className="ml-2 font-medium text-gray-900">
+                                                    {symptom.duration ? `${symptom.duration} ${symptom.durationUnit || 'months'}` : 'N/A'}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-8 text-gray-500">
+                                      <p>No triage symptoms recorded.</p>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Exam & Prior Tests */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <IoDocumentText className="mr-2 text-teal-600" />
+                              Exam & Prior Tests
+                            </h3>
+                            <div className="space-y-4">
+                              {/* DRE Findings */}
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-2">DRE (Digital Rectal Exam)</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <span className="text-gray-600">DRE Done:</span>
+                                    <span className="ml-2 font-medium text-gray-900">
+                                      {(displayPatient.dreDone || displayPatient.dre_done) ? 'Yes' : 'No'}
+                                    </span>
+                                  </div>
+                                  {(displayPatient.dreDone || displayPatient.dre_done) && (displayPatient.dreFindings || displayPatient.dre_findings) && (
+                                    <div>
+                                      <span className="text-gray-600">DRE Findings:</span>
+                                      <span className="ml-2 font-medium text-gray-900">{displayPatient.dreFindings || displayPatient.dre_findings}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Prior Prostate Biopsy */}
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-2">Prior Prostate Biopsy</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <span className="text-gray-600">Prior Biopsy:</span>
+                                    <span className="ml-2 font-medium text-gray-900">
+                                      {(displayPatient.priorBiopsy || displayPatient.prior_biopsy) === 'yes' ? 'Yes' : 'No'}
+                                    </span>
+                                  </div>
+                                  {(displayPatient.priorBiopsy || displayPatient.prior_biopsy) === 'yes' && (displayPatient.priorBiopsyDate || displayPatient.prior_biopsy_date) && (
+                                    <div>
+                                      <span className="text-gray-600">Biopsy Date:</span>
+                                      <span className="ml-2 font-medium text-gray-900">
+                                        {new Date(displayPatient.priorBiopsyDate || displayPatient.prior_biopsy_date).toLocaleDateString('en-GB', { 
+                                          day: '2-digit', 
+                                          month: 'short', 
+                                          year: 'numeric' 
+                                        })}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {(displayPatient.priorBiopsy || displayPatient.prior_biopsy) === 'yes' && (displayPatient.gleasonScore || displayPatient.gleason_score) && (
+                                    <div>
+                                      <span className="text-gray-600">Gleason Score:</span>
+                                      <span className="ml-2 font-medium text-gray-900">{displayPatient.gleasonScore || displayPatient.gleason_score}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Comorbidities */}
+                              {(displayPatient.comorbidities || []) && (displayPatient.comorbidities || []).length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-gray-700 mb-2">Comorbidities</h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {(displayPatient.comorbidities || []).map((comorbidity, index) => (
+                                      <span
+                                        key={index}
+                                        className="px-3 py-1 bg-teal-100 text-teal-700 text-sm rounded-full font-medium"
+                                      >
+                                        {comorbidity}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Show message if no data */}
+                              {!(displayPatient.dreDone || displayPatient.dre_done) && (displayPatient.priorBiopsy || displayPatient.prior_biopsy) !== 'yes' && (!displayPatient.comorbidities || displayPatient.comorbidities.length === 0) && (
+                                <div className="text-center py-8 text-gray-500">
+                                  <p>No exam or prior test information available.</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -4356,6 +4605,26 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         await fetchNotes();
         // Dispatch event to refresh other components
         window.dispatchEvent(new CustomEvent('surgery:updated'));
+      }}
+    />
+
+    {/* Edit Patient Modal */}
+    <EditPatientModal
+      isOpen={isEditModalOpen}
+      onClose={() => setIsEditModalOpen(false)}
+      patient={fullPatientData || patient}
+      onPatientUpdated={async (updatedPatient) => {
+        // Refresh patient data
+        await fetchFullPatientData();
+        // Dispatch event to refresh patient list
+        window.dispatchEvent(new CustomEvent('patient:updated', {
+          detail: { patient: updatedPatient }
+        }));
+        setIsEditModalOpen(false);
+      }}
+      onError={(errorData) => {
+        console.error('Error updating patient:', errorData);
+        // You can show an error modal here if needed
       }}
     />
     </>

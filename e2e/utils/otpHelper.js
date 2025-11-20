@@ -83,7 +83,7 @@ export async function getOTPFromAPI(page, email, type = 'login_verification', ma
 export async function fillOTPFromAPI(page, email, type = 'login_verification') {
   try {
     // Wait for OTP modal to appear
-    await page.waitForSelector('text=Verify Your Identity', { timeout: 15000 });
+    await page.waitForSelector('text=Verify Your Identity', { timeout: 30000 });
     await page.waitForSelector('input[id="otp"]', { timeout: 10000 });
     
     // Wait a bit for OTP to be generated and stored
