@@ -894,17 +894,32 @@ export const createInvestigationRequest = async (req, res) => {
       ? `${userCheck.rows[0].first_name} ${userCheck.rows[0].last_name}`
       : 'Unknown User';
 
-    // Only create a booking if scheduledDate is provided
+    // Only create a booking if scheduledDate is explicitly provided and not empty
     // If no scheduledDate, create a request (not a booking) so it doesn't appear in appointments
-    const hasScheduledDate = scheduledDate && scheduledDate.trim() !== '';
+    // This is different from "Book Investigation" which always requires a date
+    const hasScheduledDate = scheduledDate && 
+                             typeof scheduledDate === 'string' && 
+                             scheduledDate.trim() !== '' &&
+                             scheduledDate !== 'null' &&
+                             scheduledDate !== 'undefined';
+    
+    console.log('🔍 [createInvestigationRequest] Scheduled date check:', {
+      scheduledDate,
+      hasScheduledDate,
+      type: typeof scheduledDate
+    });
     
     // Determine status based on whether it's scheduled or just a request
     let finalStatus;
     if (hasScheduledDate) {
+      // Only mark as 'scheduled' or 'urgent' if there's an actual scheduled date
       finalStatus = priority === 'urgent' ? 'urgent' : 'scheduled';
+      console.log('✅ [createInvestigationRequest] Creating scheduled appointment with date:', scheduledDate);
     } else {
       // This is just a request, not a scheduled appointment
+      // These should NOT appear in the appointments list
       finalStatus = priority === 'urgent' ? 'requested_urgent' : 'requested';
+      console.log('📋 [createInvestigationRequest] Creating investigation request (no appointment) with status:', finalStatus);
     }
 
     // Insert investigation request (only as booking if scheduled date is provided)

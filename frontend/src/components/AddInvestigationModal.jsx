@@ -50,13 +50,17 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       // Handle form submission logic here
       const finalTestName = investigationType === 'custom' ? customTestName : testName;
       
+      // Only include scheduledDate if it's explicitly provided and not empty
+      // This ensures investigations without dates don't create appointments
+      const hasScheduledDate = scheduledDate && scheduledDate.trim() !== '';
+      
       const requestData = {
         investigationType,
         testName: investigationType !== 'custom' ? testName : null,
         customTestName: investigationType === 'custom' ? customTestName : null,
         priority,
         notes,
-        scheduledDate: scheduledDate || null,
+        scheduledDate: hasScheduledDate ? scheduledDate.trim() : null, // Explicitly null if no date
         scheduledTime: null // Can be added later if needed
       };
 
@@ -224,15 +228,21 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
             </div>
           </div>
 
-          {/* Scheduled Date */}
+          {/* Scheduled Date - Optional */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Scheduled Date
+              Scheduled Date <span className="text-gray-400 text-xs">(Optional - leave blank for request only)</span>
             </label>
             <input
               type="date"
               value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
+              onBlur={(e) => {
+                // Clear if empty string
+                if (!e.target.value || e.target.value.trim() === '') {
+                  setScheduledDate('');
+                }
+              }}
               min={(() => {
                 const now = new Date();
                 return now.getFullYear() + '-' + 
@@ -240,7 +250,11 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                        String(now.getDate()).padStart(2, '0');
               })()}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+              placeholder="Leave blank to create request only (no appointment)"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Leave blank to create an investigation request without scheduling an appointment
+            </p>
           </div>
 
           {/* Clinical Notes */}
