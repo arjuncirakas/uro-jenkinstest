@@ -690,8 +690,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       return renderRescheduleNote(content);
     }
     
+    // Check if this is an investigation request note
+    const isInvestigationRequest = content.includes('INVESTIGATION REQUEST') || noteType === 'investigation_request';
+    
     // Check if this is a pathway transfer note (either has PATHWAY TRANSFER header or is pathway_transfer type)
     const isPathwayTransferNote = content.includes('PATHWAY TRANSFER') || noteType === 'pathway_transfer';
+    
+    // Handle investigation request notes
+    if (isInvestigationRequest) {
+      return renderInvestigationRequestNote(content);
+    }
     
     if (!isPathwayTransferNote) {
       return <p className="text-gray-700 leading-relaxed text-sm">{content}</p>;
@@ -840,6 +848,86 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           <div>
             <div className="text-sm font-medium text-gray-500 mb-1">Additional Notes</div>
             <div className="text-sm text-gray-900 whitespace-pre-line">{data.additionalNotes}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render investigation request notes with structured formatting
+  const renderInvestigationRequestNote = (content) => {
+    const lines = content.split('\n').filter(line => line.trim());
+    
+    const data = {};
+    
+    // Parse the content
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      
+      if (trimmedLine === 'INVESTIGATION REQUEST') {
+        data.title = trimmedLine;
+      } else if (trimmedLine.includes('Investigation Type:')) {
+        data.investigationType = trimmedLine.replace('Investigation Type:', '').trim();
+      } else if (trimmedLine.includes('Test/Procedure Name:')) {
+        data.testName = trimmedLine.replace('Test/Procedure Name:', '').trim();
+      } else if (trimmedLine.includes('Priority:')) {
+        data.priority = trimmedLine.replace('Priority:', '').trim();
+      } else if (trimmedLine.includes('Scheduled Date:')) {
+        data.scheduledDate = trimmedLine.replace('Scheduled Date:', '').trim();
+      } else if (trimmedLine.includes('Clinical Notes:')) {
+        // Get everything after "Clinical Notes:"
+        const notesIndex = trimmedLine.indexOf('Clinical Notes:');
+        if (notesIndex !== -1) {
+          data.clinicalNotes = trimmedLine.substring(notesIndex + 'Clinical Notes:'.length).trim();
+        }
+      } else if (data.clinicalNotes !== undefined && trimmedLine) {
+        // Append to clinical notes if we're already in that section
+        data.clinicalNotes = (data.clinicalNotes || '') + '\n' + trimmedLine;
+      }
+    });
+
+    // Get priority color
+    const getPriorityColor = (priority) => {
+      const p = priority?.toLowerCase() || 'routine';
+      if (p === 'urgent' || p.includes('urgent')) return 'bg-red-100 text-red-700 border-red-200';
+      if (p === 'soon' || p === 'medium') return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      return 'bg-green-100 text-green-700 border-green-200';
+    };
+
+    return (
+      <div className="space-y-3">
+        {/* Investigation Type and Test Name */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Investigation Type</div>
+            <div className="text-base font-semibold text-gray-900">{data.investigationType || 'Not specified'}</div>
+          </div>
+          <div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Test/Procedure Name</div>
+            <div className="text-base text-gray-900">{data.testName || 'Not specified'}</div>
+          </div>
+        </div>
+
+        {/* Priority and Scheduled Date */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <div className="text-sm font-medium text-gray-500 mb-1">Scheduled Date</div>
+            <div className={`text-base ${data.scheduledDate && !data.scheduledDate.includes('Not scheduled') ? 'text-gray-900' : 'text-gray-400 italic'}`}>
+              {data.scheduledDate || 'Not scheduled'}
+            </div>
+          </div>
+          {data.priority && (
+            <span className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${getPriorityColor(data.priority)}`}>
+              {data.priority} Priority
+            </span>
+          )}
+        </div>
+
+        {/* Clinical Notes */}
+        {data.clinicalNotes && data.clinicalNotes.trim() && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className="text-sm font-medium text-blue-900 mb-1.5">Clinical Notes</div>
+            <div className="text-sm text-blue-800 whitespace-pre-line">{data.clinicalNotes.trim()}</div>
           </div>
         )}
       </div>

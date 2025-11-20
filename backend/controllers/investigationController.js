@@ -930,14 +930,22 @@ export const createInvestigationRequest = async (req, res) => {
 
     // Create a clinical note for the investigation request
     try {
+      const formattedDate = scheduledDate 
+        ? new Date(scheduledDate).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })
+        : null;
+      
       const noteContent = `
 INVESTIGATION REQUEST
 
-Type: ${investigationType.toUpperCase()}
-Test: ${finalTestName}
+Investigation Type: ${investigationType.toUpperCase()}
+Test/Procedure Name: ${finalTestName}
 Priority: ${priority.charAt(0).toUpperCase() + priority.slice(1)}
-${scheduledDate ? `Scheduled Date: ${new Date(scheduledDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}` : ''}
-${notes ? `\nClinical Notes:\n${notes}` : ''}
+${formattedDate ? `Scheduled Date: ${formattedDate}` : 'Scheduled Date: Not scheduled'}
+${notes ? `Clinical Notes:\n${notes}` : ''}
       `.trim();
 
       await client.query(
