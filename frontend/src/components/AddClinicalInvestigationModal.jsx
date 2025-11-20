@@ -4,9 +4,9 @@ import { FaFlask, FaXRay, FaMicroscope } from 'react-icons/fa';
 import { notesService } from '../services/notesService';
 
 const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
-  const [investigationType, setInvestigationType] = useState('');
-  const [testNames, setTestNames] = useState([]); // Changed to array for multi-select
-  const [customTestName, setCustomTestName] = useState('');
+  const [selectedInvestigationTypes, setSelectedInvestigationTypes] = useState([]); // Changed to array for multi-select
+  const [testNamesByType, setTestNamesByType] = useState({}); // Object to store test names for each investigation type
+  const [customTestNames, setCustomTestNames] = useState({}); // Object to store custom test names for each type
   const [priority, setPriority] = useState('routine');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,31 +47,49 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
       }
 
       // Validate required fields
-      if (!investigationType) {
-        setError('Please select an investigation type');
+      if (selectedInvestigationTypes.length === 0) {
+        setError('Please select at least one investigation type');
         setIsSubmitting(false);
         return;
       }
 
-      // Get selected test names
-      const testsToSubmit = investigationType === 'custom' 
-        ? (customTestName ? [customTestName] : [])
-        : testNames.filter(name => name && name.trim() !== '' && name !== 'other');
+      // Collect all test names for all selected investigation types
+      const allTests = [];
+      const investigationTypesList = [];
       
-      if (testsToSubmit.length === 0) {
-        setError('Please select at least one test/procedure');
+      selectedInvestigationTypes.forEach(invType => {
+        if (invType === 'custom') {
+          const customName = customTestNames[invType];
+          if (customName && customName.trim() !== '') {
+            investigationTypesList.push('CUSTOM');
+            allTests.push(`${invType.toUpperCase()}: ${customName}`);
+          }
+        } else {
+          const testsForType = testNamesByType[invType] || [];
+          const validTests = testsForType.filter(name => name && name.trim() !== '' && name !== 'other');
+          if (validTests.length > 0) {
+            investigationTypesList.push(invType.toUpperCase());
+            validTests.forEach(test => {
+              allTests.push(`${invType.toUpperCase()}: ${test}`);
+            });
+          }
+        }
+      });
+      
+      if (allTests.length === 0) {
+        setError('Please select at least one test/procedure for the selected investigation type(s)');
         setIsSubmitting(false);
         return;
       }
 
-      // Format test names for display (comma-separated or list)
-      const testNamesDisplay = testsToSubmit.join(', ');
+      // Format investigation types and test names for display
+      const investigationTypesDisplay = investigationTypesList.join(', ');
+      const testNamesDisplay = allTests.join(', ');
 
       // Create clinical note content for clinical investigation
-      // This is different from investigation requests - it goes directly to clinical notes
       const noteContent = `CLINICAL INVESTIGATION
 
-Investigation Type: ${investigationType.toUpperCase()}
+Investigation Type: ${investigationTypesDisplay}
 Test/Procedure Name: ${testNamesDisplay}
 Priority: ${priority.charAt(0).toUpperCase() + priority.slice(1)}
 ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
@@ -107,9 +125,9 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
   };
 
   const handleClose = () => {
-    setInvestigationType('');
-    setTestNames([]);
-    setCustomTestName('');
+    setSelectedInvestigationTypes([]);
+    setTestNamesByType({});
+    setCustomTestNames({});
     setPriority('routine');
     setNotes('');
     setError('');
@@ -117,20 +135,50 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
     onClose();
   };
 
-  // Handle checkbox change for multi-select
-  const handleTestNameToggle = (testName) => {
+  // Handle investigation type toggle
+  const handleInvestigationTypeToggle = (typeValue) => {
+    setSelectedInvestigationTypes(prev => {
+      if (prev.includes(typeValue)) {
+        // Remove if already selected - also clear its test names
+        const newTypes = prev.filter(t => t !== typeValue);
+        setTestNamesByType(prevTests => {
+          const newTests = { ...prevTests };
+          delete newTests[typeValue];
+          return newTests;
+        });
+        setCustomTestNames(prevCustom => {
+          const newCustom = { ...prevCustom };
+          delete newCustom[typeValue];
+          return newCustom;
+        });
+        return newTypes;
+      } else {
+        // Add if not selected
+        return [...prev, typeValue];
+      }
+    });
+  };
+
+  // Handle checkbox change for multi-select test names
+  const handleTestNameToggle = (invType, testName) => {
     if (testName === 'other') {
-      // "Other" is handled separately, don't add to array
       return;
     }
     
-    setTestNames(prev => {
-      if (prev.includes(testName)) {
+    setTestNamesByType(prev => {
+      const testsForType = prev[invType] || [];
+      if (testsForType.includes(testName)) {
         // Remove if already selected
-        return prev.filter(name => name !== testName);
+        return {
+          ...prev,
+          [invType]: testsForType.filter(name => name !== testName)
+        };
       } else {
         // Add if not selected
-        return [...prev, testName];
+        return {
+          ...prev,
+          [invType]: [...testsForType, testName]
+        };
       }
     });
   };
@@ -167,25 +215,28 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
             <div className="grid grid-cols-2 gap-3">
               {investigationTypes.map((type) => {
                 const Icon = type.icon;
-                const isSelected = investigationType === type.value;
+                const isSelected = selectedInvestigationTypes.includes(type.value);
+                const testsForType = testNamesByType[type.value] || [];
+                const customNameForType = customTestNames[type.value] || '';
+                
                 return (
                   <div key={type.value} className="flex flex-col">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInvestigationType(type.value);
-                        setTestNames([]);
-                        setCustomTestName('');
-                      }}
-                      className={`p-4 rounded-lg border transition-colors flex items-center gap-3 ${
+                    <label className="cursor-pointer">
+                      <div className={`p-4 rounded-lg border transition-colors flex items-center gap-3 ${
                         isSelected
                           ? 'border-teal-500 bg-teal-50 text-teal-700'
                           : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <Icon className="text-lg" />
-                      <span className="font-medium text-sm">{type.label}</span>
-                    </button>
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleInvestigationTypeToggle(type.value)}
+                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
+                        />
+                        <Icon className="text-lg" />
+                        <span className="font-medium text-sm">{type.label}</span>
+                      </div>
+                    </label>
                     
                     {/* Show Test Name multi-select checkboxes directly below selected investigation type */}
                     {isSelected && type.value !== 'custom' && (
@@ -196,7 +247,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                         </label>
                         <div className="border border-gray-300 rounded-lg p-2 max-h-48 overflow-y-auto bg-white">
                           {commonTests[type.value]?.map((test) => {
-                            const isChecked = testNames.includes(test);
+                            const isChecked = testsForType.includes(test);
                             return (
                               <label
                                 key={test}
@@ -205,22 +256,22 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
-                                  onChange={() => handleTestNameToggle(test)}
+                                  onChange={() => handleTestNameToggle(type.value, test)}
                                   className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2"
                                 />
                                 <span className="ml-2 text-sm text-gray-700">{test}</span>
                               </label>
                             );
                           })}
-                          {testNames.length > 0 && (
+                          {testsForType.length > 0 && (
                             <div className="mt-2 pt-2 border-t border-gray-200">
                               <p className="text-xs text-gray-500">
-                                {testNames.length} test{testNames.length !== 1 ? 's' : ''} selected
+                                {testsForType.length} test{testsForType.length !== 1 ? 's' : ''} selected
                               </p>
                             </div>
                           )}
                         </div>
-                        {testNames.length === 0 && (
+                        {testsForType.length === 0 && (
                           <p className="text-xs text-red-500 mt-1">Please select at least one test</p>
                         )}
                       </div>
@@ -234,8 +285,11 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                         </label>
                         <input
                           type="text"
-                          value={customTestName}
-                          onChange={(e) => setCustomTestName(e.target.value)}
+                          value={customNameForType}
+                          onChange={(e) => setCustomTestNames(prev => ({
+                            ...prev,
+                            [type.value]: e.target.value
+                          }))}
                           placeholder="Enter custom test name..."
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
                           required
@@ -255,22 +309,47 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
             </label>
             <div className="flex gap-2">
               {[
-                { value: 'urgent', label: 'Urgent', color: 'red' },
-                { value: 'soon', label: 'Soon', color: 'yellow' },
-                { value: 'routine', label: 'Routine', color: 'green' },
+                { 
+                  value: 'urgent', 
+                  label: 'Urgent', 
+                  color: 'red',
+                  tooltip: 'Requires immediate attention - typically within 24-48 hours'
+                },
+                { 
+                  value: 'soon', 
+                  label: 'Soon', 
+                  color: 'yellow',
+                  tooltip: 'Should be scheduled within 1-2 weeks'
+                },
+                { 
+                  value: 'routine', 
+                  label: 'Routine', 
+                  color: 'green',
+                  tooltip: 'Standard scheduling - can be scheduled at next available appointment'
+                },
               ].map((priorityOption) => (
-                <button
-                  key={priorityOption.value}
-                  type="button"
-                  onClick={() => setPriority(priorityOption.value)}
-                  className={`flex-1 px-3 py-2 rounded-lg border font-medium text-sm transition-colors ${
-                    priority === priorityOption.value
-                      ? `border-${priorityOption.color}-500 bg-${priorityOption.color}-50 text-${priorityOption.color}-700`
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {priorityOption.label}
-                </button>
+                <div key={priorityOption.value} className="flex-1 relative group">
+                  <button
+                    type="button"
+                    onClick={() => setPriority(priorityOption.value)}
+                    className={`w-full px-3 py-2 rounded-lg border font-medium text-sm transition-colors ${
+                      priority === priorityOption.value
+                        ? `border-${priorityOption.color}-500 bg-${priorityOption.color}-50 text-${priorityOption.color}-700`
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {priorityOption.label}
+                  </button>
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+                    <div className="bg-gray-900 text-white text-xs rounded py-2 px-3 whitespace-nowrap shadow-lg">
+                      {priorityOption.tooltip}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                        <div className="border-4 border-transparent border-t-gray-900"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -313,7 +392,22 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
             <button
               type="submit"
               onClick={handleSubmit}
-              disabled={!investigationType || (investigationType === 'custom' ? !customTestName : testNames.length === 0) || isSubmitting}
+              disabled={selectedInvestigationTypes.length === 0 || isSubmitting || (() => {
+                // Check if at least one investigation type has tests selected
+                for (const invType of selectedInvestigationTypes) {
+                  if (invType === 'custom') {
+                    if (customTestNames[invType] && customTestNames[invType].trim() !== '') {
+                      return false; // Has custom test name
+                    }
+                  } else {
+                    const tests = testNamesByType[invType] || [];
+                    if (tests.length > 0) {
+                      return false; // Has tests selected
+                    }
+                  }
+                }
+                return true; // No tests selected for any type
+              })()}
               className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {isSubmitting ? (

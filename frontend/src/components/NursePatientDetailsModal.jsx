@@ -384,14 +384,46 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       if (trimmedLine === 'INVESTIGATION REQUEST' || trimmedLine === 'CLINICAL INVESTIGATION') {
         data.title = trimmedLine;
       } else if (trimmedLine.includes('Investigation Type:')) {
-        data.investigationType = trimmedLine.replace('Investigation Type:', '').trim();
+        const invTypeValue = trimmedLine.replace('Investigation Type:', '').trim();
+        // Handle comma-separated investigation types (for multi-select)
+        data.investigationType = invTypeValue;
+        data.investigationTypes = invTypeValue.includes(',') 
+          ? invTypeValue.split(',').map(t => t.trim()).filter(t => t)
+          : [invTypeValue];
       } else if (trimmedLine.includes('Test/Procedure Name:')) {
         const testNameValue = trimmedLine.replace('Test/Procedure Name:', '').trim();
         // Handle comma-separated test names (for multi-select)
+        // Format: "PSA: PSA Total, PSA Free, TRUS: TRUS Prostate"
         data.testName = testNameValue;
-        data.testNames = testNameValue.includes(',') 
-          ? testNameValue.split(',').map(t => t.trim()).filter(t => t)
-          : [testNameValue];
+        // Check if test names include investigation type prefixes (e.g., "PSA: PSA Total")
+        if (testNameValue.includes(':')) {
+          // Parse format: "TYPE: Test1, Test2, TYPE2: Test3"
+          const testEntries = testNameValue.split(',').map(t => t.trim()).filter(t => t);
+          data.testNamesByType = {};
+          testEntries.forEach(entry => {
+            if (entry.includes(':')) {
+              const [type, ...testParts] = entry.split(':');
+              const typeKey = type.trim();
+              const testName = testParts.join(':').trim();
+              if (!data.testNamesByType[typeKey]) {
+                data.testNamesByType[typeKey] = [];
+              }
+              data.testNamesByType[typeKey].push(testName);
+            } else {
+              // Fallback: just add to a general list
+              if (!data.testNamesByType['GENERAL']) {
+                data.testNamesByType['GENERAL'] = [];
+              }
+              data.testNamesByType['GENERAL'].push(entry);
+            }
+          });
+          data.testNames = testEntries;
+        } else {
+          // Simple comma-separated list
+          data.testNames = testNameValue.includes(',') 
+            ? testNameValue.split(',').map(t => t.trim()).filter(t => t)
+            : [testNameValue];
+        }
       } else if (trimmedLine.includes('Priority:')) {
         data.priority = trimmedLine.replace('Priority:', '').trim();
       } else if (trimmedLine.includes('Scheduled Date:')) {
@@ -422,11 +454,39 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <div className="text-sm font-medium text-gray-500 mb-1">Investigation Type</div>
-            <div className="text-base font-semibold text-gray-900">{data.investigationType || 'Not specified'}</div>
+            {data.investigationTypes && data.investigationTypes.length > 1 ? (
+              <div className="space-y-1">
+                {data.investigationTypes.map((type, index) => (
+                  <div key={index} className="text-base font-semibold text-gray-900">
+                    • {type}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-base font-semibold text-gray-900">{data.investigationType || 'Not specified'}</div>
+            )}
           </div>
           <div>
             <div className="text-sm font-medium text-gray-500 mb-1">Test/Procedure Name</div>
-            {data.testNames && data.testNames.length > 1 ? (
+            {data.testNamesByType ? (
+              // Display tests grouped by investigation type
+              <div className="space-y-2">
+                {Object.entries(data.testNamesByType).map(([type, tests]) => (
+                  <div key={type}>
+                    {data.investigationTypes && data.investigationTypes.length > 1 && (
+                      <div className="text-xs font-semibold text-gray-600 mb-1">{type}:</div>
+                    )}
+                    <div className="space-y-1 ml-2">
+                      {tests.map((test, index) => (
+                        <div key={index} className="text-base text-gray-900">
+                          • {test}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : data.testNames && data.testNames.length > 1 ? (
               <div className="space-y-1">
                 {data.testNames.map((test, index) => (
                   <div key={index} className="text-base text-gray-900">
