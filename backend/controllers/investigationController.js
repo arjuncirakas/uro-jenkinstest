@@ -76,6 +76,29 @@ export const addPSAResult = async (req, res) => {
       });
     }
 
+    // Check if a PSA result already exists for this patient on this date
+    const existingPSACheck = await client.query(
+      `SELECT id, test_date, result 
+       FROM investigation_results 
+       WHERE patient_id = $1 
+         AND test_type = 'psa' 
+         AND test_date = $2::date`,
+      [patientId, testDate]
+    );
+
+    if (existingPSACheck.rows.length > 0) {
+      const existingResult = existingPSACheck.rows[0];
+      return res.status(409).json({
+        success: false,
+        message: `A PSA result already exists for this patient on ${new Date(testDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. Please update the existing result instead.`,
+        existingResult: {
+          id: existingResult.id,
+          date: existingResult.test_date,
+          result: existingResult.result
+        }
+      });
+    }
+
     // Get user details
     const userCheck = await client.query(
       'SELECT first_name, last_name FROM users WHERE id = $1',
@@ -200,6 +223,34 @@ export const updatePSAResult = async (req, res) => {
     }
 
     const existingResult = resultCheck.rows[0];
+    const patientId = existingResult.patient_id;
+
+    // Check if updating the date would create a duplicate PSA result for this patient
+    // (excluding the current result being updated)
+    if (testDate) {
+      const duplicateCheck = await client.query(
+        `SELECT id, test_date, result 
+         FROM investigation_results 
+         WHERE patient_id = $1 
+           AND test_type = 'psa' 
+           AND test_date = $2::date
+           AND id != $3`,
+        [patientId, testDate, parsedResultId]
+      );
+
+      if (duplicateCheck.rows.length > 0) {
+        const duplicateResult = duplicateCheck.rows[0];
+        return res.status(409).json({
+          success: false,
+          message: `A PSA result already exists for this patient on ${new Date(testDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. Please select a different date.`,
+          existingResult: {
+            id: duplicateResult.id,
+            date: duplicateResult.test_date,
+            result: duplicateResult.result
+          }
+        });
+      }
+    }
 
     // Handle file upload - if new file is uploaded, replace old one
     let filePath = existingResult.file_path;
