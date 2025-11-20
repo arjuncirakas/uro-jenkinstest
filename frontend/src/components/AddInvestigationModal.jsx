@@ -221,11 +221,19 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Request New Investigation</h2>
-            {patient && (
-              <p className="text-sm text-gray-600 mt-1">
-                Patient: <span className="font-medium">{patient.name}</span>
-              </p>
-            )}
+            {patient && (() => {
+              // Try multiple possible property names for patient name
+              const patientName = patient.name || 
+                                patient.patientName || 
+                                patient.fullName ||
+                                (patient.first_name && patient.last_name ? `${patient.first_name} ${patient.last_name}` : null) ||
+                                (patient.firstName && patient.lastName ? `${patient.firstName} ${patient.lastName}` : null);
+              return patientName ? (
+                <p className="text-sm text-gray-600 mt-1">
+                  Patient: <span className="font-medium">{patientName}</span>
+                </p>
+              ) : null;
+            })()}
           </div>
           <button
             onClick={handleClose}

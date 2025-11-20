@@ -873,7 +873,15 @@ export const getTodaysAppointments = async (req, res) => {
           p.upi,
           EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
           p.gender,
-          p.initial_psa as psa,
+          COALESCE(
+            (SELECT ir.result::numeric 
+             FROM investigation_results ir 
+             WHERE ir.patient_id = p.id 
+             AND LOWER(ir.test_type) = 'psa' 
+             ORDER BY ir.test_date DESC, ir.created_at DESC 
+             LIMIT 1),
+            p.initial_psa
+          ) as psa,
           ib.scheduled_date as appointment_date,
           ib.scheduled_time as appointment_time,
           ib.investigation_name as urologist,
@@ -905,7 +913,15 @@ export const getTodaysAppointments = async (req, res) => {
             p.upi,
             EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
             p.gender,
-            p.initial_psa as psa,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
             a.appointment_date,
             a.appointment_time,
             a.urologist_name as urologist,
@@ -932,7 +948,15 @@ export const getTodaysAppointments = async (req, res) => {
             p.upi,
             EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
             p.gender,
-            p.initial_psa as psa,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
             a.appointment_date,
             a.appointment_time,
             a.urologist_name as urologist,
@@ -963,7 +987,15 @@ export const getTodaysAppointments = async (req, res) => {
             p.upi,
             EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
             p.gender,
-            p.initial_psa as psa,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
             a.appointment_date,
             a.appointment_time,
             a.urologist_name as urologist,
@@ -986,7 +1018,15 @@ export const getTodaysAppointments = async (req, res) => {
             p.upi,
             EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
             p.gender,
-            p.initial_psa as psa,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
             ib.scheduled_date as appointment_date,
             ib.scheduled_time as appointment_time,
             ib.investigation_name as urologist,
@@ -1012,7 +1052,15 @@ export const getTodaysAppointments = async (req, res) => {
             p.upi,
             EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
             p.gender,
-            p.initial_psa as psa,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
             a.appointment_date,
             a.appointment_time,
             a.urologist_name as urologist,
@@ -1034,7 +1082,15 @@ export const getTodaysAppointments = async (req, res) => {
             p.upi,
             EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
             p.gender,
-            p.initial_psa as psa,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
             ib.scheduled_date as appointment_date,
             ib.scheduled_time as appointment_time,
             ib.investigation_name as urologist,
