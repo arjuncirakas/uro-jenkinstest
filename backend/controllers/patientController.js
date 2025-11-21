@@ -1496,6 +1496,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     
     // ALWAYS also check appointments table to find patients with appointments
     // This ensures patients with appointments show up even if assigned_urologist wasn't set correctly
+    // This is CRITICAL for patients added by nurses who then book appointments
     console.log(`[getAssignedPatientsForDoctor] Checking appointments table for additional patients...`);
     
     // Get doctor ID from doctors table
@@ -1517,6 +1518,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     
     // Query patients who have appointments with this doctor
     // Try by doctor ID first, then fall back to name matching if ID not found
+    // ALWAYS run this query to find patients even if assigned_urologist is null
     let appointmentWhere = '';
     let appointmentParams = [];
     let paramIndex = 1;
@@ -1550,6 +1552,10 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       appointmentWhere += ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
     }
     
+    // Use a higher limit for appointments query to ensure we get all patients with appointments
+    // We'll apply the final limit after combining results
+    const appointmentQueryLimit = queryLimit * 2; // Get more to ensure we don't miss any
+    
     const appointmentQuery = `
       SELECT DISTINCT
         p.id,
@@ -1568,7 +1574,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       ORDER BY p.created_at DESC
       LIMIT $${paramIndex}
     `;
-    appointmentParams.push(queryLimit);
+    appointmentParams.push(appointmentQueryLimit);
     
     try {
       const appointmentResult = await client.query(appointmentQuery, appointmentParams);
@@ -1581,13 +1587,16 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       if (newPatients.length > 0) {
         console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
         finalResult.rows = [...finalResult.rows, ...newPatients];
-        // Re-sort by created_at DESC
-        finalResult.rows.sort((a, b) => {
-          // Since we don't have created_at in the result, we'll keep the order as is
-          // The appointment query already orders by created_at DESC
-          return 0;
-        });
       }
+      
+      // Apply final limit after combining (in case we exceeded it)
+      if (finalResult.rows.length > queryLimit) {
+        finalResult.rows = finalResult.rows.slice(0, queryLimit);
+        console.log(`[getAssignedPatientsForDoctor] Limited combined results to ${queryLimit} patients`);
+      }
+      
+      // Re-sort by created_at DESC (we need to get created_at for proper sorting)
+      // For now, keep the order as is since both queries order by created_at DESC
     } catch (appointmentQueryError) {
       console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
       console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
