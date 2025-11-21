@@ -52,6 +52,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   // Confirmation modal state
   const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState(null);
+  const [deleteType, setDeleteType] = useState(null); // 'note' or 'investigation'
   
   // Investigation modals state
   const [isAddPSAModalOpen, setIsAddPSAModalOpen] = useState(false);
@@ -669,6 +670,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   // Show delete confirmation modal
   const handleDeleteNote = (noteId) => {
     setNoteToDelete(noteId);
+    setDeleteType('note');
     setIsConfirmationModalOpen(true);
   };
 
@@ -691,15 +693,22 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         setSuccessModalMessage('The clinical note has been removed from the patient timeline.');
         setIsSuccessModalOpen(true);
       } else {
-        setNotesError(result.error || 'Failed to delete note');
+        // Show error in modal
+        setSuccessModalTitle('Cannot Delete Note');
+        setSuccessModalMessage(result.error || result.message || 'Failed to delete note');
+        setIsSuccessModalOpen(true);
         console.error('Error deleting note:', result.error);
       }
     } catch (error) {
-      setNotesError('Failed to delete note');
+      // Show error in modal
+      setSuccessModalTitle('Error');
+      setSuccessModalMessage(error.response?.data?.message || error.message || 'Failed to delete note');
+      setIsSuccessModalOpen(true);
       console.error('Error deleting note:', error);
     } finally {
       setDeletingNote(null);
       setNoteToDelete(null);
+      setDeleteType(null);
     }
   };
 
@@ -707,6 +716,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const cancelDeleteNote = () => {
     setIsConfirmationModalOpen(false);
     setNoteToDelete(null);
+    setDeleteType(null);
   };
 
   // Handle edit note
@@ -1206,6 +1216,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   // Handle deleting investigation result
   const handleDeleteInvestigation = (resultId) => {
     setNoteToDelete(resultId);
+    setDeleteType('investigation');
     setIsConfirmationModalOpen(true);
   };
 
@@ -1238,6 +1249,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     } finally {
       setDeletingInvestigation(null);
       setNoteToDelete(null);
+      setDeleteType(null);
     }
   };
 
@@ -4726,13 +4738,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     <ConfirmationModal
       isOpen={isConfirmationModalOpen}
       onClose={cancelDeleteNote}
-      onConfirm={deletingNote !== null ? confirmDeleteNote : confirmDeleteInvestigation}
-      title={deletingNote !== null ? "Delete Clinical Note" : "Delete Investigation Result"}
-      message={deletingNote !== null 
+      onConfirm={deleteType === 'note' ? confirmDeleteNote : confirmDeleteInvestigation}
+      title={deleteType === 'note' ? "Delete Clinical Note" : "Delete Investigation Result"}
+      message={deleteType === 'note' 
         ? "Are you sure you want to delete this clinical note? This action cannot be undone."
         : "Are you sure you want to delete this investigation result? This action cannot be undone."
       }
-      confirmText={deletingNote !== null ? "Delete Note" : "Delete Result"}
+      confirmText={deleteType === 'note' ? "Delete Note" : "Delete Result"}
       cancelText="Cancel"
       type="danger"
       isLoading={deletingNote !== null || deletingInvestigation !== null}

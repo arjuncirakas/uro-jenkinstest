@@ -17,7 +17,10 @@ const Appointments = () => {
       const result = await bookingService.getAllAppointments();
       
       if (result.success) {
-        setAppointments(result.data.appointments || []);
+        // Create a new array reference to ensure React detects the change
+        const newAppointments = result.data.appointments || [];
+        console.log('Nurse Appointments - Fetched appointments:', newAppointments.length);
+        setAppointments(newAppointments);
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
         console.error('Error fetching appointments:', result.error);

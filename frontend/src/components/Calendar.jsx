@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { FiChevronLeft, FiChevronRight, FiMoreVertical } from 'react-icons/fi';
 import { bookingService } from '../services/bookingService';
 import RescheduleConfirmationModal from './RescheduleConfirmationModal';
@@ -101,7 +101,16 @@ const Calendar = ({
   }, [currentDate, onMonthChange]);
 
   // Use provided appointments if available, otherwise use fetched data
-  const appointmentsToUse = appointments || allAppointments;
+  // Use useMemo to ensure it updates when appointments or allAppointments change
+  const appointmentsToUse = useMemo(() => {
+    return appointments || allAppointments;
+  }, [appointments, allAppointments]);
+  
+  // Force re-render when appointments prop changes (for external appointments)
+  useEffect(() => {
+    // When external appointments change, force a re-render
+    setRefreshKey(prev => prev + 1);
+  }, [appointments, allAppointments]);
   
   // Debug logging
   console.log('Calendar Debug - appointments:', appointments);
@@ -245,9 +254,15 @@ const Calendar = ({
   // Get appointments for a specific date
   const getAppointmentsByDate = (date, appointments = null) => {
     const data = appointments || appointmentsToUse;
-    console.log(`Calendar Debug - getAppointmentsByDate for ${date}:`, data);
-    const filtered = data.filter(appointment => appointment.date === date);
-    console.log(`Calendar Debug - filtered appointments for ${date}:`, filtered);
+    // Format the date string to match appointment date format (YYYY-MM-DD)
+    const dateString = typeof date === 'string' ? date : formatDate(date);
+    console.log(`Calendar Debug - getAppointmentsByDate for ${dateString}:`, data);
+    const filtered = data.filter(appointment => {
+      // Handle both 'date' and 'appointment_date' fields
+      const aptDate = appointment.date || appointment.appointment_date;
+      return aptDate === dateString;
+    });
+    console.log(`Calendar Debug - filtered appointments for ${dateString}:`, filtered);
     return filtered;
   };
 
@@ -299,46 +314,58 @@ const Calendar = ({
       console.log('Formatted newDate being passed:', newDate);
       console.log('=== END CALENDAR DEBUG ===');
       
+      // Store the dragged appointment before clearing it
+      const appointmentToReschedule = draggedAppointment;
+      setDraggedAppointment(null);
+      
       setRescheduleModal({
         isOpen: true,
-        appointment: draggedAppointment,
+        appointment: appointmentToReschedule,
         newDate: newDate,
         newTime: newTime
       });
+    } else {
+      setDraggedAppointment(null);
     }
-    
-    setDraggedAppointment(null);
   };
 
   // Handle reschedule confirmation
-  const handleRescheduleConfirm = async (appointmentId, newDate, newTime) => {
+  // NOTE: The RescheduleConfirmationModal already calls the API, so this function
+  // only needs to handle the refresh logic after successful reschedule
+  const handleRescheduleConfirm = async (appointmentId, newDate, newTime, selectedDoctor) => {
     console.log('=== CONFIRMATION DEBUG ===');
     console.log('Appointment ID:', appointmentId);
     console.log('New Date:', newDate);
     console.log('New Time:', newTime);
+    console.log('Selected Doctor:', selectedDoctor);
     
-    try {
-      const result = await bookingService.rescheduleNoShowAppointment(appointmentId, {
-        newDate,
-        newTime
-      });
-      
-      if (result.success) {
-        console.log('Appointment rescheduled successfully:', result.data);
-        // Refresh appointments data
-        await fetchAppointments();
-        // Force re-render to show updated appointments
-        setRefreshKey(prev => prev + 1);
-      } else {
-        console.error('Failed to reschedule appointment:', result.error);
-        // You might want to show an error message to the user here
-      }
-    } catch (error) {
-      console.error('Error rescheduling appointment:', error);
-      // You might want to show an error message to the user here
+    // The API call was already made by RescheduleConfirmationModal
+    // We just need to refresh the appointments and close the modal
+    
+    // Close modal first
+    setRescheduleModal({ isOpen: false, appointment: null, newDate: null, newTime: null });
+    
+    // Refresh appointments data - prioritize onRefresh if available (for external appointments)
+    if (onRefresh) {
+      console.log('Calling onRefresh callback...');
+      await onRefresh();
+      console.log('onRefresh callback completed');
+    } else {
+      // If no external refresh callback, use internal fetch
+      console.log('Calling fetchAppointments...');
+      await fetchAppointments();
+      console.log('fetchAppointments completed');
     }
     
-    setRescheduleModal({ isOpen: false, appointment: null, newDate: null, newTime: null });
+    // Force re-render to show updated appointments - do this after refresh
+    console.log('Forcing calendar re-render...');
+    setRefreshKey(prev => prev + 1);
+    
+    // Small delay to ensure state updates propagate
+    setTimeout(() => {
+      setRefreshKey(prev => prev + 1);
+    }, 100);
+    
     console.log('=== END CONFIRMATION DEBUG ===');
   };
 
@@ -506,7 +533,7 @@ const Calendar = ({
             </div>
 
             {/* Calendar days */}
-            <div key={refreshKey} className="grid grid-cols-7 gap-1">
+            <div key={`calendar-grid-${refreshKey}-${appointmentsToUse.length}`} className="grid grid-cols-7 gap-1">
               {days.map((day, index) => {
                 const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
                 // Sort appointments: upcoming first (confirmed, pending), then completed/missed
@@ -797,6 +824,15 @@ const Calendar = ({
         isOpen={detailsModal.isOpen}
         appointment={detailsModal.appointment}
         onClose={handleDetailsClose}
+        onReschedule={() => {
+          // Refresh appointments after reschedule
+          if (onRefresh) {
+            onRefresh();
+          } else {
+            fetchAppointments();
+          }
+          setDetailsModal({ isOpen: false, appointment: null });
+        }}
       />
     </div>
   );

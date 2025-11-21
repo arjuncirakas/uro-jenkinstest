@@ -36,7 +36,10 @@ const Appointments = () => {
       });
       
       if (result.success) {
-        setAllAppointments(result.data.appointments || []);
+        // Create a new array reference to ensure React detects the change
+        const newAppointments = result.data.appointments || [];
+        console.log('Urologist Appointments - Fetched appointments:', newAppointments.length);
+        setAllAppointments(newAppointments);
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
         console.error('Error fetching appointments:', result.error);
@@ -238,7 +241,7 @@ const Appointments = () => {
               showAllPatients={showAllPatients}
               onTogglePatients={setShowAllPatients}
               onDayClick={handleDayClick}
-              onRefresh={() => window.location.reload()}
+              onRefresh={fetchAppointments}
             />
           )}
         </div>
@@ -261,6 +264,11 @@ const Appointments = () => {
         isOpen={detailsModal.isOpen}
         appointment={detailsModal.appointment}
         onClose={handleDetailsClose}
+        onReschedule={() => {
+          // Refresh appointments after reschedule
+          fetchAppointments();
+          handleDetailsClose();
+        }}
       />
     </div>
   );

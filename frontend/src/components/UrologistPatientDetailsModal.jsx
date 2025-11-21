@@ -472,13 +472,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         setSuccessModalMessage('Clinical note has been deleted successfully.');
         setIsSuccessModalOpen(true);
       } else {
-        setSuccessModalTitle('Error');
-        setSuccessModalMessage(result.error || 'Failed to delete note');
+        // Show error in modal with the specific error message
+        setSuccessModalTitle('Cannot Delete Note');
+        setSuccessModalMessage(result.error || result.message || 'Failed to delete note');
         setIsSuccessModalOpen(true);
+        console.error('Error deleting note:', result.error);
       }
     } catch (err) {
+      // Show error in modal
       setSuccessModalTitle('Error');
-      setSuccessModalMessage('Failed to delete note');
+      setSuccessModalMessage(err.response?.data?.message || err.message || 'Failed to delete note');
       setIsSuccessModalOpen(true);
       console.error('Error deleting note:', err);
     } finally {

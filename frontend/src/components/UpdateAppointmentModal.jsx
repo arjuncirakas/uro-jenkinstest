@@ -3,6 +3,7 @@ import { FiX, FiCalendar, FiClock, FiUser, FiFileText } from 'react-icons/fi';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { bookingService } from '../services/bookingService';
+import { investigationService } from '../services/investigationService';
 
 const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointmentType = 'urologist' }) => {
   // Pre-populate with existing appointment details
@@ -20,6 +21,69 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [patientName, setPatientName] = useState('');
+  const [latestPsa, setLatestPsa] = useState(null);
+  const [loadingPsa, setLoadingPsa] = useState(false);
+
+  // Extract patient name from various possible property names
+  useEffect(() => {
+    if (patient) {
+      const name = patient.name || 
+                   patient.patientName || 
+                   patient.fullName ||
+                   (patient.first_name && patient.last_name ? `${patient.first_name} ${patient.last_name}` : null) ||
+                   (patient.firstName && patient.lastName ? `${patient.firstName} ${patient.lastName}` : null) ||
+                   'Unknown Patient';
+      setPatientName(name);
+    } else {
+      setPatientName('');
+    }
+  }, [patient]);
+
+  // Fetch latest PSA value
+  useEffect(() => {
+    const fetchLatestPsa = async () => {
+      if (!patient?.id || !isOpen) {
+        setLatestPsa(null);
+        return;
+      }
+
+      // First, check if PSA is already in patient object
+      const psaFromPatient = patient.psa || 
+                            patient.latestPsa || 
+                            patient.initial_psa || 
+                            patient.initialPSA;
+      
+      if (psaFromPatient) {
+        setLatestPsa(psaFromPatient);
+        return;
+      }
+
+      // If not in patient object, fetch from investigation results
+      setLoadingPsa(true);
+      try {
+        const result = await investigationService.getInvestigationResults(patient.id, 'psa');
+        if (result.success && result.data && result.data.results && result.data.results.length > 0) {
+          // Get the most recent PSA result
+          const latestResult = result.data.results[0];
+          setLatestPsa(latestResult.result || latestResult.numericValue);
+        } else {
+          // Fallback to initial PSA if available
+          setLatestPsa(patient.initial_psa || patient.initialPSA || null);
+        }
+      } catch (err) {
+        console.error('Error fetching latest PSA:', err);
+        // Fallback to initial PSA if available
+        setLatestPsa(patient.initial_psa || patient.initialPSA || null);
+      } finally {
+        setLoadingPsa(false);
+      }
+    };
+
+    if (isOpen && patient?.id) {
+      fetchLatestPsa();
+    }
+  }, [isOpen, patient?.id, patient?.psa, patient?.latestPsa, patient?.initial_psa, patient?.initialPSA]);
 
   // Fetch available urologists
   useEffect(() => {
@@ -652,11 +716,17 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               <FiUser className="w-7 h-7" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-gray-900 text-base">{patient?.name}</h3>
+              <h3 className="font-semibold text-gray-900 text-base">{patientName || 'Unknown Patient'}</h3>
               <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
-                <span>{patient?.age} years</span>
-                <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                <span>PSA {patient?.latestPsa} ng/mL</span>
+                {patient?.age && <span>{patient.age} years</span>}
+                {patient?.age && latestPsa !== null && <span className="w-1 h-1 bg-gray-400 rounded-full"></span>}
+                {loadingPsa ? (
+                  <span className="text-gray-400">Loading PSA...</span>
+                ) : latestPsa !== null ? (
+                  <span>PSA {latestPsa} ng/mL</span>
+                ) : (
+                  <span className="text-gray-400">PSA: N/A</span>
+                )}
               </div>
             </div>
             <span className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${getPathwayStyle(patient?.pathway)}`}>
