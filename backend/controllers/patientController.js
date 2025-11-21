@@ -1515,70 +1515,84 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       }
     }
     
+    // Query patients who have appointments with this doctor
+    // Try by doctor ID first, then fall back to name matching if ID not found
+    let appointmentWhere = '';
+    let appointmentParams = [];
+    let paramIndex = 1;
+    
     if (doctorId) {
-      // Query patients who have appointments with this doctor
-      let appointmentWhere = `a.urologist_id = $1 AND a.status IN ('scheduled', 'confirmed')`;
-      let appointmentParams = [doctorId];
-      
-      // Add category filters for appointments query
-      if (category === 'new') {
-        appointmentWhere += ` AND NOT EXISTS (
-          SELECT 1 FROM appointments a2 
-          WHERE a2.patient_id = p.id 
-          AND a2.appointment_type ILIKE 'urologist' 
-          AND a2.status = 'completed'
-        ) AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
-      } else if (category === 'surgery-pathway') {
-        appointmentWhere += ` AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
-      } else if (category === 'post-op-followup') {
-        appointmentWhere += ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
-      }
-      
-      const appointmentQuery = `
-        SELECT DISTINCT
-          p.id,
-          p.upi,
-          p.first_name,
-          p.last_name,
-          p.date_of_birth,
-          p.gender,
-          p.priority,
-          p.status,
-          p.care_pathway,
-          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
-        FROM patients p
-        INNER JOIN appointments a ON a.patient_id = p.id
-        WHERE p.status = 'Active' AND ${appointmentWhere}
-        ORDER BY p.created_at DESC
-        LIMIT $2
-      `;
-      appointmentParams.push(queryLimit);
-      
-      try {
-        const appointmentResult = await client.query(appointmentQuery, appointmentParams);
-        console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
-        
-        // Combine results from both queries, removing duplicates by patient ID
-        const existingIds = new Set(finalResult.rows.map(r => r.id));
-        const newPatients = appointmentResult.rows.filter(r => !existingIds.has(r.id));
-        
-        if (newPatients.length > 0) {
-          console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
-          finalResult.rows = [...finalResult.rows, ...newPatients];
-          // Re-sort by created_at DESC
-          finalResult.rows.sort((a, b) => {
-            // Since we don't have created_at in the result, we'll keep the order as is
-            // The appointment query already orders by created_at DESC
-            return 0;
-          });
-        }
-      } catch (appointmentQueryError) {
-        console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
-        console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
-        // Continue with existing result - don't fail the entire request
-      }
+      // Use doctor ID for matching (most reliable)
+      appointmentWhere = `a.urologist_id = $${paramIndex} AND a.status IN ('scheduled', 'confirmed')`;
+      appointmentParams.push(doctorId);
+      paramIndex++;
+      console.log(`[getAssignedPatientsForDoctor] Using doctor ID ${doctorId} for appointments query`);
     } else {
-      console.log(`[getAssignedPatientsForDoctor] No doctor ID found, skipping appointments table check`);
+      // Fall back to name matching if doctor ID not found
+      // Match by urologist_name in appointments table (normalized, case-insensitive)
+      appointmentWhere = `TRIM(LOWER(REGEXP_REPLACE(a.urologist_name, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($${paramIndex})) AND a.status IN ('scheduled', 'confirmed')`;
+      appointmentParams.push(normalizedDoctorName || doctorName);
+      paramIndex++;
+      console.log(`[getAssignedPatientsForDoctor] Using doctor name "${normalizedDoctorName || doctorName}" for appointments query (ID not found)`);
+    }
+    
+    // Add category filters for appointments query
+    if (category === 'new') {
+      appointmentWhere += ` AND NOT EXISTS (
+        SELECT 1 FROM appointments a2 
+        WHERE a2.patient_id = p.id 
+        AND a2.appointment_type ILIKE 'urologist' 
+        AND a2.status = 'completed'
+      ) AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
+    } else if (category === 'surgery-pathway') {
+      appointmentWhere += ` AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
+    } else if (category === 'post-op-followup') {
+      appointmentWhere += ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
+    }
+    
+    const appointmentQuery = `
+      SELECT DISTINCT
+        p.id,
+        p.upi,
+        p.first_name,
+        p.last_name,
+        p.date_of_birth,
+        p.gender,
+        p.priority,
+        p.status,
+        p.care_pathway,
+        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+      FROM patients p
+      INNER JOIN appointments a ON a.patient_id = p.id
+      WHERE p.status = 'Active' AND ${appointmentWhere}
+      ORDER BY p.created_at DESC
+      LIMIT $${paramIndex}
+    `;
+    appointmentParams.push(queryLimit);
+    
+    try {
+      const appointmentResult = await client.query(appointmentQuery, appointmentParams);
+      console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
+      
+      // Combine results from both queries, removing duplicates by patient ID
+      const existingIds = new Set(finalResult.rows.map(r => r.id));
+      const newPatients = appointmentResult.rows.filter(r => !existingIds.has(r.id));
+      
+      if (newPatients.length > 0) {
+        console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
+        finalResult.rows = [...finalResult.rows, ...newPatients];
+        // Re-sort by created_at DESC
+        finalResult.rows.sort((a, b) => {
+          // Since we don't have created_at in the result, we'll keep the order as is
+          // The appointment query already orders by created_at DESC
+          return 0;
+        });
+      }
+    } catch (appointmentQueryError) {
+      console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
+      console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
+      console.error(`[getAssignedPatientsForDoctor] Appointment query stack:`, appointmentQueryError.stack);
+      // Continue with existing result - don't fail the entire request
     }
     
     // Ensure finalResult is always initialized
