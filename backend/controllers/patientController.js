@@ -1368,6 +1368,15 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       console.log(`[getAssignedPatientsForDoctor] Doctor Name from users table: "${doctorName}"`);
     }
     
+    // Ensure doctorName is not null or undefined
+    if (!doctorName || doctorName.trim() === '') {
+      console.error(`[getAssignedPatientsForDoctor] Doctor name is empty or null`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Unable to determine doctor name. Please contact support.' 
+      });
+    }
+    
     // Normalize doctor name - remove "Dr." prefix if present for consistent matching
     const normalizedDoctorName = doctorName.replace(/^Dr\.\s*/i, '').trim();
     console.log(`[getAssignedPatientsForDoctor] Final Doctor Name: "${doctorName}"`);
@@ -1418,6 +1427,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       )`;
     }
 
+    // Build the complete query string
     const query = `
       SELECT 
         p.id,
@@ -1434,28 +1444,51 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       WHERE ${whereBase} ${additionalWhere}
       ORDER BY p.created_at DESC
       LIMIT $2
-    `;
-
-    // Use normalized name for query, but also try original name
-    let result;
-    try {
-      result = await client.query(query, [normalizedDoctorName, parseInt(limit)]);
-    } catch (queryError) {
-      console.error(`[getAssignedPatientsForDoctor] Error with normalized name query:`, queryError);
-      // Try with original name if normalized fails
-      result = await client.query(query, [doctorName, parseInt(limit)]);
+    `.trim();
+    
+    // Validate query parameters
+    const queryLimit = parseInt(limit) || 100;
+    const queryName = normalizedDoctorName || doctorName;
+    
+    if (!queryName || queryName.trim() === '') {
+      console.error(`[getAssignedPatientsForDoctor] Invalid doctor name for query`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid doctor name. Please contact support.' 
+      });
     }
     
-    // If no results with normalized name, try with original name
-    let finalResult = result;
-    if (result.rows.length === 0 && normalizedDoctorName !== doctorName) {
-      console.log(`[getAssignedPatientsForDoctor] No results with normalized name, trying original name...`);
-      try {
-        finalResult = await client.query(query, [doctorName, parseInt(limit)]);
-      } catch (queryError2) {
-        console.error(`[getAssignedPatientsForDoctor] Error with original name query:`, queryError2);
-        finalResult = result; // Use the first result even if empty
+    console.log(`[getAssignedPatientsForDoctor] Executing query with name: "${queryName}", limit: ${queryLimit}`);
+    console.log(`[getAssignedPatientsForDoctor] Query:`, query.replace(/\s+/g, ' ').trim());
+    
+    // Use normalized name for query, but also try original name
+    let finalResult = { rows: [] }; // Initialize with empty result
+    
+    try {
+      const result = await client.query(query, [queryName, queryLimit]);
+      console.log(`[getAssignedPatientsForDoctor] Query returned ${result.rows.length} results`);
+      finalResult = result;
+      
+      // If no results with normalized name, try with original name
+      if (finalResult.rows.length === 0 && normalizedDoctorName !== doctorName && doctorName) {
+        console.log(`[getAssignedPatientsForDoctor] No results with normalized name, trying original name...`);
+        try {
+          const originalResult = await client.query(query, [doctorName, queryLimit]);
+          if (originalResult.rows.length > 0) {
+            finalResult = originalResult;
+            console.log(`[getAssignedPatientsForDoctor] Found ${originalResult.rows.length} results with original name`);
+          }
+        } catch (queryError2) {
+          console.error(`[getAssignedPatientsForDoctor] Error with original name query (fallback):`, queryError2);
+          // Keep the current result even if empty
+        }
       }
+    } catch (queryError) {
+      console.error(`[getAssignedPatientsForDoctor] Error executing query:`, queryError);
+      console.error(`[getAssignedPatientsForDoctor] Error message:`, queryError.message);
+      console.error(`[getAssignedPatientsForDoctor] Error stack:`, queryError.stack);
+      // Return empty result instead of throwing - this allows the function to continue
+      finalResult = { rows: [] };
     }
 
     console.log(`[getAssignedPatientsForDoctor] Found ${finalResult.rows.length} patients for category "${category}" via direct assignment`);
@@ -1514,15 +1547,29 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
           ORDER BY p.created_at DESC
           LIMIT $2
         `;
-        appointmentParams.push(parseInt(limit));
+        appointmentParams.push(queryLimit);
         
-        const appointmentResult = await client.query(appointmentQuery, appointmentParams);
-        console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
-        
-        if (appointmentResult.rows.length > 0) {
-          finalResult = appointmentResult;
+        try {
+          const appointmentResult = await client.query(appointmentQuery, appointmentParams);
+          console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
+          
+          if (appointmentResult.rows.length > 0) {
+            finalResult = appointmentResult;
+          }
+        } catch (appointmentQueryError) {
+          console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
+          console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
+          // Continue with empty result - don't fail the entire request
         }
+      } else {
+        console.log(`[getAssignedPatientsForDoctor] No doctor ID found, cannot check appointments table`);
       }
+    }
+    
+    // Ensure finalResult is always initialized
+    if (!finalResult || !finalResult.rows) {
+      console.warn(`[getAssignedPatientsForDoctor] finalResult not properly initialized, using empty result`);
+      finalResult = { rows: [] };
     }
     
     if (finalResult.rows.length > 0) {
