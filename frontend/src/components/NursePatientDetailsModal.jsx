@@ -4911,7 +4911,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       onClose={() => setIsEditModalOpen(false)}
       patient={fullPatientData || patient}
       onPatientUpdated={async (updatedPatient) => {
-        // Refresh patient data
+        // Immediately update the patient data in the modal for instant reflection
+        if (updatedPatient) {
+          setFullPatientData(updatedPatient);
+        }
+        // Then refresh from API to ensure we have the latest data
         await fetchFullPatientData();
         // Dispatch event to refresh patient list
         window.dispatchEvent(new CustomEvent('patient:updated', {
