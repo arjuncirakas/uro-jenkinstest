@@ -1337,13 +1337,41 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     console.log(`[getAssignedPatientsForDoctor] User ID: ${userId}, Role: ${userRole}, Category: ${category}`);
 
     // Resolve doctor's full name to match patients.assigned_urologist string field
-    const userQ = await client.query('SELECT first_name, last_name, role FROM users WHERE id = $1', [userId]);
+    // First try to get from doctors table (since appointments use doctors.id)
+    // If not found, fall back to users table
+    let doctorName = null;
+    
+    // Get user info first
+    const userQ = await client.query('SELECT first_name, last_name, role, email FROM users WHERE id = $1', [userId]);
     if (userQ.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    const doctorName = `${userQ.rows[0].first_name} ${userQ.rows[0].last_name}`.trim();
     
-    console.log(`[getAssignedPatientsForDoctor] Doctor Name Built: "${doctorName}"`);
+    const user = userQ.rows[0];
+    
+    // Try to get from doctors table first (preferred, since appointments use doctors.id)
+    if (user.email) {
+      const doctorQ = await client.query(
+        'SELECT first_name, last_name FROM doctors WHERE email = $1 AND is_active = true LIMIT 1',
+        [user.email]
+      );
+      
+      if (doctorQ.rows.length > 0) {
+        doctorName = `${doctorQ.rows[0].first_name} ${doctorQ.rows[0].last_name}`.trim();
+        console.log(`[getAssignedPatientsForDoctor] Doctor Name from doctors table: "${doctorName}"`);
+      }
+    }
+    
+    // Fall back to users table if not found in doctors table
+    if (!doctorName) {
+      doctorName = `${user.first_name} ${user.last_name}`.trim();
+      console.log(`[getAssignedPatientsForDoctor] Doctor Name from users table: "${doctorName}"`);
+    }
+    
+    // Normalize doctor name - remove "Dr." prefix if present for consistent matching
+    const normalizedDoctorName = doctorName.replace(/^Dr\.\s*/i, '').trim();
+    console.log(`[getAssignedPatientsForDoctor] Final Doctor Name: "${doctorName}"`);
+    console.log(`[getAssignedPatientsForDoctor] Normalized Doctor Name: "${normalizedDoctorName}"`);
     
     // Debug: Check all patients with assignments
     const debugQ = await client.query(
@@ -1361,9 +1389,14 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       }))
     );
 
-    // Base WHERE for assignment - use TRIM for robust name matching
+    // Base WHERE for assignment - use TRIM and case-insensitive matching for robust name matching
     // This ensures patients rescheduled to different doctors appear in their lists
-    const whereBase = `p.status = 'Active' AND TRIM(p.assigned_urologist) = TRIM($1)`;
+    // Also check for variations in name format (e.g., "Dr. John Doe" vs "John Doe")
+    const whereBase = `p.status = 'Active' AND (
+      TRIM(LOWER(p.assigned_urologist)) = TRIM(LOWER($1)) OR
+      TRIM(LOWER(p.assigned_urologist)) = TRIM(LOWER(REPLACE($1, 'Dr. ', ''))) OR
+      TRIM(LOWER(REPLACE(p.assigned_urologist, 'Dr. ', ''))) = TRIM(LOWER($1))
+    )`;
 
     let additionalWhere = '';
     // Category filters
@@ -1407,18 +1440,94 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       LIMIT $2
     `;
 
-    const result = await client.query(query, [doctorName, parseInt(limit)]);
+    // Use normalized name for query, but also try original name
+    const result = await client.query(query, [normalizedDoctorName, parseInt(limit)]);
+    
+    // If no results with normalized name, try with original name
+    let finalResult = result;
+    if (result.rows.length === 0 && normalizedDoctorName !== doctorName) {
+      console.log(`[getAssignedPatientsForDoctor] No results with normalized name, trying original name...`);
+      finalResult = await client.query(query, [doctorName, parseInt(limit)]);
+    } else {
+      finalResult = result;
+    }
 
-    console.log(`[getAssignedPatientsForDoctor] Found ${result.rows.length} patients for category "${category}"`);
-    if (result.rows.length > 0) {
+    console.log(`[getAssignedPatientsForDoctor] Found ${finalResult.rows.length} patients for category "${category}" via direct assignment`);
+    
+    // If no patients found via direct assignment, also check appointments table
+    // This handles cases where patients have appointments but assigned_urologist wasn't set
+    if (finalResult.rows.length === 0) {
+      console.log(`[getAssignedPatientsForDoctor] No patients found via direct assignment, checking appointments table...`);
+      
+      // Get doctor ID from doctors table
+      let doctorId = null;
+      if (user.email) {
+        const doctorIdQuery = await client.query(
+          'SELECT id FROM doctors WHERE email = $1 AND is_active = true LIMIT 1',
+          [user.email]
+        );
+        if (doctorIdQuery.rows.length > 0) {
+          doctorId = doctorIdQuery.rows[0].id;
+        }
+      }
+      
+      if (doctorId) {
+        // Query patients who have appointments with this doctor
+        let appointmentWhere = `a.urologist_id = $1 AND a.status IN ('scheduled', 'confirmed')`;
+        let appointmentParams = [doctorId];
+        
+        // Add category filters for appointments query
+        if (category === 'new') {
+          appointmentWhere += ` AND NOT EXISTS (
+            SELECT 1 FROM appointments a2 
+            WHERE a2.patient_id = p.id 
+            AND a2.appointment_type ILIKE 'urologist' 
+            AND a2.status = 'completed'
+          ) AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
+        } else if (category === 'surgery-pathway') {
+          appointmentWhere += ` AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
+        } else if (category === 'post-op-followup') {
+          appointmentWhere += ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
+        }
+        
+        const appointmentQuery = `
+          SELECT DISTINCT
+            p.id,
+            p.upi,
+            p.first_name,
+            p.last_name,
+            p.date_of_birth,
+            p.gender,
+            p.priority,
+            p.status,
+            p.care_pathway,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+          FROM patients p
+          INNER JOIN appointments a ON a.patient_id = p.id
+          WHERE p.status = 'Active' AND ${appointmentWhere}
+          ORDER BY p.created_at DESC
+          LIMIT $2
+        `;
+        appointmentParams.push(parseInt(limit));
+        
+        const appointmentResult = await client.query(appointmentQuery, appointmentParams);
+        console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
+        
+        if (appointmentResult.rows.length > 0) {
+          finalResult = appointmentResult;
+        }
+      }
+    }
+    
+    if (finalResult.rows.length > 0) {
       console.log(`[getAssignedPatientsForDoctor] Sample patient:`, {
-        id: result.rows[0].id,
-        name: `${result.rows[0].first_name} ${result.rows[0].last_name}`,
-        upi: result.rows[0].upi
+        id: finalResult.rows[0].id,
+        name: `${finalResult.rows[0].first_name} ${finalResult.rows[0].last_name}`,
+        upi: finalResult.rows[0].upi
       });
     }
 
-    const patients = result.rows.map(r => ({
+    const patients = finalResult.rows.map(r => ({
       id: r.id,
       upi: r.upi,
       name: `${r.first_name} ${r.last_name}`,
