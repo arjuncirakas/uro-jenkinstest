@@ -577,6 +577,36 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       console.log('🔍 UrologistPatientDetailsModal: MDT scheduling result:', result);
 
       if (result.success) {
+        // Add clinical note about MDT scheduling
+        try {
+          const formattedDate = new Date(mdtData.mdtDate).toLocaleDateString('en-AU', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          const teamMembersList = mdtData.teamMembers.length > 0 
+            ? ` Team members: ${mdtData.teamMembers.join(', ')}.`
+            : '';
+          const noteContent = `MDT meeting scheduled for ${formattedDate} at ${mdtData.time}. Priority: ${mdtData.priority}.${teamMembersList}${mdtData.notes ? ` Notes: ${mdtData.notes}` : ''}`;
+          
+          const noteResult = await notesService.addNote(patient.id, {
+            noteContent: noteContent,
+            noteType: 'clinical'
+          });
+          
+          if (noteResult.success) {
+            console.log('✅ Clinical note added for MDT scheduling');
+            // Add the new note to the beginning of the list
+            setClinicalNotes(prev => [noteResult.data, ...prev]);
+          } else {
+            console.warn('⚠️ Failed to add clinical note for MDT scheduling:', noteResult.error);
+          }
+        } catch (noteError) {
+          console.error('❌ Error adding clinical note for MDT scheduling:', noteError);
+          // Don't fail the MDT scheduling if note creation fails
+        }
+        
         setSuccessModalTitle('MDT Meeting Scheduled Successfully!');
         setSuccessModalMessage(`Multidisciplinary team meeting has been scheduled for ${patient.name} on ${new Date(mdtData.mdtDate).toLocaleDateString()} at ${mdtData.time}.`);
         setIsSuccessModalOpen(true);

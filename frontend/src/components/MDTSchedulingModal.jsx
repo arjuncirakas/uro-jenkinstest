@@ -16,6 +16,7 @@ import ConfirmModal from './ConfirmModal';
 import SuccessModal from './modals/SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import { doctorsService } from '../services/doctorsService';
+import { investigationService } from '../services/investigationService';
 
 const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
   // Early return if patient is not provided
@@ -63,6 +64,10 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
   const [isManagingDepartment, setIsManagingDepartment] = useState(false);
   const [departmentError, setDepartmentError] = useState('');
   const [departmentSuccessMessage, setDepartmentSuccessMessage] = useState('');
+  
+  // State for latest PSA
+  const [latestPsa, setLatestPsa] = useState(null);
+  const [loadingPsa, setLoadingPsa] = useState(false);
 
   // Close confirmation modal
   const closeConfirmModal = (save = false) => {
@@ -110,6 +115,52 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
     !mdtForm.teamMembers.includes(member.name) && 
     member.name.toLowerCase().includes(dropdownSearchTerm.toLowerCase())
   );
+
+  // Fetch latest PSA value
+  useEffect(() => {
+    const fetchLatestPsa = async () => {
+      if (!patient?.id || !isOpen) {
+        setLatestPsa(null);
+        return;
+      }
+
+      // First, check if PSA is already in patient object
+      const psaFromPatient = patient.psa || 
+                            patient.latestPsa || 
+                            patient.latest_psa ||
+                            patient.initial_psa || 
+                            patient.initialPSA;
+      
+      if (psaFromPatient) {
+        setLatestPsa(psaFromPatient);
+        return;
+      }
+
+      // If not in patient object, fetch from investigation results
+      setLoadingPsa(true);
+      try {
+        const result = await investigationService.getInvestigationResults(patient.id, 'psa');
+        if (result.success && result.data && result.data.results && result.data.results.length > 0) {
+          // Get the most recent PSA result
+          const latestResult = result.data.results[0];
+          setLatestPsa(latestResult.result || latestResult.numericValue);
+        } else {
+          // Fallback to initial PSA if available
+          setLatestPsa(patient.initial_psa || patient.initialPSA || null);
+        }
+      } catch (err) {
+        console.error('Error fetching latest PSA:', err);
+        // Fallback to initial PSA if available
+        setLatestPsa(patient.initial_psa || patient.initialPSA || null);
+      } finally {
+        setLoadingPsa(false);
+      }
+    };
+
+    if (isOpen && patient?.id) {
+      fetchLatestPsa();
+    }
+  }, [isOpen, patient?.id]);
 
   // Reset form when modal opens and fetch doctors
   useEffect(() => {
@@ -658,7 +709,15 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
                       <div className="flex flex-wrap gap-4 text-sm text-gray-600 mt-1">
                         <span>ID: {patient?.id || 'N/A'}</span>
                         <span>Age: {patient?.age || 'N/A'}</span>
-                        <span>PSA: {patient?.psa || 'N/A'} ng/mL</span>
+                        <span>
+                          PSA: {
+                            loadingPsa ? 'Loading...' : 
+                            latestPsa ? `${latestPsa} ng/mL` : 
+                            (patient?.psa || patient?.latestPsa || patient?.latest_psa || patient?.initial_psa) 
+                              ? `${patient?.psa || patient?.latestPsa || patient?.latest_psa || patient?.initial_psa} ng/mL` 
+                              : 'N/A'
+                          }
+                        </span>
                         {patient?.gleasonScore && (
                           <span>Gleason: {patient.gleasonScore}</span>
                         )}
