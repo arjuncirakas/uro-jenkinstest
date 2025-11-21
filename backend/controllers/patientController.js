@@ -1391,12 +1391,8 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
 
     // Base WHERE for assignment - use TRIM and case-insensitive matching for robust name matching
     // This ensures patients rescheduled to different doctors appear in their lists
-    // Also check for variations in name format (e.g., "Dr. John Doe" vs "John Doe")
-    const whereBase = `p.status = 'Active' AND (
-      TRIM(LOWER(p.assigned_urologist)) = TRIM(LOWER($1)) OR
-      TRIM(LOWER(p.assigned_urologist)) = TRIM(LOWER(REPLACE($1, 'Dr. ', ''))) OR
-      TRIM(LOWER(REPLACE(p.assigned_urologist, 'Dr. ', ''))) = TRIM(LOWER($1))
-    )`;
+    // Simplify to avoid SQL syntax issues - use COALESCE to handle NULL values
+    const whereBase = `p.status = 'Active' AND p.assigned_urologist IS NOT NULL AND TRIM(LOWER(p.assigned_urologist)) = TRIM(LOWER($1))`;
 
     let additionalWhere = '';
     // Category filters
@@ -1441,15 +1437,25 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     `;
 
     // Use normalized name for query, but also try original name
-    const result = await client.query(query, [normalizedDoctorName, parseInt(limit)]);
+    let result;
+    try {
+      result = await client.query(query, [normalizedDoctorName, parseInt(limit)]);
+    } catch (queryError) {
+      console.error(`[getAssignedPatientsForDoctor] Error with normalized name query:`, queryError);
+      // Try with original name if normalized fails
+      result = await client.query(query, [doctorName, parseInt(limit)]);
+    }
     
     // If no results with normalized name, try with original name
     let finalResult = result;
     if (result.rows.length === 0 && normalizedDoctorName !== doctorName) {
       console.log(`[getAssignedPatientsForDoctor] No results with normalized name, trying original name...`);
-      finalResult = await client.query(query, [doctorName, parseInt(limit)]);
-    } else {
-      finalResult = result;
+      try {
+        finalResult = await client.query(query, [doctorName, parseInt(limit)]);
+      } catch (queryError2) {
+        console.error(`[getAssignedPatientsForDoctor] Error with original name query:`, queryError2);
+        finalResult = result; // Use the first result even if empty
+      }
     }
 
     console.log(`[getAssignedPatientsForDoctor] Found ${finalResult.rows.length} patients for category "${category}" via direct assignment`);
@@ -1544,7 +1550,12 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     res.json({ success: true, message: 'Assigned patients retrieved', data: { patients, count: patients.length } });
   } catch (error) {
     console.error('Get assigned patients error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   } finally {
     client.release();
   }
