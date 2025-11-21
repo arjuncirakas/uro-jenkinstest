@@ -30,6 +30,7 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
       active: location.pathname.startsWith('/urologist/patients'),
       hasSubItems: true,
       subItems: [
+        { name: 'My Patients', icon: FaUsers, path: '/urologist/patients/my-patients', active: location.pathname === '/urologist/patients/my-patients' },
         { name: 'New Patients', icon: FaClipboardList, path: '/urologist/patients/new', active: location.pathname === '/urologist/patients/new' },
         { name: 'Surgery Pathway', icon: FaProcedures, path: '/urologist/patients/surgery-pathway', active: location.pathname === '/urologist/patients/surgery-pathway' },
         { name: 'Post-op Followup', icon: FaHeartbeat, path: '/urologist/patients/post-op-followup', active: location.pathname === '/urologist/patients/post-op-followup' },

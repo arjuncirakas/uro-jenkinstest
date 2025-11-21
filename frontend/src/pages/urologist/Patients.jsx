@@ -15,6 +15,7 @@ const Patients = () => {
   // Determine the category from the URL path
   const category = useMemo(() => {
     const path = location.pathname;
+    if (path.includes('/patients/my-patients')) return 'my-patients';
     if (path.includes('/patients/new')) return 'new';
     if (path.includes('/patients/surgery-pathway')) return 'surgery-pathway';
     if (path.includes('/patients/post-op-followup')) return 'post-op-followup';
@@ -25,6 +26,8 @@ const Patients = () => {
   // Get page title based on category
   const pageTitle = useMemo(() => {
     switch (category) {
+      case 'my-patients':
+        return 'My Patients';
       case 'new':
         return 'New Patients';
       case 'surgery-pathway':
@@ -39,6 +42,8 @@ const Patients = () => {
   // Get page subtitle based on category
   const pageSubtitle = useMemo(() => {
     switch (category) {
+      case 'my-patients':
+        return 'Patients you have added to the system';
       case 'new':
         return 'Recently registered patients requiring initial assessment';
       case 'surgery-pathway':
@@ -56,6 +61,7 @@ const Patients = () => {
 
   const apiCategoryMap = {
     all: 'all',
+    'my-patients': 'my-patients',
     'surgery-pathway': 'surgery-pathway',
     'post-op-followup': 'post-op-followup',
     new: 'new'
@@ -83,8 +89,8 @@ const Patients = () => {
   useEffect(() => {
     const handlePatientAdded = () => {
       console.log('🔄 Patient added event received, refreshing patient list...');
-      // Only refresh if we're on the "new" patients page
-      if (category === 'new') {
+      // Refresh if we're on the "new" patients page or "my-patients" page
+      if (category === 'new' || category === 'my-patients') {
         fetchPatients();
       }
     };

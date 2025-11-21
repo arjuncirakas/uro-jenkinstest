@@ -1402,32 +1402,58 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     // This ensures patients rescheduled to different doctors appear in their lists
     // Also normalize by removing "Dr." prefix from both sides for consistent matching
     // Simplify to avoid SQL syntax issues - use COALESCE to handle NULL values
-    const whereBase = `p.status = 'Active' AND p.assigned_urologist IS NOT NULL AND TRIM(LOWER(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($1))`;
-
+    // Validate query parameters first
+    const queryLimit = parseInt(limit) || 100;
+    const queryName = normalizedDoctorName || doctorName;
+    
+    // For my-patients category, we need a different WHERE clause that doesn't require assigned_urologist
+    let whereBase = '';
     let additionalWhere = '';
-    // Category filters
-    if (category === 'new') {
-      // New = assigned patients with no completed urologist appointments and no care pathway set
-      // This includes patients who just had appointments booked
-      additionalWhere = `AND NOT EXISTS (
-          SELECT 1 FROM appointments a 
-          WHERE a.patient_id = p.id 
-            AND a.appointment_type ILIKE 'urologist' 
-            AND a.status = 'completed'
-        )
-        AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
-    } else if (category === 'surgery-pathway') {
-      // Only return patients whose current pathway is Surgery Pathway
-      // Don't include patients who have been transferred to other pathways
-      additionalWhere = `AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
-    } else if (category === 'post-op-followup') {
-      // Only return patients whose current pathway is Post-op Transfer or Post-op Followup
-      additionalWhere = `AND ( 
-        COALESCE(p.care_pathway,'') = 'Post-op Transfer' 
-        OR COALESCE(p.care_pathway,'') = 'Post-op Followup'
-      )`;
+    let queryParams = [];
+    let limitParamIndex = 2; // Default limit parameter index
+    
+    if (category === 'my-patients') {
+      // My Patients = patients created by the current urologist (regardless of assigned_urologist)
+      whereBase = `p.status = 'Active' AND p.created_by = $1`;
+      queryParams = [userId, queryLimit]; // userId, limit
+      limitParamIndex = 2; // limit is $2
+    } else {
+      // For other categories, use the standard assigned_urologist matching
+      whereBase = `p.status = 'Active' AND p.assigned_urologist IS NOT NULL AND TRIM(LOWER(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($1))`;
+      queryParams = [queryName, queryLimit]; // name, limit
+      
+      // Category filters
+      if (category === 'new') {
+        // New = assigned patients with no completed urologist appointments and no care pathway set
+        // This includes patients who just had appointments booked
+        additionalWhere = `AND NOT EXISTS (
+            SELECT 1 FROM appointments a 
+            WHERE a.patient_id = p.id 
+              AND a.appointment_type ILIKE 'urologist' 
+              AND a.status = 'completed'
+          )
+          AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
+      } else if (category === 'surgery-pathway') {
+        // Only return patients whose current pathway is Surgery Pathway
+        // Don't include patients who have been transferred to other pathways
+        additionalWhere = `AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
+      } else if (category === 'post-op-followup') {
+        // Only return patients whose current pathway is Post-op Transfer or Post-op Followup
+        additionalWhere = `AND ( 
+          COALESCE(p.care_pathway,'') = 'Post-op Transfer' 
+          OR COALESCE(p.care_pathway,'') = 'Post-op Followup'
+        )`;
+      }
     }
-
+    
+    if (!queryName || queryName.trim() === '') {
+      console.error(`[getAssignedPatientsForDoctor] Invalid doctor name for query`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid doctor name. Please contact support.' 
+      });
+    }
+    
     // Build the complete query string
     const query = `
       SELECT 
@@ -1444,37 +1470,27 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       FROM patients p
       WHERE ${whereBase} ${additionalWhere}
       ORDER BY p.created_at DESC
-      LIMIT $2
+      LIMIT $${limitParamIndex}
     `.trim();
     
-    // Validate query parameters
-    const queryLimit = parseInt(limit) || 100;
-    const queryName = normalizedDoctorName || doctorName;
-    
-    if (!queryName || queryName.trim() === '') {
-      console.error(`[getAssignedPatientsForDoctor] Invalid doctor name for query`);
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid doctor name. Please contact support.' 
-      });
-    }
-    
-    console.log(`[getAssignedPatientsForDoctor] Executing query with name: "${queryName}", limit: ${queryLimit}`);
+    console.log(`[getAssignedPatientsForDoctor] Executing query with name: "${queryName}", limit: ${queryLimit}, category: ${category}`);
     console.log(`[getAssignedPatientsForDoctor] Query:`, query.replace(/\s+/g, ' ').trim());
+    console.log(`[getAssignedPatientsForDoctor] Query params:`, queryParams);
     
     // Use normalized name for query, but also try original name
     let finalResult = { rows: [] }; // Initialize with empty result
     
     try {
-      const result = await client.query(query, [queryName, queryLimit]);
+      const result = await client.query(query, queryParams);
       console.log(`[getAssignedPatientsForDoctor] Query returned ${result.rows.length} results`);
       finalResult = result;
       
-      // If no results with normalized name, try with original name
-      if (finalResult.rows.length === 0 && normalizedDoctorName !== doctorName && doctorName) {
+      // If no results with normalized name, try with original name (only for non-my-patients categories)
+      if (finalResult.rows.length === 0 && normalizedDoctorName !== doctorName && doctorName && category !== 'my-patients') {
         console.log(`[getAssignedPatientsForDoctor] No results with normalized name, trying original name...`);
         try {
-          const originalResult = await client.query(query, [doctorName, queryLimit]);
+          const originalParams = category === 'my-patients' ? [doctorName, userId, queryLimit] : [doctorName, queryLimit];
+          const originalResult = await client.query(query, originalParams);
           if (originalResult.rows.length > 0) {
             finalResult = originalResult;
             console.log(`[getAssignedPatientsForDoctor] Found ${originalResult.rows.length} results with original name`);
@@ -1538,9 +1554,13 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       console.log(`[getAssignedPatientsForDoctor] Using doctor name "${normalizedDoctorName || doctorName}" for appointments query (ID not found)`);
     }
     
-    // Add category filters for appointments query
-    if (category === 'new') {
-      appointmentWhere += ` AND NOT EXISTS (
+    // For my-patients category, skip appointments table check since we only want patients created by the urologist
+    if (category === 'my-patients') {
+      console.log(`[getAssignedPatientsForDoctor] Skipping appointments table check for my-patients category`);
+    } else {
+      // Add category filters for appointments query
+      if (category === 'new') {
+        appointmentWhere += ` AND NOT EXISTS (
         SELECT 1 FROM appointments a2 
         WHERE a2.patient_id = p.id 
         AND a2.appointment_type ILIKE 'urologist' 
@@ -1597,11 +1617,12 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       
       // Re-sort by created_at DESC (we need to get created_at for proper sorting)
       // For now, keep the order as is since both queries order by created_at DESC
-    } catch (appointmentQueryError) {
-      console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
-      console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
-      console.error(`[getAssignedPatientsForDoctor] Appointment query stack:`, appointmentQueryError.stack);
-      // Continue with existing result - don't fail the entire request
+      } catch (appointmentQueryError) {
+        console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
+        console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
+        console.error(`[getAssignedPatientsForDoctor] Appointment query stack:`, appointmentQueryError.stack);
+        // Continue with existing result - don't fail the entire request
+      }
     }
     
     // Ensure finalResult is always initialized
