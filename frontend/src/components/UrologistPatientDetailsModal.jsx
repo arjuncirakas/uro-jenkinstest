@@ -466,24 +466,32 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     
     try {
       const result = await notesService.deleteNote(noteToDelete);
-      if (result.success) {
+      console.log('Delete note result:', result);
+      
+      // Check if result.success is explicitly true (not just truthy)
+      if (result && result.success === true) {
         await fetchNotes(); // Refresh notes
         setSuccessModalTitle('Note Deleted');
         setSuccessModalMessage('Clinical note has been deleted successfully.');
         setIsSuccessModalOpen(true);
       } else {
-        // Show error in modal with the specific error message
-        setSuccessModalTitle('Cannot Delete Note');
-        setSuccessModalMessage(result.error || result.message || 'Failed to delete note');
-        setIsSuccessModalOpen(true);
-        console.error('Error deleting note:', result.error);
+        // Show error in error modal with the specific error message
+        const errorMessage = result?.error || result?.message || 'Failed to delete note';
+        console.error('Delete note failed:', errorMessage);
+        setErrorModalTitle('Cannot Delete Note');
+        setErrorModalMessage(errorMessage);
+        setIsErrorModalOpen(true);
       }
     } catch (err) {
-      // Show error in modal
-      setSuccessModalTitle('Error');
-      setSuccessModalMessage(err.response?.data?.message || err.message || 'Failed to delete note');
-      setIsSuccessModalOpen(true);
-      console.error('Error deleting note:', err);
+      // Show error in error modal
+      console.error('Exception deleting note:', err);
+      const errorMessage = err.response?.data?.message || 
+                         err.response?.data?.error || 
+                         err.message || 
+                         'Failed to delete note';
+      setErrorModalTitle('Error');
+      setErrorModalMessage(errorMessage);
+      setIsErrorModalOpen(true);
     } finally {
       setDeletingNote(null);
       setNoteToDelete(null);

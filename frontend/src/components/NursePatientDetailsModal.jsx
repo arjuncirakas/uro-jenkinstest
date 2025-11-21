@@ -5,6 +5,7 @@ import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
 import SuccessModal from './SuccessModal';
+import ErrorModal from './modals/ErrorModal';
 import ConfirmationModal from './modals/ConfirmationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
 import EditPSAResultModal from './modals/EditPSAResultModal';
@@ -27,6 +28,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successModalTitle, setSuccessModalTitle] = useState('');
   const [successModalMessage, setSuccessModalMessage] = useState('');
+  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+  const [errorModalTitle, setErrorModalTitle] = useState('');
+  const [errorModalMessage, setErrorModalMessage] = useState('');
   const [isPSAHistoryModalOpen, setIsPSAHistoryModalOpen] = useState(false);
   const [isOtherTestsHistoryModalOpen, setIsOtherTestsHistoryModalOpen] = useState(false);
   const [isMDTSchedulingModalOpen, setIsMDTSchedulingModalOpen] = useState(false);
@@ -683,8 +687,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     
     try {
       const result = await notesService.deleteNote(noteToDelete);
+      console.log('Delete note result:', result);
       
-      if (result.success) {
+      // Check if result.success is explicitly true (not just truthy)
+      if (result && result.success === true) {
         // Remove the note from the list
         setClinicalNotes(prev => prev.filter(note => note.id !== noteToDelete));
         
@@ -693,18 +699,23 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         setSuccessModalMessage('The clinical note has been removed from the patient timeline.');
         setIsSuccessModalOpen(true);
       } else {
-        // Show error in modal
-        setSuccessModalTitle('Cannot Delete Note');
-        setSuccessModalMessage(result.error || result.message || 'Failed to delete note');
-        setIsSuccessModalOpen(true);
-        console.error('Error deleting note:', result.error);
+        // Show error in error modal - result.success is false or undefined
+        const errorMessage = result?.error || result?.message || 'Failed to delete note';
+        console.error('Delete note failed:', errorMessage);
+        setErrorModalTitle('Cannot Delete Note');
+        setErrorModalMessage(errorMessage);
+        setIsErrorModalOpen(true);
       }
     } catch (error) {
-      // Show error in modal
-      setSuccessModalTitle('Error');
-      setSuccessModalMessage(error.response?.data?.message || error.message || 'Failed to delete note');
-      setIsSuccessModalOpen(true);
-      console.error('Error deleting note:', error);
+      // Show error in error modal
+      console.error('Exception deleting note:', error);
+      const errorMessage = error.response?.data?.message || 
+                         error.response?.data?.error || 
+                         error.message || 
+                         'Failed to delete note';
+      setErrorModalTitle('Error');
+      setErrorModalMessage(errorMessage);
+      setIsErrorModalOpen(true);
     } finally {
       setDeletingNote(null);
       setNoteToDelete(null);
@@ -3410,6 +3421,14 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         onClose={() => setIsSuccessModalOpen(false)}
         title={successModalTitle}
         message={successModalMessage}
+      />
+      
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={isErrorModalOpen}
+        onClose={() => setIsErrorModalOpen(false)}
+        title={errorModalTitle}
+        message={errorModalMessage}
       />
 
       {/* PSA History Modal */}

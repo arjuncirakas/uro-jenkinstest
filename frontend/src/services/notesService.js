@@ -54,12 +54,25 @@ export const notesService = {
   deleteNote: async (noteId) => {
     try {
       const response = await apiClient.delete(`/notes/${noteId}`);
+      // Check if the response indicates success
+      if (response.data && response.data.success === false) {
+        return {
+          success: false,
+          error: response.data.message || 'Failed to delete note',
+          details: response.data.errors
+        };
+      }
       return { success: true, data: response.data };
     } catch (error) {
       console.error('Error deleting note:', error);
+      // Handle both error.response.data.message and error.response.data.error
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Failed to delete note';
       return {
         success: false,
-        error: error.response?.data?.message || error.message,
+        error: errorMessage,
         details: error.response?.data?.errors
       };
     }
