@@ -1635,6 +1635,19 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const timeSlots = generateTimeSlots();
 
 
+  // Use fullPatientData if available, otherwise fallback to patient prop
+  const displayPatient = fullPatientData || patient;
+  
+  // Get patient name from various possible fields
+  const patientName = displayPatient.name || 
+                      displayPatient.fullName || 
+                      displayPatient.patientName ||
+                      (displayPatient.firstName && displayPatient.lastName 
+                        ? `${displayPatient.firstName} ${displayPatient.lastName}`.trim()
+                        : displayPatient.first_name && displayPatient.last_name
+                        ? `${displayPatient.first_name} ${displayPatient.last_name}`.trim()
+                        : 'Unknown Patient');
+
   return (
     <>
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1644,16 +1657,16 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-2xl font-bold">{patient.patientName || patient.fullName || patient.name || 'Unknown Patient'}</h2>
+                <h2 className="text-2xl font-bold">{patientName}</h2>
                 <div className="text-right">
                   <div className="text-sm font-medium text-teal-800">Referred by</div>
-                  <div className="text-sm text-teal-700">{patient.referringDepartment || patient.referringDoctor || 'Not Specified'}</div>
+                  <div className="text-sm text-teal-700">{displayPatient.referringDepartment || displayPatient.referringDoctor || displayPatient.referring_department || displayPatient.referring_doctor || 'Not Specified'}</div>
                 </div>
               </div>
               <div className="flex items-center space-x-4 text-teal-700">
-                <span>{patient.age || '0'}, {patient.gender || 'Unknown'}</span>
-                <span>UPI: {patient.upi || 'Unknown'}</span>
-                <span>Phone: {patient.phone || patient.phoneNumber || 'Unknown'}</span>
+                <span>{displayPatient.age || '0'}, {displayPatient.gender || 'Unknown'}</span>
+                <span>UPI: {displayPatient.upi || 'Unknown'}</span>
+                <span>Phone: {displayPatient.phone || displayPatient.phoneNumber || 'Unknown'}</span>
               </div>
             </div>
             <button

@@ -1452,6 +1452,19 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const timeSlots = generateTimeSlots();
 
 
+  // Use fullPatientData if available, otherwise fallback to patient prop
+  const displayPatient = fullPatientData || patient;
+  
+  // Get patient name from various possible fields
+  const patientName = displayPatient.name || 
+                      displayPatient.fullName || 
+                      displayPatient.patientName ||
+                      (displayPatient.firstName && displayPatient.lastName 
+                        ? `${displayPatient.firstName} ${displayPatient.lastName}`.trim()
+                        : displayPatient.first_name && displayPatient.last_name
+                        ? `${displayPatient.first_name} ${displayPatient.last_name}`.trim()
+                        : 'Unknown Patient');
+
   return (
     <>
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1461,28 +1474,28 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-2xl font-bold">{patient.name}</h2>
-                {patient.referredByGP && (
+                <h2 className="text-2xl font-bold">{patientName}</h2>
+                {displayPatient.referredByGP && (
                   <div className="text-right">
                     <div className="text-sm font-medium text-teal-800">Referred by</div>
-                    <div className="text-sm text-teal-700">{patient.referredByGP} (GP)</div>
+                    <div className="text-sm text-teal-700">{displayPatient.referredByGP} (GP)</div>
                   </div>
                 )}
               </div>
               <div className="flex items-center space-x-4 text-teal-700">
-                <span>{patient.age}, {patient.gender}</span>
-                <span>UPI: {patient.upi || patient.patientId}</span>
-                <span>MRN: {patient.mrn}</span>
-                {patient.appointmentTime && (
-                  <span>Appointment: {patient.appointmentTime}</span>
+                <span>{displayPatient.age || '0'}, {displayPatient.gender || 'Unknown'}</span>
+                <span>UPI: {displayPatient.upi || displayPatient.patientId || 'Unknown'}</span>
+                <span>MRN: {displayPatient.mrn || 'N/A'}</span>
+                {displayPatient.appointmentTime && (
+                  <span>Appointment: {displayPatient.appointmentTime}</span>
                 )}
-                {patient.status && (
+                {displayPatient.status && (
                   <span className={`px-2 py-1 rounded-full text-xs ${
-                    patient.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
-                    patient.status === 'no_show' ? 'bg-red-100 text-red-700' :
+                    displayPatient.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
+                    displayPatient.status === 'no_show' ? 'bg-red-100 text-red-700' :
                     'bg-gray-100 text-gray-700'
                   }`}>
-                    {patient.status}
+                    {displayPatient.status}
                   </span>
                 )}
               </div>
@@ -1497,34 +1510,34 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         </div>
 
         {/* Appointment Summary */}
-        {(patient.appointmentTime || patient.psa || patient.type) && (
+        {(displayPatient.appointmentTime || displayPatient.psa || displayPatient.type) && (
           <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-6">
-                {patient.appointmentTime && (
+                {displayPatient.appointmentTime && (
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium text-gray-600">Appointment Time:</span>
-                    <span className="text-sm font-semibold text-gray-900">{patient.appointmentTime}</span>
+                    <span className="text-sm font-semibold text-gray-900">{displayPatient.appointmentTime}</span>
                   </div>
                 )}
-                {patient.psa && (
+                {displayPatient.psa && (
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium text-gray-600">PSA:</span>
-                    <span className="text-sm font-semibold text-gray-900">{patient.psa} ng/mL</span>
+                    <span className="text-sm font-semibold text-gray-900">{displayPatient.psa} ng/mL</span>
                   </div>
                 )}
-                {patient.type && (
+                {displayPatient.type && (
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium text-gray-600">Type:</span>
                     <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded-full font-medium">
-                      {patient.type}
+                      {displayPatient.type}
                     </span>
                   </div>
                 )}
               </div>
-              {patient.urologist && (
+              {displayPatient.urologist && (
                 <div className="text-sm text-gray-600">
-                  <span className="font-medium">Urologist:</span> {patient.urologist}
+                  <span className="font-medium">Urologist:</span> {displayPatient.urologist}
                 </div>
               )}
             </div>
