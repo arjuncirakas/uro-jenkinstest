@@ -95,6 +95,24 @@ const Patients = () => {
     };
   }, [category, fetchPatients]);
 
+  // Listen for appointment booking events to refresh the list
+  // When a nurse books an appointment, the patient should appear in the urologist's list
+  useEffect(() => {
+    const handleAppointmentUpdated = (event) => {
+      console.log('🔄 Appointment updated event received, refreshing patient list...', event.detail);
+      // Refresh the patient list to show newly assigned patients
+      fetchPatients();
+    };
+
+    window.addEventListener('appointment:updated', handleAppointmentUpdated);
+    window.addEventListener('surgery:updated', handleAppointmentUpdated);
+    
+    return () => {
+      window.removeEventListener('appointment:updated', handleAppointmentUpdated);
+      window.removeEventListener('surgery:updated', handleAppointmentUpdated);
+    };
+  }, [fetchPatients]);
+
   const handleViewPatient = (patient) => {
     patientDetailsModalRef.current?.openPatientDetails(patient.name, null, category);
   };
