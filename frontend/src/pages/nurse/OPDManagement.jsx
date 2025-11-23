@@ -21,7 +21,7 @@ const OPDManagement = () => {
   const [selectedNoShowPatient, setSelectedNoShowPatient] = useState(null);
   const [selectedNoShowAppointmentId, setSelectedNoShowAppointmentId] = useState(null);
   const [selectedNoShowAppointmentType, setSelectedNoShowAppointmentType] = useState(null);
-  
+
   // State for new patients
   const [newPatients, setNewPatients] = useState([]);
   const [loadingNewPatients, setLoadingNewPatients] = useState(false);
@@ -31,10 +31,10 @@ const OPDManagement = () => {
   const fetchNewPatients = async () => {
     setLoadingNewPatients(true);
     setNewPatientsError(null);
-    
+
     try {
       const result = await patientService.getNewPatients({ limit: 20 });
-      
+
       if (result.success) {
         // Extract patients array from result.data
         const patients = Array.isArray(result.data?.patients) ? result.data.patients : (Array.isArray(result.data) ? result.data : []);
@@ -55,22 +55,22 @@ const OPDManagement = () => {
   const fetchTodaysAppointments = async (type = null) => {
     setLoadingAppointments(true);
     setAppointmentsError(null);
-    
+
     try {
       const result = await bookingService.getTodaysAppointments(type);
-      
+
       if (result.success) {
         console.log('✅ OPDManagement: Raw appointments data:', result.data.appointments);
         const appointments = result.data.appointments || [];
-        
+
         // Log the structure of the first appointment if available
         if (appointments.length > 0) {
           console.log('✅ OPDManagement: First appointment structure:', appointments[0]);
           console.log('✅ OPDManagement: First appointment keys:', Object.keys(appointments[0]));
         }
-        
+
         setAppointments(appointments);
-        
+
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
         console.error('Error fetching appointments:', result.error);
@@ -87,10 +87,10 @@ const OPDManagement = () => {
   const fetchNoShowPatients = async (type = null) => {
     setLoadingNoShow(true);
     setNoShowError(null);
-    
+
     try {
       const result = await bookingService.getNoShowPatients(type);
-      
+
       if (result.success) {
         setNoShowPatients(result.data.noShowPatients || []);
       } else {
@@ -105,6 +105,57 @@ const OPDManagement = () => {
     }
   };
 
+  // Fetch upcoming appointments
+  const fetchUpcomingAppointments = async (reset = false) => {
+    if (reset) {
+      setUpcomingOffset(0);
+      setUpcomingAppointments([]);
+      setHasMoreUpcoming(true);
+    }
+
+    setLoadingUpcoming(true);
+    setUpcomingError(null);
+
+    try {
+      const offset = reset ? 0 : upcomingOffset;
+      const result = await bookingService.getUpcomingAppointments({
+        view: upcomingView,
+        limit: upcomingLimit,
+        offset: offset
+      });
+
+      if (result.success) {
+        const newAppointments = result.data.appointments || [];
+
+        if (reset) {
+          setUpcomingAppointments(newAppointments);
+        } else {
+          setUpcomingAppointments(prev => [...prev, ...newAppointments]);
+        }
+
+        setHasMoreUpcoming(result.data.hasMore);
+        if (result.data.hasMore) {
+          setUpcomingOffset(prev => prev + upcomingLimit);
+        }
+      } else {
+        setUpcomingError(result.error || 'Failed to fetch upcoming appointments');
+      }
+    } catch (error) {
+      setUpcomingError('Failed to fetch upcoming appointments');
+      console.error('Error fetching upcoming appointments:', error);
+    } finally {
+      setLoadingUpcoming(false);
+    }
+  };
+
+  // Handle scroll for infinite loading
+  const handleUpcomingScroll = (e) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.target;
+    if (scrollHeight - scrollTop <= clientHeight + 50 && !loadingUpcoming && hasMoreUpcoming) {
+      fetchUpcomingAppointments(false);
+    }
+  };
+
 
   // State for appointments data
   const [appointments, setAppointments] = useState([]);
@@ -116,13 +167,29 @@ const OPDManagement = () => {
   const [loadingNoShow, setLoadingNoShow] = useState(false);
   const [noShowError, setNoShowError] = useState(null);
 
+  // State for upcoming appointments
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+  const [loadingUpcoming, setLoadingUpcoming] = useState(false);
+  const [upcomingError, setUpcomingError] = useState(null);
+  const [upcomingView, setUpcomingView] = useState('week');
+  const [upcomingLimit, setUpcomingLimit] = useState(5);
+  const [upcomingOffset, setUpcomingOffset] = useState(0);
+  const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true);
+  const upcomingScrollRef = useRef(null);
+
 
   // Load data on component mount
   useEffect(() => {
     fetchNewPatients();
     fetchTodaysAppointments();
     fetchNoShowPatients();
+    fetchUpcomingAppointments(true);
   }, []);
+
+  // Fetch upcoming appointments when view changes
+  useEffect(() => {
+    fetchUpcomingAppointments(true);
+  }, [upcomingView]);
 
 
   // Listen for patient added event to refresh new patients list
@@ -134,7 +201,7 @@ const OPDManagement = () => {
     };
 
     window.addEventListener('patientAdded', handlePatientAdded);
-    
+
     return () => {
       window.removeEventListener('patientAdded', handlePatientAdded);
     };
@@ -150,7 +217,7 @@ const OPDManagement = () => {
     };
 
     window.addEventListener('testResultAdded', handleTestResultAdded);
-    
+
     return () => {
       window.removeEventListener('testResultAdded', handleTestResultAdded);
     };
@@ -167,7 +234,7 @@ const OPDManagement = () => {
       console.log('Patient deleted event received, refreshing all data:', event.detail);
       // Refresh all data to remove deleted patient from all lists
       refreshAllData();
-      
+
       // Close modals if the deleted patient was selected
       if (selectedPatient && selectedPatient.id === event.detail.patientId) {
         setIsPatientDetailsModalOpen(false);
@@ -182,7 +249,7 @@ const OPDManagement = () => {
     };
 
     window.addEventListener('patientDeleted', handlePatientDeleted);
-    
+
     return () => {
       window.removeEventListener('patientDeleted', handlePatientDeleted);
     };
@@ -197,7 +264,7 @@ const OPDManagement = () => {
   const getPSAColor = (psaValue) => {
     const psa = parseFloat(psaValue);
     if (isNaN(psa)) return { dotColor: 'bg-gray-400', textColor: 'text-gray-900' };
-    
+
     if (psa > 4) {
       return { dotColor: 'bg-red-500', textColor: 'text-gray-900' };
     } else {
@@ -222,13 +289,13 @@ const OPDManagement = () => {
       } else {
         date = new Date(dateString);
       }
-      
+
       // Check if date is valid
       if (isNaN(date.getTime())) {
         console.error('Invalid date:', dateString);
         return dateString;
       }
-      
+
       // Format as DD/MM/YYYY
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -301,7 +368,7 @@ const OPDManagement = () => {
   const getStatusIcon = (testType, appointment) => {
     // Use the test result status from the appointment data (from backend)
     const testStatus = appointment[testType];
-    
+
     if (testStatus === 'completed') {
       return (
         <div className="w-5 h-5 bg-teal-100 rounded-full flex items-center justify-center">
@@ -323,24 +390,24 @@ const OPDManagement = () => {
   const handleViewEdit = async (patientOrAppointment) => {
     console.log('🔍 OPDManagement: handleViewEdit called with:', patientOrAppointment);
     console.log('🔍 OPDManagement: Object keys:', Object.keys(patientOrAppointment));
-    
+
     let patientData = null;
-    
+
     // Check if this is an appointment object (has appointment-specific fields)
     const isAppointment = patientOrAppointment.patientName || patientOrAppointment.appointmentDate || patientOrAppointment.appointmentTime;
-    
+
     if (isAppointment) {
       // This is an appointment object - we need to fetch the patient details
       let patientId = patientOrAppointment.patient_id || patientOrAppointment.patientId || patientOrAppointment.patientID;
-      
+
       console.log('🔍 OPDManagement: This is an appointment object, patient ID:', patientId);
-      
+
       // If no patient ID, try to find the patient by UPI
       if (!patientId && patientOrAppointment.upi) {
         try {
           console.log('🔍 OPDManagement: No patient ID, searching by UPI:', patientOrAppointment.upi);
           const searchResult = await patientService.getPatients({ search: patientOrAppointment.upi });
-          
+
           if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
             // Find exact match by UPI
             const matchedPatient = searchResult.data.find(p => p.upi === patientOrAppointment.upi);
@@ -353,17 +420,17 @@ const OPDManagement = () => {
           console.error('❌ OPDManagement: Error searching by UPI:', error);
         }
       }
-      
+
       if (patientId) {
         try {
           // Fetch patient details from API
           console.log('🔍 OPDManagement: Fetching patient details for ID:', patientId);
           const result = await patientService.getPatientById(patientId);
-          
+
           if (result.success && result.data) {
             const fullPatientData = result.data;
             console.log('✅ OPDManagement: Fetched patient data:', fullPatientData);
-            
+
             // Merge with appointment data for context
             patientData = {
               ...fullPatientData,
@@ -448,7 +515,7 @@ const OPDManagement = () => {
       console.log('✅ OPDManagement: This is a patient object');
       patientData = patientOrAppointment;
     }
-    
+
     if (patientData) {
       console.log('✅ OPDManagement: Final patient data:', patientData);
       console.log('✅ OPDManagement: Patient ID:', patientData.id);
@@ -478,15 +545,15 @@ const OPDManagement = () => {
 
   const handleNoShowReschedule = async (patientId, rescheduleData) => {
     console.log('Rescheduling no-show patient:', patientId, rescheduleData);
-    
+
     try {
       // The API call is already made in the RescheduleConfirmationModal
       // Here we just need to refresh the data to reflect the changes
       await refreshAllData();
-      
+
       // Show success message
       console.log('Patient rescheduled successfully:', rescheduleData);
-      
+
     } catch (error) {
       console.error('Error handling reschedule:', error);
     }
@@ -515,7 +582,7 @@ const OPDManagement = () => {
       {/* Main Content Area */}
       <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <NurseHeader 
+        <NurseHeader
           title="OPD Management"
           subtitle="Track patients in OPD queue and manage consultation flow"
           searchPlaceholder="Search by name"
@@ -533,26 +600,24 @@ const OPDManagement = () => {
                   <div className="flex items-center space-x-3">
                     {/* Tabs */}
                     <div className="flex bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => setActiveAppointmentTab('investigation')}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                        activeAppointmentTab === 'investigation'
+                      <button
+                        onClick={() => setActiveAppointmentTab('investigation')}
+                        className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'investigation'
                           ? 'bg-teal-600 text-white'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Investigation
-                    </button>
-                    <button
-                      onClick={() => setActiveAppointmentTab('urologist')}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                        activeAppointmentTab === 'urologist'
+                          }`}
+                      >
+                        Investigation
+                      </button>
+                      <button
+                        onClick={() => setActiveAppointmentTab('urologist')}
+                        className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'urologist'
                           ? 'bg-teal-600 text-white'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Urologist
-                    </button>
+                          }`}
+                      >
+                        Urologist
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -719,9 +784,9 @@ const OPDManagement = () => {
                   ) : (
                     <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                       {noShowPatients.filter(patient => patient.appointmentType === 'investigation').map((patient) => (
-                        <div 
-                          key={patient.id} 
-                          className="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 hover:shadow-md transition-all duration-200 cursor-pointer group" 
+                        <div
+                          key={patient.id}
+                          className="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 hover:shadow-md transition-all duration-200 cursor-pointer group"
                           onClick={() => handleNoShowClick(patient, patient.id, patient.appointmentType)}
                         >
                           <div className="flex items-center space-x-3">
@@ -777,9 +842,9 @@ const OPDManagement = () => {
                   ) : (
                     <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                       {noShowPatients.filter(patient => patient.appointmentType === 'urologist').map((patient) => (
-                        <div 
-                          key={patient.id} 
-                          className="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 hover:shadow-md transition-all duration-200 cursor-pointer group" 
+                        <div
+                          key={patient.id}
+                          className="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 hover:shadow-md transition-all duration-200 cursor-pointer group"
                           onClick={() => handleNoShowClick(patient, patient.id, patient.appointmentType)}
                         >
                           <div className="flex items-center space-x-3">
@@ -904,20 +969,120 @@ const OPDManagement = () => {
                 </div>
               </div>
             </div>
+
+            {/* Upcoming Appointments */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[32rem]">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Upcoming Appointments</h2>
+              </div>
+              <div className="p-4 sm:p-6 flex-1 flex flex-col overflow-hidden">
+                {/* Week/Month Toggle */}
+                <div className="flex space-x-2 border-b border-gray-200 pb-3 mb-4 flex-shrink-0">
+                  <button
+                    onClick={() => setUpcomingView('week')}
+                    className={`px-4 py-2 text-sm transition-colors ${upcomingView === 'week'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                  >
+                    This Week
+                  </button>
+                  <button
+                    onClick={() => setUpcomingView('month')}
+                    className={`px-4 py-2 text-sm transition-colors ${upcomingView === 'month'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                  >
+                    This Month
+                  </button>
+                </div>
+
+                {/* Appointments List */}
+                <div
+                  className="space-y-3 flex-1 overflow-y-auto"
+                  onScroll={handleUpcomingScroll}
+                  ref={upcomingScrollRef}
+                >
+                  {upcomingAppointments.length === 0 && !loadingUpcoming && !upcomingError ? (
+                    <div className="text-center py-8 text-gray-500 text-sm">
+                      No upcoming appointments for this period
+                    </div>
+                  ) : upcomingError ? (
+                    <div className="text-center py-8 text-red-500 text-sm">
+                      Error: {upcomingError}
+                    </div>
+                  ) : (
+                    <>
+                      {upcomingAppointments.map((appointment) => (
+                        <div
+                          key={appointment.id}
+                          onClick={() => handleViewEdit(appointment)}
+                          className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md hover:border-teal-300 transition-all cursor-pointer"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {formatDate(appointment.appointmentDate)}
+                                </span>
+                                <span className="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full font-medium">
+                                  {appointment.appointmentTime}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-600 mb-2">
+                                {appointment.urologist}
+                              </div>
+                            </div>
+                            <IoChevronForward className="text-gray-400 text-sm flex-shrink-0" />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="font-medium text-gray-900 text-sm">
+                              {appointment.patientName}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs text-gray-500">
+                                Age: {appointment.age || 'N/A'} • {appointment.gender || 'Unknown'}
+                              </div>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${appointment.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
+                                  appointment.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                    appointment.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                                }`}>
+                                {appointment.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {loadingUpcoming && (
+                        <div className="text-center py-4 text-gray-500 text-sm">
+                          <div className="flex items-center justify-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-600"></div>
+                            <span>Loading more...</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
       </div>
 
       {/* Nurse Patient Details Modal */}
-      <NursePatientDetailsModal 
+      <NursePatientDetailsModal
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
       />
 
       {/* Book Investigation Modal */}
-      <BookInvestigationModal 
+      <BookInvestigationModal
         isOpen={isInvestigationModalOpen}
         onClose={() => setIsInvestigationModalOpen(false)}
         patient={selectedPatient}
@@ -930,7 +1095,7 @@ const OPDManagement = () => {
       />
 
       {/* Schedule Modal */}
-      <AddScheduleModal 
+      <AddScheduleModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
         patient={selectedPatient}
@@ -943,7 +1108,7 @@ const OPDManagement = () => {
       />
 
       {/* No Show Patient Modal */}
-      <NoShowPatientModal 
+      <NoShowPatientModal
         isOpen={isNoShowModalOpen}
         onClose={() => {
           setIsNoShowModalOpen(false);

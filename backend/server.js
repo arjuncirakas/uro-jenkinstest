@@ -36,7 +36,7 @@ const PORT = process.env.PORT || 5000;
 // Get allowed origins for CSP
 const getAllowedCSPOrigins = () => {
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   if (isDevelopment) {
     // In development, allow localhost origins
     return [
@@ -47,13 +47,13 @@ const getAllowedCSPOrigins = () => {
       "http://localhost:5000"
     ];
   }
-  
+
   // In production, allow configured frontend URL
   const origins = ["'self'"];
   if (process.env.FRONTEND_URL) {
     origins.push(process.env.FRONTEND_URL);
   }
-  
+
   return origins;
 };
 
@@ -152,6 +152,14 @@ app.use('/api', auditMiddleware);
 // This protects ALL /api/* routes except public auth endpoints
 app.use(protectApiRoutes);
 
+// Debug logging for all API requests
+app.use('/api', (req, res, next) => {
+  console.log(`🌐 [API Request] ${req.method} ${req.originalUrl}`);
+  console.log(`🌐 [API Request] Path: ${req.path}`);
+  console.log(`🌐 [API Request] Base URL: ${req.baseUrl}`);
+  next();
+});
+
 // Register API routes with audit logging
 app.use('/api/auth', auditAuthMiddleware, authRoutes);
 app.use('/api/superadmin', superadminRoutes);
@@ -195,7 +203,7 @@ const startServer = async () => {
         process.exit(1);
       }
     }
-    
+
     // Test database connection
     const dbConnected = await testConnection();
     if (!dbConnected) {
@@ -209,10 +217,10 @@ const startServer = async () => {
       console.error('❌ Failed to initialize database. Exiting...');
       process.exit(1);
     }
-    
+
     // Initialize notifications table
     await initializeNotificationsTable();
-    
+
     // Initialize automatic no-show scheduler
     initAutoNoShowScheduler();
 

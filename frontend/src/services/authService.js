@@ -20,16 +20,16 @@ class AuthService {
         otp,
         type
       });
-      
+
       // If verification successful, store tokens and user data
       if (response.data.success && response.data.data) {
         const { user, accessToken, refreshToken } = response.data.data;
-        
+
         // Store tokens and user data
         tokenService.setTokens(accessToken, refreshToken);
         tokenService.setUser(user);
       }
-      
+
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -56,12 +56,12 @@ class AuthService {
         email,
         password
       });
-      
+
       // Only store tokens if it's a direct login (superadmin) - NOT if OTP is required
-      if (response.data.success && 
-          response.data.data && 
-          response.data.data.accessToken && 
-          !response.data.data.requiresOTPVerification) {
+      if (response.data.success &&
+        response.data.data &&
+        response.data.data.accessToken &&
+        !response.data.data.requiresOTPVerification) {
         // Direct login successful (superadmin) - store tokens and user data
         const { user, accessToken, refreshToken } = response.data.data;
         tokenService.setTokens(accessToken, refreshToken);
@@ -71,7 +71,7 @@ class AuthService {
         // OTP required - do NOT store tokens
         console.log('📧 OTP verification required - tokens NOT stored');
       }
-      
+
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -85,15 +85,15 @@ class AuthService {
         email,
         otp
       });
-      
+
       // Store tokens and user data after successful OTP verification
       if (response.data.success && response.data.data) {
         const { user, accessToken, refreshToken } = response.data.data;
-        
+
         tokenService.setTokens(accessToken, refreshToken);
         tokenService.setUser(user);
       }
-      
+
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -116,16 +116,16 @@ class AuthService {
   async logout() {
     try {
       const refreshToken = tokenService.getRefreshToken();
-      
+
       if (refreshToken) {
         await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, {
           refreshToken
         });
       }
-      
+
       // Clear local storage
       tokenService.clearAuth();
-      
+
       return { success: true, message: 'Logged out successfully' };
     } catch (error) {
       // Even if logout fails on server, clear local storage
@@ -138,12 +138,12 @@ class AuthService {
   async getProfile() {
     try {
       const response = await apiClient.get(API_ENDPOINTS.AUTH.PROFILE);
-      
+
       // Update user data in storage
       if (response.data.success && response.data.data) {
         tokenService.setUser(response.data.data.user);
       }
-      
+
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -154,21 +154,21 @@ class AuthService {
   async refreshToken() {
     try {
       const refreshToken = tokenService.getRefreshToken();
-      
+
       if (!refreshToken) {
         throw new Error('No refresh token available');
       }
-      
+
       const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH_TOKEN, {
         refreshToken
       });
-      
+
       // Update tokens
       if (response.data.success && response.data.data) {
         const { accessToken, refreshToken: newRefreshToken } = response.data.data;
         tokenService.setTokens(accessToken, newRefreshToken);
       }
-      
+
       return response.data;
     } catch (error) {
       // If refresh fails, clear auth data
@@ -243,7 +243,7 @@ class AuthService {
 
       // Get fresh profile data
       await this.getProfile();
-      
+
       return { valid: true };
     } catch (error) {
       console.error('Session validation failed:', error);
@@ -254,24 +254,24 @@ class AuthService {
   // Get role-based navigation routes
   getRoleRoutes() {
     const role = this.getUserRole();
-    
+
     const roleRoutes = {
-      superadmin: '/superadmin/dashboard',
+      superadmin: '/superadmin/users',
       urologist: '/urologist/dashboard',
       doctor: '/urologist/dashboard', // Doctors use the same routes as urologists
       gp: '/gp/dashboard',
       urology_nurse: '/nurse/opd-management'
     };
-    
+
     return roleRoutes[role] || '/login';
   }
 
   // Check if user can access a specific route
   canAccessRoute(route) {
     const role = this.getUserRole();
-    
+
     if (!role) return false;
-    
+
     // Define role-based access rules
     const accessRules = {
       superadmin: ['/superadmin', '/dashboard', '/profile'],
@@ -280,7 +280,7 @@ class AuthService {
       gp: ['/gp', '/dashboard', '/profile'],
       urology_nurse: ['/nurse', '/dashboard', '/profile']
     };
-    
+
     const allowedRoutes = accessRules[role] || [];
     return allowedRoutes.some(allowedRoute => route.startsWith(allowedRoute));
   }

@@ -54,10 +54,10 @@ const AppRoutes = () => {
       <Route path="/unauthorized" element={<Unauthorized />} />
 
       {/* Protected Routes - Authentication + Role-based authorization required */}
-      
+
       {/* Urologist Routes - Only accessible by urologists */}
-      <Route 
-        path="/urologist" 
+      <Route
+        path="/urologist"
         element={
           <ProtectedRoute allowedRoles={['urologist']}>
             <UrologistLayout />
@@ -76,8 +76,8 @@ const AppRoutes = () => {
       </Route>
 
       {/* GP Routes - Only accessible by GPs */}
-      <Route 
-        path="/gp" 
+      <Route
+        path="/gp"
         element={
           <ProtectedRoute allowedRoles={['gp']}>
             <GPLayout />
@@ -92,8 +92,8 @@ const AppRoutes = () => {
       </Route>
 
       {/* Nurse Routes - Only accessible by urology nurses */}
-      <Route 
-        path="/nurse" 
+      <Route
+        path="/nurse"
         element={
           <ProtectedRoute allowedRoles={['urology_nurse']}>
             <NurseLayout />
@@ -111,15 +111,15 @@ const AppRoutes = () => {
       </Route>
 
       {/* Superadmin Routes - Only accessible by superadmins */}
-      <Route 
-        path="/superadmin" 
+      <Route
+        path="/superadmin"
         element={
           <ProtectedRoute allowedRoles={['superadmin']}>
             <SuperadminLayout />
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
+        <Route index element={<Navigate to="/superadmin/users" replace />} />
         <Route path="dashboard" element={<SuperadminDashboard />} />
         <Route path="users" element={<Users />} />
         <Route path="users/new" element={<AddUser />} />

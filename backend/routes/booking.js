@@ -1,8 +1,8 @@
 import express from 'express';
-import { 
-  bookUrologistAppointment, 
-  bookInvestigation, 
-  getPatientAppointments, 
+import {
+  bookUrologistAppointment,
+  bookInvestigation,
+  getPatientAppointments,
   getPatientInvestigationBookings,
   getAvailableUrologists,
   getAvailableDoctors,
@@ -16,7 +16,8 @@ import {
   rescheduleNoShowAppointment,
   getAllAppointments,
   sendAppointmentReminder,
-  sendBulkAppointmentReminders
+  sendBulkAppointmentReminders,
+  getUpcomingAppointments
 } from '../controllers/bookingController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
@@ -24,6 +25,18 @@ import { xssProtection } from '../middleware/sanitizer.js';
 
 const router = express.Router();
 router.use(xssProtection);
+
+// Get upcoming appointments
+router.get('/appointments/upcoming',
+  (req, res, next) => {
+    console.log('🔍 Route hit: /appointments/upcoming');
+    next();
+  },
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urology_nurse', 'urologist', 'doctor']),
+  getUpcomingAppointments
+);
 
 // Book urologist appointment for a patient
 router.post('/patients/:patientId/appointments',
@@ -80,6 +93,8 @@ router.get('/appointments/today',
   requireRole(['urology_nurse', 'urologist', 'doctor']),
   getTodaysAppointments
 );
+
+
 
 // Get no-show patients
 router.get('/no-show-patients',

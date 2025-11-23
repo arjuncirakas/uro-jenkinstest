@@ -8,9 +8,9 @@ export const bookingService = {
       console.log('📍 Patient ID:', patientId);
       console.log('📦 Appointment Data:', JSON.stringify(appointmentData, null, 2));
       console.log('🔗 Request URL:', `/booking/patients/${patientId}/appointments`);
-      
+
       const response = await apiClient.post(`/booking/patients/${patientId}/appointments`, appointmentData);
-      
+
       console.log('✅ Booking successful, response:', response.data);
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -25,7 +25,7 @@ export const bookingService = {
       };
     }
   },
-  
+
   // Update appointment (for rescheduling existing appointments)
   updateAppointment: async (appointmentId, appointmentData) => {
     try {
@@ -233,10 +233,10 @@ export const bookingService = {
     try {
       // Get client's timezone offset in minutes (e.g., -330 for IST)
       const timezoneOffset = new Date().getTimezoneOffset();
-      
+
       const response = await apiClient.get(`/booking/doctors/${doctorId}/available-slots`, {
-        params: { 
-          date, 
+        params: {
+          date,
           type: appointmentType,
           timezoneOffset // Send client timezone to backend
         }
@@ -274,7 +274,7 @@ export const bookingService = {
       if (filters.endDate) params.append('endDate', filters.endDate);
       if (filters.urologistId) params.append('urologistId', filters.urologistId);
       if (filters.search && filters.search.trim()) params.append('search', filters.search.trim());
-      
+
       const response = await apiClient.get(`/booking/appointments?${params.toString()}`);
       return { success: true, data: response.data.data };
     } catch (error) {
@@ -294,6 +294,21 @@ export const bookingService = {
       return { success: true, data: response.data.data };
     } catch (error) {
       console.error('Error updating appointment status:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
+  },
+
+  // Get upcoming appointments
+  getUpcomingAppointments: async (params = {}) => {
+    try {
+      const response = await apiClient.get('/booking/appointments/upcoming', { params });
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error fetching upcoming appointments:', error);
       return {
         success: false,
         error: error.response?.data?.message || error.message,

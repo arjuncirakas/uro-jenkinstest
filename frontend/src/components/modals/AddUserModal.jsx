@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Building2, 
-  UserCircle, 
-  Activity, 
+import {
+  User,
+  Mail,
+  Phone,
+  Building2,
+  UserCircle,
+  Activity,
   Stethoscope,
   X,
   CheckCircle,
@@ -18,8 +18,8 @@ import { createUser, clearError, getAllUsers } from '../../store/slices/superadm
 import ErrorModal from './ErrorModal';
 import SuccessModal from './SuccessModal';
 import { doctorsService } from '../../services/doctorsService';
-import { 
-  validateNameInput, 
+import {
+  validateNameInput,
   validatePhoneInput,
   sanitizeInput
 } from '../../utils/inputValidation';
@@ -32,7 +32,7 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
   const [createdUser, setCreatedUser] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -45,7 +45,7 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
   const [errors, setErrors] = useState({});
   const [departments, setDepartments] = useState([]);
   const [loadingDepartments, setLoadingDepartments] = useState(false);
-  
+
   // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
@@ -102,7 +102,7 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const validateField = (name, value, formDataToValidate = formData) => {
     let error = '';
-    
+
     switch (name) {
       case 'firstName':
         if (!value.trim()) {
@@ -136,7 +136,7 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
           }
           const cleanedPhone = value.replace(/[\s\-\(\)]/g, '');
           const digitsOnly = cleanedPhone.replace(/^\+/, '');
-          
+
           if (!/^[\+\d\s\-\(\)]+$/.test(value)) {
             error = 'Phone number can only contain digits (0-9), spaces, hyphens, parentheses, and + symbol. Letters are not allowed.';
           }
@@ -171,21 +171,21 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
       default:
         break;
     }
-    
+
     return error;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     let isValid = true;
     let sanitizedValue = value;
-    
+
     if (['firstName', 'lastName'].includes(name)) {
       isValid = validateNameInput(value);
       if (!isValid) return;
     }
-    
+
     if (name === 'phone') {
       isValid = validatePhoneInput(value);
       if (!isValid) {
@@ -196,27 +196,35 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         return;
       }
     }
-    
+
     if (typeof value === 'string' && !['email', 'phone'].includes(name)) {
       sanitizedValue = sanitizeInput(value);
     }
-    
+
     const updatedFormData = {
       ...formData,
       [name]: sanitizedValue
     };
-    
-    if (name === 'role' && value !== 'doctor') {
-      updatedFormData.department_id = '';
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.department_id;
-        return newErrors;
-      });
+
+    if (name === 'role') {
+      if (value === 'doctor') {
+        // Automatically set department to Urology
+        const urologyDept = departments.find(d => d.name.toLowerCase() === 'urology');
+        if (urologyDept) {
+          updatedFormData.department_id = urologyDept.id;
+        }
+      } else {
+        updatedFormData.department_id = '';
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.department_id;
+          return newErrors;
+        });
+      }
     }
-    
+
     setFormData(updatedFormData);
-    
+
     const error = validateField(name, sanitizedValue, updatedFormData);
     setErrors(prev => ({
       ...prev,
@@ -226,26 +234,26 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     Object.keys(formData).forEach(key => {
       const error = validateField(key, formData[key]);
       if (error) {
         newErrors[key] = error;
       }
     });
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     dispatch(clearError());
     setShowErrorModal(false);
     setShowSuccessModal(false);
     setErrorMessage('');
-    
+
     if (!validateForm()) {
       return;
     }
@@ -253,24 +261,24 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       const submitData = {
         ...formData,
-        department_id: formData.role === 'doctor' && formData.department_id 
-          ? parseInt(formData.department_id, 10) 
+        department_id: formData.role === 'doctor' && formData.department_id
+          ? parseInt(formData.department_id, 10)
           : undefined
       };
-      
+
       const result = await dispatch(createUser(submitData));
-      
+
       if (result.type.endsWith('/fulfilled') && result.payload && result.payload.success) {
         setCreatedUser({
           ...formData,
           id: result.payload.data.userId,
           emailSent: result.payload.data.emailSent
         });
-        
-        const message = result.payload.data.emailSent 
+
+        const message = result.payload.data.emailSent
           ? `User ${formData.firstName} ${formData.lastName} has been created successfully. Password setup email has been sent to ${formData.email}.`
           : `User ${formData.firstName} ${formData.lastName} has been created successfully. However, the password setup email could not be sent. Please contact support.`;
-        
+
         setSuccessMessage(message);
         setShowSuccessModal(true);
         setShowErrorModal(false);
@@ -367,9 +375,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                         value={formData.firstName}
                         onChange={handleChange}
                         autoComplete="given-name"
-                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                          errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                        }`}
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                          }`}
                         placeholder="Enter first name"
                       />
                     </div>
@@ -397,9 +404,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                         value={formData.lastName}
                         onChange={handleChange}
                         autoComplete="family-name"
-                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                          errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                        }`}
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                          }`}
                         placeholder="Enter last name"
                       />
                     </div>
@@ -427,9 +433,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                         value={formData.email}
                         onChange={handleChange}
                         autoComplete="email"
-                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                          errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                        }`}
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                          }`}
                         placeholder="Enter email address"
                       />
                     </div>
@@ -457,9 +462,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                         value={formData.phone}
                         onChange={handleChange}
                         autoComplete="tel"
-                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                          errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                        }`}
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${errors.phone ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                          }`}
                         placeholder="Enter phone number"
                       />
                     </div>
@@ -487,9 +491,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                         value={formData.organization}
                         onChange={handleChange}
                         autoComplete="organization"
-                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
-                          errors.organization ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-                        }`}
+                        className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${errors.organization ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
+                          }`}
                         placeholder="Enter organization"
                       />
                     </div>
@@ -519,14 +522,13 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                         name="role"
                         value={formData.role}
                         onChange={handleChange}
-                        className={`block w-full ${formData.role ? 'pl-10' : 'pl-3'} pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
-                          errors.role ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                        }`}
+                        className={`block w-full ${formData.role ? 'pl-10' : 'pl-3'} pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${errors.role ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                          }`}
                       >
                         <option value="">Select Role</option>
                         <option value="gp">General Practitioner</option>
-                        <option value="urology_nurse">Urology Clinical Nurse</option>
-                        <option value="doctor">Doctor</option>
+                        <option value="urology_nurse">Urology Nurse</option>
+                        <option value="doctor">Urologist</option>
                       </select>
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                         <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -542,47 +544,7 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                     )}
                   </div>
 
-                  {/* Department - Only show when role is doctor */}
-                  {formData.role === 'doctor' && (
-                    <div>
-                      <label htmlFor="modal-department_id" className="block text-sm font-medium text-gray-700 mb-2">
-                        Department <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Building2 className="h-5 w-5 text-gray-400" />
-                        </div>
-                        <select
-                          id="modal-department_id"
-                          name="department_id"
-                          value={formData.department_id}
-                          onChange={handleChange}
-                          disabled={loadingDepartments}
-                          className={`block w-full pl-10 pr-8 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
-                            errors.department_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                          } ${loadingDepartments ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          <option value="">Select Department</option>
-                          {departments.map((dept) => (
-                            <option key={dept.id} value={dept.id}>
-                              {dept.name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
-                      </div>
-                      {errors.department_id && (
-                        <p className="mt-1 text-sm text-red-600 flex items-center">
-                          <XCircle className="h-4 w-4 mr-1" />
-                          {errors.department_id}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                  {/* Department dropdown removed as it is automatically set to Urology for Urologists */}
                 </div>
 
                 {/* Submit Buttons */}

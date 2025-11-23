@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  MoreVertical, 
-  Edit, 
-  Trash2, 
-  Mail, 
+import {
+  Plus,
+  Search,
+  Filter,
+  MoreVertical,
+  Edit,
+  Trash2,
+  Mail,
   Eye,
   CheckCircle,
   AlertCircle,
@@ -29,7 +29,7 @@ const Users = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { users: allUsers, pagination, isLoading, error, filters } = useAppSelector((state) => state.superadmin);
-  
+
   // State declarations - must be before useMemo
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,7 +47,7 @@ const Users = () => {
   const [selectedDepartment, setSelectedDepartment] = useState(filters.department_id || '');
   const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
-  
+
   // Fetch departments when category is doctor
   useEffect(() => {
     if (filters.category === 'doctor') {
@@ -75,7 +75,7 @@ const Users = () => {
   // Frontend filtering as fallback - ALWAYS applied to ensure correct filtering
   const filteredUsers = useMemo(() => {
     let filtered = [...allUsers];
-    
+
     // Apply status filter on frontend as fallback
     if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
       const statusFilter = filters.status.trim().toLowerCase();
@@ -95,19 +95,19 @@ const Users = () => {
         return user.isActive === true; // Only include active users, exclude inactive (soft-deleted)
       });
     }
-    
+
     // Apply category filter on frontend as fallback
     if (filters.category && filters.category.trim() !== '') {
       const categoryFilter = filters.category.trim().toLowerCase();
       filtered = filtered.filter(user => {
         // Map user role to category
         const userCategory = user.role === 'doctor' || user.role === 'urologist' ? 'doctor' :
-                            user.role === 'urology_nurse' ? 'nurse' :
-                            user.role === 'gp' ? 'gp' : null;
+          user.role === 'urology_nurse' ? 'nurse' :
+            user.role === 'gp' ? 'gp' : null;
         return userCategory === categoryFilter;
       });
     }
-    
+
     // Apply department filter when category is doctor
     if (filters.category === 'doctor' && selectedDepartment && selectedDepartment.trim() !== '') {
       filtered = filtered.filter(user => {
@@ -117,7 +117,7 @@ const Users = () => {
         return true; // Backend handles the filtering
       });
     }
-    
+
     // Apply search filter on frontend - ALWAYS use "starts with" (NOT includes)
     if (searchValue && searchValue.trim() !== '') {
       const searchLower = searchValue.trim().toLowerCase();
@@ -130,7 +130,7 @@ const Users = () => {
         const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
         // Also check without space (in case user types "peterparker")
         const fullNameNoSpace = `${firstName}${lastName}`.toLowerCase();
-        
+
         // STRICT "starts with" logic - check merged first+last name, first name, and email
         // Priority: 
         // 1. Full name (first + last merged) starts with search term
@@ -140,26 +140,26 @@ const Users = () => {
         const matchesFullNameNoSpace = fullNameNoSpace.startsWith(searchLower);
         const matchesFirstName = firstName.startsWith(searchLower);
         const matchesEmail = email.startsWith(searchLower);
-        
+
         const matches = matchesFullName || matchesFullNameNoSpace || matchesFirstName || matchesEmail;
         return matches;
       });
     }
-    
+
     return filtered;
   }, [allUsers, filters.status, filters.category, searchValue, selectedDepartment]);
-  
+
   // Apply frontend pagination to filtered results
   const paginatedUsers = useMemo(() => {
     const startIndex = (frontendPage - 1) * frontendPageSize;
     const endIndex = startIndex + frontendPageSize;
     return filteredUsers.slice(startIndex, endIndex);
   }, [filteredUsers, frontendPage, frontendPageSize]);
-  
+
   // Calculate pagination info
   const totalFilteredUsers = filteredUsers.length;
   const totalFrontendPages = Math.ceil(totalFilteredUsers / frontendPageSize);
-  
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setFrontendPage(1);
@@ -175,13 +175,13 @@ const Users = () => {
   // Load ALL users on component mount for frontend filtering (don't rely on backend search)
   useEffect(() => {
     setIsInitialLoad(true);
-    
+
     // Load ALL users without search filter - we'll do filtering on frontend
     const initialFilters = {
       page: 1,
       limit: 10000 // Load a very large number to get all users
     };
-    
+
     // Only add category and status filters (not search - we filter that on frontend)
     if (filters.category && filters.category.trim() !== '') {
       initialFilters.category = filters.category.trim();
@@ -193,7 +193,7 @@ const Users = () => {
       initialFilters.department_id = filters.department_id.trim();
       setSelectedDepartment(filters.department_id.trim());
     }
-    
+
     setSearchValue(filters.search || '');
     dispatch(getAllUsers(initialFilters)).finally(() => {
       setIsInitialLoad(false);
@@ -212,7 +212,7 @@ const Users = () => {
   // Get general role term for the column (Doctor for both doctor and urologist)
   const getGeneralRole = (role) => {
     if (role === 'urologist' || role === 'doctor') {
-      return 'Doctor';
+      return 'Urologist';
     }
     const roleMap = {
       'gp': 'General Practitioner',
@@ -276,12 +276,12 @@ const Users = () => {
     if (userToDelete) {
       const userName = `${userToDelete.firstName} ${userToDelete.lastName}`;
       setShowDeleteModal(false);
-      
+
       try {
         // Use the unified deleteUser endpoint which handles both users and doctors
         // The backend automatically detects if it's a doctor (ID > 1000000) or regular user
         const deleteResult = await dispatch(deleteUser(userToDelete.id));
-        
+
         if (deleteResult.type.endsWith('/fulfilled')) {
           // Success - reload users with current filters and wait for completion
           const currentFilters = {
@@ -297,11 +297,11 @@ const Users = () => {
           if (filters.department_id && filters.department_id.trim() !== '') {
             currentFilters.department_id = filters.department_id.trim();
           }
-          
+
           // Wait for the reload to complete before showing success
           try {
             const reloadResult = await dispatch(getAllUsers(currentFilters));
-            
+
             // Check if reload was successful
             if (reloadResult.type.endsWith('/fulfilled')) {
               // Show success modal after reload completes
@@ -314,7 +314,7 @@ const Users = () => {
               setSuccessMessage(`User ${userName} has been deleted successfully.`);
               setShowSuccessModal(true);
               setUserToDelete(null);
-              
+
               // Try to reload again
               dispatch(getAllUsers(currentFilters));
             }
@@ -324,7 +324,7 @@ const Users = () => {
             setSuccessMessage(`User ${userName} has been deleted successfully.`);
             setShowSuccessModal(true);
             setUserToDelete(null);
-            
+
             // Try to reload again silently
             dispatch(getAllUsers(currentFilters));
           }
@@ -338,11 +338,11 @@ const Users = () => {
         }
       } catch (error) {
         console.error('Error deleting user:', error);
-        const message = error?.response?.data?.error || 
-                       error?.response?.data?.message || 
-                       error?.message || 
-                       error?.toString() || 
-                       'An unexpected error occurred while deleting the user. Please try again.';
+        const message = error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          error?.toString() ||
+          'An unexpected error occurred while deleting the user. Please try again.';
         setErrorMessage(message);
         setShowErrorModal(true);
         setUserToDelete(null);
@@ -352,10 +352,10 @@ const Users = () => {
 
   const handleResendPasswordSetup = async (user) => {
     setResendingUserId(user.id);
-    
+
     try {
       const result = await dispatch(resendPasswordSetup(user.id));
-      
+
       if (result.type.endsWith('/fulfilled')) {
         setSuccessMessage(`Password setup email has been resent successfully to ${user.email}`);
         setShowSuccessModal(true);
@@ -403,33 +403,33 @@ const Users = () => {
 
   const handleFilterChange = useCallback((filterType, value) => {
     const cleanValue = value ? String(value).trim() : '';
-    
+
     // For search, update local state only - frontend filtering handles the rest
     if (filterType === 'search') {
       setSearchValue(cleanValue);
       dispatch(setFilters({ [filterType]: cleanValue }));
       return;
     }
-    
+
     // If category changes, clear department filter if not doctor
     if (filterType === 'category' && cleanValue !== 'doctor') {
       setSelectedDepartment('');
       dispatch(setFilters({ department_id: '' }));
     }
-    
+
     // For category and status, reload users from backend (but load all, frontend will filter)
     const newFilters = {
       page: 1,
       limit: 10000 // Load all users, frontend will filter
     };
-    
+
     // Add category filter
     if (filterType === 'category') {
       if (cleanValue) newFilters.category = cleanValue;
     } else if (filters.category && filters.category.trim() !== '') {
       newFilters.category = filters.category.trim();
     }
-    
+
     // Add department filter when category is doctor
     if (filterType === 'department_id') {
       if (cleanValue) {
@@ -441,7 +441,7 @@ const Users = () => {
     } else if (filters.category === 'doctor' && selectedDepartment) {
       newFilters.department_id = selectedDepartment;
     }
-    
+
     // Add status filter - CRITICAL: Use the new value directly, not from Redux state
     if (filterType === 'status') {
       if (cleanValue && cleanValue !== 'all') {
@@ -450,17 +450,17 @@ const Users = () => {
     } else if (filters.status && filters.status.trim() !== '' && filters.status.trim() !== 'all') {
       newFilters.status = filters.status.trim().toLowerCase();
     }
-    
+
     // Don't add search to backend filters - frontend handles search
     // searchValue is handled separately by frontend filtering
-    
+
     // Update the filter in the Redux store
     if (filterType === 'department_id') {
       dispatch(setFilters({ department_id: cleanValue }));
     } else {
       dispatch(setFilters({ [filterType]: cleanValue }));
     }
-    
+
     // Refetch users with new filters (without showing full-page loader)
     dispatch(getAllUsers(newFilters));
   }, [dispatch, filters, selectedDepartment]);
@@ -510,7 +510,7 @@ const Users = () => {
               </div>
             </div>
           </div>
-          
+
           {/* Add User Button */}
           <div className="w-full lg:w-auto">
             <button
@@ -565,43 +565,9 @@ const Users = () => {
                   <option value="">All Categories</option>
                   <option value="gp">General Practitioner</option>
                   <option value="nurse">Nurse</option>
-                  <option value="doctor">Doctor</option>
+                  <option value="doctor">Urologist</option>
                 </select>
               </div>
-
-              {/* Department Filter - Only show when category is doctor */}
-              {filters.category === 'doctor' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Department
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building2 className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <select
-                      value={selectedDepartment}
-                      onChange={(e) => handleFilterChange('department_id', e.target.value)}
-                      disabled={loadingDepartments}
-                      className={`block w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer hover:border-gray-400 ${
-                        loadingDepartments ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      <option value="">All Departments</option>
-                      {departments.map((dept) => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Status Filter */}
               <div>
@@ -646,7 +612,7 @@ const Users = () => {
               </div>
             )}
           </div>
-          
+
           {paginatedUsers.length === 0 && !isLoading ? (
             <div className="text-center py-12">
               <UserPlus className="mx-auto h-12 w-12 text-gray-400" />
@@ -697,12 +663,7 @@ const Users = () => {
                                   {user.firstName} {user.lastName}
                                 </div>
                                 {/* Department Tag (for doctors and urologists) */}
-                                {(user.role === 'doctor' || user.role === 'urologist') && user.department_name && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200">
-                                    <Building2 className="h-3 w-3 mr-1 text-teal-600" />
-                                    {user.department_name}
-                                  </span>
-                                )}
+                                {null}
                               </div>
                               <div className="text-sm text-gray-500">{user.email}</div>
                             </div>
@@ -756,7 +717,7 @@ const Users = () => {
               </table>
             </div>
           )}
-          
+
           {/* Frontend Pagination Controls */}
           {totalFrontendPages > 1 && (
             <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex items-center justify-between">
@@ -807,11 +768,10 @@ const Users = () => {
                           <button
                             key={pageNum}
                             onClick={() => setFrontendPage(pageNum)}
-                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                              frontendPage === pageNum
-                                ? 'z-10 bg-teal-50 border-teal-500 text-teal-600'
-                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                            }`}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${frontendPage === pageNum
+                              ? 'z-10 bg-teal-50 border-teal-500 text-teal-600'
+                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                              }`}
                           >
                             {pageNum}
                           </button>
@@ -863,7 +823,7 @@ const Users = () => {
 
             <div className="mb-6">
               <p className="text-gray-700 leading-relaxed">
-                Are you sure you want to delete <strong>{userToDelete.firstName} {userToDelete.lastName}</strong>? 
+                Are you sure you want to delete <strong>{userToDelete.firstName} {userToDelete.lastName}</strong>?
                 This action cannot be undone.
               </p>
             </div>

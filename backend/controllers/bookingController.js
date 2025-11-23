@@ -4,17 +4,17 @@ import { sendAppointmentReminderEmail } from '../services/emailService.js';
 // Book urologist appointment
 export const bookUrologistAppointment = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { patientId } = req.params;
-    const { 
-      appointmentDate, 
-      appointmentTime, 
-      urologistId, 
-      urologistName, 
+    const {
+      appointmentDate,
+      appointmentTime,
+      urologistId,
+      urologistName,
       notes,
       appointmentType,
-      surgeryType 
+      surgeryType
     } = req.body;
     const userId = req.user.id;
     const userRole = req.user.role;
@@ -63,7 +63,7 @@ export const bookUrologistAppointment = async (req, res) => {
         'SELECT id, first_name, last_name, role, email FROM users WHERE id = $1 AND role IN ($2, $3)',
         [urologistId, 'urologist', 'doctor']
       );
-      
+
       if (userCheck.rows.length > 0) {
         // Found in users table, now find corresponding doctors.id
         const userEmail = userCheck.rows[0].email;
@@ -71,7 +71,7 @@ export const bookUrologistAppointment = async (req, res) => {
           'SELECT id, first_name, last_name, specialization FROM doctors WHERE email = $1 AND is_active = true',
           [userEmail]
         );
-        
+
         if (doctorByEmailCheck.rows.length > 0) {
           // Use doctors.id instead of users.id
           finalUrologistId = doctorByEmailCheck.rows[0].id;
@@ -110,7 +110,7 @@ export const bookUrologistAppointment = async (req, res) => {
 
     // Determine appointment type (default to 'urologist', but allow 'surgery' for surgery pathway)
     const aptType = appointmentType || 'urologist';
-    
+
     // Insert appointment - ALWAYS use doctors.id
     const appointmentQuery = await client.query(
       `INSERT INTO appointments (
@@ -119,14 +119,14 @@ export const bookUrologistAppointment = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *`,
       [
-        patientId, 
-        aptType, 
-        appointmentDate, 
-        appointmentTime, 
+        patientId,
+        aptType,
+        appointmentDate,
+        appointmentTime,
         finalUrologistId, // Use doctors.id, not users.id
-        urologistName, 
-        surgeryType || null, 
-        notes || '', 
+        urologistName,
+        surgeryType || null,
+        notes || '',
         userId
       ]
     );
@@ -139,7 +139,7 @@ export const bookUrologistAppointment = async (req, res) => {
       'UPDATE patients SET assigned_urologist = $1 WHERE id = $2 RETURNING id, upi, first_name, last_name, assigned_urologist',
       [urologistFullName, patientId]
     );
-    
+
     console.log(`[bookUrologistAppointment] Assigned patient ${updateResult.rows[0].upi} to urologist: ${urologistFullName}`);
 
     res.json({
@@ -175,15 +175,15 @@ export const bookUrologistAppointment = async (req, res) => {
 // Book investigation
 export const bookInvestigation = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { patientId } = req.params;
-    const { 
-      investigationType, 
-      investigationName, 
-      scheduledDate, 
-      scheduledTime, 
-      notes 
+    const {
+      investigationType,
+      investigationName,
+      scheduledDate,
+      scheduledTime,
+      notes
     } = req.body;
     const userId = req.user.id;
     const userRole = req.user.role;
@@ -236,12 +236,12 @@ export const bookInvestigation = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *`,
       [
-        patientId, 
-        investigationType, 
-        investigationName, 
-        scheduledDate, 
-        scheduledTime, 
-        notes || '', 
+        patientId,
+        investigationType,
+        investigationName,
+        scheduledDate,
+        scheduledTime,
+        notes || '',
         userId
       ]
     );
@@ -258,10 +258,10 @@ export const bookInvestigation = async (req, res) => {
           'SELECT assigned_urologist FROM patients WHERE id = $1',
           [patientId]
         );
-        
+
         if (currentAssignment.rows.length > 0) {
           const currentUrologist = currentAssignment.rows[0].assigned_urologist;
-          
+
           if (!currentUrologist || currentUrologist.trim() === '') {
             // Patient not assigned yet - assign to the investigation doctor (trim for consistency)
             const trimmedInvestigationName = investigationName.trim();
@@ -311,7 +311,7 @@ export const bookInvestigation = async (req, res) => {
 // Get patient appointments
 export const getPatientAppointments = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { patientId } = req.params;
     const { type } = req.query; // Optional filter by appointment type
@@ -346,14 +346,14 @@ export const getPatientAppointments = async (req, res) => {
       FROM appointments
       WHERE patient_id = $1
     `;
-    
+
     const queryParams = [patientId];
-    
+
     if (type) {
       query += ' AND appointment_type = $2';
       queryParams.push(type);
     }
-    
+
     query += ' ORDER BY appointment_date DESC, appointment_time DESC';
 
     const result = await client.query(query, queryParams);
@@ -363,7 +363,7 @@ export const getPatientAppointments = async (req, res) => {
       // Extract surgery start and end times from notes if available
       let surgeryStartTime = null;
       let surgeryEndTime = null;
-      
+
       if (row.notes) {
         // Try to extract from notes: "Surgery Time: HH:MM - HH:MM"
         const timeRangeMatch = row.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
@@ -372,7 +372,7 @@ export const getPatientAppointments = async (req, res) => {
           surgeryEndTime = timeRangeMatch[2];
         }
       }
-      
+
       return {
         id: row.id,
         appointmentType: row.appointment_type,
@@ -418,7 +418,7 @@ export const getPatientAppointments = async (req, res) => {
 // Get patient investigation bookings
 export const getPatientInvestigationBookings = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { patientId } = req.params;
     const { type } = req.query; // Optional filter by investigation type
@@ -451,14 +451,14 @@ export const getPatientInvestigationBookings = async (req, res) => {
       FROM investigation_bookings
       WHERE patient_id = $1
     `;
-    
+
     const queryParams = [patientId];
-    
+
     if (type) {
       query += ' AND investigation_type = $2';
       queryParams.push(type);
     }
-    
+
     query += ' ORDER BY scheduled_date DESC, scheduled_time DESC';
 
     const result = await client.query(query, queryParams);
@@ -504,7 +504,7 @@ export const getPatientInvestigationBookings = async (req, res) => {
 // Get available urologists
 export const getAvailableUrologists = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     // Get urologists from doctors table (Urology department only)
     // Only include active doctors that are verified in users table
@@ -597,13 +597,13 @@ export const getAvailableUrologists = async (req, res) => {
       if (doctorsTableEmails.has(userRow.email.toLowerCase())) {
         continue;
       }
-      
+
       // Look up corresponding doctors.id by email
       const doctorByEmailCheck = await client.query(
         'SELECT id, first_name, last_name, specialization, department_id FROM doctors WHERE email = $1 AND is_active = true',
         [userRow.email]
       );
-      
+
       if (doctorByEmailCheck.rows.length > 0) {
         // Found corresponding doctors record - use doctors.id
         const doctorRow = doctorByEmailCheck.rows[0];
@@ -615,7 +615,7 @@ export const getAvailableUrologists = async (req, res) => {
             departmentName = deptResult.rows[0].name;
           }
         }
-        
+
         urologistsFromUsers.push({
           id: doctorRow.id, // Use doctors.id, not users.id
           name: `${doctorRow.first_name} ${doctorRow.last_name}`,
@@ -635,7 +635,7 @@ export const getAvailableUrologists = async (req, res) => {
 
     // Combine both lists (doctors table takes priority, no duplicates)
     const allUrologists = [...urologistsFromTable, ...urologistsFromUsers];
-    
+
     // Final deduplication by email (case-insensitive) - keep first occurrence (doctors_table takes priority)
     const seenEmails = new Set();
     const urologists = allUrologists.filter(urologist => {
@@ -672,7 +672,7 @@ export const getAvailableUrologists = async (req, res) => {
 // Get all available doctors (all specializations)
 export const getAvailableDoctors = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     // Get all doctors from the doctors table (where actual doctor records are stored)
     // Only include active doctors that are verified in users table
@@ -778,7 +778,7 @@ export const getTodaysAppointments = async (req, res) => {
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   console.log(`\n📅 [getTodaysAppointments ${requestId}] Starting`);
   console.log(`📅 [getTodaysAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
-  
+
   let client;
   try {
     console.log(`📅 [getTodaysAppointments ${requestId}] Connecting to database...`);
@@ -798,16 +798,16 @@ export const getTodaysAppointments = async (req, res) => {
       error: 'Service temporarily unavailable'
     });
   }
-  
+
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const userEmail = req.user?.email;
     console.log(`📅 [getTodaysAppointments ${requestId}] Processing for userId: ${userId}, role: ${userRole}, email: ${userEmail}`);
     const { type } = req.query; // 'investigation' or 'urologist'
-    
+
     console.log(`[getTodaysAppointments] User ID: ${userId}, Role: ${userRole}, Type: ${type}`);
-    
+
     // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
     let doctorId = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
@@ -832,9 +832,9 @@ export const getTodaysAppointments = async (req, res) => {
             data: {
               appointments: [],
               count: 0,
-              date: new Date().getFullYear() + '-' + 
-                    String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(new Date().getDate()).padStart(2, '0')
+              date: new Date().getFullYear() + '-' +
+                String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
+                String(new Date().getDate()).padStart(2, '0')
             }
           });
         }
@@ -846,20 +846,20 @@ export const getTodaysAppointments = async (req, res) => {
     } else {
       console.log(`📅 [getTodaysAppointments ${requestId}] User role is ${userRole}, skipping doctor lookup (not urologist/doctor)`);
     }
-    
+
     // Use local timezone instead of UTC to get the correct "today"
     const now = new Date();
-    const today = now.getFullYear() + '-' + 
-                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                  String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
-    
+    const today = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
+
     console.log(`📅 [getTodaysAppointments ${requestId}] Today's date: ${today}`);
-    
+
     let query = '';
     let queryParams = [today];
-    
+
     console.log(`📅 [getTodaysAppointments ${requestId}] Building query - type: ${type || 'all'}, doctorId: ${doctorId || 'null'}, userRole: ${userRole}`);
-    
+
     if (type === 'investigation') {
       console.log(`📅 [getTodaysAppointments ${requestId}] Building investigation query`);
       // Get investigation bookings for today - only show those with scheduled dates (actual appointments)
@@ -1106,12 +1106,12 @@ export const getTodaysAppointments = async (req, res) => {
         `;
       }
     }
-    
+
     console.log(`📅 [getTodaysAppointments ${requestId}] Query built successfully`);
     console.log(`📅 [getTodaysAppointments ${requestId}] Query params:`, JSON.stringify(queryParams));
     console.log(`📅 [getTodaysAppointments ${requestId}] Query type: ${type || 'all'}`);
     console.log(`📅 [getTodaysAppointments ${requestId}] Query length: ${query.length} characters`);
-    
+
     let result;
     try {
       console.log(`📅 [getTodaysAppointments ${requestId}] Executing database query...`);
@@ -1136,15 +1136,15 @@ export const getTodaysAppointments = async (req, res) => {
       console.error(`❌ [getTodaysAppointments ${requestId}] Failed query params:`, JSON.stringify(queryParams));
       throw queryError;
     }
-    
+
     // Get test results for all patients in the appointments
     const patientIds = result.rows
       .map(row => row.patient_id)
       .filter(id => id != null && id !== undefined) // Remove null/undefined
       .filter((id, index, self) => self.indexOf(id) === index); // Remove duplicates
-    
+
     let testResults = {};
-    
+
     if (patientIds.length > 0) {
       try {
         const testResultsQuery = `
@@ -1155,23 +1155,23 @@ export const getTodaysAppointments = async (req, res) => {
           FROM investigation_results
           WHERE patient_id = ANY($1::int[])
         `;
-        
+
         console.log(`📅 [getTodaysAppointments ${requestId}] Fetching test results for ${patientIds.length} patients`);
         const testResultsResult = await client.query(testResultsQuery, [patientIds]);
         console.log(`✅ [getTodaysAppointments ${requestId}] Found ${testResultsResult.rows.length} test results`);
-      
+
         // Group test results by patient ID
         testResultsResult.rows.forEach(row => {
           if (!row.patient_id) return; // Skip if patient_id is null
-          
+
           if (!testResults[row.patient_id]) {
             testResults[row.patient_id] = { mri: false, biopsy: false, trus: false };
           }
-          
+
           // Check if test type or name matches our expected values
           const testType = row.test_type ? String(row.test_type).toLowerCase() : '';
           const testName = row.test_name ? String(row.test_name).toLowerCase() : '';
-          
+
           if (testType.includes('mri') || testName.includes('mri')) {
             testResults[row.patient_id].mri = true;
           }
@@ -1191,7 +1191,7 @@ export const getTodaysAppointments = async (req, res) => {
     } else {
       console.log('[getTodaysAppointments] No patient IDs to fetch test results for');
     }
-    
+
     // Format results for frontend
     const formattedAppointments = result.rows.map((row, index) => {
       try {
@@ -1206,14 +1206,14 @@ export const getTodaysAppointments = async (req, res) => {
               const day = String(dateString.getDate()).padStart(2, '0');
               return `${year}-${month}-${day}`;
             }
-            
+
             // Handle string dates
             const date = new Date(dateString);
             if (isNaN(date.getTime())) {
               console.error('Invalid date in backend:', dateString);
               return dateString;
             }
-            
+
             // Use local timezone components to avoid UTC conversion issues
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -1288,7 +1288,7 @@ export const getTodaysAppointments = async (req, res) => {
         };
       }
     }).filter(apt => apt != null); // Remove any null entries
-    
+
     console.log(`✅ [getTodaysAppointments ${requestId}] Formatted ${formattedAppointments.length} appointments`);
     console.log(`📅 [getTodaysAppointments ${requestId}] Sending response - success: true, count: ${formattedAppointments.length}, date: ${today}`);
     res.json({
@@ -1301,23 +1301,23 @@ export const getTodaysAppointments = async (req, res) => {
       }
     });
     console.log(`✅ [getTodaysAppointments ${requestId}] Response sent successfully`);
-    
+
   } catch (error) {
     console.error(`❌ [getTodaysAppointments ${requestId}] ========== ERROR OCCURRED ==========`);
     console.error(`❌ [getTodaysAppointments ${requestId}] Error message:`, error.message);
     console.error(`❌ [getTodaysAppointments ${requestId}] Error name:`, error.name);
     console.error(`❌ [getTodaysAppointments ${requestId}] Error code:`, error.code);
     console.error(`❌ [getTodaysAppointments ${requestId}] Error stack:`, error.stack);
-    console.error(`❌ [getTodaysAppointments ${requestId}] User info:`, { 
-      id: req.user?.id, 
+    console.error(`❌ [getTodaysAppointments ${requestId}] User info:`, {
+      id: req.user?.id,
       role: req.user?.role,
-      email: req.user?.email 
+      email: req.user?.email
     });
     console.error(`❌ [getTodaysAppointments ${requestId}] Request query params:`, req.query);
     console.error(`❌ [getTodaysAppointments ${requestId}] Request method:`, req.method);
     console.error(`❌ [getTodaysAppointments ${requestId}] Request path:`, req.path);
     console.error(`❌ [getTodaysAppointments ${requestId}] ======================================`);
-    
+
     res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -1331,22 +1331,135 @@ export const getTodaysAppointments = async (req, res) => {
   }
 };
 
+// Get upcoming appointments (week/month view with pagination)
+export const getUpcomingAppointments = async (req, res) => {
+  console.log('🔥 [getUpcomingAppointments] Function called');
+  console.log('🔥 [getUpcomingAppointments] Query params:', req.query);
+  console.log('🔥 [getUpcomingAppointments] User:', req.user?.id, req.user?.role);
+
+  const client = await pool.connect();
+
+  try {
+    const { view = 'week', limit = 5, offset = 0 } = req.query;
+
+    // Use local timezone
+    const now = new Date();
+    const today = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+
+    let endDate;
+    const endDateObj = new Date(now);
+
+    if (view === 'month') {
+      endDateObj.setDate(endDateObj.getDate() + 30);
+    } else {
+      // Default to week (7 days)
+      endDateObj.setDate(endDateObj.getDate() + 7);
+    }
+
+    endDate = endDateObj.getFullYear() + '-' +
+      String(endDateObj.getMonth() + 1).padStart(2, '0') + '-' +
+      String(endDateObj.getDate()).padStart(2, '0');
+
+    console.log(`[getUpcomingAppointments] Fetching for view: ${view}, range: ${today} to ${endDate}, limit: ${limit}, offset: ${offset}`);
+
+    // Query for appointments
+    const query = `
+      SELECT 
+        a.id,
+        a.patient_id,
+        p.first_name,
+        p.last_name,
+        p.upi,
+        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+        p.gender,
+        a.appointment_date,
+        a.appointment_time,
+        a.urologist_name as urologist,
+        a.status,
+        a.notes,
+        a.appointment_type as type
+      FROM appointments a
+      JOIN patients p ON a.patient_id = p.id
+      WHERE a.appointment_date >= $1 
+      AND a.appointment_date <= $2
+      AND a.status != 'cancelled'
+      ORDER BY a.appointment_date ASC, a.appointment_time ASC
+      LIMIT $3 OFFSET $4
+    `;
+
+    const result = await client.query(query, [today, endDate, limit, offset]);
+
+    // Format results
+    const formattedAppointments = result.rows.map(row => {
+      // Format date
+      const date = new Date(row.appointment_date);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day}`;
+
+      // Format time
+      let formattedTime = row.appointment_time;
+      if (formattedTime && formattedTime.match(/^\d{2}:\d{2}:\d{2}$/)) {
+        formattedTime = formattedTime.substring(0, 5);
+      }
+
+      return {
+        id: row.id,
+        patientId: row.patient_id,
+        patientName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Unknown Patient',
+        upi: row.upi,
+        age: row.age,
+        gender: row.gender,
+        appointmentDate: formattedDate,
+        appointmentTime: formattedTime,
+        urologist: row.urologist,
+        status: row.status,
+        type: row.type,
+        notes: row.notes
+      };
+    });
+
+    res.json({
+      success: true,
+      message: 'Upcoming appointments retrieved successfully',
+      data: {
+        appointments: formattedAppointments,
+        count: formattedAppointments.length,
+        hasMore: formattedAppointments.length === parseInt(limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Get upcoming appointments error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
+  }
+};
+
 // Get no-show patients
 export const getNoShowPatients = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { type } = req.query; // 'investigation' or 'urologist'
-    
+
     // Use local timezone instead of UTC to get the correct "today"
     const now = new Date();
-    const today = now.getFullYear() + '-' + 
-                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                  String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
-    
+    const today = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
+
     let query = '';
     let queryParams = [today];
-    
+
     if (type === 'investigation') {
       // Get investigation no-shows (past appointments with no-show status)
       query = `
@@ -1431,9 +1544,9 @@ export const getNoShowPatients = async (req, res) => {
         ORDER BY scheduled_date DESC, scheduled_time DESC
       `;
     }
-    
+
     const result = await client.query(query, queryParams);
-    
+
     // Format results for frontend
     const formattedNoShows = result.rows.map(row => ({
       id: row.id,
@@ -1447,7 +1560,7 @@ export const getNoShowPatients = async (req, res) => {
       scheduledTime: row.scheduled_time,
       doctorName: row.urologist_name || row.investigation_name
     }));
-    
+
     res.json({
       success: true,
       message: 'No-show patients retrieved successfully',
@@ -1456,7 +1569,7 @@ export const getNoShowPatients = async (req, res) => {
         count: formattedNoShows.length
       }
     });
-    
+
   } catch (error) {
     console.error('Get no-show patients error:', error);
     res.status(500).json({
@@ -1472,33 +1585,33 @@ export const getNoShowPatients = async (req, res) => {
 // Mark appointment as no-show
 export const markAppointmentAsNoShow = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { appointmentId } = req.params;
     const { reason, notes, type } = req.body;
     const userId = req.user.id; // Get the logged-in user's ID
-    
+
     // Get user details for proper name display
     const userQuery = await client.query(
       'SELECT first_name, last_name, role FROM users WHERE id = $1',
       [userId]
     );
-    
+
     if (userQuery.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
-    
+
     const user = userQuery.rows[0];
     const userName = `${user.first_name} ${user.last_name}`;
-    const userRole = user.role === 'urology_nurse' ? 'Nurse' : 
-                    (user.role === 'urologist' || user.role === 'doctor') ? 'Urologist' : 
-                    user.role === 'admin' ? 'Admin' : 'User';
-    
+    const userRole = user.role === 'urology_nurse' ? 'Nurse' :
+      (user.role === 'urologist' || user.role === 'doctor') ? 'Urologist' :
+        user.role === 'admin' ? 'Admin' : 'User';
+
     let appointmentQuery, updateQuery, appointment, updateResult;
-    
+
     if (type === 'investigation') {
       // Handle investigation booking
       appointmentQuery = `
@@ -1508,18 +1621,18 @@ export const markAppointmentAsNoShow = async (req, res) => {
         JOIN patients p ON ib.patient_id = p.id
         WHERE ib.id = $1
       `;
-      
+
       const appointmentResult = await client.query(appointmentQuery, [appointmentId]);
-      
+
       if (appointmentResult.rows.length === 0) {
         return res.status(404).json({
           success: false,
           message: 'Investigation booking not found'
         });
       }
-      
+
       appointment = appointmentResult.rows[0];
-      
+
       // Update investigation booking status to no-show
       updateQuery = `
         UPDATE investigation_bookings 
@@ -1529,13 +1642,13 @@ export const markAppointmentAsNoShow = async (req, res) => {
         WHERE id = $3
         RETURNING *
       `;
-      
+
       updateResult = await client.query(updateQuery, [
         reason || 'No show',
         notes || '',
         appointmentId
       ]);
-      
+
     } else {
       // Handle urologist appointment
       appointmentQuery = `
@@ -1545,18 +1658,18 @@ export const markAppointmentAsNoShow = async (req, res) => {
         JOIN patients p ON a.patient_id = p.id
         WHERE a.id = $1
       `;
-      
+
       const appointmentResult = await client.query(appointmentQuery, [appointmentId]);
-      
+
       if (appointmentResult.rows.length === 0) {
         return res.status(404).json({
           success: false,
           message: 'Appointment not found'
         });
       }
-      
+
       appointment = appointmentResult.rows[0];
-      
+
       // Update appointment status to no-show
       updateQuery = `
         UPDATE appointments 
@@ -1566,23 +1679,23 @@ export const markAppointmentAsNoShow = async (req, res) => {
         WHERE id = $3
         RETURNING *
       `;
-      
+
       updateResult = await client.query(updateQuery, [
         reason || 'No show',
         notes || '',
         appointmentId
       ]);
     }
-    
+
     // Add timeline entry for no-show
     const timelineQuery = `
       INSERT INTO patient_notes (patient_id, note_type, note_content, author_id, author_name, author_role, created_at)
       VALUES ($1, 'no_show', $2, $3, $4, $5, CURRENT_TIMESTAMP)
     `;
-    
+
     const timelineContent = `Patient marked as No Show - Reason: ${reason || 'No show'}. Notes: ${notes || 'No additional notes'}`;
     await client.query(timelineQuery, [appointment.patient_id, timelineContent, userId, userName, userRole]);
-    
+
     res.json({
       success: true,
       message: 'Patient successfully marked as no-show',
@@ -1598,7 +1711,7 @@ export const markAppointmentAsNoShow = async (req, res) => {
         }
       }
     });
-    
+
   } catch (error) {
     console.error('Mark appointment as no-show error:', error);
     res.status(500).json({
@@ -1615,7 +1728,7 @@ export const markAppointmentAsNoShow = async (req, res) => {
 const getSpecializationFromRole = (role) => {
   const roleMap = {
     'urologist': 'Urologist',
-    'radiologist': 'Radiologist', 
+    'radiologist': 'Radiologist',
     'pathologist': 'Pathologist',
     'oncologist': 'Oncologist'
   };
@@ -1673,12 +1786,12 @@ export const addNoShowNote = async (req, res) => {
       VALUES ($1, $2, 'no_show_followup', $3, $4, $5, CURRENT_TIMESTAMP)
       RETURNING *
     `;
-    
+
     const authorName = `${user.first_name} ${user.last_name}`;
-    const authorRole = user.role === 'urology_nurse' ? 'Nurse' : 
-                      (user.role === 'urologist' || user.role === 'doctor') ? 'Urologist' : 
-                      user.role === 'admin' ? 'Admin' : 'User';
-    
+    const authorRole = user.role === 'urology_nurse' ? 'Nurse' :
+      (user.role === 'urologist' || user.role === 'doctor') ? 'Urologist' :
+        user.role === 'admin' ? 'Admin' : 'User';
+
     const noteResult = await client.query(noteQuery, [
       patientId,
       noteContent.trim(),
@@ -1745,7 +1858,7 @@ export const getNoShowNotes = async (req, res) => {
       WHERE patient_id = $1 AND note_type = 'no_show_followup'
       ORDER BY created_at DESC
     `;
-    
+
     const notesResult = await client.query(notesQuery, [patientId]);
 
     res.json({
@@ -1781,9 +1894,9 @@ export const removeNoShowNote = async (req, res) => {
       JOIN users u ON pn.author_id = u.id
       WHERE pn.id = $1
     `;
-    
+
     const noteResult = await client.query(noteQuery, [noteId]);
-    
+
     if (noteResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -1792,7 +1905,7 @@ export const removeNoShowNote = async (req, res) => {
     }
 
     const note = noteResult.rows[0];
-    
+
     // Check if user can delete the note (author or admin/urologist/doctor)
     if (note.author_id !== userId && !['admin', 'urologist', 'doctor'].includes(note.role)) {
       return res.status(403).json({
@@ -1826,7 +1939,7 @@ export const removeNoShowNote = async (req, res) => {
 // Reschedule a no-show appointment
 export const rescheduleNoShowAppointment = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { appointmentId } = req.params;
     const { newDate, newTime, newDoctorId, appointmentType, surgeryType, rescheduleReason } = req.body;
@@ -1864,17 +1977,17 @@ export const rescheduleNoShowAppointment = async (req, res) => {
        WHERE d.id = $1 AND d.is_active = true`,
       [newDoctorId]
     );
-    
+
     let finalDoctorId = newDoctorId; // Default to provided ID
     let doctorSource = 'doctors';
-    
+
     // If not found in doctors table, try users table and get corresponding doctors.id
     if (doctorResult.rows.length === 0) {
       const userCheck = await client.query(
         `SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role IN ('urologist', 'doctor') AND is_active = true`,
         [newDoctorId]
       );
-      
+
       if (userCheck.rows.length > 0) {
         // Found in users table, now find corresponding doctors.id
         const userEmail = userCheck.rows[0].email;
@@ -1882,7 +1995,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           `SELECT id, first_name, last_name, specialization FROM doctors WHERE email = $1 AND is_active = true`,
           [userEmail]
         );
-        
+
         if (doctorByEmailCheck.rows.length > 0) {
           // Use doctors.id instead of users.id
           finalDoctorId = doctorByEmailCheck.rows[0].id;
@@ -1893,7 +2006,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         }
       }
     }
-    
+
     if (doctorResult.rows.length === 0) {
       console.error(`[rescheduleNoShowAppointment] Doctor not found with ID: ${newDoctorId}`);
       return res.status(404).json({
@@ -1904,7 +2017,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
     const doctor = doctorResult.rows[0];
     const doctorName = `${doctor.first_name} ${doctor.last_name}`.trim();
-    
+
     console.log(`[rescheduleNoShowAppointment] Found doctor: ${doctorName} (Doctor ID: ${finalDoctorId}, Source: ${doctorSource})`);
 
     // Start transaction
@@ -1915,16 +2028,16 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       'SELECT id, status, patient_id FROM appointments WHERE id = $1',
       [appointmentId]
     );
-    
+
     const checkInvestigationAppointment = await client.query(
       'SELECT id, status, patient_id FROM investigation_bookings WHERE id = $1',
       [appointmentId]
     );
-    
-    const originalAppointmentType = checkUrologistAppointment.rows.length > 0 
-      ? 'urologist' 
+
+    const originalAppointmentType = checkUrologistAppointment.rows.length > 0
+      ? 'urologist'
       : (checkInvestigationAppointment.rows.length > 0 ? 'investigation' : null);
-    
+
     if (!originalAppointmentType) {
       await client.query('ROLLBACK');
       return res.status(404).json({
@@ -1932,20 +2045,20 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         message: 'Appointment not found'
       });
     }
-    
-    const patientIdForTimeline = checkUrologistAppointment.rows.length > 0 
-      ? checkUrologistAppointment.rows[0].patient_id 
+
+    const patientIdForTimeline = checkUrologistAppointment.rows.length > 0
+      ? checkUrologistAppointment.rows[0].patient_id
       : checkInvestigationAppointment.rows[0].patient_id;
-    
+
     const currentStatus = checkUrologistAppointment.rows.length > 0
       ? checkUrologistAppointment.rows[0].status
       : checkInvestigationAppointment.rows[0].status;
-    
+
     // Check if appointment type is being changed
     const isTypeChange = originalAppointmentType !== appointmentType;
-    
+
     console.log(`[rescheduleNoShowAppointment] Original type: ${originalAppointmentType}, New type: ${appointmentType}, Type change: ${isTypeChange}`);
-    
+
     // If appointment type is being changed, delete old appointment and create new one
     if (isTypeChange) {
       // Delete the old appointment
@@ -1956,10 +2069,10 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         await client.query('DELETE FROM investigation_bookings WHERE id = $1', [appointmentId]);
         console.log(`[rescheduleNoShowAppointment] Deleted old investigation appointment ${appointmentId}`);
       }
-      
+
       // Create new appointment in the other table
       const notesText = req.body.notes || '';
-      
+
       if (appointmentType === 'investigation') {
         // Create new investigation booking
         const newInvestigationQuery = `
@@ -1979,23 +2092,23 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           req.user.id,
           'scheduled'
         ]);
-        
+
         const newAppointmentId = newInvestigationResult.rows[0].id;
         console.log(`[rescheduleNoShowAppointment] Created new investigation appointment ${newAppointmentId}`);
-        
+
         // Update patient's assigned urologist
         await client.query(
           'UPDATE patients SET assigned_urologist = $1 WHERE id = $2',
           [doctorName, patientIdForTimeline]
         );
-        
+
         // Add timeline entry
         const timelineNote = `Appointment type changed from ${originalAppointmentType} to investigation and scheduled for ${newDate} at ${newTime} with ${doctorName}`;
         await client.query(
           'INSERT INTO patient_notes (patient_id, note_content, author_id, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
           [patientIdForTimeline, timelineNote, req.user.id]
         );
-        
+
         // Commit and return
         await client.query('COMMIT');
         return res.json({
@@ -2030,23 +2143,23 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           req.user.id,
           'scheduled'
         ]);
-        
+
         const newAppointmentId = newAppointmentResult.rows[0].id;
         console.log(`[rescheduleNoShowAppointment] Created new urologist appointment ${newAppointmentId}`);
-        
+
         // Update patient's assigned urologist
         await client.query(
           'UPDATE patients SET assigned_urologist = $1 WHERE id = $2',
           [doctorName, patientIdForTimeline]
         );
-        
+
         // Add timeline entry
         const timelineNote = `Appointment type changed from ${originalAppointmentType} to urologist consultation and scheduled for ${newDate} at ${newTime} with Dr. ${doctorName}`;
         await client.query(
           'INSERT INTO patient_notes (patient_id, note_content, author_id, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
           [patientIdForTimeline, timelineNote, req.user.id]
         );
-        
+
         // Commit and return
         await client.query('COMMIT');
         return res.json({
@@ -2062,7 +2175,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         });
       }
     }
-    
+
     // If appointment type is not changing, proceed with normal update
     if (appointmentType === 'investigation') {
       // Update investigation booking
@@ -2071,7 +2184,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         'SELECT status, patient_id FROM investigation_bookings WHERE id = $1',
         [appointmentId]
       );
-      
+
       if (getCurrentInvestigation.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({
@@ -2079,16 +2192,16 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           message: 'Investigation appointment not found'
         });
       }
-      
+
       const currentStatus = getCurrentInvestigation.rows[0].status;
       const patientIdForTimeline = getCurrentInvestigation.rows[0].patient_id;
-      
+
       // Build notes update - append new notes if provided
       const notesText = req.body.notes || '';
-      
+
       let updateQuery;
       let updateParams;
-      
+
       if (notesText) {
         updateQuery = `
           UPDATE investigation_bookings 
@@ -2115,9 +2228,9 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         `;
         updateParams = [newDate, newTime, doctorName, appointmentId];
       }
-      
+
       const updateResult = await client.query(updateQuery, updateParams);
-      
+
       if (updateResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({
@@ -2134,14 +2247,14 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       `;
       await client.query(updatePatientQuery, [doctorName, patientIdForTimeline]);
       console.log(`[rescheduleNoShowAppointment] Assigned patient ${patientIdForTimeline} to urologist: ${doctorName}`);
-      
+
       // Add timeline entry for the update
       const timelineQuery = `
         INSERT INTO patient_notes (patient_id, note_content, author_id, created_at)
         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
       `;
-      
-      const timelineNote = currentStatus === 'no_show' 
+
+      const timelineNote = currentStatus === 'no_show'
         ? `Investigation appointment rescheduled from no-show to ${newDate} at ${newTime} with ${doctorName}`
         : `Investigation appointment updated to ${newDate} at ${newTime} with ${doctorName}`;
       await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id]);
@@ -2153,7 +2266,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         'SELECT status, patient_id FROM appointments WHERE id = $1',
         [appointmentId]
       );
-      
+
       if (getCurrentAppointment.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({
@@ -2161,16 +2274,16 @@ export const rescheduleNoShowAppointment = async (req, res) => {
           message: 'Appointment not found'
         });
       }
-      
+
       const currentStatus = getCurrentAppointment.rows[0].status;
       const patientIdForTimeline = getCurrentAppointment.rows[0].patient_id;
-      
+
       // Build notes update - append new notes if provided
       const notesText = req.body.notes || '';
-      
+
       let updateQuery;
       let updateParams;
-      
+
       if (notesText) {
         updateQuery = `
           UPDATE appointments 
@@ -2201,9 +2314,9 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         `;
         updateParams = [newDate, newTime, finalDoctorId, doctorName, surgeryType || null, appointmentId];
       }
-      
+
       const updateResult = await client.query(updateQuery, updateParams);
-      
+
       // Update patient's assigned urologist if doctor changed
       const updatePatientUrologistQuery = `
         UPDATE patients 
@@ -2212,21 +2325,21 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       `;
       await client.query(updatePatientUrologistQuery, [doctorName, patientIdForTimeline]);
       console.log(`[rescheduleNoShowAppointment] Assigned patient ${patientIdForTimeline} to urologist: ${doctorName}`);
-      
+
       // Add timeline entry for the update (if rescheduleReason is provided, include it)
       const timelineQuery = `
         INSERT INTO patient_notes (patient_id, note_content, author_id, created_at)
         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
       `;
-      
-      let timelineNote = currentStatus === 'no_show' 
+
+      let timelineNote = currentStatus === 'no_show'
         ? `Appointment rescheduled from no-show to ${newDate} at ${newTime} with Dr. ${doctorName}`
         : `Appointment updated to ${newDate} at ${newTime} with Dr. ${doctorName}`;
-      
+
       if (rescheduleReason && rescheduleReason.trim()) {
         timelineNote += `. Reason: ${rescheduleReason.trim()}`;
       }
-      
+
       await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id]);
     }
 
@@ -2282,11 +2395,11 @@ export const getAvailableTimeSlots = async (req, res) => {
     // Check if doctor exists - try doctors table first, then users table
     let doctor = null;
     let doctorSource = null;
-    
+
     // Try doctors table first
     const doctorsTableQuery = `SELECT id, first_name, last_name, specialization FROM doctors WHERE id = $1 AND is_active = true`;
     const doctorsTableResult = await client.query(doctorsTableQuery, [doctorId]);
-    
+
     if (doctorsTableResult.rows.length > 0) {
       doctor = doctorsTableResult.rows[0];
       doctorSource = 'doctors_table';
@@ -2295,14 +2408,14 @@ export const getAvailableTimeSlots = async (req, res) => {
       // Try users table for backwards compatibility
       const usersTableQuery = `SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ('urologist', 'doctor', 'radiologist', 'pathologist', 'oncologist')`;
       const usersTableResult = await client.query(usersTableQuery, [doctorId]);
-      
+
       if (usersTableResult.rows.length > 0) {
         doctor = usersTableResult.rows[0];
         doctorSource = 'users_table';
         console.log(`[getAvailableTimeSlots] Found doctor in users table: ${doctor.first_name} ${doctor.last_name} (${doctor.role})`);
       }
     }
-    
+
     if (!doctor) {
       console.error(`[getAvailableTimeSlots] Doctor not found with ID: ${doctorId}`);
       return res.status(404).json({
@@ -2325,9 +2438,9 @@ export const getAvailableTimeSlots = async (req, res) => {
     // Get existing appointments for this doctor on this date
     // CRITICAL: Check BOTH investigation_bookings AND appointments tables
     // to prevent double-booking the same doctor at the same time
-    
+
     console.log(`[getAvailableTimeSlots] Checking bookings for doctor ${doctorId} on ${date}`);
-    
+
     // Query 1: Check investigation bookings for this doctor
     const investigationQuery = `
       SELECT ib.scheduled_time, ib.status, ib.investigation_name,
@@ -2337,7 +2450,7 @@ export const getAvailableTimeSlots = async (req, res) => {
       WHERE ib.scheduled_date = $1
       AND ib.status NOT IN ('cancelled', 'no_show')
     `;
-    
+
     // Query 2: Check urologist appointments for this doctor (including surgery appointments)
     const appointmentsQuery = `
       SELECT a.appointment_time, a.status, a.notes, a.appointment_type, a.surgery_type,
@@ -2348,14 +2461,14 @@ export const getAvailableTimeSlots = async (req, res) => {
       AND a.appointment_date = $2
       AND a.status NOT IN ('cancelled', 'no_show')
     `;
-    
+
     // Execute both queries
     const investigationResult = await client.query(investigationQuery, [date]);
     const appointmentsResult = await client.query(appointmentsQuery, [doctorId, date]);
-    
+
     console.log(`[getAvailableTimeSlots] Found ${investigationResult.rows.length} investigation bookings on ${date}`);
     console.log(`[getAvailableTimeSlots] Found ${appointmentsResult.rows.length} urologist appointments for doctor ${doctorId} on ${date}`);
-    
+
     // Combine booked times from both tables
     const bookedTimesFromInvestigations = investigationResult.rows.map(row => {
       const timeValue = row.scheduled_time;
@@ -2365,18 +2478,18 @@ export const getAvailableTimeSlots = async (req, res) => {
       }
       return formattedTime;
     }).filter(time => time !== null);
-    
+
     const bookedTimesFromAppointments = [];
     const surgeryTimeRanges = []; // Store surgery time ranges to block intermediate slots
-    
+
     appointmentsResult.rows.forEach(row => {
       const timeValue = row.appointment_time;
       const formattedTime = timeValue ? timeValue.substring(0, 5) : null;
-      
+
       // Check if this is a surgery appointment (has surgery_type or appointment_type contains 'surgery')
-      const isSurgery = row.surgery_type || 
-                       (row.appointment_type && row.appointment_type.toLowerCase().includes('surgery'));
-      
+      const isSurgery = row.surgery_type ||
+        (row.appointment_type && row.appointment_type.toLowerCase().includes('surgery'));
+
       if (isSurgery && row.notes) {
         // Try to extract surgery time range from notes: "Surgery Time: HH:MM - HH:MM"
         const timeRangeMatch = row.notes.match(/Surgery Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
@@ -2396,16 +2509,16 @@ export const getAvailableTimeSlots = async (req, res) => {
         console.log(`[getAvailableTimeSlots] Urologist appointment booked: ${formattedTime} for ${row.patient_name}`);
       }
     });
-    
+
     // Generate all slots that fall within surgery time ranges
     const surgeryBlockedSlots = new Set();
     surgeryTimeRanges.forEach(({ startTime, endTime }) => {
       const [startHour, startMinute] = startTime.split(':').map(Number);
       const [endHour, endMinute] = endTime.split(':').map(Number);
-      
+
       const startMinutes = startHour * 60 + startMinute;
       const endMinutes = endHour * 60 + endMinute;
-      
+
       // Generate all 30-minute slots between start and end time (inclusive)
       for (let minutes = startMinutes; minutes <= endMinutes; minutes += 30) {
         const hour = Math.floor(minutes / 60);
@@ -2414,22 +2527,22 @@ export const getAvailableTimeSlots = async (req, res) => {
         surgeryBlockedSlots.add(slotTime);
       }
     });
-    
+
     // Convert Set to Array and log
     const surgeryBlockedSlotsArray = Array.from(surgeryBlockedSlots);
     if (surgeryBlockedSlotsArray.length > 0) {
       console.log(`[getAvailableTimeSlots] Surgery blocked slots: ${JSON.stringify(surgeryBlockedSlotsArray)}`);
     }
-    
+
     // Merge all booked times (regular appointments + investigation + surgery blocked slots)
     const bookedTimes = [...new Set([...bookedTimesFromInvestigations, ...bookedTimesFromAppointments, ...surgeryBlockedSlotsArray])];
-    
+
     console.log(`[getAvailableTimeSlots] Total booked times (combined): ${JSON.stringify(bookedTimes)}`);
 
     // Check if the selected date is today to disable past time slots
     // Use client's timezone offset if provided, otherwise use server time
     const now = new Date();
-    
+
     // Apply timezone offset from client if provided (in minutes, e.g., -330 for IST)
     let currentDateTime = now;
     if (timezoneOffset) {
@@ -2438,10 +2551,10 @@ export const getAvailableTimeSlots = async (req, res) => {
       currentDateTime = new Date(now.getTime() - (offsetMinutes * 60 * 1000));
       console.log(`[getAvailableTimeSlots] Using client timezone offset: ${offsetMinutes} minutes`);
     }
-    
-    const today = currentDateTime.getFullYear() + '-' + 
-                  String(currentDateTime.getMonth() + 1).padStart(2, '0') + '-' + 
-                  String(currentDateTime.getDate()).padStart(2, '0');
+
+    const today = currentDateTime.getFullYear() + '-' +
+      String(currentDateTime.getMonth() + 1).padStart(2, '0') + '-' +
+      String(currentDateTime.getDate()).padStart(2, '0');
     const isToday = date === today;
     const currentHour = currentDateTime.getHours();
     const currentMinute = currentDateTime.getMinutes();
@@ -2455,19 +2568,19 @@ export const getAvailableTimeSlots = async (req, res) => {
     const availableSlots = allSlots.map(time => {
       const isBooked = bookedTimes.includes(time);
       let isPastTime = false;
-      
+
       if (isToday) {
         // For today, check if the time slot has already passed
         const [slotHour, slotMinute] = time.split(':').map(Number);
         const slotTimeInMinutes = slotHour * 60 + slotMinute;
         const currentTimeInMinutes = currentHour * 60 + currentMinute;
         isPastTime = slotTimeInMinutes <= currentTimeInMinutes;
-        
+
         if (isPastTime) {
           console.log(`[getAvailableTimeSlots] Marking ${time} as past time (current: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
         }
       }
-      
+
       return {
         time,
         available: !isBooked && !isPastTime
@@ -2501,7 +2614,7 @@ export const getAllAppointments = async (req, res) => {
   console.log(`\n📅 [getAllAppointments ${requestId}] Starting`);
   console.log(`📅 [getAllAppointments ${requestId}] Query params:`, req.query);
   console.log(`📅 [getAllAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
-  
+
   let client;
   try {
     console.log(`📅 [getAllAppointments ${requestId}] Connecting to database...`);
@@ -2521,13 +2634,13 @@ export const getAllAppointments = async (req, res) => {
       error: 'Service temporarily unavailable'
     });
   }
-  
+
   try {
     const { startDate, endDate, urologistId, search } = req.query;
     console.log(`📅 [getAllAppointments ${requestId}] Processing query with startDate: ${startDate}, endDate: ${endDate}, urologistId: ${urologistId}, search: ${search}`);
-    
+
     let queryParams = [];
-    
+
     // If urologistId is provided, determine if it's doctors.id or users.id
     // Appointments have urologist_id pointing to doctors.id
     let doctorId = null;
@@ -2539,7 +2652,7 @@ export const getAllAppointments = async (req, res) => {
         'SELECT id FROM doctors WHERE id = $1 AND is_active = true',
         [urologistIdInt]
       );
-      
+
       if (doctorCheck.rows.length > 0) {
         // urologistId is already a doctors.id
         doctorId = urologistIdInt;
@@ -2585,12 +2698,12 @@ export const getAllAppointments = async (req, res) => {
         }
       }
     }
-    
+
     // Build first part - urologist appointments (includes regular consultations and surgery appointments)
     // Note: Date parameters will be added later to the outer query, so inner query uses $1 for urologist filter
     let urologistWhere = ['a.status != \'cancelled\''];
     let innerQueryParams = [];
-    
+
     // Add urologist filter - use doctors.id only
     // Note: Appointments might have been created with either doctors.id or users.id
     // But we only want to match by doctors.id (as per user requirement)
@@ -2603,10 +2716,10 @@ export const getAllAppointments = async (req, res) => {
       innerQueryParams.push(-1); // Use invalid ID to return no results
       urologistWhere.push(`a.urologist_id = $1`);
     }
-    
+
     // Note: Surgery appointments are stored in the appointments table with appointment_type = 'surgery'
     // They are already included in the first part of the UNION query
-    
+
     // Build query to get both urologist appointments and investigation bookings
     // IMPORTANT: Using INNER JOINs ensures only patients with appointments are returned
     // This guarantees that search results will only include patients who have booked appointments
@@ -2671,12 +2784,12 @@ export const getAllAppointments = async (req, res) => {
         AND ib.scheduled_time IS NOT NULL
         AND ib.status NOT IN ('requested', 'requested_urgent')
     `;
-    
+
     // Combine inner query params with date params for final query
     queryParams = [...innerQueryParams];
-    
+
     let whereConditions = [];
-    
+
     // Add date range filter
     if (startDate && endDate) {
       const startParamIndex = queryParams.length + 1;
@@ -2684,7 +2797,7 @@ export const getAllAppointments = async (req, res) => {
       queryParams.push(startDate, endDate);
       whereConditions.push(`appointment_date BETWEEN $${startParamIndex} AND $${endParamIndex}`);
     }
-    
+
     // Add search filter for patient name
     // Note: This search is applied to the combined_appointments subquery which already contains
     // only patients with appointments (via INNER JOINs), ensuring search only returns patients with bookings
@@ -2694,7 +2807,7 @@ export const getAllAppointments = async (req, res) => {
       queryParams.push(searchTerm);
       whereConditions.push(`(first_name || ' ' || last_name) ILIKE $${searchParamIndex}`);
     }
-    
+
     // Wrap the query in a subquery to apply filters
     // The base query already ensures only patients with appointments are included via INNER JOINs
     if (whereConditions.length > 0) {
@@ -2702,12 +2815,12 @@ export const getAllAppointments = async (req, res) => {
     } else {
       query = `SELECT * FROM (${query}) AS combined_appointments`;
     }
-    
+
     query += ` ORDER BY appointment_date, appointment_time`;
-    
+
     console.log(`📅 [getAllAppointments ${requestId}] Executing query with ${queryParams.length} params:`, queryParams);
     console.log(`📅 [getAllAppointments ${requestId}] Query length: ${query.length} characters`);
-    
+
     let result;
     try {
       result = await client.query(query, queryParams);
@@ -2718,7 +2831,7 @@ export const getAllAppointments = async (req, res) => {
       console.error(`❌ [getAllAppointments ${requestId}] Query error stack:`, queryError.stack);
       throw queryError;
     }
-    
+
     // Format results for frontend
     const formattedAppointments = result.rows.map(row => {
       // Format date using local timezone to avoid UTC conversion issues
@@ -2732,14 +2845,14 @@ export const getAllAppointments = async (req, res) => {
             const day = String(dateString.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
           }
-          
+
           // Handle string dates
           const date = new Date(dateString);
           if (isNaN(date.getTime())) {
             console.error('Invalid date in backend:', dateString);
             return dateString;
           }
-          
+
           // Use local timezone components to avoid UTC conversion issues
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -2750,19 +2863,19 @@ export const getAllAppointments = async (req, res) => {
           return dateString;
         }
       };
-      
+
       const formattedDate = formatDate(row.appointment_date);
-      
+
       // Format time
       const timeStr = row.appointment_time;
       const formattedTime = timeStr ? timeStr.substring(0, 5) : '';
-      
+
       // Determine appointment type and color
       let typeColor = 'teal'; // Default for urologist consultations
       let appointmentType = 'Urologist Consultation';
-      
+
       const aptType = (row.type || '').toLowerCase();
-      
+
       if (aptType === 'investigation') {
         typeColor = 'purple';
         appointmentType = 'Investigation Appointment';
@@ -2770,13 +2883,13 @@ export const getAllAppointments = async (req, res) => {
         typeColor = 'orange'; // Orange for surgery appointments
         appointmentType = 'Surgery Appointment';
       }
-      
+
       // Determine status - treat no_show as missed
       let status = row.status;
       if (status === 'no_show' || status === 'no-show') {
         status = 'missed';
       }
-      
+
       return {
         id: row.id,
         patientId: row.patient_id,
@@ -2793,18 +2906,18 @@ export const getAllAppointments = async (req, res) => {
         notes: row.notes || '',
         type: appointmentType,
         typeColor: typeColor,
-        urologist: row.type === 'investigation' 
+        urologist: row.type === 'investigation'
           ? row.urologist_first_name || 'Unassigned'
-          : (row.urologist_first_name && row.urologist_last_name 
-              ? `Dr. ${row.urologist_first_name} ${row.urologist_last_name}`
-              : 'Unassigned'),
+          : (row.urologist_first_name && row.urologist_last_name
+            ? `Dr. ${row.urologist_first_name} ${row.urologist_last_name}`
+            : 'Unassigned'),
         reminderSent: row.reminder_sent || false,
         reminderSentAt: row.reminder_sent_at || null,
         createdAt: row.created_at,
         updatedAt: row.updated_at
       };
     });
-    
+
     console.log(`✅ [getAllAppointments ${requestId}] Formatted ${formattedAppointments.length} appointments, sending response`);
     res.json({
       success: true,
@@ -2815,7 +2928,7 @@ export const getAllAppointments = async (req, res) => {
       }
     });
     console.log(`✅ [getAllAppointments ${requestId}] Response sent successfully`);
-    
+
   } catch (error) {
     console.error(`❌ [getAllAppointments ${requestId}] Error occurred:`, error.message);
     console.error(`❌ [getAllAppointments ${requestId}] Error stack:`, error.stack);
@@ -2841,7 +2954,7 @@ export const sendAppointmentReminder = async (req, res) => {
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   console.log(`\n📧 [sendAppointmentReminder ${requestId}] Starting`);
   console.log(`📧 [sendAppointmentReminder ${requestId}] Request body:`, req.body);
-  
+
   let client;
   try {
     const {
@@ -2937,7 +3050,7 @@ export const sendBulkAppointmentReminders = async (req, res) => {
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   console.log(`\n📧 [sendBulkAppointmentReminders ${requestId}] Starting`);
   console.log(`📧 [sendBulkAppointmentReminders ${requestId}] Request body:`, req.body);
-  
+
   try {
     const { reminders } = req.body;
 
@@ -2955,8 +3068,8 @@ export const sendBulkAppointmentReminders = async (req, res) => {
     const reminderPromises = reminders.map(async (reminder) => {
       try {
         // Validate required fields
-        if (!reminder.appointmentId || !reminder.patientEmail || !reminder.patientName || 
-            !reminder.appointmentDate || !reminder.appointmentTime) {
+        if (!reminder.appointmentId || !reminder.patientEmail || !reminder.patientName ||
+          !reminder.appointmentDate || !reminder.appointmentTime) {
           throw new Error('Missing required fields');
         }
 

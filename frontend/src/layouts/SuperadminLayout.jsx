@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
-import { 
-  Users, 
-  UserPlus, 
-  Menu, 
+import {
+  Users,
+  UserPlus,
+  Menu,
   X,
   BarChart3,
   Building2,
@@ -56,12 +56,11 @@ const SuperadminLayout = () => {
   };
 
   const navigation = [
-    { name: 'Dashboard', href: '/superadmin/dashboard', icon: BarChart3 },
     { name: 'All Users', href: '/superadmin/users', icon: Users },
     // { name: 'Add User', href: '/superadmin/users/new', icon: UserPlus }, // Now handled as modal in Users page
     // { name: 'Doctors', href: '/superadmin/doctors', icon: User }, // Commented out as requested
     // { name: 'Nurses', href: '/superadmin/nurses', icon: Stethoscope }, // Commented out as requested
-    { name: 'Departments', href: '/superadmin/departments', icon: Building2 },
+    // { name: 'Departments', href: '/superadmin/departments', icon: Building2 },
   ];
 
   const isCurrentPath = (path) => {
@@ -76,7 +75,7 @@ const SuperadminLayout = () => {
     <div className="flex h-screen bg-gray-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-gray-600 bg-opacity-75 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
@@ -92,9 +91,9 @@ const SuperadminLayout = () => {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <img 
+              <img
                 src={isCollapsed ? "/qwe.png" : "/rdshgdsr.png"}
-                alt="Urology Care System Logo" 
+                alt="Urology Care System Logo"
                 className={`${isCollapsed ? 'w-10 h-10' : 'w-32 h-auto'} flex-shrink-0 transition-all duration-300`}
               />
             </div>
@@ -129,11 +128,10 @@ const SuperadminLayout = () => {
                   <Link
                     to={item.href}
                     onClick={handleLinkClick}
-                    className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${
-                      isCurrentPath(item.href)
-                        ? 'bg-teal-50 text-teal-700'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${isCurrentPath(item.href)
+                      ? 'bg-teal-50 text-teal-700'
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                     title={isCollapsed ? item.name : ''}
                   >
                     <Icon className={`text-xl ${isCollapsed ? '' : 'mr-4'} ${isCurrentPath(item.href) ? 'text-teal-600' : 'text-gray-500'}`} />
@@ -155,7 +153,7 @@ const SuperadminLayout = () => {
             <IoLogOutOutline className={`text-xl ${isCollapsed ? '' : 'mr-3'}`} />
             {!isCollapsed && <span className="font-medium">Logout</span>}
           </button>
-          
+
           {/* Powered by AhimsaGlobal */}
           {!isCollapsed && (
             <div className="text-center pt-4 border-t border-gray-100">
