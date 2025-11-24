@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiEye, FiCalendar, FiClock, FiUser } from 'react-icons/fi';
+import { FiCalendar, FiClock, FiUser } from 'react-icons/fi';
 import { IoChevronForward } from 'react-icons/io5';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import BookInvestigationModal from '../../components/BookInvestigationModal';
@@ -588,66 +588,59 @@ const OPDManagement = () => {
           searchPlaceholder="Search by name"
         />
 
-        {/* Main Layout Grid - 3 columns like urologist dashboard */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
+        {/* Main Layout Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
           {/* Left Column - Takes 2/3 width */}
-          <div className="xl:col-span-2 space-y-4 lg:space-y-6">
+          <div className="lg:col-span-2 space-y-4 lg:space-y-6">
             {/* Today's Appointments */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[32rem]">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex-shrink-0">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-base sm:text-lg font-semibold text-gray-900">Today's Appointments</h2>
-                  <div className="flex items-center space-x-3">
-                    {/* Tabs */}
-                    <div className="flex bg-gray-100 rounded-lg p-1">
-                      <button
-                        onClick={() => setActiveAppointmentTab('investigation')}
-                        className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'investigation'
-                          ? 'bg-teal-600 text-white'
-                          : 'text-gray-600 hover:text-gray-900'
-                          }`}
-                      >
-                        Investigation
-                      </button>
-                      <button
-                        onClick={() => setActiveAppointmentTab('urologist')}
-                        className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'urologist'
-                          ? 'bg-teal-600 text-white'
-                          : 'text-gray-600 hover:text-gray-900'
-                          }`}
-                      >
-                        Urologist
-                      </button>
-                    </div>
+                  {/* Tabs */}
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setActiveAppointmentTab('investigation')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'investigation'
+                        ? 'bg-teal-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                    >
+                      Investigation
+                    </button>
+                    <button
+                      onClick={() => setActiveAppointmentTab('urologist')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'urologist'
+                        ? 'bg-teal-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                    >
+                      Urologist
+                    </button>
                   </div>
                 </div>
               </div>
-              <div className="w-full">
-                <table className="w-full table-fixed">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50">
+              <div className="flex-1 overflow-auto">
+                <div className="overflow-x-auto h-full">
+                  <table className="w-full min-w-[640px]">
+                    <thead className="sticky top-0 bg-gray-50 z-10">
+                      <tr className="border-b border-gray-200">
                       {activeAppointmentTab === 'investigation' ? (
                         <>
-                          <th className="text-left py-3 px-3 font-medium text-gray-600 text-xs w-[22%]">PATIENT</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-600 text-xs w-[12%]">DATE</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-600 text-xs w-[14%]">UROLOGIST</th>
-                          <th className="text-center py-3 px-1 font-medium text-gray-600 text-xs w-[7%]">
-                            <div className="flex justify-center items-center">MRI</div>
-                          </th>
-                          <th className="text-center py-3 px-1 font-medium text-gray-600 text-xs w-[7%]">
-                            <div className="flex justify-center items-center">BIOPSY</div>
-                          </th>
-                          <th className="text-center py-3 px-1 font-medium text-gray-600 text-xs w-[7%]">
-                            <div className="flex justify-center items-center">TRUS</div>
-                          </th>
-                          <th className="text-center py-3 px-1 font-medium text-gray-600 text-xs w-[23%]">ACTIONS</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">PATIENT</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">DATE</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">UROLOGIST</th>
+                          <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">MRI</th>
+                          <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">BIOPSY</th>
+                          <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">TRUS</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">ACTIONS</th>
                         </>
                       ) : (
                         <>
-                          <th className="text-left py-3 px-3 font-medium text-gray-600 text-xs w-[22%]">PATIENT</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-600 text-xs w-[20%]">DATE OF APPOINTMENT</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-600 text-xs w-[20%]">UROLOGIST</th>
-                          <th className="text-center py-3 px-1 font-medium text-gray-600 text-xs w-[26%]">ACTIONS</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">PATIENT</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">DATE OF APPOINTMENT</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">UROLOGIST</th>
+                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">ACTIONS</th>
                         </>
                       )}
                     </tr>
@@ -683,13 +676,13 @@ const OPDManagement = () => {
                     ) : (
                       appointments.filter(apt => apt.type === activeAppointmentTab && apt.status !== 'no_show').map((appointment) => (
                         <tr key={appointment.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="py-3 px-3">
+                          <td className="py-3 sm:py-4 px-3 sm:px-6">
                             <div className="flex items-center space-x-2">
                               <div className="w-7 h-7 bg-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
                                 {getInitials(appointment.patientName)}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="font-medium text-gray-900 text-xs truncate">{appointment.patientName}</div>
+                                <div className="font-medium text-gray-900 text-xs sm:text-sm truncate">{appointment.patientName}</div>
                                 <div className="text-xs text-gray-600 truncate">
                                   {appointment.age} • {appointment.gender}
                                 </div>
@@ -700,53 +693,51 @@ const OPDManagement = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-2 text-gray-700 text-xs">
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
                             <div className="font-medium truncate">{formatDate(appointment.appointmentDate)}</div>
                             <div className="text-xs text-gray-500 truncate">{formatTime(appointment.appointmentTime)}</div>
                           </td>
                           {activeAppointmentTab === 'investigation' ? (
                             <>
-                              <td className="py-3 px-2 text-gray-700 text-xs">
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
                                 <div className="truncate">{appointment.urologist}</div>
                               </td>
-                              <td className="py-3 px-1">
+                              <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <div className="flex justify-center items-center">
                                   {getStatusIcon('mri', appointment)}
                                 </div>
                               </td>
-                              <td className="py-3 px-1">
+                              <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <div className="flex justify-center items-center">
                                   {getStatusIcon('biopsy', appointment)}
                                 </div>
                               </td>
-                              <td className="py-3 px-1">
+                              <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <div className="flex justify-center items-center">
                                   {getStatusIcon('trus', appointment)}
                                 </div>
                               </td>
                             </>
                           ) : (
-                            <td className="py-3 px-2 text-gray-700 text-xs">
+                            <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
                               <div className="truncate">{appointment.urologist}</div>
                             </td>
                           )}
-                          <td className="py-2 px-1 text-center">
-                            <div className="flex flex-row gap-0.5 justify-center items-center">
-                              <button
-                                onClick={() => handleViewEdit(appointment)}
-                                className="px-1.5 py-1 bg-teal-600 text-white text-xs rounded hover:bg-teal-700 transition-colors flex items-center space-x-0.5"
-                                title="View/Edit"
-                              >
-                                <FiEye className="w-3 h-3" />
-                                <span className="text-xs">View/Edit</span>
-                              </button>
-                            </div>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6">
+                            <button
+                              onClick={() => handleViewEdit(appointment)}
+                              className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
+                              aria-label={`View details for ${appointment.patientName}`}
+                            >
+                              View
+                            </button>
                           </td>
                         </tr>
                       ))
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
 
@@ -870,15 +861,15 @@ const OPDManagement = () => {
             </div>
           </div>
 
-          {/* Right Column - Takes 1/3 width - New Patients */}
-          <div className="xl:col-span-1 space-y-4 lg:space-y-6">
+          {/* Right Column - Takes 1/3 width */}
+          <div className="lg:col-span-1 space-y-4 lg:space-y-6">
             {/* New Patients */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-96">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex-shrink-0">
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900">New Patients</h2>
               </div>
-              <div className="p-4">
-                <div className="space-y-4 max-h-[58vh] overflow-y-auto">
+              <div className="p-4 flex-1 overflow-hidden">
+                <div className="space-y-4 h-full overflow-y-auto">
                   {loadingNewPatients ? (
                     <div className="flex items-center justify-center py-8">
                       <div className="flex items-center space-x-2">

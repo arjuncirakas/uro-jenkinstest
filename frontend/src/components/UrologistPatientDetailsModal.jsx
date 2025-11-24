@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar } from 'react-icons/io5';
+import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
@@ -100,6 +100,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [notesError, setNotesError] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
   const [deletingNote, setDeletingNote] = useState(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState(null);
@@ -434,10 +435,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         setClinicalNotes(prev => [result.data, ...prev]);
         setNoteContent('');
         
-        // Show success message
-        setSuccessModalTitle('Note Saved Successfully!');
-        setSuccessModalMessage('Your clinical note has been saved and added to the patient timeline.');
-        setIsSuccessModalOpen(true);
+        // Show "Saved" in button for 2 seconds
+        setNoteSaved(true);
+        setTimeout(() => {
+          setNoteSaved(false);
+        }, 2000);
       } else {
         console.log('❌ UrologistPatientDetailsModal: Failed to save note:', result.error);
         setNotesError(result.error || 'Failed to save note');
@@ -445,9 +447,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       }
     } catch (err) {
       console.error('❌ UrologistPatientDetailsModal: Error saving note:', err);
-      setSuccessModalTitle('Error');
-      setSuccessModalMessage('Failed to save note');
-      setIsSuccessModalOpen(true);
+      setNotesError('Failed to save note');
     } finally {
       setSavingNote(false);
     }
@@ -655,17 +655,42 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   };
 
-  const getDesignationIcon = (designation) => {
-    if (!designation) return <FaUserMd className="text-gray-600" />;
+  const getDesignationIcon = (designation, noteType = null, noteContent = '', note = null) => {
+    // Check if this is a system-generated note
+    const authorRole = designation || note?.authorRole || note?.author_role || '';
+    const isSystemGenerated = 
+      noteType === 'pathway_transfer' ||
+      noteType === 'no_show' ||
+      authorRole.toLowerCase() === 'automated' ||
+      authorRole.toLowerCase() === 'system' ||
+      noteContent.includes('PATHWAY TRANSFER') ||
+      noteContent.includes('SURGERY APPOINTMENT RESCHEDULED') ||
+      noteContent.includes('automatically marked as No Show') ||
+      noteContent.includes('automatically marked as no-show') ||
+      (!designation && (noteType === 'pathway_transfer' || noteType === 'no_show' || noteContent.includes('PATHWAY TRANSFER')));
     
-    switch (designation.toLowerCase()) {
-      case 'urologist':
-        return <FaUserMd className="text-teal-600" />;
-      case 'nurse':
-        return <FaUserNurse className="text-blue-600" />;
-      default:
-        return <FaUserMd className="text-gray-600" />;
+    if (isSystemGenerated) {
+      return <IoConstruct className="text-purple-600" />;
     }
+    
+    // Get role from multiple possible fields
+    const role = designation || note?.authorRole || note?.author_role || '';
+    const roleLower = role.toLowerCase().trim();
+    
+    if (!role) return <FaStethoscope className="text-gray-600" />;
+    
+    // Check for nurse variations
+    if (roleLower === 'nurse' || roleLower.includes('nurse')) {
+      return <FaUserNurse className="text-blue-600" />;
+    }
+    
+    // Check for urologist/doctor variations
+    if (roleLower === 'urologist' || roleLower === 'doctor' || roleLower.includes('urologist') || roleLower.includes('doctor')) {
+      return <FaStethoscope className="text-teal-600" />;
+    }
+    
+    // Default to doctor icon
+    return <FaStethoscope className="text-gray-600" />;
   };
 
   const getDesignationColor = (designation) => {
@@ -1675,6 +1700,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                             Saving...
                           </>
+                        ) : noteSaved ? (
+                          <>
+                            <IoCheckmark className="mr-2" />
+                            Saved
+                          </>
                         ) : (
                           <>
                             <FaNotesMedical className="mr-2" />
@@ -1712,7 +1742,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 <div className="px-6 py-4 border-b border-gray-200 bg-white">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                     <BsClockHistory className="mr-2 text-teal-600" />
-                    Clinical Notes Timeline
+                    Case Timeline
                   </h3>
                 </div>
                 
@@ -1879,8 +1909,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   </span>
                                 </div>
                                 
-                                {/* Actions */}
+                                {/* Author Name and Icon */}
                                 <div className="flex items-center gap-2">
+                                  {getDesignationIcon(note.authorRole || note.author_role, note.type, note.content || '', note)}
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {note.authorName || note.author_name || (note.type === 'pathway_transfer' || note.type === 'no_show' || (note.authorRole || note.author_role || '').toLowerCase() === 'automated' || (note.authorRole || note.author_role || '').toLowerCase() === 'system' || (note.content || '').includes('PATHWAY TRANSFER') || (note.content || '').includes('SURGERY APPOINTMENT RESCHEDULED') || (note.content || '').includes('automatically marked') ? 'System' : 'Unknown')}
+                                  </span>
                                   {/* Edit Appointment button - ONLY show on clinical notes with Surgery Pathway (not pathway_transfer notes, not reschedule notes) */}
                                   {(() => {
                                     const noteContent = note.content || '';
@@ -2139,33 +2173,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       </button>
                                     );
                                   })()}
-                                  <button 
-                                    onClick={() => handleDeleteClick(note.id)}
-                                    disabled={deletingNote === note.id}
-                                    className="p-1 text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                                  >
-                                    {deletingNote === note.id ? (
-                                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-                                    ) : (
-                                      <Trash className="w-4 h-4" />
-                                    )}
-                                  </button>
                                 </div>
                               </div>
                               
                               {/* Content */}
                               <div className="mb-4">
                                 {renderPathwayTransferNote(note.content || 'No content available', note.type)}
-                              </div>
-                              
-                              {/* Author */}
-                              <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
-                                <div className="flex items-center gap-2">
-                                  {getDesignationIcon(note.authorRole || 'urologist')}
-                                  <span className="text-sm font-medium text-gray-900">{note.authorName || 'Unknown'}</span>
-                                </div>
-                                <span className="text-xs text-gray-500">•</span>
-                                <span className="text-xs text-gray-500">{note.authorRole || 'Staff'}</span>
                               </div>
                             </div>
                           </div>

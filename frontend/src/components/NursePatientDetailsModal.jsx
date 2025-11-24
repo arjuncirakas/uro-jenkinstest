@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar } from 'react-icons/io5';
+import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
@@ -48,6 +48,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [notesError, setNotesError] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
   const [deletingNote, setDeletingNote] = useState(null);
   const [editingNote, setEditingNote] = useState(null);
   const [editNoteContent, setEditNoteContent] = useState('');
@@ -151,17 +152,42 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     }
   };
 
-  const getDesignationIcon = (designation) => {
-    if (!designation) return <FaUserMd className="text-gray-600" />;
+  const getDesignationIcon = (designation, noteType = null, noteContent = '', note = null) => {
+    // Check if this is a system-generated note
+    const authorRole = designation || note?.authorRole || note?.author_role || '';
+    const isSystemGenerated = 
+      noteType === 'pathway_transfer' ||
+      noteType === 'no_show' ||
+      authorRole.toLowerCase() === 'automated' ||
+      authorRole.toLowerCase() === 'system' ||
+      noteContent.includes('PATHWAY TRANSFER') ||
+      noteContent.includes('SURGERY APPOINTMENT RESCHEDULED') ||
+      noteContent.includes('automatically marked as No Show') ||
+      noteContent.includes('automatically marked as no-show') ||
+      (!designation && (noteType === 'pathway_transfer' || noteType === 'no_show' || noteContent.includes('PATHWAY TRANSFER')));
     
-    switch (designation.toLowerCase()) {
-      case 'urologist':
-        return <FaUserMd className="text-teal-600" />;
-      case 'nurse':
-        return <FaUserNurse className="text-blue-600" />;
-      default:
-        return <FaUserMd className="text-gray-600" />;
+    if (isSystemGenerated) {
+      return <IoConstruct className="text-purple-600" />;
     }
+    
+    // Get role from multiple possible fields
+    const role = designation || note?.authorRole || note?.author_role || '';
+    const roleLower = role.toLowerCase().trim();
+    
+    if (!role) return <FaStethoscope className="text-gray-600" />;
+    
+    // Check for nurse variations
+    if (roleLower === 'nurse' || roleLower.includes('nurse')) {
+      return <FaUserNurse className="text-blue-600" />;
+    }
+    
+    // Check for urologist/doctor variations
+    if (roleLower === 'urologist' || roleLower === 'doctor' || roleLower.includes('urologist') || roleLower.includes('doctor')) {
+      return <FaStethoscope className="text-teal-600" />;
+    }
+    
+    // Default to doctor icon
+    return <FaStethoscope className="text-gray-600" />;
   };
 
   const getDesignationColor = (designation) => {
@@ -655,10 +681,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         setClinicalNotes(prev => [result.data, ...prev]);
         setNoteContent('');
         
-        // Show success message
-        setSuccessModalTitle('Note Saved Successfully!');
-        setSuccessModalMessage('Your clinical note has been saved and added to the patient timeline.');
-        setIsSuccessModalOpen(true);
+        // Show "Saved" in button for 2 seconds
+        setNoteSaved(true);
+        setTimeout(() => {
+          setNoteSaved(false);
+        }, 2000);
       } else {
         setNotesError(result.error || 'Failed to save note');
         console.error('Error saving note:', result.error);
@@ -1809,6 +1836,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                             Saving...
                           </>
+                        ) : noteSaved ? (
+                          <>
+                            <IoCheckmark className="mr-2" />
+                            Saved
+                          </>
                         ) : (
                           <>
                             <FaNotesMedical className="mr-2" />
@@ -1822,13 +1854,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                   {/* Action Buttons */}
                   <div className="border-t border-gray-200 mt-2 sm:mt-3 lg:mt-4 pt-2 sm:pt-3 lg:pt-4 flex-shrink-0">
                     <div className="flex gap-3">
-                      <button
-                        onClick={() => setIsMDTSchedulingModalOpen(true)}
-                        className="flex-1 px-3 py-3 text-sm font-medium text-teal-600 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors flex items-center justify-center"
-                      >
-                        <FaUserNurse className="mr-2" />
-                        Schedule MDT
-                      </button>
                       <button
                         onClick={() => setIsAddInvestigationModalOpen(true)}
                         className="flex-1 px-3 py-3 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center"
@@ -1846,7 +1871,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <div className="px-6 py-4 border-b border-gray-200 bg-white">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                     <BsClockHistory className="mr-2 text-teal-600" />
-                    Clinical Notes Timeline
+                    Case Timeline
                   </h3>
                 </div>
                 
@@ -2021,188 +2046,19 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                       : 'No date'}
                                   </span>
                                 </div>
+                                
+                                {/* Author Name and Icon */}
+                                <div className="flex items-center gap-2">
+                                  {getDesignationIcon(note.authorRole || note.author_role, note.type, note.content || '', note)}
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {note.authorName || note.author_name || (note.type === 'pathway_transfer' || note.type === 'no_show' || (note.authorRole || note.author_role || '').toLowerCase() === 'automated' || (note.authorRole || note.author_role || '').toLowerCase() === 'system' || (note.content || '').includes('PATHWAY TRANSFER') || (note.content || '').includes('SURGERY APPOINTMENT RESCHEDULED') || (note.content || '').includes('automatically marked') ? 'System' : 'Unknown')}
+                                  </span>
+                                </div>
                               </div>
                               
                               {/* Content */}
                               <div className="mb-4">
                                 {renderPathwayTransferNote(note.content || 'No content available', note.type)}
-                              </div>
-                              
-                              {/* Author and Actions */}
-                              <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                                <div className="flex items-center gap-2">
-                                  {getDesignationIcon(note.authorRole || 'urologist')}
-                                  <span className="text-sm font-medium text-gray-900">{note.authorName || 'Unknown'}</span>
-                                  <span className="text-xs text-gray-500">•</span>
-                                  <span className="text-xs text-gray-500">{note.authorRole || 'Staff'}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {/* Edit Appointment button - ONLY show on clinical notes with Surgery Pathway */}
-                                  {(() => {
-                                    const noteContent = note.content || '';
-                                    const noteType = note.type || '';
-                                    
-                                    // Don't show button on pathway_transfer notes - only on clinical notes
-                                    if (noteType === 'pathway_transfer') {
-                                      return null;
-                                    }
-                                    
-                                    // Don't show button on reschedule notes
-                                    const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
-                                    if (isRescheduleNote) {
-                                      return null;
-                                    }
-                                    
-                                    // Only show on clinical notes that mention Surgery Pathway
-                                    const noteContentLower = noteContent.toLowerCase();
-                                    const hasSurgeryPathway = 
-                                      noteContent.includes('Surgery Pathway') || 
-                                      noteContentLower.includes('surgery pathway') ||
-                                      (noteContent.includes('Transfer To:') && noteContentLower.includes('surgery'));
-                                    
-                                    // Only show button on clinical notes with Surgery Pathway
-                                    if (!hasSurgeryPathway) {
-                                      return null;
-                                    }
-                                    
-                                    return (
-                                      <button
-                                        onClick={async () => {
-                                          try {
-                                            // Parse note content to extract appointment details
-                                            const parsedData = {};
-                                            const lines = noteContent.split('\n');
-                                            let currentKey = null;
-                                            let currentValue = [];
-                                            
-                                            lines.forEach(line => {
-                                              const trimmedLine = line.trim();
-                                              if (trimmedLine.includes('Transfer To:')) {
-                                                currentKey = 'transferTo';
-                                                parsedData[currentKey] = trimmedLine.replace('Transfer To:', '').trim();
-                                              } else if (trimmedLine.includes('Reason for Transfer:')) {
-                                                if (currentKey && currentValue.length > 0) {
-                                                  parsedData[currentKey] = currentValue.join('\n');
-                                                }
-                                                currentKey = 'reason';
-                                                currentValue = [];
-                                              } else if (trimmedLine.includes('Clinical Rationale:')) {
-                                                if (currentKey && currentValue.length > 0) {
-                                                  parsedData[currentKey] = currentValue.join('\n');
-                                                }
-                                                currentKey = 'clinicalRationale';
-                                                currentValue = [];
-                                              } else if (trimmedLine.includes('Additional Notes:')) {
-                                                if (currentKey && currentValue.length > 0) {
-                                                  parsedData[currentKey] = currentValue.join('\n');
-                                                }
-                                                currentKey = 'additionalNotes';
-                                                currentValue = [];
-                                              } else if (trimmedLine.startsWith('- Date:')) {
-                                                parsedData.surgeryDate = trimmedLine.replace('- Date:', '').trim();
-                                              } else if (trimmedLine.startsWith('- Time:')) {
-                                                parsedData.surgeryTime = trimmedLine.replace('- Time:', '').trim();
-                                              } else if (currentKey && trimmedLine) {
-                                                currentValue.push(trimmedLine);
-                                              }
-                                            });
-                                            
-                                            if (currentKey && currentValue.length > 0) {
-                                              parsedData[currentKey] = currentValue.join('\n');
-                                            }
-                                            
-                                            // Fetch appointments for this patient
-                                            const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
-                                            
-                                            if (appointmentsResult.success) {
-                                              const appointments = appointmentsResult.data?.appointments || appointmentsResult.data || [];
-                                              
-                                              // Find surgery appointment
-                                              const surgeryAppointment = appointments.find(apt => {
-                                                const aptType = (apt.appointmentType || apt.type || '').toLowerCase();
-                                                const hasSurgeryType = !!(apt.surgeryType || apt.surgery_type);
-                                                return hasSurgeryType || aptType.includes('surgery') || aptType.includes('surgical');
-                                              });
-                                              
-                                              if (surgeryAppointment) {
-                                                setSelectedSurgeryAppointment({
-                                                  ...surgeryAppointment,
-                                                  reason: parsedData.reason || surgeryAppointment.surgeryType || surgeryAppointment.surgery_type || '',
-                                                  priority: parsedData.priority || surgeryAppointment.priority || 'normal',
-                                                  clinicalRationale: parsedData.clinicalRationale || '',
-                                                  additionalNotes: parsedData.additionalNotes || ''
-                                                });
-                                                setIsEditSurgeryAppointmentModalOpen(true);
-                                              } else {
-                                                alert('No surgery appointment found for this patient. Please schedule a surgery appointment first.');
-                                              }
-                                            } else {
-                                              alert(`Failed to fetch appointment details: ${appointmentsResult.error || 'Unknown error'}`);
-                                            }
-                                          } catch (error) {
-                                            console.error('Error fetching appointment details:', error);
-                                            alert(`Error fetching appointment details: ${error.message}`);
-                                          }
-                                        }}
-                                        className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center gap-1"
-                                        title="Edit Surgery Appointment"
-                                      >
-                                        <IoCalendar className="w-3 h-3" />
-                                        Edit Appointment
-                                      </button>
-                                    );
-                                  })()}
-                                  {/* Don't show edit button for pathway transfer notes or reschedule notes */}
-                                  {(() => {
-                                    const noteContent = note.content || '';
-                                    const noteType = note.type || '';
-                                    const isPathwayTransfer = noteType === 'pathway_transfer' || noteContent.includes('PATHWAY TRANSFER');
-                                    const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
-                                    
-                                    // Only show edit button if it's not a pathway transfer note and not a reschedule note
-                                    if (isPathwayTransfer || isRescheduleNote) {
-                                      return null;
-                                    }
-                                    
-                                    return (
-                                      <button
-                                        onClick={() => handleEditNote(note)}
-                                        disabled={deletingNote === note.id}
-                                        className="text-blue-500 hover:text-blue-700 transition-colors p-1 rounded-md hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="Edit note"
-                                      >
-                                        <Edit className="w-4 h-4" />
-                                      </button>
-                                    );
-                                  })()}
-                                  {/* Don't show delete button for pathway transfer notes or reschedule notes */}
-                                  {(() => {
-                                    const noteContent = note.content || '';
-                                    const noteType = note.type || '';
-                                    const isPathwayTransfer = noteType === 'pathway_transfer' || noteContent.includes('PATHWAY TRANSFER');
-                                    const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
-                                    
-                                    // Only show delete button if it's not a pathway transfer note and not a reschedule note
-                                    if (isPathwayTransfer || isRescheduleNote) {
-                                      return null;
-                                    }
-                                    
-                                    return (
-                                      <button
-                                        onClick={() => handleDeleteNote(note.id)}
-                                        disabled={deletingNote === note.id}
-                                        className="text-red-500 hover:text-red-700 transition-colors p-1 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="Delete note"
-                                      >
-                                        {deletingNote === note.id ? (
-                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-                                        ) : (
-                                          <Trash className="w-4 h-4" />
-                                        )}
-                                      </button>
-                                    );
-                                  })()}
-                                </div>
                               </div>
                             </div>
                           </div>
