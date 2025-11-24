@@ -195,7 +195,7 @@ const DailyAppointmentsList = ({
           </div>
         ) : (
           /* Timeline View */
-          <div className="max-w-4xl mx-auto">
+          <div className="w-full">
             {timeSlots.map((slot) => {
               const slotAppointments = getAppointmentsForHour(slot.hour24);
               

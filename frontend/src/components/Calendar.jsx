@@ -723,7 +723,7 @@ const Calendar = ({
 
         {/* Day View */}
         {!isLoading && !hasError && view === 'day' && (
-          <div key={refreshKey} className="max-w-2xl mx-auto">
+          <div key={refreshKey} className="w-full">
             {timeSlots.map((time, timeIndex) => {
               const dayAppointments = getAppointmentsByDate(formatDate(currentDate), appointmentsToUse);
               // Sort appointments: upcoming first (confirmed, pending), then completed/missed
