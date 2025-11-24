@@ -947,32 +947,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
     if (testsToCreate.length > 0) {
       console.log('🔍 NursePatientDetailsModal: Creating investigation requests for:', testsToCreate);
       
-      // Get appointment date from patient data if available
-      let appointmentDate = null;
-      if (patient.appointmentDate) {
-        // Try to parse the appointment date
-        try {
-          const dateObj = new Date(patient.appointmentDate);
-          if (!isNaN(dateObj.getTime())) {
-            // Format as YYYY-MM-DD
-            const year = dateObj.getFullYear();
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            appointmentDate = `${year}-${month}-${day}`;
-          }
-        } catch (e) {
-          console.warn('Could not parse appointment date:', e);
-        }
-      }
-      
-      // If no appointment date, use current date
-      if (!appointmentDate) {
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        appointmentDate = `${year}-${month}-${day}`;
-      }
+      // Don't set scheduledDate for automatically created requests
+      // This ensures they are created as requests (not appointments) and won't appear in the appointments list
       
       for (const testName of testsToCreate) {
         try {
@@ -981,7 +957,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
             testNames: [testName],
             priority: 'routine',
             notes: 'Automatically created from investigation management',
-            scheduledDate: appointmentDate, // Use appointment date or current date
+            scheduledDate: null, // Don't set a date - this makes it a request, not an appointment
             scheduledTime: null
           });
           
@@ -2422,8 +2398,69 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                             })
                             .flat();
 
+                          // Filter out test entries like "TEST DOCTOR" and doctor appointments
+                          const filteredInvestigationRequests = investigationRequests.filter(request => {
+                            const investigationName = (request.investigationName || request.investigation_name || '').toUpperCase();
+                            const investigationType = (request.investigationType || request.investigation_type || '').toLowerCase();
+                            
+                            // Filter out TEST DOCTOR
+                            if (investigationName === 'TEST DOCTOR' || investigationName.includes('TEST DOCTOR')) {
+                              return false;
+                            }
+                            
+                            // Filter out doctor appointments - these are consultations, not test results
+                            // Doctor appointments typically have person names (first and last name with space)
+                            // or investigation_type might be 'appointment' or 'consultation'
+                            if (investigationType === 'appointment' || investigationType === 'consultation' || investigationType === 'urologist') {
+                              return false;
+                            }
+                            
+                            // Filter out entries that look like person names (doctor names)
+                            // Person names typically have a space between first and last name
+                            // and are not common test names
+                            const nameParts = investigationName.trim().split(/\s+/);
+                            if (nameParts.length >= 2) {
+                              // Check if it looks like a person name (not a test name)
+                              const commonTestNames = ['MRI', 'TRUS', 'BIOPSY', 'PSA', 'ULTRASOUND', 'CT', 'X-RAY', 'BLOOD', 'URINE'];
+                              const isTestName = commonTestNames.some(test => investigationName.includes(test));
+                              if (!isTestName) {
+                                // Likely a person name (doctor appointment), exclude it
+                                return false;
+                              }
+                            }
+                            
+                            return true;
+                          });
+                          
+                          const filteredClinicalInvestigations = clinicalInvestigations.filter(request => {
+                            const investigationName = (request.investigationName || request.investigation_name || '').toUpperCase();
+                            const investigationType = (request.investigationType || request.investigation_type || '').toLowerCase();
+                            
+                            // Filter out TEST DOCTOR
+                            if (investigationName === 'TEST DOCTOR' || investigationName.includes('TEST DOCTOR')) {
+                              return false;
+                            }
+                            
+                            // Filter out doctor appointments
+                            if (investigationType === 'appointment' || investigationType === 'consultation' || investigationType === 'urologist') {
+                              return false;
+                            }
+                            
+                            // Filter out entries that look like person names (doctor names)
+                            const nameParts = investigationName.trim().split(/\s+/);
+                            if (nameParts.length >= 2) {
+                              const commonTestNames = ['MRI', 'TRUS', 'BIOPSY', 'PSA', 'ULTRASOUND', 'CT', 'X-RAY', 'BLOOD', 'URINE'];
+                              const isTestName = commonTestNames.some(test => investigationName.includes(test));
+                              if (!isTestName) {
+                                return false;
+                              }
+                            }
+                            
+                            return true;
+                          });
+
                           // Combine investigation requests and clinical investigations
-                          const allInvestigations = [...investigationRequests, ...clinicalInvestigations];
+                          const allInvestigations = [...filteredInvestigationRequests, ...filteredClinicalInvestigations];
 
                           // Group by date
                           const groupedByDate = {};
@@ -2525,63 +2562,44 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                   };
 
                                   return (
-                                    <div key={`request-${request.id}`} className={`rounded-lg p-4 border-2 transition-all ${
-                                      request.status === 'results_awaited' 
-                                        ? 'bg-amber-50 border-amber-200' 
-                                        : request.status === 'not_required'
-                                        ? 'bg-slate-50 border-slate-200'
-                                        : 'bg-white border-gray-200'
-                                    }`}>
+                                    <div key={`request-${request.id}`} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all shadow-sm">
                                       <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-3 mb-2">
-                                            <h5 className="font-bold text-base text-gray-900">{investigationName}</h5>
-                                            <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                                              request.status === 'results_awaited'
-                                                ? 'bg-amber-200 text-amber-800'
-                                                : request.status === 'not_required'
-                                                ? 'bg-slate-200 text-slate-700'
-                                                : request.status === 'completed'
-                                                ? 'bg-green-200 text-green-800'
-                                                : 'bg-blue-200 text-blue-800'
-                                            }`}>
-                                              {request.status === 'results_awaited' ? 'RESULTS AWAITED' :
-                                               request.status === 'not_required' ? 'NOT REQUIRED' :
-                                               request.status?.toUpperCase() || 'PENDING'}
-                                            </span>
+                                          <div className="flex items-center gap-3 mb-3">
+                                            <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
                                           </div>
                                           
                                           {uploadedResult && uploadedResult.result && (
                                             <div className="text-sm text-gray-700 mb-2">
-                                              <span className="font-semibold">Result: </span>
-                                              <span>{uploadedResult.result}</span>
+                                              <span className="font-medium text-gray-600">Result: </span>
+                                              <span className="text-gray-900">{uploadedResult.result}</span>
                                             </div>
                                           )}
                                           
                                           {/* Status update controls for all investigation requests */}
                                           {!request.isClinicalInvestigation && request.id && (
-                                            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                            <div className="mt-3 flex items-center gap-2 flex-wrap">
                                               <button
                                                 onClick={() => handleStatusUpdate('results_awaited')}
-                                                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                                                   request.status === 'results_awaited'
-                                                    ? 'bg-amber-500 text-white shadow-md cursor-not-allowed'
-                                                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
+                                                    ? 'bg-amber-500 text-white cursor-not-allowed'
+                                                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
                                                 }`}
                                                 disabled={request.status === 'results_awaited'}
                                               >
-                                                ✓ Results Awaited
+                                                Results Awaited
                                               </button>
                                               <button
                                                 onClick={() => handleStatusUpdate('not_required')}
-                                                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                                                   request.status === 'not_required'
-                                                    ? 'bg-slate-500 text-white shadow-md cursor-not-allowed'
-                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
+                                                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                                                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                                                 }`}
                                                 disabled={request.status === 'not_required'}
                                               >
-                                                ✗ Not Required
+                                                Not Required
                                               </button>
                                             </div>
                                           )}
@@ -2600,7 +2618,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                                   setIsSuccessModalOpen(true);
                                                 }
                                               }}
-                                              className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                                              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
                                             >
                                               <Eye className="w-4 h-4" />
                                               View
@@ -2622,7 +2640,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                                 setSelectedInvestigationRequest(requestToUse);
                                                 setIsAddResultModalOpen(true);
                                               }}
-                                              className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-sm"
+                                              className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
                                             >
                                               <Upload className="w-4 h-4" />
                                               Upload

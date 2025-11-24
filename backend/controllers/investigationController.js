@@ -1123,6 +1123,8 @@ export const getInvestigationRequests = async (req, res) => {
     }
 
     // Build query with optional status filter
+    // Exclude doctor appointments - these are consultations, not test results
+    // Filter out: appointment, consultation, urologist types and entries that look like person names
     let query = `
       SELECT 
         id,
@@ -1136,6 +1138,29 @@ export const getInvestigationRequests = async (req, res) => {
         updated_at
       FROM investigation_bookings
       WHERE patient_id = $1
+        -- Exclude doctor appointments (consultations)
+        AND LOWER(investigation_type) NOT IN ('appointment', 'consultation', 'urologist')
+        -- Exclude entries that look like person names (doctor names)
+        -- Person names typically have spaces and don't contain common test keywords
+        AND NOT (
+          -- Check if investigation_name has 2+ words (likely a person name)
+          (LENGTH(investigation_name) - LENGTH(REPLACE(investigation_name, ' ', '')) + 1) >= 2
+          -- And doesn't contain common test names
+          AND UPPER(investigation_name) NOT LIKE '%MRI%'
+          AND UPPER(investigation_name) NOT LIKE '%TRUS%'
+          AND UPPER(investigation_name) NOT LIKE '%BIOPSY%'
+          AND UPPER(investigation_name) NOT LIKE '%PSA%'
+          AND UPPER(investigation_name) NOT LIKE '%ULTRASOUND%'
+          AND UPPER(investigation_name) NOT LIKE '%CT%'
+          AND UPPER(investigation_name) NOT LIKE '%X-RAY%'
+          AND UPPER(investigation_name) NOT LIKE '%XRAY%'
+          AND UPPER(investigation_name) NOT LIKE '%BLOOD%'
+          AND UPPER(investigation_name) NOT LIKE '%URINE%'
+          AND UPPER(investigation_name) NOT LIKE '%TEST%'
+        )
+        -- Exclude "TEST DOCTOR" entries
+        AND UPPER(investigation_name) != 'TEST DOCTOR'
+        AND UPPER(investigation_name) NOT LIKE '%TEST DOCTOR%'
     `;
     
     const queryParams = [patientId];
