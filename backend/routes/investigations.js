@@ -8,6 +8,7 @@ import {
   deleteInvestigationResult,
   createInvestigationRequest,
   getInvestigationRequests,
+  updateInvestigationRequestStatus,
   deleteInvestigationRequest,
   upload,
   serveFile
@@ -33,6 +34,18 @@ router.get('/patients/:patientId/investigation-requests',
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getInvestigationRequests
+);
+
+// Update investigation request status
+router.patch('/investigation-requests/:requestId/status',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
+  (req, res, next) => {
+    console.log(`[Investigation Routes] PATCH /investigation-requests/${req.params.requestId}/status - Route matched`);
+    next();
+  },
+  updateInvestigationRequestStatus
 );
 
 // Delete investigation request

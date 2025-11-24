@@ -703,6 +703,7 @@ export const getAllInvestigations = async (req, res) => {
     // Get all investigation results to determine test status and latest PSA
     let resultsQuery = { rows: [] };
     let latestPSAQuery = { rows: [] };
+    let bookingStatusQuery = { rows: [] };
     
     if (result.rows.length > 0) {
       const patientIds = result.rows.map(r => r.patient_id);
@@ -714,6 +715,18 @@ export const getAllInvestigations = async (req, res) => {
           test_name
         FROM investigation_results
         WHERE patient_id = ANY($1)
+      `, [patientIds]);
+      
+      // Get investigation booking statuses for MRI, Biopsy, TRUS (most recent status for each test per patient)
+      bookingStatusQuery = await client.query(`
+        SELECT DISTINCT ON (patient_id, LOWER(investigation_name))
+          patient_id,
+          investigation_name,
+          status
+        FROM investigation_bookings
+        WHERE patient_id = ANY($1)
+          AND LOWER(investigation_name) IN ('mri', 'biopsy', 'trus')
+        ORDER BY patient_id, LOWER(investigation_name), created_at DESC
       `, [patientIds]);
       
       // Get latest PSA for each patient
@@ -747,6 +760,28 @@ export const getAllInvestigations = async (req, res) => {
         patientResults[row.patient_id].trus = true;
       }
     });
+    
+    // Create a map of investigation booking statuses
+    const patientBookingStatuses = {};
+    if (bookingStatusQuery && bookingStatusQuery.rows) {
+      bookingStatusQuery.rows.forEach(row => {
+        if (!patientBookingStatuses[row.patient_id]) {
+          patientBookingStatuses[row.patient_id] = {
+            mri: null,
+            biopsy: null,
+            trus: null
+          };
+        }
+        const testName = (row.investigation_name || '').toLowerCase();
+        if (testName === 'mri') {
+          patientBookingStatuses[row.patient_id].mri = row.status;
+        } else if (testName === 'biopsy') {
+          patientBookingStatuses[row.patient_id].biopsy = row.status;
+        } else if (testName === 'trus') {
+          patientBookingStatuses[row.patient_id].trus = row.status;
+        }
+      });
+    }
     
     // Create a map of latest PSA values
     const latestPSAMap = {};
@@ -795,6 +830,17 @@ export const getAllInvestigations = async (req, res) => {
         // Use latest PSA from investigation_results, fallback to initial_psa
         const displayPSA = latestPSAMap[patientId] || row.initial_psa;
         
+        // Get booking statuses for this patient
+        const bookingStatuses = patientBookingStatuses[patientId] || { mri: null, biopsy: null, trus: null };
+        
+        // Determine status: completed if results exist, otherwise use booking status
+        const getTestStatus = (hasResult, bookingStatus) => {
+          if (hasResult) return 'completed';
+          if (bookingStatus === 'results_awaited') return 'results_awaited';
+          if (bookingStatus === 'not_required') return 'not_required';
+          return 'pending';
+        };
+        
         patientTests[patientId] = {
           id: patientId,
           patientName: `${row.first_name} ${row.last_name}`,
@@ -805,9 +851,9 @@ export const getAllInvestigations = async (req, res) => {
           appointmentDate: formatDate(row.appointment_date),
           appointmentTime: formatTime(row.appointment_time),
           urologist: row.urologist || 'Not Assigned',
-          mri: results.mri ? 'completed' : 'pending',
-          biopsy: results.biopsy ? 'completed' : 'pending',
-          trus: results.trus ? 'completed' : 'pending',
+          mri: getTestStatus(results.mri, bookingStatuses.mri),
+          biopsy: getTestStatus(results.biopsy, bookingStatuses.biopsy),
+          trus: getTestStatus(results.trus, bookingStatuses.trus),
           lastUpdated: row.booking_created_at
         };
       }
@@ -968,19 +1014,23 @@ export const createInvestigationRequest = async (req, res) => {
     const newRequest = createdRequests[0]; // Use first one for response
 
     // Create a clinical note for the investigation request with all test names
-    try {
-      const formattedDate = scheduledDate 
-        ? new Date(scheduledDate).toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })
-        : null;
-      
-      // Format test names - if multiple, show as comma-separated list
-      const testNamesDisplay = testNamesArray.join(', ');
-      
-      const noteContent = `
+    // BUT skip creating notes for automatically created requests from investigation management
+    const isAutomaticRequest = notes && notes.includes('Automatically created from investigation management');
+    
+    if (!isAutomaticRequest) {
+      try {
+        const formattedDate = scheduledDate 
+          ? new Date(scheduledDate).toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })
+          : null;
+        
+        // Format test names - if multiple, show as comma-separated list
+        const testNamesDisplay = testNamesArray.join(', ');
+        
+        const noteContent = `
 INVESTIGATION REQUEST
 
 Investigation Type: ${investigationType.toUpperCase()}
@@ -988,19 +1038,22 @@ Test/Procedure Name: ${testNamesDisplay}
 Priority: ${priority.charAt(0).toUpperCase() + priority.slice(1)}
 ${formattedDate ? `Scheduled Date: ${formattedDate}` : 'Scheduled Date: Not scheduled'}
 ${notes ? `Clinical Notes:\n${notes}` : ''}
-      `.trim();
+        `.trim();
 
-      await client.query(
-        `INSERT INTO patient_notes (
-          patient_id, note_content, note_type, author_id, author_name, author_role
-        ) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [patientId, noteContent, 'investigation_request', userId, creatorName, req.user.role]
-      );
-      
-      console.log('✅ Clinical note created for investigation request');
-    } catch (noteError) {
-      console.error('❌ Error creating clinical note:', noteError);
-      // Don't fail the request if note creation fails
+        await client.query(
+          `INSERT INTO patient_notes (
+            patient_id, note_content, note_type, author_id, author_name, author_role
+          ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [patientId, noteContent, 'investigation_request', userId, creatorName, req.user.role]
+        );
+        
+        console.log('✅ Clinical note created for investigation request');
+      } catch (noteError) {
+        console.error('❌ Error creating clinical note:', noteError);
+        // Don't fail the request if note creation fails
+      }
+    } else {
+      console.log('⏭️ Skipping clinical note creation for automatic investigation request');
     }
 
     res.json({
@@ -1125,6 +1178,69 @@ export const getInvestigationRequests = async (req, res) => {
 
   } catch (error) {
     console.error('Get investigation requests error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// Update investigation request status
+export const updateInvestigationRequestStatus = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { requestId } = req.params;
+    const { status } = req.body;
+    const userId = req.user.id;
+
+    // Validate status
+    const validStatuses = ['requested', 'requested_urgent', 'scheduled', 'urgent', 'pending', 'results_awaited', 'not_required', 'completed'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Valid statuses are: ' + validStatuses.join(', ')
+      });
+    }
+
+    // Check if request exists
+    const requestCheck = await client.query(
+      'SELECT id, patient_id FROM investigation_bookings WHERE id = $1',
+      [requestId]
+    );
+
+    if (requestCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Investigation request not found'
+      });
+    }
+
+    // Update status
+    const updateResult = await client.query(
+      `UPDATE investigation_bookings 
+       SET status = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [status, requestId]
+    );
+
+    const updatedRequest = updateResult.rows[0];
+
+    res.json({
+      success: true,
+      message: 'Investigation request status updated successfully',
+      data: {
+        id: updatedRequest.id,
+        status: updatedRequest.status,
+        updatedAt: updatedRequest.updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Update investigation request status error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
