@@ -182,6 +182,21 @@ export const investigationService = {
     }
   },
 
+  // Update investigation request status
+  updateInvestigationRequestStatus: async (requestId, status) => {
+    try {
+      const response = await apiClient.patch(`/investigation-requests/${requestId}/status`, { status });
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error updating investigation request status:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
+  },
+
   // Delete investigation request
   deleteInvestigationRequest: async (requestId) => {
     try {

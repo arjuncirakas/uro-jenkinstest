@@ -43,6 +43,21 @@ const InvestigationManagement = () => {
     fetchInvestigations();
   }, []);
 
+  // Listen for investigation status updates
+  useEffect(() => {
+    const handleInvestigationStatusUpdate = (event) => {
+      console.log('Investigation status updated event received:', event.detail);
+      // Refresh investigations to reflect updated status
+      fetchInvestigations();
+    };
+
+    window.addEventListener('investigationStatusUpdated', handleInvestigationStatusUpdate);
+    
+    return () => {
+      window.removeEventListener('investigationStatusUpdated', handleInvestigationStatusUpdate);
+    };
+  }, []);
+
   // Listen for test result added events to refresh data
   useEffect(() => {
     const handleTestResultAdded = (event) => {
@@ -231,9 +246,20 @@ const InvestigationManagement = () => {
       try {
         const result = await patientService.getPatientById(patient.id);
         if (result.success && result.data) {
+          // Preserve investigation statuses (mri, trus, biopsy) and appointment date from investigation management
           setSelectedPatient({
             ...result.data,
-            fullName: result.data.fullName || `${result.data.firstName || result.data.first_name || ''} ${result.data.lastName || result.data.last_name || ''}`.trim()
+            fullName: result.data.fullName || `${result.data.firstName || result.data.first_name || ''} ${result.data.lastName || result.data.last_name || ''}`.trim(),
+            // Preserve investigation statuses from the investigation management data
+            mri: patient.mri || result.data.mri,
+            trus: patient.trus || result.data.trus,
+            biopsy: patient.biopsy || result.data.biopsy,
+            mriStatus: patient.mri || result.data.mri,
+            trusStatus: patient.trus || result.data.trus,
+            biopsyStatus: patient.biopsy || result.data.biopsy,
+            // Preserve appointment date from investigation management
+            appointmentDate: patient.appointmentDate || result.data.appointmentDate,
+            appointmentTime: patient.appointmentTime || result.data.appointmentTime
           });
         } else {
           setSelectedPatient(patient);

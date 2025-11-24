@@ -618,6 +618,16 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
             return false;
           }
           
+          // Remove investigation requests that were automatically created from investigation management
+          // These should only appear in "Other Test Results & Reports", not in clinical notes
+          if (noteType === 'investigation_request' && content.includes('Automatically created from investigation management')) {
+            console.log('🗑️ Filtering out automatic investigation request note:', {
+              noteId: note.id,
+              content: content.substring(0, 100)
+            });
+            return false;
+          }
+          
           return true;
         });
         
@@ -878,6 +888,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         console.log('✅ NursePatientDetailsModal: Parsed investigation requests:', requests);
         console.log('✅ Number of requests:', requests.length);
         setInvestigationRequests(requests);
+        
+        // Automatically create investigation requests for MRI, TRUS, and Biopsy if patient has investigations
+        // Call this after setting requests to avoid race conditions
+        ensureMainTestRequests(requests).catch(error => {
+          console.error('Error ensuring main test requests:', error);
+        });
       } else {
         setRequestsError(result.error || 'Failed to fetch investigation requests');
         console.error('❌ NursePatientDetailsModal: Error fetching investigation requests:', result.error);
@@ -889,6 +905,110 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
       setLoadingRequests(false);
     }
   }, [patient?.id]);
+
+  // Ensure main test requests (MRI, TRUS, Biopsy) exist for patients with investigations
+  const ensureMainTestRequests = useCallback(async (existingRequests) => {
+    if (!patient?.id) return;
+    
+    // Check if patient has investigation data (mri, trus, biopsy status)
+    // These come from the investigation management page
+    const hasInvestigationData = patient.mri || patient.trus || patient.biopsy || 
+                                 patient.mriStatus || patient.trusStatus || patient.biopsyStatus;
+    
+    if (!hasInvestigationData) return;
+    
+    const mainTests = [
+      { name: 'MRI', key: 'mri' },
+      { name: 'TRUS', key: 'trus' },
+      { name: 'Biopsy', key: 'biopsy' }
+    ];
+    
+    // Check which tests need to be created
+    const testsToCreate = [];
+    
+    for (const test of mainTests) {
+      // Check if request already exists for this test
+      const testNameUpper = test.name.toUpperCase();
+      const existingRequest = existingRequests.find(req => {
+        const reqName = (req.investigationName || req.investigation_name || '').toUpperCase();
+        return reqName === testNameUpper || reqName.includes(testNameUpper) || testNameUpper.includes(reqName);
+      });
+      
+      if (!existingRequest) {
+        // Check the status - only create if not 'not_required'
+        const status = patient[test.key] || patient[`${test.key}Status`] || 'pending';
+        if (status !== 'not_required' && status !== 'NOT_REQUIRED') {
+          testsToCreate.push(test.name);
+        }
+      }
+    }
+    
+    // Create missing investigation requests
+    if (testsToCreate.length > 0) {
+      console.log('🔍 NursePatientDetailsModal: Creating investigation requests for:', testsToCreate);
+      
+      // Get appointment date from patient data if available
+      let appointmentDate = null;
+      if (patient.appointmentDate) {
+        // Try to parse the appointment date
+        try {
+          const dateObj = new Date(patient.appointmentDate);
+          if (!isNaN(dateObj.getTime())) {
+            // Format as YYYY-MM-DD
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            appointmentDate = `${year}-${month}-${day}`;
+          }
+        } catch (e) {
+          console.warn('Could not parse appointment date:', e);
+        }
+      }
+      
+      // If no appointment date, use current date
+      if (!appointmentDate) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        appointmentDate = `${year}-${month}-${day}`;
+      }
+      
+      for (const testName of testsToCreate) {
+        try {
+          const result = await investigationService.createInvestigationRequest(patient.id, {
+            investigationType: 'clinical_investigation',
+            testNames: [testName],
+            priority: 'routine',
+            notes: 'Automatically created from investigation management',
+            scheduledDate: appointmentDate, // Use appointment date or current date
+            scheduledTime: null
+          });
+          
+          if (result.success) {
+            console.log(`✅ Created investigation request for ${testName}`);
+          } else {
+            console.error(`❌ Failed to create investigation request for ${testName}:`, result.error);
+          }
+        } catch (error) {
+          console.error(`❌ Exception creating investigation request for ${testName}:`, error);
+        }
+      }
+      
+      // Refresh investigation requests after creating
+      if (testsToCreate.length > 0) {
+        setTimeout(async () => {
+          const refreshResult = await investigationService.getInvestigationRequests(patient.id);
+          if (refreshResult.success) {
+            const requests = Array.isArray(refreshResult.data) 
+              ? refreshResult.data 
+              : (refreshResult.data?.requests || []);
+            setInvestigationRequests(requests);
+          }
+        }, 500);
+      }
+    }
+  }, [patient?.id, patient?.mri, patient?.trus, patient?.biopsy, patient?.mriStatus, patient?.trusStatus, patient?.biopsyStatus]);
 
   // Handle investigation success
   const handleInvestigationSuccess = (message) => {
@@ -2221,6 +2341,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 return 'bg-blue-100 text-blue-700 border-blue-200';
                               case 'completed':
                                 return 'bg-green-100 text-green-700 border-green-200';
+                              case 'results_awaited':
+                                return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                              case 'not_required':
+                                return 'bg-gray-100 text-gray-700 border-gray-200';
                               case 'pending':
                               case 'requested':
                               case 'requested_urgent':
@@ -2305,8 +2429,19 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           const groupedByDate = {};
                           allInvestigations.forEach((request) => {
                             let dateKey = 'No Date';
+                            let dateObj = null;
+                            
+                            // Try scheduled date first
                             if (request.scheduledDate || request.scheduled_date) {
-                              const dateObj = new Date(request.scheduledDate || request.scheduled_date);
+                              dateObj = new Date(request.scheduledDate || request.scheduled_date);
+                            }
+                            // Try created date as fallback
+                            else if (request.createdAt || request.created_at) {
+                              dateObj = new Date(request.createdAt || request.created_at);
+                            }
+                            
+                            // Only use the date if it's valid (not epoch 0 or invalid)
+                            if (dateObj && !isNaN(dateObj.getTime()) && dateObj.getFullYear() > 1970) {
                               const day = String(dateObj.getDate()).padStart(2, '0');
                               const month = String(dateObj.getMonth() + 1).padStart(2, '0');
                               const year = dateObj.getFullYear();
@@ -2349,77 +2484,151 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                     return resultName === investigationName || resultName.includes(investigationName) || investigationName.includes(resultName);
                                   });
 
+                                  // Check if this is a main test (MRI, TRUS, Biopsy)
+                                  const isMainTest = ['MRI', 'TRUS', 'BIOPSY'].includes(investigationName);
+                                  
+                                  // Handle status update for main tests
+                                  const handleStatusUpdate = async (newStatus) => {
+                                    if (!request.id || request.isClinicalInvestigation) {
+                                      // For clinical investigations, we can't update status directly
+                                      return;
+                                    }
+                                    
+                                    try {
+                                      const result = await investigationService.updateInvestigationRequestStatus(request.id, newStatus);
+                                      if (result.success) {
+                                        // Refresh investigation requests
+                                        fetchInvestigationRequests();
+                                        
+                                        // Trigger event to refresh investigation management table
+                                        window.dispatchEvent(new CustomEvent('investigationStatusUpdated', {
+                                          detail: {
+                                            patientId: patient.id,
+                                            testName: investigationName,
+                                            status: newStatus
+                                          }
+                                        }));
+                                        
+                                        setSuccessModalTitle('Status Updated');
+                                        setSuccessModalMessage(`Investigation status updated to ${newStatus.replace('_', ' ').toUpperCase()}. The investigation management table will be refreshed.`);
+                                        setIsSuccessModalOpen(true);
+                                      } else {
+                                        setErrorModalTitle('Update Failed');
+                                        setErrorModalMessage(result.error || 'Failed to update status');
+                                        setIsErrorModalOpen(true);
+                                      }
+                                    } catch (error) {
+                                      setErrorModalTitle('Update Failed');
+                                      setErrorModalMessage('Failed to update investigation request status');
+                                      setIsErrorModalOpen(true);
+                                    }
+                                  };
+
                                   return (
-                                    <div key={`request-${request.id}`} className="bg-white rounded-lg p-3 border border-gray-200">
-                                      <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <h5 className="font-semibold text-gray-900">{investigationName}</h5>
-                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${getRequestStatusColor(request.status)}`}>
-                                              {request.status?.toUpperCase() || 'PENDING'}
+                                    <div key={`request-${request.id}`} className={`rounded-lg p-4 border-2 transition-all ${
+                                      request.status === 'results_awaited' 
+                                        ? 'bg-amber-50 border-amber-200' 
+                                        : request.status === 'not_required'
+                                        ? 'bg-slate-50 border-slate-200'
+                                        : 'bg-white border-gray-200'
+                                    }`}>
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-3 mb-2">
+                                            <h5 className="font-bold text-base text-gray-900">{investigationName}</h5>
+                                            <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                                              request.status === 'results_awaited'
+                                                ? 'bg-amber-200 text-amber-800'
+                                                : request.status === 'not_required'
+                                                ? 'bg-slate-200 text-slate-700'
+                                                : request.status === 'completed'
+                                                ? 'bg-green-200 text-green-800'
+                                                : 'bg-blue-200 text-blue-800'
+                                            }`}>
+                                              {request.status === 'results_awaited' ? 'RESULTS AWAITED' :
+                                               request.status === 'not_required' ? 'NOT REQUIRED' :
+                                               request.status?.toUpperCase() || 'PENDING'}
                                             </span>
                                           </div>
-                                          <div className="text-xs text-gray-600 mb-1">
-                                            <span className="font-medium">Type:</span> <span className="capitalize">{request.investigationType || request.investigation_type || 'N/A'}</span>
-                                          </div>
+                                          
                                           {uploadedResult && uploadedResult.result && (
-                                            <div className="text-xs text-gray-600 mb-1">
-                                              <span className="font-medium">Result:</span> <span className="text-gray-900">{uploadedResult.result}</span>
+                                            <div className="text-sm text-gray-700 mb-2">
+                                              <span className="font-semibold">Result: </span>
+                                              <span>{uploadedResult.result}</span>
                                             </div>
                                           )}
-                                          {uploadedResult && uploadedResult.notes && (
-                                            <div className="text-xs text-gray-600 mb-1">
-                                              <span className="font-medium">Notes:</span> <span>{uploadedResult.notes}</span>
-                                            </div>
-                                          )}
-                                          {!uploadedResult && request.notes && (
-                                            <div className="text-xs text-gray-600 mb-1">
-                                              <span className="font-medium">Notes:</span> {request.notes}
+                                          
+                                          {/* Status update controls for all investigation requests */}
+                                          {!request.isClinicalInvestigation && request.id && (
+                                            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                              <button
+                                                onClick={() => handleStatusUpdate('results_awaited')}
+                                                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                                                  request.status === 'results_awaited'
+                                                    ? 'bg-amber-500 text-white shadow-md cursor-not-allowed'
+                                                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
+                                                }`}
+                                                disabled={request.status === 'results_awaited'}
+                                              >
+                                                ✓ Results Awaited
+                                              </button>
+                                              <button
+                                                onClick={() => handleStatusUpdate('not_required')}
+                                                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                                                  request.status === 'not_required'
+                                                    ? 'bg-slate-500 text-white shadow-md cursor-not-allowed'
+                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
+                                                }`}
+                                                disabled={request.status === 'not_required'}
+                                              >
+                                                ✗ Not Required
+                                              </button>
                                             </div>
                                           )}
                                         </div>
-                                        {hasResults && uploadedResult ? (
-                                          <button
-                                            onClick={() => {
-                                              const filePath = uploadedResult.filePath || uploadedResult.file_path;
-                                              if (filePath) {
-                                                handleViewFile(filePath);
-                                              } else {
-                                                // Show result details if no file
-                                                setSuccessModalTitle('Test Result');
-                                                setSuccessModalMessage(`Result: ${uploadedResult.result || 'N/A'}\nReference Range: ${uploadedResult.referenceRange || 'N/A'}\nNotes: ${uploadedResult.notes || 'No notes'}`);
-                                                setIsSuccessModalOpen(true);
-                                              }
-                                            }}
-                                            className="ml-3 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors font-medium whitespace-nowrap flex items-center gap-1"
-                                          >
-                                            <Eye className="w-3 h-3" />
-                                            View Results
-                                          </button>
-                                        ) : (
-                                          <button
-                                            onClick={() => {
-                                              // For clinical investigations, create a request object
-                                              const requestToUse = request.isClinicalInvestigation ? {
-                                                id: request.noteId,
-                                                investigationName: request.investigationName,
-                                                investigation_name: request.investigation_name,
-                                                investigationType: request.investigationType,
-                                                investigation_type: request.investigation_type,
-                                                scheduledDate: request.scheduledDate,
-                                                scheduled_date: request.scheduled_date,
-                                                status: request.status,
-                                                notes: request.notes
-                                              } : request;
-                                              setSelectedInvestigationRequest(requestToUse);
-                                              setIsAddResultModalOpen(true);
-                                            }}
-                                            className="ml-3 px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors font-medium whitespace-nowrap flex items-center gap-1"
-                                          >
-                                            <Upload className="w-3 h-3" />
-                                            Upload Result
-                                          </button>
-                                        )}
+                                        
+                                        <div className="flex-shrink-0">
+                                          {hasResults && uploadedResult ? (
+                                            <button
+                                              onClick={() => {
+                                                const filePath = uploadedResult.filePath || uploadedResult.file_path;
+                                                if (filePath) {
+                                                  handleViewFile(filePath);
+                                                } else {
+                                                  setSuccessModalTitle('Test Result');
+                                                  setSuccessModalMessage(`Result: ${uploadedResult.result || 'N/A'}\nReference Range: ${uploadedResult.referenceRange || 'N/A'}\nNotes: ${uploadedResult.notes || 'No notes'}`);
+                                                  setIsSuccessModalOpen(true);
+                                                }
+                                              }}
+                                              className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                                            >
+                                              <Eye className="w-4 h-4" />
+                                              View
+                                            </button>
+                                          ) : (
+                                            <button
+                                              onClick={() => {
+                                                const requestToUse = request.isClinicalInvestigation ? {
+                                                  id: request.noteId,
+                                                  investigationName: request.investigationName,
+                                                  investigation_name: request.investigation_name,
+                                                  investigationType: request.investigationType,
+                                                  investigation_type: request.investigation_type,
+                                                  scheduledDate: request.scheduledDate,
+                                                  scheduled_date: request.scheduled_date,
+                                                  status: request.status,
+                                                  notes: request.notes
+                                                } : request;
+                                                setSelectedInvestigationRequest(requestToUse);
+                                                setIsAddResultModalOpen(true);
+                                              }}
+                                              className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-sm"
+                                            >
+                                              <Upload className="w-4 h-4" />
+                                              Upload
+                                            </button>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   );
