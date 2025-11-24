@@ -859,8 +859,18 @@ export const getAllInvestigations = async (req, res) => {
       }
     });
     
-    // Convert to array
-    const investigations = Object.values(patientTests);
+    // Convert to array and filter out patients where all three main investigations (MRI, TRUS, Biopsy) have results
+    const investigations = Object.values(patientTests).filter(patient => {
+      // Get the results for this patient
+      const results = patientResults[patient.id] || { mri: false, biopsy: false, trus: false };
+      
+      // If all three main investigations have results, exclude this patient from the list
+      // Only check MRI, TRUS, and Biopsy - ignore other clinical investigations
+      const allMainTestsCompleted = results.mri && results.biopsy && results.trus;
+      
+      // Return false to exclude if all three are completed, true to include otherwise
+      return !allMainTestsCompleted;
+    });
     
     res.json({
       success: true,
