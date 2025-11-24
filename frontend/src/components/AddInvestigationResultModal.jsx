@@ -5,8 +5,6 @@ import { investigationService } from '../services/investigationService';
 
 const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, patient, onSuccess }) => {
   const [result, setResult] = useState('');
-  const [referenceRange, setReferenceRange] = useState('');
-  const [status, setStatus] = useState('Normal');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState('');
@@ -70,8 +68,6 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         testName: investigationRequest.investigationName || investigationRequest.investigation_name,
         testDate: new Date().toISOString().split('T')[0],
         result: result || '',
-        referenceRange: referenceRange || '',
-        status: status,
         notes: notes || '',
         testFile: file
       };
@@ -108,8 +104,6 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
   const handleClose = () => {
     setResult('');
-    setReferenceRange('');
-    setStatus('Normal');
     setNotes('');
     setFile(null);
     setFileName('');
@@ -157,41 +151,6 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                 placeholder="e.g., 5.2 ng/mL, Positive, Negative"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
               />
-            </div>
-
-            {/* Reference Range */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reference Range
-              </label>
-              <input
-                type="text"
-                value={referenceRange}
-                onChange={(e) => setReferenceRange(e.target.value)}
-                placeholder="e.g., 0.0 - 4.0 ng/mL, Normal range"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-              />
-            </div>
-
-            {/* Status */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                required
-              >
-                <option value="Normal">Normal</option>
-                <option value="Elevated">Elevated</option>
-                <option value="Low Risk">Low Risk</option>
-                <option value="Intermediate">Intermediate</option>
-                <option value="High Risk">High Risk</option>
-                <option value="Available">Available</option>
-                <option value="Not Available">Not Available</option>
-              </select>
             </div>
 
             {/* Upload Report */}

@@ -394,16 +394,52 @@ export const getPatients = async (req, res) => {
       status = 'Active',
       assignedUrologist = '',
       carePathway = '',
+      carePathways = '', // Support multiple pathways (comma-separated)
+      activeMonitoring = '', // Special flag for active monitoring pathways
       sortBy = 'created_at',
       sortOrder = 'DESC'
     } = req.query;
 
     const offset = (page - 1) * limit;
     
+    // Determine pathways to filter
+    let pathwaysToFilter = [];
+    if (activeMonitoring === 'true' || activeMonitoring === true) {
+      // For active monitoring, include all relevant pathways
+      pathwaysToFilter = ['Active Monitoring', 'Active Surveillance', 'Medication', 'Discharge'];
+    } else if (carePathways) {
+      // Support comma-separated pathways
+      pathwaysToFilter = carePathways.split(',').map(p => p.trim()).filter(p => p);
+    } else if (carePathway) {
+      // Single pathway (backward compatibility)
+      pathwaysToFilter = [carePathway];
+    }
+
+    // Determine statuses to filter
+    // For active monitoring pathways, include both Active and Discharged statuses
+    let statusesToFilter = [];
+    if (activeMonitoring === 'true' || activeMonitoring === true || (pathwaysToFilter.includes('Discharge'))) {
+      statusesToFilter = ['Active', 'Discharged'];
+    } else {
+      statusesToFilter = [status];
+    }
+    
     // Build WHERE clause
-    let whereConditions = ['p.status = $1'];
-    let queryParams = [status];
-    let paramCount = 1;
+    let whereConditions = [];
+    let queryParams = [];
+    let paramCount = 0;
+
+    // Add status filter (support multiple statuses)
+    if (statusesToFilter.length > 0) {
+      paramCount++;
+      if (statusesToFilter.length === 1) {
+        whereConditions.push(`p.status = $${paramCount}`);
+        queryParams.push(statusesToFilter[0]);
+      } else {
+        whereConditions.push(`p.status = ANY($${paramCount}::text[])`);
+        queryParams.push(statusesToFilter);
+      }
+    }
 
     // If user is GP, filter by referred_by_gp_id
     // Only show patients explicitly assigned to this GP AND have a valid creator
@@ -417,11 +453,17 @@ export const getPatients = async (req, res) => {
     }
 
     // Add care pathway filter - CRITICAL for Active Monitoring page
-    if (carePathway) {
+    // Support multiple pathways using IN clause
+    if (pathwaysToFilter.length > 0) {
       paramCount++;
-      whereConditions.push(`p.care_pathway = $${paramCount}`);
-      queryParams.push(carePathway);
-      console.log(`🔍 Care Pathway Filter: ${carePathway}`);
+      if (pathwaysToFilter.length === 1) {
+        whereConditions.push(`p.care_pathway = $${paramCount}`);
+        queryParams.push(pathwaysToFilter[0]);
+      } else {
+        whereConditions.push(`p.care_pathway = ANY($${paramCount}::text[])`);
+        queryParams.push(pathwaysToFilter);
+      }
+      console.log(`🔍 Care Pathway Filter: ${pathwaysToFilter.join(', ')}`);
     }
 
     // Add search filter - search in first name, last name, full name (concatenated), UPI, phone, and email

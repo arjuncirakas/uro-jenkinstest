@@ -3,12 +3,12 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddClinicalInvestigationModal from './AddClinicalInvestigationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
-import AddTestResultModal from './modals/AddTestResultModal';
 import AddInvestigationResultModal from './AddInvestigationResultModal';
 import DischargeSummaryModal from './DischargeSummaryModal';
 import EditSurgeryAppointmentModal from './EditSurgeryAppointmentModal';
@@ -33,6 +33,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [errorModalTitle, setErrorModalTitle] = useState('');
   const [errorModalMessage, setErrorModalMessage] = useState('');
   const [isPSAHistoryModalOpen, setIsPSAHistoryModalOpen] = useState(false);
+  const [isPSAPlotModalOpen, setIsPSAPlotModalOpen] = useState(false);
   const [isOtherTestsHistoryModalOpen, setIsOtherTestsHistoryModalOpen] = useState(false);
   const [isMDTSchedulingModalOpen, setIsMDTSchedulingModalOpen] = useState(false);
   const [isAddInvestigationModalOpen, setIsAddInvestigationModalOpen] = useState(false);
@@ -945,12 +946,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       if (trimmedLine === 'INVESTIGATION REQUEST' || trimmedLine === 'CLINICAL INVESTIGATION') {
         data.title = trimmedLine;
       } else if (trimmedLine.includes('Investigation Type:')) {
-        const invTypeValue = trimmedLine.replace('Investigation Type:', '').trim();
-        // Handle comma-separated investigation types (for multi-select)
-        data.investigationType = invTypeValue;
-        data.investigationTypes = invTypeValue.includes(',') 
-          ? invTypeValue.split(',').map(t => t.trim()).filter(t => t)
-          : [invTypeValue];
+        // Ignore investigation type line - no longer needed for clinical investigations
+        // Keep for backward compatibility with old notes
       } else if (trimmedLine.includes('Test/Procedure Name:')) {
         const testNameValue = trimmedLine.replace('Test/Procedure Name:', '').trim();
         // Handle comma-separated test names (for multi-select)
@@ -1011,55 +1008,30 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
     return (
       <div className="space-y-3">
-        {/* Investigation Type and Test Name */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <div className="text-sm font-medium text-gray-500 mb-1">Investigation Type</div>
-            {data.investigationTypes && data.investigationTypes.length > 1 ? (
-              <div className="space-y-1">
-                {data.investigationTypes.map((type, index) => (
-                  <div key={index} className="text-base font-semibold text-gray-900">
-                    • {type}
-                  </div>
-                ))}
+        {/* Test/Procedure Names */}
+        {(() => {
+          // Extract all test names for display
+          let allTestNames = [];
+          if (data.testNamesByType) {
+            Object.values(data.testNamesByType).forEach(tests => {
+              allTestNames = [...allTestNames, ...tests];
+            });
+          } else if (data.testNames && data.testNames.length > 0) {
+            allTestNames = data.testNames;
+          } else if (data.testName) {
+            // Parse comma-separated test names
+            allTestNames = data.testName.split(',').map(t => t.trim()).filter(t => t);
+          }
+
+          return allTestNames.length > 0 ? (
+            <div>
+              <div className="text-sm font-medium text-gray-500 mb-1">Test/Procedure Name</div>
+              <div className="text-base text-gray-900">
+                {allTestNames.join(', ')}
               </div>
-            ) : (
-              <div className="text-base font-semibold text-gray-900">{data.investigationType || 'Not specified'}</div>
-            )}
-          </div>
-          <div>
-            <div className="text-sm font-medium text-gray-500 mb-1">Test/Procedure Name</div>
-            {data.testNamesByType ? (
-              // Display tests grouped by investigation type
-              <div className="space-y-2">
-                {Object.entries(data.testNamesByType).map(([type, tests]) => (
-                  <div key={type}>
-                    {data.investigationTypes && data.investigationTypes.length > 1 && (
-                      <div className="text-xs font-semibold text-gray-600 mb-1">{type}:</div>
-                    )}
-                    <div className="space-y-1 ml-2">
-                      {tests.map((test, index) => (
-                        <div key={index} className="text-base text-gray-900">
-                          • {test}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : data.testNames && data.testNames.length > 1 ? (
-              <div className="space-y-1">
-                {data.testNames.map((test, index) => (
-                  <div key={index} className="text-base text-gray-900">
-                    • {test}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-base text-gray-900">{data.testName || 'Not specified'}</div>
-            )}
-          </div>
-        </div>
+            </div>
+          ) : null;
+        })()}
 
         {/* Priority - Only show scheduled date for investigation requests, not clinical investigations */}
         {isClinicalInvestigation ? (
@@ -1274,16 +1246,28 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   } : null;
 
   // Complete PSA history from API data
-  const psaHistory = psaResults.map(result => ({
-    id: result.id,
-    date: result.test_date || result.created_at,
-    result: result.result_value || result.result,
-    referenceRange: result.reference_range || '0.0 - 4.0 ng/mL',
-    status: result.status || 'Available',
-    statusColor: 'blue',
-    notes: result.notes || result.comments || '',
-    filePath: result.file_path
-  }));
+  const psaHistory = psaResults.map(result => {
+    const date = result.test_date || result.created_at;
+    let formattedDate = 'N/A';
+    if (date) {
+      const dateObj = new Date(date);
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      formattedDate = `${day}-${month}-${year}`;
+    }
+    
+    return {
+      id: result.id,
+      date: formattedDate,
+      result: result.result_value || result.result,
+      referenceRange: result.reference_range || '0.0 - 4.0 ng/mL',
+      status: result.status || 'Available',
+      statusColor: 'blue',
+      notes: result.notes || result.comments || '',
+      filePath: result.file_path
+    };
+  });
 
   // Latest other test results from API data
   const latestOtherTests = otherTestResults.map(result => ({
@@ -1315,9 +1299,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     switch (status.toLowerCase()) {
       case 'normal':
       case 'low risk':
+      case 'low':
         return 'bg-green-100 text-green-700';
       case 'elevated':
       case 'high risk':
+      case 'high':
         return 'bg-red-100 text-red-700';
       case 'intermediate':
         return 'bg-yellow-100 text-yellow-700';
@@ -1359,6 +1345,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     setSuccessModalTitle('View Document');
     setSuccessModalMessage(`Opening ${document.name}...`);
     setIsSuccessModalOpen(true);
+  };
+
+  // Handle view file
+  const handleViewFile = (filePath) => {
+    if (filePath) {
+      investigationService.viewFile(filePath);
+    }
   };
 
   // Handle view test report
@@ -2220,12 +2213,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         <Plus className="w-3 h-3" />
                         <span>Add PSA</span>
                       </button>
-                      <button
-                        onClick={() => setIsPSAHistoryModalOpen(true)}
-                        className="px-3 py-1 bg-teal-50 border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-sm font-medium"
-                      >
-                        View History
-                      </button>
+                      {psaResults.length > 0 && (
+                        <button
+                          onClick={() => setIsPSAPlotModalOpen(true)}
+                          className="px-3 py-1 bg-teal-50 border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-sm font-medium"
+                        >
+                          View Plot
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2239,48 +2234,47 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       <div className="flex items-center justify-center py-8">
                         <div className="text-red-500">Error: {investigationsError}</div>
                       </div>
-                    ) : latestPSA ? (
-                      <div className="space-y-4">
-                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h4 className="font-semibold text-gray-900">PSA (Prostate Specific Antigen)</h4>
-                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(latestPSA.status)}`}>
-                                  {latestPSA.status}
-                                </span>
-                              </div>
-                              <div className="text-sm text-gray-600 mb-2">
-                                Date: {latestPSA.date}
-                              </div>
-                            </div>
-                            <button 
-                              onClick={() => handleViewReport(latestPSA)}
-                              className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                            >
-                              View
-                            </button>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 gap-4 mb-3">
-                            <div>
-                              <span className="text-sm font-medium text-gray-700">Result:</span>
-                              <span className="ml-2 text-sm text-gray-900">{latestPSA.result}</span>
-                            </div>
-                            <div>
-                              <span className="text-sm font-medium text-gray-700">Reference Range:</span>
-                              <span className="ml-2 text-sm text-gray-600">{latestPSA.referenceRange}</span>
-                            </div>
-                          </div>
-                          
-                          {latestPSA.notes && (
-                            <div className="pt-3 border-t border-gray-200">
-                              <span className="text-sm font-medium text-gray-700">Notes:</span>
-                              <p className="text-sm text-gray-600 mt-1">{latestPSA.notes}</p>
-                            </div>
-                          )}
-                        </div>
-                        
+                    ) : psaResults.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-2 px-4 text-sm font-medium text-gray-600">DATE</th>
+                              <th className="text-left py-2 px-4 text-sm font-medium text-gray-600">PSA VALUE (NG/ML)</th>
+                              <th className="text-left py-2 px-4 text-sm font-medium text-gray-600">NOTES</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {psaResults.map((psa) => {
+                              const date = psa.test_date || psa.created_at || psa.date;
+                              let formattedDate = 'N/A';
+                              if (date) {
+                                const dateObj = new Date(date);
+                                const day = String(dateObj.getDate()).padStart(2, '0');
+                                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                                const year = dateObj.getFullYear();
+                                formattedDate = `${day}-${month}-${year}`;
+                              }
+                              const psaValue = psa.result_value || psa.result || 'N/A';
+                              const displayValue = psaValue.toString().includes('ng/mL') ? psaValue : `${psaValue} ng/mL`;
+                              
+                              return (
+                                <tr key={psa.id} className="border-b border-gray-100">
+                                  <td className="py-3 px-4 text-sm text-gray-900">{formattedDate}</td>
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-900 font-medium">{displayValue}</span>
+                                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(psa.status)}`}>
+                                        {psa.status || 'Normal'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-sm text-gray-600">{psa.notes || psa.comments || ''}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     ) : (
                       <div className="text-center py-8">
@@ -2306,33 +2300,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     </h3>
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => setIsAddTestModalOpen(true)}
+                        onClick={() => setIsAddInvestigationModalOpen(true)}
                         className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-1"
                       >
                         <Plus className="w-3 h-3" />
                         <span>Add Test</span>
-                      </button>
-                      <button
-                        onClick={() => setIsOtherTestsHistoryModalOpen(true)}
-                        className="px-3 py-1 bg-teal-50 border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-sm font-medium"
-                      >
-                        View History
                       </button>
                     </div>
                   </div>
                 </div>
                   
                   <div className="flex-1 overflow-y-auto p-6">
-                    {(() => {
-                      console.log('🎨 Rendering Other Test Results section:');
-                      console.log('  - loadingInvestigations:', loadingInvestigations);
-                      console.log('  - loadingRequests:', loadingRequests);
-                      console.log('  - investigationsError:', investigationsError);
-                      console.log('  - requestsError:', requestsError);
-                      console.log('  - investigationRequests.length:', investigationRequests.length);
-                      console.log('  - latestOtherTests.length:', latestOtherTests.length);
-                      return null;
-                    })()}
                     {(loadingInvestigations || loadingRequests) ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="flex items-center space-x-2">
@@ -2344,122 +2322,225 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       <div className="flex items-center justify-center py-8">
                         <div className="text-red-500 text-sm">{investigationsError || requestsError}</div>
                       </div>
-                    ) : (investigationRequests.length > 0 || latestOtherTests.length > 0) ? (
-                      <div className="space-y-4">
-                        {/* Investigation Requests */}
-                        {investigationRequests.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-semibold text-purple-700 mb-3 flex items-center">
-                              <IoCalendar className="mr-2" />
-                              Pending Investigations
-                            </h4>
-                            {investigationRequests.map((request) => {
-                              const getRequestStatusColor = (status) => {
-                                switch (status?.toLowerCase()) {
-                                  case 'urgent':
-                                    return 'bg-red-100 text-red-700 border-red-200';
-                                  case 'scheduled':
-                                    return 'bg-blue-100 text-blue-700 border-blue-200';
-                                  case 'completed':
-                                    return 'bg-green-100 text-green-700 border-green-200';
-                                  case 'pending':
-                                    return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-                                  default:
-                                    return 'bg-gray-100 text-gray-700 border-gray-200';
+                    ) : (investigationRequests.length > 0 || clinicalNotes.length > 0 || allOtherTests.length > 0) ? (
+                      <div className="space-y-6">
+                        {/* Group investigation requests and clinical investigations by date */}
+                        {(() => {
+                          const getRequestStatusColor = (status) => {
+                            switch (status?.toLowerCase()) {
+                              case 'urgent':
+                                return 'bg-red-100 text-red-700 border-red-200';
+                              case 'scheduled':
+                                return 'bg-blue-100 text-blue-700 border-blue-200';
+                              case 'completed':
+                                return 'bg-green-100 text-green-700 border-green-200';
+                              case 'pending':
+                              case 'requested':
+                              case 'requested_urgent':
+                                return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                              default:
+                                return 'bg-gray-100 text-gray-700 border-gray-200';
+                            }
+                          };
+
+                          // Extract clinical investigations from notes
+                          const clinicalInvestigations = clinicalNotes
+                            .filter(note => note.type === 'clinical_investigation' || (note.content && note.content.includes('CLINICAL INVESTIGATION')))
+                            .map(note => {
+                              const content = note.content || '';
+                              const lines = content.split('\n').filter(line => line.trim());
+                              const data = {};
+                              
+                              lines.forEach(line => {
+                                const trimmedLine = line.trim();
+                                if (trimmedLine.includes('Test/Procedure Name:')) {
+                                  const testNameValue = trimmedLine.replace('Test/Procedure Name:', '').trim();
+                                  data.testName = testNameValue;
+                                  // Parse comma-separated test names
+                                  if (testNameValue.includes(',')) {
+                                    data.testNames = testNameValue.split(',').map(t => t.trim()).filter(t => t);
+                                  } else if (testNameValue.includes(':')) {
+                                    // Handle format like "PSA: PSA Total, PSA Free"
+                                    const parts = testNameValue.split(',').map(t => t.trim());
+                                    data.testNames = parts.map(p => {
+                                      if (p.includes(':')) {
+                                        return p.split(':')[1]?.trim() || p;
+                                      }
+                                      return p;
+                                    }).filter(t => t);
+                                  } else {
+                                    data.testNames = [testNameValue];
+                                  }
+                                } else if (trimmedLine.includes('Priority:')) {
+                                  data.priority = trimmedLine.replace('Priority:', '').trim();
+                                } else if (trimmedLine.includes('Clinical Notes:')) {
+                                  const notesIndex = trimmedLine.indexOf('Clinical Notes:');
+                                  if (notesIndex !== -1) {
+                                    data.clinicalNotes = trimmedLine.substring(notesIndex + 'Clinical Notes:'.length).trim();
+                                  }
                                 }
-                              };
+                              });
 
-                              return (
-                                <div key={`request-${request.id}`} className="bg-purple-50 rounded-lg p-4 border border-purple-200 mb-3">
-                                  <div className="flex items-start justify-between mb-2">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <h5 className="font-semibold text-gray-900">{request.investigationName || request.investigation_name}</h5>
-                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${getRequestStatusColor(request.status)}`}>
-                                          {request.status?.toUpperCase() || 'PENDING'}
-                                        </span>
-                                      </div>
-                                      <div className="text-xs text-gray-600 mt-1">
-                                        <span className="font-medium">Scheduled:</span> {request.formattedDate || new Date(request.scheduledDate || request.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                      </div>
-                                      <div className="text-xs text-gray-600">
-                                        <span className="font-medium">Type:</span> <span className="capitalize">{request.investigationType || request.investigation_type}</span>
-                                      </div>
-                                      {request.notes && (
-                                        <div className="mt-2 text-xs text-gray-600">
-                                          <span className="font-medium">Notes:</span> {request.notes}
+                              // Get date from note
+                              const noteDate = note.createdAt || note.created_at;
+                              let formattedDate = 'No Date';
+                              if (noteDate) {
+                                const dateObj = new Date(noteDate);
+                                const day = String(dateObj.getDate()).padStart(2, '0');
+                                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                                const year = dateObj.getFullYear();
+                                formattedDate = `${day}-${month}-${year}`;
+                              }
+
+                              // Create individual entries for each test name
+                              const testNames = data.testNames || (data.testName ? [data.testName] : []);
+                              return testNames.map((testName, index) => ({
+                                id: `clinical-inv-${note.id}-${index}`,
+                                investigationName: testName,
+                                investigation_name: testName,
+                                investigationType: 'clinical_investigation',
+                                investigation_type: 'clinical_investigation',
+                                scheduledDate: noteDate,
+                                scheduled_date: noteDate,
+                                status: data.priority?.toLowerCase() === 'urgent' ? 'urgent' : 'pending',
+                                notes: data.clinicalNotes || '',
+                                isClinicalInvestigation: true,
+                                noteId: note.id,
+                                formattedDate: formattedDate
+                              }));
+                            })
+                            .flat();
+
+                          // Combine investigation requests and clinical investigations
+                          const allInvestigations = [...investigationRequests, ...clinicalInvestigations];
+
+                          // Group by date
+                          const groupedByDate = {};
+                          allInvestigations.forEach((request) => {
+                            let dateKey = 'No Date';
+                            if (request.scheduledDate || request.scheduled_date) {
+                              const dateObj = new Date(request.scheduledDate || request.scheduled_date);
+                              const day = String(dateObj.getDate()).padStart(2, '0');
+                              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                              const year = dateObj.getFullYear();
+                              dateKey = `${day}-${month}-${year}`;
+                            } else if (request.formattedDate && request.formattedDate !== 'No Date') {
+                              dateKey = request.formattedDate;
+                            }
+                            
+                            if (!groupedByDate[dateKey]) {
+                              groupedByDate[dateKey] = [];
+                            }
+                            groupedByDate[dateKey].push(request);
+                          });
+
+                          // Sort dates (newest first)
+                          const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+                            if (a === 'No Date') return 1;
+                            if (b === 'No Date') return -1;
+                            return b.localeCompare(a);
+                          });
+
+                          return sortedDates.map((dateKey) => (
+                            <div key={dateKey} className="border-l-2 border-teal-500 pl-4">
+                              <div className="mb-3">
+                                <h4 className="text-sm font-semibold text-gray-700 flex items-center">
+                                  <IoCalendar className="mr-2 text-teal-600" />
+                                  {dateKey}
+                                </h4>
+                              </div>
+                              <div className="space-y-3 ml-6">
+                                {groupedByDate[dateKey].map((request) => {
+                                  // Check if results have been uploaded for this investigation
+                                  const investigationName = (request.investigationName || request.investigation_name || '').toUpperCase();
+                                  const hasResults = allOtherTests.some(result => {
+                                    const resultName = (result.testName || '').toUpperCase();
+                                    return resultName === investigationName || resultName.includes(investigationName) || investigationName.includes(resultName);
+                                  });
+                                  const uploadedResult = allOtherTests.find(result => {
+                                    const resultName = (result.testName || '').toUpperCase();
+                                    return resultName === investigationName || resultName.includes(investigationName) || investigationName.includes(resultName);
+                                  });
+
+                                  return (
+                                    <div key={`request-${request.id}`} className="bg-white rounded-lg p-3 border border-gray-200">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <h5 className="font-semibold text-gray-900">{investigationName}</h5>
+                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded border ${getRequestStatusColor(request.status)}`}>
+                                              {request.status?.toUpperCase() || 'PENDING'}
+                                            </span>
+                                          </div>
+                                          <div className="text-xs text-gray-600 mb-1">
+                                            <span className="font-medium">Type:</span> <span className="capitalize">{request.investigationType || request.investigation_type || 'N/A'}</span>
+                                          </div>
+                                          {uploadedResult && uploadedResult.result && (
+                                            <div className="text-xs text-gray-600 mb-1">
+                                              <span className="font-medium">Result:</span> <span className="text-gray-900">{uploadedResult.result}</span>
+                                            </div>
+                                          )}
+                                          {uploadedResult && uploadedResult.notes && (
+                                            <div className="text-xs text-gray-600 mb-1">
+                                              <span className="font-medium">Notes:</span> <span>{uploadedResult.notes}</span>
+                                            </div>
+                                          )}
+                                          {!uploadedResult && request.notes && (
+                                            <div className="text-xs text-gray-600 mb-1">
+                                              <span className="font-medium">Notes:</span> {request.notes}
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
+                                        {hasResults && uploadedResult ? (
+                                          <button
+                                            onClick={() => {
+                                              const filePath = uploadedResult.filePath || uploadedResult.file_path;
+                                              if (filePath) {
+                                                handleViewFile(filePath);
+                                              } else {
+                                                // Show result details if no file
+                                                setSuccessModalTitle('Test Result');
+                                                setSuccessModalMessage(`Result: ${uploadedResult.result || 'N/A'}\nReference Range: ${uploadedResult.referenceRange || 'N/A'}\nNotes: ${uploadedResult.notes || 'No notes'}`);
+                                                setIsSuccessModalOpen(true);
+                                              }
+                                            }}
+                                            className="ml-3 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors font-medium whitespace-nowrap flex items-center gap-1"
+                                          >
+                                            <Eye className="w-3 h-3" />
+                                            View Results
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => {
+                                              // For clinical investigations, create a request object
+                                              const requestToUse = request.isClinicalInvestigation ? {
+                                                id: request.noteId,
+                                                investigationName: request.investigationName,
+                                                investigation_name: request.investigation_name,
+                                                investigationType: request.investigationType,
+                                                investigation_type: request.investigation_type,
+                                                scheduledDate: request.scheduledDate,
+                                                scheduled_date: request.scheduled_date,
+                                                status: request.status,
+                                                notes: request.notes
+                                              } : request;
+                                              setSelectedInvestigationRequest(requestToUse);
+                                              setIsAddResultModalOpen(true);
+                                            }}
+                                            className="ml-3 px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors font-medium whitespace-nowrap flex items-center gap-1"
+                                          >
+                                            <Upload className="w-3 h-3" />
+                                            Upload Result
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
-                                    <button
-                                      onClick={() => {
-                                        setSelectedInvestigationRequest(request);
-                                        setIsAddResultModalOpen(true);
-                                      }}
-                                      className="ml-3 px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors font-medium whitespace-nowrap flex items-center gap-1"
-                                    >
-                                      <Upload className="w-3 h-3" />
-                                      Add Results
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* Completed Test Results */}
-                        {latestOtherTests.length > 0 && (
-                          <div>
-                            {investigationRequests.length > 0 && (
-                              <h4 className="text-sm font-semibold text-teal-700 mb-3 flex items-center mt-6">
-                                <IoDocument className="mr-2" />
-                                Completed Results
-                              </h4>
-                            )}
-                            {latestOtherTests.map((test) => (
-                              <div key={test.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="font-semibold text-gray-900">{test.testName}</h4>
-                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(test.status)}`}>
-                                    {test.status}
-                                  </span>
-                                </div>
-                                <div className="text-sm text-gray-600 mb-2">
-                                  Date: {test.date}
-                                </div>
-                              </div>
-                              <button 
-                                onClick={() => handleViewReport(test)}
-                                className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                              >
-                                View
-                              </button>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 gap-4 mb-3">
-                              <div>
-                                <span className="text-sm font-medium text-gray-700">Result:</span>
-                                <span className="ml-2 text-sm text-gray-900">{test.result}</span>
-                              </div>
-                              <div>
-                                <span className="text-sm font-medium text-gray-700">Reference Range:</span>
-                                <span className="ml-2 text-sm text-gray-600">{test.referenceRange}</span>
+                                  );
+                                })}
                               </div>
                             </div>
-                            
-                            {test.notes && (
-                              <div className="pt-3 border-t border-gray-200">
-                                <span className="text-sm font-medium text-gray-700">Notes:</span>
-                                <p className="text-sm text-gray-600 mt-1">{test.notes}</p>
-                              </div>
-                            )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                          ));
+                        })()}
                       </div>
                     ) : (
                       <div className="text-center py-8">
@@ -3416,6 +3497,144 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         confirmButtonClass="bg-red-600 hover:bg-red-700 text-white"
       />
 
+      {/* PSA Plot Modal */}
+      {isPSAPlotModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col border border-gray-200">
+            {/* Modal Header */}
+            <div className="bg-teal-600 text-white px-6 py-4 flex items-center justify-between border-b border-teal-700">
+              <div>
+                <h2 className="text-lg font-semibold">PSA Trend Plot</h2>
+                <p className="text-teal-100 text-sm mt-0.5">PSA monitoring trend for {patient?.name || 'Patient'}</p>
+              </div>
+              <button
+                onClick={() => setIsPSAPlotModalOpen(false)}
+                className="text-white/90 hover:text-white transition-colors p-1.5 hover:bg-white/10 rounded"
+              >
+                <IoClose className="text-xl" />
+              </button>
+            </div>
+
+            {/* Modal Content - Graph Only */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">PSA Trend</h3>
+                <div className="h-64 bg-gray-50 rounded-lg border border-gray-200 p-4">
+                  {psaHistory.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <IoDocument className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-sm">No data available for chart</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      {(() => {
+                        const chartData = psaHistory.slice(0, 5).reverse();
+                        const rechartsData = chartData.map((psaItem) => {
+                          const psaValue = parseFloat(psaItem.result) || 0;
+                          const date = psaItem.date ? new Date(psaItem.date) : new Date();
+                          const dateStr = date && !isNaN(date.getTime()) 
+                            ? date.toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric',
+                                year: 'numeric' 
+                              })
+                            : psaItem.date || 'N/A';
+                          
+                          return {
+                            id: psaItem.id,
+                            date: dateStr,
+                            dateObj: date,
+                            psa: psaValue,
+                            originalResult: psaItem.result,
+                            numericValue: psaValue
+                          };
+                        });
+                        
+                        const psaValues = rechartsData.map(d => d.psa).filter(v => v > 0);
+                        if (psaValues.length === 0) {
+                          return <div className="text-center text-gray-500">No PSA data available</div>;
+                        }
+                        
+                        const maxValue = Math.max(...psaValues);
+                        const minValue = Math.min(...psaValues);
+                        const valueRange = maxValue - minValue;
+                        const padding = valueRange > 0 ? Math.max(valueRange * 0.1, 0.5) : 1;
+                        const yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+                        
+                        return (
+                          <LineChart 
+                            data={rechartsData} 
+                            margin={{ top: 5, right: 20, left: 10, bottom: 30 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <XAxis 
+                              dataKey="date" 
+                              stroke="#6b7280"
+                              style={{ fontSize: '12px' }}
+                              tick={{ fill: '#6b7280' }}
+                            />
+                            <YAxis 
+                              domain={yDomain}
+                              stroke="#6b7280"
+                              style={{ fontSize: '12px' }}
+                              tick={{ fill: '#6b7280' }}
+                              label={{ 
+                                value: 'PSA Value (ng/mL)', 
+                                angle: -90, 
+                                position: 'insideLeft', 
+                                style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } 
+                              }}
+                            />
+                            <Tooltip 
+                              formatter={(value) => {
+                                const numValue = typeof value === 'number' && !isNaN(value) ? value : parseFloat(String(value)) || 0;
+                                return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
+                              }}
+                              labelFormatter={(label) => label || 'Date'}
+                              contentStyle={{
+                                backgroundColor: 'white',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '0.5rem',
+                                padding: '12px',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                              }}
+                              cursor={{ stroke: '#0d9488', strokeWidth: 1, strokeDasharray: '3 3' }}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="psa" 
+                              stroke="#0d9488" 
+                              strokeWidth={2}
+                              dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
+                              activeDot={{ r: 7, fill: '#0d9488', stroke: '#0d9488', strokeWidth: 2 }}
+                              isAnimationActive={false}
+                            />
+                          </LineChart>
+                        );
+                      })()}
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setIsPSAPlotModalOpen(false)}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PSA History Modal */}
       {isPSAHistoryModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -3670,12 +3889,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         onClose={() => setIsAddInvestigationModalOpen(false)}
         patient={patient}
         onSuccess={(message) => {
-          setSuccessModalTitle('Clinical Investigation Added');
-          setSuccessModalMessage(message);
-          setIsSuccessModalOpen(true);
           setIsAddInvestigationModalOpen(false);
           // Refresh notes to show the new clinical investigation instantly
           fetchNotes();
+          // Refresh investigation requests and results
+          fetchInvestigationRequests();
+          fetchInvestigations();
         }}
       />
 
@@ -3687,13 +3906,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         onSuccess={handleInvestigationSuccess}
       />
 
-      {/* Add Test Result Modal */}
-      <AddTestResultModal
-        isOpen={isAddTestModalOpen}
-        onClose={() => setIsAddTestModalOpen(false)}
-        patient={patient}
-        onSuccess={handleInvestigationSuccess}
-      />
 
       {/* Add Investigation Result Modal */}
       <AddInvestigationResultModal

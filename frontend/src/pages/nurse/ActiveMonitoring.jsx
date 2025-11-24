@@ -22,19 +22,18 @@ const ActiveMonitoring = () => {
     setError(null);
     
     try {
-      // Fetch all patients and filter by Active Monitoring pathway
+      // Use the new backend parameter to fetch all active monitoring pathways
+      // This includes: Active Monitoring, Active Surveillance, Medication, and Discharge
+      // The backend will handle filtering by both Active and Discharged statuses
       const result = await patientService.getPatients({
         page: 1,
         limit: 100,
-        status: 'Active'
+        activeMonitoring: 'true'
       });
       
       if (result.success) {
-        // Filter patients by Active Monitoring or Active Surveillance pathway
-        const activeMonitoringPatients = (result.data || []).filter(patient => {
-          const pathway = patient.carePathway || patient.care_pathway || patient.pathway || '';
-          return pathway === 'Active Monitoring' || pathway === 'Active Surveillance';
-        });
+        // Patients are already filtered by the backend
+        const activeMonitoringPatients = result.data || [];
         
         // Transform to match expected format
         const transformedPatients = activeMonitoringPatients.map(patient => {
@@ -97,6 +96,12 @@ const ActiveMonitoring = () => {
         return 'bg-blue-100 text-blue-800';
       case 'Active Surveillance':
         return 'bg-green-100 text-green-800';
+      case 'Active Monitoring':
+        return 'bg-teal-100 text-teal-800';
+      case 'Medication':
+        return 'bg-indigo-100 text-indigo-800';
+      case 'Discharge':
+        return 'bg-gray-100 text-gray-800';
       case 'Surgical Pathway':
         return 'bg-orange-100 text-orange-800';
       case 'Post-Op Follow-up':
@@ -135,8 +140,8 @@ const ActiveMonitoring = () => {
   };
 
   // Filter patients based on search query
-  // NOTE: This search only filters within Active Monitoring/Active Surveillance pathway patients
-  // The monitoringPatients array is already pre-filtered to only include patients from this pathway
+  // NOTE: This search filters within Active Monitoring, Active Surveillance, Medication, and Discharge pathway patients
+  // The monitoringPatients array is already pre-filtered to only include patients from these pathways
   const filteredPatients = monitoringPatients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -178,7 +183,7 @@ const ActiveMonitoring = () => {
       <div className="p-4 sm:p-6 lg:p-8">
         <NurseHeader 
           title="Active Monitoring"
-          subtitle="Patients under active surveillance monitoring"
+          subtitle="Patients under active surveillance, medication, and discharge monitoring"
           onSearch={setSearchQuery}
           searchPlaceholder="Search by name"
         />

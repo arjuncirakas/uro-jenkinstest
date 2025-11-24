@@ -1,17 +1,44 @@
-import React, { useState } from 'react';
-import { IoClose, IoCalendar, IoFlask, IoCloudUpload, IoDocument, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
+import React, { useState, useEffect } from 'react';
+import { IoClose, IoCalendar, IoFlask } from 'react-icons/io5';
 import { investigationService } from '../../services/investigationService';
 
 const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
+  // Get today's date in YYYY-MM-DD format for the date input
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [formData, setFormData] = useState({
-    testDate: '',
+    testDate: getTodayDate(),
     result: '',
     notes: '',
     status: 'Normal'
   });
-  const [testFile, setTestFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Reset form with today's date when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayDate = `${year}-${month}-${day}`;
+      
+      setFormData({
+        testDate: todayDate,
+        result: '',
+        notes: '',
+        status: 'Normal'
+      });
+      setErrors({});
+    }
+  }, [isOpen]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -46,53 +73,6 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
     }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate file type
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-      if (!allowedTypes.includes(file.type)) {
-        setErrors(prev => ({
-          ...prev,
-          file: 'Please select a PDF, DOC, DOCX, JPG, or PNG file'
-        }));
-        return;
-      }
-      
-      // Validate file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        setErrors(prev => ({
-          ...prev,
-          file: 'File size must be less than 10MB'
-        }));
-        return;
-      }
-      
-      setTestFile(file);
-      setErrors(prev => ({
-        ...prev,
-        file: ''
-      }));
-    }
-  };
-
-  const handleRemoveFile = (e) => {
-    e.stopPropagation();
-    setTestFile(null);
-    // Reset the file input
-    const fileInput = document.getElementById('psaFile');
-    if (fileInput) {
-      fileInput.value = '';
-    }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -123,8 +103,7 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
     try {
       const submitData = {
         ...formData,
-        referenceRange: '0.0 - 4.0', // Default reference range
-        testFile: testFile
+        referenceRange: '0.0 - 4.0' // Default reference range
       };
       
       const result = await investigationService.addPSAResult(patient.id, submitData);
@@ -132,12 +111,11 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
       if (result.success) {
         onSuccess('PSA result added successfully!');
         setFormData({
-          testDate: '',
+          testDate: getTodayDate(),
           result: '',
           notes: '',
           status: 'Normal'
         });
-        setTestFile(null);
         
         // Trigger custom events to refresh tables
         const refreshEvent = new CustomEvent('testResultAdded', {
@@ -262,67 +240,6 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                    '(PSA 0.0 - 4.0 ng/mL)'}
                 </span>
               </div>
-            </div>
-
-            {/* File Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Attach PSA Report (Optional)
-              </label>
-              {testFile ? (
-                // Show attached file
-                <div className="border-2 border-teal-400 bg-teal-50 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      <div className="flex-shrink-0">
-                        <IoDocument className="w-6 h-6 text-teal-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-teal-900 truncate">
-                          {testFile.name}
-                        </p>
-                        <p className="text-xs text-teal-700 mt-0.5">
-                          {formatFileSize(testFile.size)}
-                        </p>
-                      </div>
-                      <div className="flex-shrink-0 flex items-center space-x-2">
-                        <IoCheckmarkCircle className="w-5 h-5 text-green-500" />
-                        <button
-                          type="button"
-                          onClick={handleRemoveFile}
-                          className="text-red-500 hover:text-red-700 transition-colors"
-                          title="Remove file"
-                        >
-                          <IoCloseCircle className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                // Show upload area
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-teal-400 transition-colors">
-                  <input
-                    type="file"
-                    id="psaFile"
-                    onChange={handleFileChange}
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    className="hidden"
-                  />
-                  <label htmlFor="psaFile" className="cursor-pointer block">
-                    <IoCloudUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">
-                      Click to upload or drag and drop
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      PDF, DOC, DOCX, JPG, PNG up to 10MB
-                    </p>
-                  </label>
-                </div>
-              )}
-              {errors.file && (
-                <p className="text-red-500 text-sm mt-1">{errors.file}</p>
-              )}
             </div>
 
             {/* Notes */}

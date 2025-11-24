@@ -55,7 +55,6 @@ const UrologistDashboard = () => {
   const [recentPatients, setRecentPatients] = useState([]);
   const [loadingRecentPatients, setLoadingRecentPatients] = useState(false);
   const [recentPatientsError, setRecentPatientsError] = useState(null);
-
   const [surgeries, setSurgeries] = useState([]);
   const [loadingSurgeries, setLoadingSurgeries] = useState(false);
   const [surgeriesError, setSurgeriesError] = useState(null);
