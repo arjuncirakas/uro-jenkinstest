@@ -3,7 +3,7 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Dot, LabelList } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import ConfirmationModal from './modals/ConfirmationModal';
@@ -3804,7 +3804,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           return (
                             <LineChart 
                               data={rechartsData} 
-                              margin={{ top: 25, right: 20, left: 50, bottom: 30 }}
+                              margin={{ top: 5, right: 20, left: 50, bottom: 30 }}
                             >
                               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                               <XAxis 
@@ -3826,6 +3826,30 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                   style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } 
                                 }}
                               />
+                              <Tooltip 
+                                formatter={(value, name, props) => {
+                                  // Get the actual PSA value from the data point
+                                  const dataPoint = props.payload || {};
+                                  const psaValue = dataPoint.psa !== undefined ? dataPoint.psa : 
+                                                  (dataPoint.numericValue !== undefined ? dataPoint.numericValue : 
+                                                   (value !== undefined && value !== null ? value : 0));
+                                  
+                                  const numValue = typeof psaValue === 'number' && !isNaN(psaValue) 
+                                    ? psaValue 
+                                    : parseFloat(String(psaValue)) || 0;
+                                  
+                                  return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
+                                }}
+                                labelFormatter={(label) => label || 'Date'}
+                                contentStyle={{
+                                  backgroundColor: 'white',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '0.5rem',
+                                  padding: '12px',
+                                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                }}
+                                cursor={{ stroke: '#0d9488', strokeWidth: 1, strokeDasharray: '3 3' }}
+                              />
                               <Line 
                                 type="monotone" 
                                 dataKey="psa" 
@@ -3834,15 +3858,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
                                 activeDot={{ r: 7, fill: '#0d9488', stroke: '#0d9488', strokeWidth: 2 }}
                                 isAnimationActive={false}
-                              >
-                                <LabelList 
-                                  dataKey="psa" 
-                                  position="top" 
-                                  offset={8}
-                                  formatter={(value) => `${parseFloat(value).toFixed(1)} ng/mL`}
-                                  style={{ fill: '#0d9488', fontSize: '11px', fontWeight: '600' }}
-                                />
-                              </Line>
+                              />
                             </LineChart>
                           );
                         })()}
