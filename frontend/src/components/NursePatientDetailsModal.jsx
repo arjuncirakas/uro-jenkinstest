@@ -3828,15 +3828,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                               />
                               <Tooltip 
                                 formatter={(value, name, props) => {
-                                  // Get the actual PSA value from the data point
-                                  const dataPoint = props.payload || {};
-                                  const psaValue = dataPoint.psa !== undefined ? dataPoint.psa : 
-                                                  (dataPoint.numericValue !== undefined ? dataPoint.numericValue : 
-                                                   (value !== undefined && value !== null ? value : 0));
-                                  
-                                  const numValue = typeof psaValue === 'number' && !isNaN(psaValue) 
-                                    ? psaValue 
-                                    : parseFloat(String(psaValue)) || 0;
+                                  // The value parameter is the Y-axis value for THIS specific hovered point
+                                  // This is automatically calculated by Recharts from dataKey="psa"
+                                  // Use value directly as it's already the correct PSA value for this point
+                                  const numValue = typeof value === 'number' && !isNaN(value) 
+                                    ? value 
+                                    : parseFloat(String(value)) || 0;
                                   
                                   return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
                                 }}
