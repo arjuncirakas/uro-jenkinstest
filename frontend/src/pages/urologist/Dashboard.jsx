@@ -1374,7 +1374,7 @@ const UrologistDashboard = () => {
                         )}
                       </div>
                       <div className="text-xs text-gray-600">
-                        {mdtSchedules[0].patientsCount} patients • Chair: {mdtSchedules[0].chair}
+                        {mdtSchedules[0].patientsCount} {mdtSchedules[0].patientsCount === 1 ? 'patient' : 'patients'} • Chair: {mdtSchedules[0].chair}
                       </div>
                     </div>
                   )}
@@ -1481,7 +1481,7 @@ const UrologistDashboard = () => {
                               )}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {schedule.patientsCount} patients
+                              {schedule.patientsCount} {schedule.patientsCount === 1 ? 'patient' : 'patients'}
                             </div>
                           </div>
                         </div>

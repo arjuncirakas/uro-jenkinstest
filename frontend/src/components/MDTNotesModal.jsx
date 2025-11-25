@@ -1047,7 +1047,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                       <ul className="space-y-2">
                         {formData.actionItems.map((action, idx) => (
                           <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-white p-2 rounded border border-gray-200">
-                            <div className="w-4 h-4 border-2 border-teal-300 rounded mt-0.5 flex-shrink-0"></div>
+                            <CheckCircle className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
                             <span className="flex-1">{action}</span>
                             <button
                               onClick={() => removeActionItem(idx)}
