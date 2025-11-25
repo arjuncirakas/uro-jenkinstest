@@ -78,7 +78,7 @@ const PatientsDueForReviewModal = ({ isOpen, onClose, patients = [], loading = f
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Patients Due for Review</h2>
-            <p className="text-gray-600 mt-1">Next 7-14 Days ({patientsDueForReview.length} patients)</p>
+            <p className="text-gray-600 mt-1">Upcoming Appointments ({patientsDueForReview.length} {patientsDueForReview.length === 1 ? 'patient' : 'patients'})</p>
           </div>
           <button
             onClick={onClose}
@@ -122,24 +122,24 @@ const PatientsDueForReviewModal = ({ isOpen, onClose, patients = [], loading = f
                        </tr>
                      ) : patientsDueForReview.length === 0 ? (
                        <tr>
-                         <td colSpan="6" className="py-8 text-center text-gray-500">
-                           No patients due for review in the next 7-14 days
-                         </td>
+                        <td colSpan="6" className="py-8 text-center text-gray-500">
+                          No upcoming appointments
+                        </td>
                        </tr>
                      ) : (
                        patientsDueForReview.map((patient) => (
-                         <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                           <td className="py-3 px-4 text-gray-900 font-medium">{patient.name}</td>
-                           <td className="py-3 px-4 text-gray-700">{patient.age}</td>
+                         <tr key={patient.id || patient.appointmentId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                           <td className="py-3 px-4 text-gray-900 font-medium">{patient.name || patient.patientName || 'Unknown Patient'}</td>
+                           <td className="py-3 px-4 text-gray-700">{patient.age || 'N/A'}</td>
                            <td className="py-3 px-4">
-                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(patient.type)}`} aria-label={`Type: ${patient.type}`}>
-                               {patient.type}
+                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(patient.type || 'Follow-up')}`} aria-label={`Type: ${patient.type || 'Follow-up'}`}>
+                               {patient.type || 'Follow-up'}
                              </span>
                            </td>
-                           <td className="py-3 px-4 text-gray-700">{formatDate(patient.date)}</td>
+                           <td className="py-3 px-4 text-gray-700">{formatDate(patient.date || patient.appointmentDate)}</td>
                            <td className="py-3 px-4">
-                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(patient.priority)}`} aria-label={`Priority: ${patient.priority}`}>
-                               {patient.priority}
+                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(patient.priority || 'Medium')}`} aria-label={`Priority: ${patient.priority || 'Medium'}`}>
+                               {patient.priority || 'Medium'}
                              </span>
                            </td>
                            <td className="py-3 px-4">
@@ -148,17 +148,19 @@ const PatientsDueForReviewModal = ({ isOpen, onClose, patients = [], loading = f
                                  if (patientModalRef?.current) {
                                    // Determine category based on type
                                    let category = 'new';
-                                   if (patient.type === 'Surgery') {
+                                   const patientType = patient.type || 'Follow-up';
+                                   if (patientType === 'Surgery') {
                                      category = 'surgery-pathway';
-                                   } else if (patient.type === 'Post-Op Follow-up') {
+                                   } else if (patientType === 'Post-Op Follow-up') {
                                      category = 'post-op-followup';
                                    }
-                                   patientModalRef.current.openPatientDetails(patient.name, { age: patient.age }, category);
+                                   const patientName = patient.name || patient.patientName || 'Unknown Patient';
+                                   patientModalRef.current.openPatientDetails(patientName, { age: patient.age }, category);
                                    onClose();
                                  }
                                }}
                                className="group flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
-                               aria-label={`View details for ${patient.name}`}
+                               aria-label={`View details for ${patient.name || patient.patientName || 'patient'}`}
                              >
                                <IoEye className="text-sm" />
                                View

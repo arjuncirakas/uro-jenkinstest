@@ -602,18 +602,47 @@ const UrologistDashboard = () => {
           surgical: 0
         };
         
-        // Transform appointments to match the expected format
-        const patients = appointments.map(apt => ({
-          id: apt.patientId,
-          patientName: apt.patientName,
-          age: apt.age,
-          appointmentDate: apt.appointmentDate,
-          appointmentTime: apt.appointmentTime,
-          appointmentType: apt.type,
-          carePathway: apt.carePathway,
-          status: apt.status,
-          appointmentId: apt.id
-        }));
+        // Transform appointments to match the modal's expected format
+        const patients = appointments.map(apt => {
+          // Determine type based on appointment type or care pathway
+          let type = 'Follow-up';
+          if (apt.type === 'Surgery Appointment' || apt.type === 'surgery' || apt.type === 'Surgery') {
+            type = 'Surgery';
+          } else if (apt.carePathway === 'Post-op Transfer' || apt.carePathway === 'Post-op Followup') {
+            type = 'Post-Op Follow-up';
+          } else if (apt.type === 'Investigation Appointment' || apt.type === 'investigation') {
+            type = 'Investigation';
+          } else if (apt.carePathway === 'Investigation Pathway') {
+            type = 'Investigation';
+          }
+          
+          // Determine priority based on date proximity and type
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const appointmentDate = new Date(apt.appointmentDate);
+          appointmentDate.setHours(0, 0, 0, 0);
+          const daysUntil = Math.floor((appointmentDate - today) / (24 * 60 * 60 * 1000));
+          
+          let priority = 'Medium';
+          if (daysUntil <= 7 || type === 'Post-Op Follow-up') {
+            priority = 'High';
+          } else if (daysUntil > 10) {
+            priority = 'Low';
+          }
+          
+          return {
+            id: apt.patientId,
+            name: apt.patientName, // Modal expects 'name'
+            age: apt.age,
+            date: apt.appointmentDate, // Modal expects 'date'
+            time: apt.appointmentTime,
+            type: type, // Modal expects 'type'
+            priority: priority, // Modal expects 'priority'
+            carePathway: apt.carePathway,
+            status: apt.status,
+            appointmentId: apt.id
+          };
+        });
         
         setPatientsDueForReview(patients);
         setPatientsDueForReviewSummary(summary);
