@@ -1333,14 +1333,59 @@ export const getTodaysAppointments = async (req, res) => {
 
 // Get upcoming appointments (week/month view with pagination)
 export const getUpcomingAppointments = async (req, res) => {
-  console.log('🔥 [getUpcomingAppointments] Function called');
-  console.log('🔥 [getUpcomingAppointments] Query params:', req.query);
-  console.log('🔥 [getUpcomingAppointments] User:', req.user?.id, req.user?.role);
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`\n📅 [getUpcomingAppointments ${requestId}] Starting`);
+  console.log(`📅 [getUpcomingAppointments ${requestId}] Query params:`, req.query);
+  console.log(`📅 [getUpcomingAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
 
-  const client = await pool.connect();
+  let client;
+  try {
+    console.log(`📅 [getUpcomingAppointments ${requestId}] Connecting to database...`);
+    client = await pool.connect();
+    console.log(`✅ [getUpcomingAppointments ${requestId}] Database connection successful`);
+  } catch (dbError) {
+    console.error(`❌ [getUpcomingAppointments ${requestId}] Database connection failed:`, dbError.message);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection failed',
+      error: 'Service temporarily unavailable'
+    });
+  }
 
   try {
-    const { view = 'week', limit = 5, offset = 0 } = req.query;
+    const { view = 'week', limit = 50, offset = 0 } = req.query;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const userEmail = req.user?.email;
+
+    // For urologists/doctors, get their doctor ID
+    let doctorId = null;
+    if (userRole === 'urologist' || userRole === 'doctor') {
+      try {
+        // First try to find by user_id
+        let doctorCheck = await client.query(
+          `SELECT id FROM doctors WHERE user_id = $1 AND is_active = true`,
+          [userId]
+        );
+        
+        // If not found, try by email
+        if (doctorCheck.rows.length === 0 && userEmail) {
+          doctorCheck = await client.query(
+            `SELECT id FROM doctors WHERE email = $1 AND is_active = true`,
+            [userEmail]
+          );
+        }
+        
+        if (doctorCheck.rows.length > 0) {
+          doctorId = doctorCheck.rows[0].id;
+          console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
+        } else {
+          console.log(`📅 [getUpcomingAppointments ${requestId}] No doctor record found for user ${userId}`);
+        }
+      } catch (doctorIdError) {
+        console.error(`📅 [getUpcomingAppointments ${requestId}] Error getting doctor ID:`, doctorIdError);
+      }
+    }
 
     // Use local timezone
     const now = new Date();
@@ -1362,36 +1407,72 @@ export const getUpcomingAppointments = async (req, res) => {
       String(endDateObj.getMonth() + 1).padStart(2, '0') + '-' +
       String(endDateObj.getDate()).padStart(2, '0');
 
-    console.log(`[getUpcomingAppointments] Fetching for view: ${view}, range: ${today} to ${endDate}, limit: ${limit}, offset: ${offset}`);
+    console.log(`📅 [getUpcomingAppointments ${requestId}] Fetching for view: ${view}, range: ${today} to ${endDate}, limit: ${limit}, offset: ${offset}, doctorId: ${doctorId}`);
 
-    // Query for appointments
-    const query = `
-      SELECT 
-        a.id,
-        a.patient_id,
-        p.first_name,
-        p.last_name,
-        p.upi,
-        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-        p.gender,
-        a.appointment_date,
-        a.appointment_time,
-        a.urologist_name as urologist,
-        a.status,
-        a.notes,
-        a.appointment_type as type
-      FROM appointments a
-      JOIN patients p ON a.patient_id = p.id
-      WHERE a.appointment_date >= $1 
-      AND a.appointment_date <= $2
-      AND a.status != 'cancelled'
-      ORDER BY a.appointment_date ASC, a.appointment_time ASC
-      LIMIT $3 OFFSET $4
-    `;
+    // Build query with doctor filter for urologists/doctors
+    let query;
+    let queryParams = [];
+    
+    if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+      // Filter by doctor for urologists/doctors
+      query = `
+        SELECT 
+          a.id,
+          a.patient_id,
+          p.first_name,
+          p.last_name,
+          p.upi,
+          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+          p.gender,
+          p.care_pathway,
+          a.appointment_date,
+          a.appointment_time,
+          a.urologist_name as urologist,
+          a.status,
+          a.notes,
+          a.appointment_type as type
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.id
+        WHERE a.appointment_date >= $1 
+        AND a.appointment_date <= $2
+        AND a.status != 'cancelled'
+        AND a.urologist_id = $3
+        ORDER BY a.appointment_date ASC, a.appointment_time ASC
+        LIMIT $4 OFFSET $5
+      `;
+      queryParams = [today, endDate, doctorId, parseInt(limit), parseInt(offset)];
+    } else {
+      // For nurses, show all appointments
+      query = `
+        SELECT 
+          a.id,
+          a.patient_id,
+          p.first_name,
+          p.last_name,
+          p.upi,
+          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+          p.gender,
+          p.care_pathway,
+          a.appointment_date,
+          a.appointment_time,
+          a.urologist_name as urologist,
+          a.status,
+          a.notes,
+          a.appointment_type as type
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.id
+        WHERE a.appointment_date >= $1 
+        AND a.appointment_date <= $2
+        AND a.status != 'cancelled'
+        ORDER BY a.appointment_date ASC, a.appointment_time ASC
+        LIMIT $3 OFFSET $4
+      `;
+      queryParams = [today, endDate, parseInt(limit), parseInt(offset)];
+    }
 
-    const result = await client.query(query, [today, endDate, limit, offset]);
+    const result = await client.query(query, queryParams);
 
-    // Format results
+    // Format results and calculate summary
     const formattedAppointments = result.rows.map(row => {
       // Format date
       const date = new Date(row.appointment_date);
@@ -1413,6 +1494,7 @@ export const getUpcomingAppointments = async (req, res) => {
         upi: row.upi,
         age: row.age,
         gender: row.gender,
+        carePathway: row.care_pathway,
         appointmentDate: formattedDate,
         appointmentTime: formattedTime,
         urologist: row.urologist,
@@ -1422,25 +1504,44 @@ export const getUpcomingAppointments = async (req, res) => {
       };
     });
 
+    // Calculate summary by care pathway
+    const summary = {
+      total: formattedAppointments.length,
+      postOpFollowup: formattedAppointments.filter(apt => 
+        apt.carePathway === 'Post-op Transfer' || apt.carePathway === 'Post-op Followup'
+      ).length,
+      investigation: formattedAppointments.filter(apt => 
+        apt.type === 'Investigation Appointment' || apt.type === 'investigation'
+      ).length,
+      surgical: formattedAppointments.filter(apt => 
+        apt.type === 'Surgery Appointment' || apt.type === 'surgery' || apt.type === 'Surgery'
+      ).length
+    };
+
     res.json({
       success: true,
       message: 'Upcoming appointments retrieved successfully',
       data: {
         appointments: formattedAppointments,
+        summary: summary,
         count: formattedAppointments.length,
         hasMore: formattedAppointments.length === parseInt(limit)
       }
     });
 
   } catch (error) {
-    console.error('Get upcoming appointments error:', error);
+    console.error(`❌ [getUpcomingAppointments ${requestId}] Error occurred:`, error.message);
+    console.error(`❌ [getUpcomingAppointments ${requestId}] Error stack:`, error.stack);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    client.release();
+    if (client) {
+      console.log(`📅 [getUpcomingAppointments ${requestId}] Releasing database connection`);
+      client.release();
+    }
   }
 };
 

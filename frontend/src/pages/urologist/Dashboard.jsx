@@ -579,17 +579,22 @@ const UrologistDashboard = () => {
     }
   };
 
-  // Fetch patients due for review (7-14 days window)
+  // Fetch upcoming appointments for Patients Due for Review section
   const fetchPatientsDueForReview = async () => {
     setLoadingPatientsDueForReview(true);
     setPatientsDueForReviewError(null);
     
     try {
-      const result = await patientService.getPatientsDueForReview();
+      // Fetch upcoming appointments (next 7 days by default)
+      const result = await bookingService.getUpcomingAppointments({
+        view: 'week',
+        limit: 50,
+        offset: 0
+      });
       
       if (result.success) {
-        console.log('Patients due for review result:', result);
-        const patients = result.data?.patients || [];
+        console.log('Upcoming appointments result:', result);
+        const appointments = result.data?.appointments || [];
         const summary = result.data?.summary || {
           total: 0,
           postOpFollowup: 0,
@@ -597,10 +602,23 @@ const UrologistDashboard = () => {
           surgical: 0
         };
         
+        // Transform appointments to match the expected format
+        const patients = appointments.map(apt => ({
+          id: apt.patientId,
+          patientName: apt.patientName,
+          age: apt.age,
+          appointmentDate: apt.appointmentDate,
+          appointmentTime: apt.appointmentTime,
+          appointmentType: apt.type,
+          carePathway: apt.carePathway,
+          status: apt.status,
+          appointmentId: apt.id
+        }));
+        
         setPatientsDueForReview(patients);
         setPatientsDueForReviewSummary(summary);
       } else {
-        setPatientsDueForReviewError(result.error || 'Failed to fetch patients due for review');
+        setPatientsDueForReviewError(result.error || 'Failed to fetch upcoming appointments');
         setPatientsDueForReview([]);
         setPatientsDueForReviewSummary({
           total: 0,
@@ -610,8 +628,8 @@ const UrologistDashboard = () => {
         });
       }
     } catch (error) {
-      setPatientsDueForReviewError('Failed to fetch patients due for review');
-      console.error('Error fetching patients due for review:', error);
+      setPatientsDueForReviewError('Failed to fetch upcoming appointments');
+      console.error('Error fetching upcoming appointments:', error);
       setPatientsDueForReview([]);
       setPatientsDueForReviewSummary({
         total: 0,
