@@ -272,13 +272,29 @@ const UrologistDashboard = () => {
             }
           }
           
+          // Determine status based on appointment status
+          let status = 'Visited';
+          let statusColor = 'green';
+          if (patient.last_appointment_status) {
+            if (patient.last_appointment_status === 'completed') {
+              status = 'Completed';
+              statusColor = 'green';
+            } else if (patient.last_appointment_status === 'no_show') {
+              status = 'No Show';
+              statusColor = 'red';
+            } else if (patient.last_appointment_status === 'scheduled' || patient.last_appointment_status === 'confirmed') {
+              status = 'Scheduled';
+              statusColor = 'blue';
+            }
+          }
+          
           return {
             id: patient.id || patient.patient_id,
             time: timeDisplay,
             patient: fullName,
             age: patient.age || 'N/A',
-            status: 'Visited',
-            statusColor: 'green'
+            status: status,
+            statusColor: statusColor
           };
         });
         

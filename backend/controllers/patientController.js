@@ -822,10 +822,12 @@ export const getNewPatients = async (req, res) => {
           SELECT DISTINCT ON (a.patient_id)
             a.patient_id,
             a.appointment_date,
-            a.appointment_time
+            a.appointment_time,
+            a.status as appointment_status
           FROM appointments a
           WHERE a.urologist_id = $2
-            AND a.status IN ('scheduled', 'confirmed', 'completed')
+            AND a.status IN ('scheduled', 'confirmed', 'completed', 'no_show')
+            AND a.status != 'cancelled'
           ORDER BY a.patient_id, a.appointment_date DESC, a.appointment_time DESC
         )
         SELECT 
@@ -853,13 +855,17 @@ export const getNewPatients = async (req, res) => {
           gp.last_name as gp_last_name,
           EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
           ra.appointment_date as last_appointment_date,
-          ra.appointment_time as last_appointment_time
+          ra.appointment_time as last_appointment_time,
+          ra.appointment_status
         FROM patients p
         INNER JOIN recent_appointments ra ON ra.patient_id = p.id
         LEFT JOIN users u ON p.created_by = u.id
         LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
         WHERE p.status = $1
-        ORDER BY ra.appointment_date DESC, ra.appointment_time DESC
+        ORDER BY 
+          CASE WHEN ra.appointment_date = CURRENT_DATE THEN 0 ELSE 1 END,
+          ra.appointment_date DESC, 
+          ra.appointment_time DESC
         LIMIT $3
       `;
       
@@ -915,9 +921,11 @@ export const getNewPatients = async (req, res) => {
           SELECT DISTINCT ON (a.patient_id)
             a.patient_id,
             a.appointment_date,
-            a.appointment_time
+            a.appointment_time,
+            a.status as appointment_status
           FROM appointments a
-          WHERE a.status IN ('scheduled', 'confirmed', 'completed')
+          WHERE a.status IN ('scheduled', 'confirmed', 'completed', 'no_show')
+            AND a.status != 'cancelled'
           ORDER BY a.patient_id, a.appointment_date DESC, a.appointment_time DESC
         )
         SELECT 
@@ -945,13 +953,17 @@ export const getNewPatients = async (req, res) => {
           gp.last_name as gp_last_name,
           EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
           ra.appointment_date as last_appointment_date,
-          ra.appointment_time as last_appointment_time
+          ra.appointment_time as last_appointment_time,
+          ra.appointment_status
         FROM patients p
         INNER JOIN recent_appointments ra ON ra.patient_id = p.id
         LEFT JOIN users u ON p.created_by = u.id
         LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
         WHERE p.status = $1
-        ORDER BY ra.appointment_date DESC, ra.appointment_time DESC
+        ORDER BY 
+          CASE WHEN ra.appointment_date = CURRENT_DATE THEN 0 ELSE 1 END,
+          ra.appointment_date DESC, 
+          ra.appointment_time DESC
         LIMIT $2
       `;
       
@@ -1008,7 +1020,8 @@ export const getNewPatients = async (req, res) => {
         createdAt: patient.created_at,
         updatedAt: patient.updated_at,
         last_appointment_date: patient.last_appointment_date || null,
-        last_appointment_time: patient.last_appointment_time || null
+        last_appointment_time: patient.last_appointment_time || null,
+        last_appointment_status: patient.appointment_status || null
       };
       } catch (error) {
         console.error(`Error transforming patient ${index + 1}:`, error);
@@ -1037,7 +1050,8 @@ export const getNewPatients = async (req, res) => {
           createdAt: patient.created_at || new Date(),
           updatedAt: patient.updated_at || new Date(),
           last_appointment_date: patient.last_appointment_date || null,
-          last_appointment_time: patient.last_appointment_time || null
+          last_appointment_time: patient.last_appointment_time || null,
+          last_appointment_status: patient.appointment_status || null
         };
       }
     });
