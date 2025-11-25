@@ -98,6 +98,8 @@ const AddUser = () => {
       case 'firstName':
         if (!value.trim()) {
           error = 'First name is required';
+        } else if (value !== value.trim()) {
+          error = 'First name cannot start or end with a space';
         } else if (value.trim().length < 2) {
           error = 'First name must be at least 2 characters';
         } else if (!/^[a-zA-Z\s'.-]+$/.test(value.trim())) {
@@ -107,6 +109,8 @@ const AddUser = () => {
       case 'lastName':
         if (!value.trim()) {
           error = 'Last name is required';
+        } else if (value !== value.trim()) {
+          error = 'Last name cannot start or end with a space';
         } else if (!/^[a-zA-Z\s'.-]+$/.test(value.trim())) {
           error = 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods';
         }
@@ -180,9 +184,10 @@ const AddUser = () => {
     let sanitizedValue = value;
     
     // Name fields - only allow letters, spaces, hyphens, apostrophes
+    // Spaces are allowed only between letters, not at start or end
     if (['firstName', 'lastName'].includes(name)) {
       isValid = validateNameInput(value);
-      if (!isValid) return; // Don't update if invalid characters
+      if (!isValid) return; // Don't update if invalid characters (including spaces at start/end)
     }
     
     // Phone field - only allow digits, spaces, hyphens, parentheses, plus

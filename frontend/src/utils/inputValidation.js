@@ -7,10 +7,18 @@
 import DOMPurify from 'dompurify';
 
 // Validate name fields (only letters, spaces, hyphens, apostrophes, periods)
+// Spaces are allowed only between letters, not at the start or end
 export const validateNameInput = (value) => {
   // Allow letters, spaces, hyphens, apostrophes, periods
   const nameRegex = /^[a-zA-Z\s'.-]*$/;
-  return nameRegex.test(value);
+  if (!nameRegex.test(value)) {
+    return false;
+  }
+  // Check that value doesn't start or end with a space
+  if (value.trim() !== value) {
+    return false;
+  }
+  return true;
 };
 
 // Validate phone number (only digits, spaces, hyphens, parentheses, plus sign)
