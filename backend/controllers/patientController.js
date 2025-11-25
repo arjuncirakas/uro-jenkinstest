@@ -771,71 +771,193 @@ export const getNewPatients = async (req, res) => {
   }
   
   try {
-    const { limit = 20 } = req.query;
+    const { limit = 15 } = req.query;
     console.log(`👥 [getNewPatients ${requestId}] Processing with limit: ${limit}`);
+    
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    let doctorId = null;
 
-    // Build WHERE clause for GP filtering
-    let whereConditions = ['p.status = $1'];
-    let queryParams = ['Active'];
-    let paramCount = 1;
-
-    // If user is GP, filter by referred_by_gp_id
-    // Only show patients explicitly assigned to this GP AND have a valid creator
-    if (req.user && req.user.role === 'gp') {
-      paramCount++;
-      whereConditions.push(`p.referred_by_gp_id = $${paramCount}`);
-      queryParams.push(req.user.id);
-      // Also exclude patients with NULL created_by (orphaned/invalid assignments)
-      whereConditions.push(`p.created_by IS NOT NULL`);
-      console.log(`🔍 GP Filter (getNewPatients): User ID = ${req.user.id}, Role = ${req.user.role}, Email = ${req.user.email}`);
+    // For urologists/doctors, get their doctor ID from the doctors table
+    if ((userRole === 'urologist' || userRole === 'doctor') && userId) {
+      try {
+        const userEmail = req.user?.email;
+        console.log(`👥 [getNewPatients ${requestId}] Looking up doctor ID for user ${userId} (email: ${userEmail})`);
+        
+        // First try to find by user_id
+        let doctorCheck = await client.query(
+          `SELECT id FROM doctors WHERE user_id = $1`,
+          [userId]
+        );
+        
+        // If not found, try by email
+        if (doctorCheck.rows.length === 0 && userEmail) {
+          doctorCheck = await client.query(
+            `SELECT id FROM doctors WHERE email = $1`,
+            [userEmail]
+          );
+        }
+        
+        if (doctorCheck.rows.length > 0) {
+          doctorId = doctorCheck.rows[0].id;
+          console.log(`👥 [getNewPatients ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
+        } else {
+          console.log(`👥 [getNewPatients ${requestId}] No doctor record found for user ${userId}`);
+        }
+      } catch (doctorIdError) {
+        console.error(`👥 [getNewPatients ${requestId}] Error getting doctor ID:`, doctorIdError);
+      }
     }
 
-    const whereClause = whereConditions.join(' AND ');
+    let query;
+    let queryParams = [];
+    let paramCount = 0;
 
-    const query = `
-      SELECT 
-        p.id,
-        p.upi,
-        p.first_name,
-        p.last_name,
-        p.date_of_birth,
-        p.gender,
-        p.phone,
-        p.email,
-        p.initial_psa,
-        p.initial_psa_date,
-        p.priority,
-        p.status,
-        p.care_pathway,
-        p.created_at,
-        p.updated_at,
-        p.referred_by_gp_id,
-        p.assigned_urologist,
-        u.first_name as created_by_name,
-        u.last_name as created_by_last_name,
-        u.role as created_by_role,
-        gp.first_name as gp_first_name,
-        gp.last_name as gp_last_name,
-        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
-      FROM patients p
-      LEFT JOIN users u ON p.created_by = u.id
-      LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
-      WHERE ${whereClause}
-      AND NOT EXISTS (
-        SELECT 1 FROM appointments a
-        WHERE a.patient_id = p.id 
-        AND a.status IN ('scheduled', 'confirmed')
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM investigation_bookings ib
-        WHERE ib.patient_id = p.id 
-        AND ib.status IN ('scheduled', 'confirmed')
-      )
-      ORDER BY p.created_at DESC
-      LIMIT $${paramCount + 1}
-    `;
+    // For urologists/doctors: Get patients who visited this doctor, ordered by most recent appointment
+    if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+      console.log(`👥 [getNewPatients ${requestId}] Fetching recent patients for doctor ${doctorId}`);
+      
+      query = `
+        WITH recent_appointments AS (
+          SELECT DISTINCT ON (a.patient_id)
+            a.patient_id,
+            a.appointment_date,
+            a.appointment_time
+          FROM appointments a
+          WHERE a.urologist_id = $2
+            AND a.status IN ('scheduled', 'confirmed', 'completed')
+          ORDER BY a.patient_id, a.appointment_date DESC, a.appointment_time DESC
+        )
+        SELECT 
+          p.id,
+          p.upi,
+          p.first_name,
+          p.last_name,
+          p.date_of_birth,
+          p.gender,
+          p.phone,
+          p.email,
+          p.initial_psa,
+          p.initial_psa_date,
+          p.priority,
+          p.status,
+          p.care_pathway,
+          p.created_at,
+          p.updated_at,
+          p.referred_by_gp_id,
+          p.assigned_urologist,
+          u.first_name as created_by_name,
+          u.last_name as created_by_last_name,
+          u.role as created_by_role,
+          gp.first_name as gp_first_name,
+          gp.last_name as gp_last_name,
+          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+          ra.appointment_date as last_appointment_date,
+          ra.appointment_time as last_appointment_time
+        FROM patients p
+        INNER JOIN recent_appointments ra ON ra.patient_id = p.id
+        LEFT JOIN users u ON p.created_by = u.id
+        LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+        WHERE p.status = $1
+        ORDER BY ra.appointment_date DESC, ra.appointment_time DESC
+        LIMIT $3
+      `;
+      
+      queryParams = ['Active', doctorId, parseInt(limit)];
+      
+    } else if (userRole === 'gp') {
+      // For GPs: Keep existing logic - filter by referred_by_gp_id
+      console.log(`👥 [getNewPatients ${requestId}] Fetching patients for GP ${userId}`);
+      
+      query = `
+        SELECT 
+          p.id,
+          p.upi,
+          p.first_name,
+          p.last_name,
+          p.date_of_birth,
+          p.gender,
+          p.phone,
+          p.email,
+          p.initial_psa,
+          p.initial_psa_date,
+          p.priority,
+          p.status,
+          p.care_pathway,
+          p.created_at,
+          p.updated_at,
+          p.referred_by_gp_id,
+          p.assigned_urologist,
+          u.first_name as created_by_name,
+          u.last_name as created_by_last_name,
+          u.role as created_by_role,
+          gp.first_name as gp_first_name,
+          gp.last_name as gp_last_name,
+          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+        FROM patients p
+        LEFT JOIN users u ON p.created_by = u.id
+        LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+        WHERE p.status = $1
+          AND p.referred_by_gp_id = $2
+          AND p.created_by IS NOT NULL
+        ORDER BY p.created_at DESC
+        LIMIT $3
+      `;
+      
+      queryParams = ['Active', userId, parseInt(limit)];
+      
+    } else {
+      // For nurses or other roles: Get all recent patients based on appointments
+      console.log(`👥 [getNewPatients ${requestId}] Fetching all recent patients (nurse/other role)`);
+      
+      query = `
+        WITH recent_appointments AS (
+          SELECT DISTINCT ON (a.patient_id)
+            a.patient_id,
+            a.appointment_date,
+            a.appointment_time
+          FROM appointments a
+          WHERE a.status IN ('scheduled', 'confirmed', 'completed')
+          ORDER BY a.patient_id, a.appointment_date DESC, a.appointment_time DESC
+        )
+        SELECT 
+          p.id,
+          p.upi,
+          p.first_name,
+          p.last_name,
+          p.date_of_birth,
+          p.gender,
+          p.phone,
+          p.email,
+          p.initial_psa,
+          p.initial_psa_date,
+          p.priority,
+          p.status,
+          p.care_pathway,
+          p.created_at,
+          p.updated_at,
+          p.referred_by_gp_id,
+          p.assigned_urologist,
+          u.first_name as created_by_name,
+          u.last_name as created_by_last_name,
+          u.role as created_by_role,
+          gp.first_name as gp_first_name,
+          gp.last_name as gp_last_name,
+          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+          ra.appointment_date as last_appointment_date,
+          ra.appointment_time as last_appointment_time
+        FROM patients p
+        INNER JOIN recent_appointments ra ON ra.patient_id = p.id
+        LEFT JOIN users u ON p.created_by = u.id
+        LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+        WHERE p.status = $1
+        ORDER BY ra.appointment_date DESC, ra.appointment_time DESC
+        LIMIT $2
+      `;
+      
+      queryParams = ['Active', parseInt(limit)];
+    }
 
-    queryParams.push(parseInt(limit));
     const result = await client.query(query, queryParams);
 
     console.log(`Found ${result.rows.length} new patients`);
@@ -884,7 +1006,9 @@ export const getNewPatients = async (req, res) => {
         referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
         assignedUrologist: patient.assigned_urologist,
         createdAt: patient.created_at,
-        updatedAt: patient.updated_at
+        updatedAt: patient.updated_at,
+        last_appointment_date: patient.last_appointment_date || null,
+        last_appointment_time: patient.last_appointment_time || null
       };
       } catch (error) {
         console.error(`Error transforming patient ${index + 1}:`, error);
@@ -911,7 +1035,9 @@ export const getNewPatients = async (req, res) => {
           referredByGP: null,
           assignedUrologist: null,
           createdAt: patient.created_at || new Date(),
-          updatedAt: patient.updated_at || new Date()
+          updatedAt: patient.updated_at || new Date(),
+          last_appointment_date: patient.last_appointment_date || null,
+          last_appointment_time: patient.last_appointment_time || null
         };
       }
     });

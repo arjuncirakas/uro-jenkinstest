@@ -222,7 +222,7 @@ const UrologistDashboard = () => {
     setRecentPatientsError(null);
     
     try {
-      const result = await patientService.getNewPatients({ limit: 10 });
+      const result = await patientService.getNewPatients({ limit: 15 });
       
       if (result.success) {
         console.log('Raw recent patients data:', result.data);
@@ -240,13 +240,45 @@ const UrologistDashboard = () => {
           const lastName = patient.last_name || patient.lastName || '';
           const fullName = patient.name || patient.patientName || `${firstName} ${lastName}`.trim() || 'Unknown Patient';
           
+          // Format the visit date/time
+          let timeDisplay = 'Recently';
+          if (patient.last_appointment_date) {
+            const visitDate = new Date(patient.last_appointment_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const visitDateOnly = new Date(visitDate);
+            visitDateOnly.setHours(0, 0, 0, 0);
+            
+            const diffTime = today - visitDateOnly;
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) {
+              timeDisplay = 'Today';
+            } else if (diffDays === 1) {
+              timeDisplay = 'Yesterday';
+            } else if (diffDays < 7) {
+              timeDisplay = `${diffDays} days ago`;
+            } else {
+              // Format as date
+              timeDisplay = visitDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: visitDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+            }
+            
+            // Add time if available
+            if (patient.last_appointment_time) {
+              const timeStr = typeof patient.last_appointment_time === 'string' 
+                ? patient.last_appointment_time.substring(0, 5) 
+                : patient.last_appointment_time;
+              timeDisplay += ` ${formatTime(timeStr)}`;
+            }
+          }
+          
           return {
             id: patient.id || patient.patient_id,
-            time: 'Recently',
+            time: timeDisplay,
             patient: fullName,
             age: patient.age || 'N/A',
-            status: 'New Patient',
-            statusColor: 'blue'
+            status: 'Visited',
+            statusColor: 'green'
           };
         });
         
@@ -929,12 +961,19 @@ const UrologistDashboard = () => {
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Priority</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Actions</th>
                           </>
+                        ) : activeTab === 'appointments' ? (
+                          <>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Time</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Patient Name</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Age</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Actions</th>
+                          </>
                         ) : (
                           <>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Time</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Patient Name</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Age</th>
-                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Pathway Status</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Status</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Actions</th>
                           </>
                         )}
@@ -944,19 +983,19 @@ const UrologistDashboard = () => {
                       {activeTab === 'appointments' ? (
                         loadingAppointments ? (
                           <tr>
-                            <td colSpan="5" className="py-8 text-center text-gray-500">
+                            <td colSpan="4" className="py-8 text-center text-gray-500">
                               Loading appointments...
                             </td>
                           </tr>
                         ) : appointmentsError ? (
                           <tr>
-                            <td colSpan="5" className="py-8 text-center text-red-500">
+                            <td colSpan="4" className="py-8 text-center text-red-500">
                               Error: {appointmentsError}
                             </td>
                           </tr>
                         ) : appointments.length === 0 ? (
                           <tr>
-                            <td colSpan="5" className="py-8 text-center text-gray-500">
+                            <td colSpan="4" className="py-8 text-center text-gray-500">
                               No appointments scheduled for today
                             </td>
                           </tr>
@@ -983,17 +1022,6 @@ const UrologistDashboard = () => {
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
                                 {appointment.age || 'N/A'}
-                              </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6">
-                                {getStatusBadge(
-                                  appointment.status === 'scheduled' ? 'Scheduled' : 
-                                  appointment.status === 'completed' ? 'Completed' :
-                                  appointment.status === 'no_show' ? 'No Show' : 
-                                  appointment.status,
-                                  appointment.status === 'scheduled' ? 'blue' :
-                                  appointment.status === 'completed' ? 'green' :
-                                  appointment.status === 'no_show' ? 'red' : 'gray'
-                                )}
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <button

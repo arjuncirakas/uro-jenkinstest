@@ -159,20 +159,6 @@ const Patients = () => {
     }
   };
 
-  const getPriorityBadge = (priority, color) => {
-    const colorClasses = {
-      red: 'bg-red-100 text-red-700',
-      purple: 'bg-purple-100 text-purple-700',
-      yellow: 'bg-yellow-100 text-yellow-700',
-      green: 'bg-green-100 text-green-700',
-    };
-    
-    return (
-      <span className={`px-3 py-1 rounded-full text-xs font-medium ${colorClasses[color]}`} aria-label={`Priority: ${priority}`}>
-        {priority}
-      </span>
-    );
-  };
 
   return (
     <div className="h-full overflow-y-auto">
@@ -227,7 +213,7 @@ const Patients = () => {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT NAME</th>
                   <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT ID / MRN</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PRIORITY</th>
+                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">CARE PATHWAY</th>
                   <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">ACTION</th>
                 </tr>
               </thead>
@@ -259,7 +245,9 @@ const Patients = () => {
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      {getPriorityBadge(patient.priority || 'Normal', 'green')}
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                        {patient.carePathway || 'Not Assigned'}
+                      </span>
                     </td>
                     <td className="py-4 px-6">
                       <button 

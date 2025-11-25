@@ -3315,6 +3315,18 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 </span>
                               </div>
                               <div>
+                                <span className="text-gray-600">Referring Department:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.referringDepartment || displayPatient.referring_department || 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Referring GP:</span>
+                                <span className="ml-2 font-medium text-gray-900">
+                                  {displayPatient.referredByGP || displayPatient.referred_by_gp || 'N/A'}
+                                </span>
+                              </div>
+                              <div>
                                 <span className="text-gray-600">Assigned Urologist:</span>
                                 <span className="ml-2 font-medium text-gray-900">
                                   {displayPatient.assignedUrologist || displayPatient.assigned_urologist || 'Not assigned'}

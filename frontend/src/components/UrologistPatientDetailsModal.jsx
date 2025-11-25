@@ -2418,7 +2418,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       <div className="flex items-center justify-center py-8">
                         <div className="text-red-500 text-sm">{investigationsError || requestsError}</div>
                       </div>
-                    ) : (investigationRequests.length > 0 || clinicalNotes.length > 0 || allOtherTests.length > 0) ? (
+                    ) : (investigationRequests.length > 0 || clinicalNotes.length > 0 || latestOtherTests.length > 0) ? (
                       <div className="space-y-6">
                         {/* Group investigation requests and clinical investigations by date */}
                         {(() => {
@@ -2614,11 +2614,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 {groupedByDate[dateKey].map((request) => {
                                   // Check if results have been uploaded for this investigation
                                   const investigationName = (request.investigationName || request.investigation_name || '').toUpperCase();
-                                  const hasResults = allOtherTests.some(result => {
+                                  const hasResults = latestOtherTests.some(result => {
                                     const resultName = (result.testName || '').toUpperCase();
                                     return resultName === investigationName || resultName.includes(investigationName) || investigationName.includes(resultName);
                                   });
-                                  const uploadedResult = allOtherTests.find(result => {
+                                  const uploadedResult = latestOtherTests.find(result => {
                                     const resultName = (result.testName || '').toUpperCase();
                                     return resultName === investigationName || resultName.includes(investigationName) || investigationName.includes(resultName);
                                   });
@@ -3044,6 +3044,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               year: 'numeric' 
                             })
                           : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Referring Department:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {displayPatient.referringDepartment || displayPatient.referring_department || 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Referring GP:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {displayPatient.referredByGP || displayPatient.referred_by_gp || 'N/A'}
                       </span>
                     </div>
                     <div>
