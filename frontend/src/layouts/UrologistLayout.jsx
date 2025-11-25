@@ -34,6 +34,11 @@ const UrologistLayout = () => {
     window.dispatchEvent(new CustomEvent('patient:added', {
       detail: { patient: newPatient }
     }));
+    
+    // Also dispatch patientAdded event for nurse pages to pick up
+    window.dispatchEvent(new CustomEvent('patientAdded', {
+      detail: { newPatient }
+    }));
   };
 
   const handleSuccessModalClose = () => {

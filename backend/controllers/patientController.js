@@ -913,7 +913,7 @@ export const getNewPatients = async (req, res) => {
       queryParams = ['Active', userId, parseInt(limit)];
       
     } else {
-      // For nurses or other roles: Get all recent patients based on appointments
+      // For nurses or other roles: Get all recent patients, including those without appointments
       console.log(`👥 [getNewPatients ${requestId}] Fetching all recent patients (nurse/other role)`);
       
       query = `
@@ -956,14 +956,16 @@ export const getNewPatients = async (req, res) => {
           ra.appointment_time as last_appointment_time,
           ra.appointment_status
         FROM patients p
-        INNER JOIN recent_appointments ra ON ra.patient_id = p.id
+        LEFT JOIN recent_appointments ra ON ra.patient_id = p.id
         LEFT JOIN users u ON p.created_by = u.id
         LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
         WHERE p.status = $1
         ORDER BY 
           CASE WHEN ra.appointment_date = CURRENT_DATE THEN 0 ELSE 1 END,
-          ra.appointment_date DESC, 
-          ra.appointment_time DESC
+          CASE WHEN ra.appointment_date IS NOT NULL THEN 0 ELSE 1 END,
+          ra.appointment_date DESC NULLS LAST, 
+          ra.appointment_time DESC NULLS LAST,
+          p.created_at DESC
         LIMIT $2
       `;
       
