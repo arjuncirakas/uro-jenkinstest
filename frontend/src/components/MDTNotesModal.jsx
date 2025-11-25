@@ -34,9 +34,9 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
   const [formData, setFormData] = useState({
     date: '',
     time: '',
-    author: 'Dr. Thompson',
-    designation: 'Urologist',
-    department: 'Urology Department',
+    author: '',
+    designation: '',
+    department: 'MDT',
     meetingType: '',
     attendees: [],
     patientInfo: {
@@ -129,6 +129,29 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
           const outs = Array.isArray(m.outcomes) && m.outcomes.length
             ? m.outcomes
             : ((() => { try { const p = rawNotes && typeof rawNotes === 'string' ? JSON.parse(rawNotes) : (rawNotes || {}); return Array.isArray(p.outcomes) ? p.outcomes : []; } catch { return []; } })());
+          
+          // Load attendees - prefer from parsed notes (attendees field), fallback to teamMembers
+          let loadedAttendees = [];
+          if (Array.isArray(m.attendees) && m.attendees.length > 0) {
+            // Use attendees from parsed notes (what was saved)
+            loadedAttendees = m.attendees;
+          } else {
+            // Fallback to teamMembers from database relationships
+            try {
+              const parsed = rawNotes && typeof rawNotes === 'string' ? JSON.parse(rawNotes) : (rawNotes || {});
+              if (Array.isArray(parsed.attendees) && parsed.attendees.length > 0) {
+                loadedAttendees = parsed.attendees;
+              } else if (Array.isArray(m.teamMembers) && m.teamMembers.length > 0) {
+                loadedAttendees = m.teamMembers.map(tm => `${tm.name}${tm.role ? ` (${tm.role})` : ''}`);
+              }
+            } catch {
+              // If parsing fails, try teamMembers
+              if (Array.isArray(m.teamMembers) && m.teamMembers.length > 0) {
+                loadedAttendees = m.teamMembers.map(tm => `${tm.name}${tm.role ? ` (${tm.role})` : ''}`);
+              }
+            }
+          }
+          
           setFormData({
             date: toLocalYmd(m.meetingDate),
             time: (m.meetingTime || '00:00').slice(0,5),
@@ -136,7 +159,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
             designation: m.createdBy?.role || '',
             department: 'MDT',
             meetingType: '',
-            attendees: (m.teamMembers || []).map(tm => `${tm.name}${tm.role ? ` (${tm.role})` : ''}`),
+            attendees: loadedAttendees,
             patientInfo: pInfo,
             clinicalSummary: summaryFromNotes || patientNotesText || (pInfo.diagnosis ? `Diagnosis: ${pInfo.diagnosis}` : ''),
             content: discussionText,
@@ -346,19 +369,34 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
         } catch {}
       }
       setExistingNotes(discussionText);
-      setFormData(prev => ({
-        ...prev,
-        date: toLocalYmd(m.meetingDate || prev.date),
-        time: (m.meetingTime || prev.time || '00:00').slice(0,5),
-        clinicalSummary: summaryFromNotes || prev.clinicalSummary,
-        content: discussionText,
-        mdtOutcome: m.mdtOutcome ?? prev.mdtOutcome,
-        recommendations: Array.isArray(m.recommendations) ? m.recommendations : prev.recommendations,
-        actionItems: Array.isArray(m.actionItems) ? m.actionItems : prev.actionItems,
-        decisions: Array.isArray(m.decisions) ? m.decisions : prev.decisions,
-        outcomes: Array.isArray(m.outcomes) ? m.outcomes : prev.outcomes,
-        attendees: Array.isArray(m.attendees) && m.attendees.length ? m.attendees : prev.attendees
-      }));
+      setFormData(prev => {
+        // Get attendees from response - prefer top-level field, then parsed notes, then keep current
+        let savedAttendees = prev.attendees;
+        if (Array.isArray(m.attendees) && m.attendees.length > 0) {
+          savedAttendees = m.attendees;
+        } else {
+          try {
+            const parsed = m.notes ? (typeof m.notes === 'string' ? JSON.parse(m.notes) : m.notes) : {};
+            if (Array.isArray(parsed.attendees) && parsed.attendees.length > 0) {
+              savedAttendees = parsed.attendees;
+            }
+          } catch {}
+        }
+        
+        return {
+          ...prev,
+          date: toLocalYmd(m.meetingDate || prev.date),
+          time: (m.meetingTime || prev.time || '00:00').slice(0,5),
+          clinicalSummary: summaryFromNotes || prev.clinicalSummary,
+          content: discussionText,
+          mdtOutcome: m.mdtOutcome ?? prev.mdtOutcome,
+          recommendations: Array.isArray(m.recommendations) ? m.recommendations : prev.recommendations,
+          actionItems: Array.isArray(m.actionItems) ? m.actionItems : prev.actionItems,
+          decisions: Array.isArray(m.decisions) ? m.decisions : prev.decisions,
+          outcomes: Array.isArray(m.outcomes) ? m.outcomes : prev.outcomes,
+          attendees: savedAttendees
+        };
+      });
       setIsEditing(false);
       setSaveToast({ visible: true, type: 'success', message: 'Meeting record saved successfully' });
       setTimeout(() => setSaveToast(s => ({ ...s, visible: false })), 2000);
@@ -668,7 +706,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
               )}
             </div>
             <div className="flex items-center gap-2">
-              {!isEditing && (
+              {!isEditing && !isMeetingComplete && (
                 <button
                   onClick={() => setIsEditing(true)}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white flex items-center gap-2"
@@ -824,11 +862,16 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                             >
                               {attendee}
                               <button
-                                onClick={() => setFormData(prev => ({
-                                  ...prev,
-                                  attendees: prev.attendees.filter((_, i) => i !== idx)
-                                }))}
-                                className="ml-1 hover:text-red-600"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    attendees: prev.attendees.filter((_, i) => i !== idx)
+                                  }));
+                                }}
+                                className="ml-1 hover:text-red-600 cursor-pointer"
+                                aria-label={`Remove ${attendee}`}
                               >
                                 <X className="h-3 w-3" />
                               </button>
@@ -1054,7 +1097,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                 <Save className="h-4 w-4" />
                 Save Meeting Record
               </button>
-            ) : (
+            ) : !isMeetingComplete ? (
               <button
                 onClick={() => setIsEditing(true)}
                 className="px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all flex items-center gap-2"
@@ -1062,7 +1105,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                 <Edit3 className="h-4 w-4" />
                 Edit Meeting Record
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
