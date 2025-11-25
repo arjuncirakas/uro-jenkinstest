@@ -3,7 +3,7 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
@@ -2342,14 +2342,29 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           </thead>
                           <tbody>
                             {psaResults.map((psa) => {
-                              const date = psa.test_date || psa.created_at || psa.date;
+                              // Check multiple possible date fields from API response
+                              const date = psa.testDate || psa.test_date || psa.formattedDate || psa.created_at || psa.date;
                               let formattedDate = 'N/A';
                               if (date) {
-                                const dateObj = new Date(date);
-                                const day = String(dateObj.getDate()).padStart(2, '0');
-                                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-                                const year = dateObj.getFullYear();
-                                formattedDate = `${day}-${month}-${year}`;
+                                // If it's already formatted (from formattedDate field), use it
+                                if (psa.formattedDate && psa.formattedDate !== 'N/A' && psa.formattedDate.includes('/')) {
+                                  // Convert from MM/DD/YYYY to DD-MM-YYYY format
+                                  const parts = psa.formattedDate.split('/');
+                                  if (parts.length === 3) {
+                                    formattedDate = `${parts[1]}-${parts[0]}-${parts[2]}`;
+                                  } else {
+                                    formattedDate = psa.formattedDate;
+                                  }
+                                } else {
+                                  // Parse date object
+                                  const dateObj = new Date(date);
+                                  if (!isNaN(dateObj.getTime())) {
+                                    const day = String(dateObj.getDate()).padStart(2, '0');
+                                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                                    const year = dateObj.getFullYear();
+                                    formattedDate = `${day}-${month}-${year}`;
+                                  }
+                                }
                               }
                               const psaValue = psa.result_value || psa.result || 'N/A';
                               const displayValue = psaValue.toString().includes('ng/mL') ? psaValue : `${psaValue} ng/mL`;
@@ -3806,7 +3821,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         return (
                           <LineChart 
                             data={rechartsData} 
-                            margin={{ top: 5, right: 20, left: 10, bottom: 30 }}
+                            margin={{ top: 25, right: 20, left: 10, bottom: 30 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis 
@@ -3827,39 +3842,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } 
                               }}
                             />
-                            <Tooltip 
-                              formatter={(value, name, props) => {
-                                // This formatter is called for EACH point individually
-                                // value is the Y-axis value (PSA) for THIS specific hovered point
-                                // props.payload contains the full data object for THIS point from our API response
-                                const dataPoint = props.payload || {};
-                                
-                                // Use the value parameter - this is the Y-axis value for THIS point
-                                // This is calculated by Recharts from dataKey="psa" for this specific data point
-                                const psaValue = value !== undefined && value !== null ? value : 
-                                                (dataPoint.psa !== undefined ? dataPoint.psa : 
-                                                 dataPoint.numericValue !== undefined ? dataPoint.numericValue : 0);
-                                
-                                const numValue = typeof psaValue === 'number' && !isNaN(psaValue) 
-                                  ? psaValue 
-                                  : parseFloat(String(psaValue)) || 0;
-                                
-                                // Return formatted value - this will be displayed in the tooltip
-                                return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
-                              }}
-                              labelFormatter={(label) => {
-                                // Return the date label
-                                return label || 'Date';
-                              }}
-                              contentStyle={{
-                                backgroundColor: 'white',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '0.5rem',
-                                padding: '12px',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                              }}
-                              cursor={{ stroke: '#0d9488', strokeWidth: 1, strokeDasharray: '3 3' }}
-                            />
                             <Line 
                               type="monotone" 
                               dataKey="psa" 
@@ -3868,7 +3850,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
                               activeDot={{ r: 7, fill: '#0d9488', stroke: '#0d9488', strokeWidth: 2 }}
                               isAnimationActive={false}
-                            />
+                            >
+                              <LabelList 
+                                dataKey="psa" 
+                                position="top" 
+                                formatter={(value) => `${parseFloat(value).toFixed(1)} ng/mL`}
+                                style={{ fill: '#0d9488', fontSize: '11px', fontWeight: '600' }}
+                              />
+                            </Line>
                           </LineChart>
                         );
                       })()}
