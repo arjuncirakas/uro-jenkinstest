@@ -19,6 +19,7 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
     status: 'Normal'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAdded, setIsAdded] = useState(false);
   const [errors, setErrors] = useState({});
 
   // Reset form with today's date when modal opens
@@ -37,6 +38,7 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
         status: 'Normal'
       });
       setErrors({});
+      setIsAdded(false);
     }
   }, [isOpen]);
 
@@ -109,13 +111,8 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
       const result = await investigationService.addPSAResult(patient.id, submitData);
       
       if (result.success) {
-        onSuccess('PSA result added successfully!');
-        setFormData({
-          testDate: getTodayDate(),
-          result: '',
-          notes: '',
-          status: 'Normal'
-        });
+        setIsSubmitting(false);
+        setIsAdded(true);
         
         // Trigger custom events to refresh tables
         const refreshEvent = new CustomEvent('testResultAdded', {
@@ -137,14 +134,31 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
         });
         window.dispatchEvent(psaAddedEvent);
         
-        onClose();
+        // Call onSuccess with skipModal flag to refresh data without showing modal
+        if (onSuccess) {
+          onSuccess('PSA result added successfully!', true);
+        }
+        
+        // Reset form
+        setFormData({
+          testDate: getTodayDate(),
+          result: '',
+          notes: '',
+          status: 'Normal'
+        });
+        
+        // Show "Added" for 1 second, then close modal
+        setTimeout(() => {
+          setIsAdded(false);
+          onClose();
+        }, 1000);
       } else {
         setErrors({ submit: result.error || 'Failed to add PSA result' });
+        setIsSubmitting(false);
       }
     } catch (error) {
       setErrors({ submit: 'An unexpected error occurred. Please try again.' });
       console.error('Error adding PSA result:', error);
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -276,13 +290,15 @@ const AddPSAResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isAdded}
               className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
             >
               {isSubmitting && (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
               )}
-              <span>{isSubmitting ? 'Adding...' : 'Add PSA Result'}</span>
+              <span>
+                {isAdded ? 'Added' : isSubmitting ? 'Adding...' : 'Add PSA Result'}
+              </span>
             </button>
           </div>
         </form>

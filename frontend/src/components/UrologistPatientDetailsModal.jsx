@@ -601,10 +601,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   };
 
   // Handle investigation success (refresh data)
-  const handleInvestigationSuccess = async (message) => {
-    setSuccessModalTitle('Investigation Added');
-    setSuccessModalMessage(message);
-    setIsSuccessModalOpen(true);
+  const handleInvestigationSuccess = async (message, skipModal = false) => {
+    if (!skipModal) {
+      setSuccessModalTitle('Investigation Added');
+      setSuccessModalMessage(message);
+      setIsSuccessModalOpen(true);
+    }
     
     // Refresh investigations data
     if (patient?.id) {

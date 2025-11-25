@@ -987,10 +987,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
   }, [patient?.id, patient?.mri, patient?.trus, patient?.biopsy, patient?.mriStatus, patient?.trusStatus, patient?.biopsyStatus]);
 
   // Handle investigation success
-  const handleInvestigationSuccess = (message) => {
-    setSuccessModalTitle('Success!');
-    setSuccessModalMessage(message);
-    setIsSuccessModalOpen(true);
+  const handleInvestigationSuccess = (message, skipModal = false) => {
+    if (!skipModal) {
+      setSuccessModalTitle('Success!');
+      setSuccessModalMessage(message);
+      setIsSuccessModalOpen(true);
+    }
     fetchInvestigations(); // Refresh data
     fetchInvestigationRequests(); // Also refresh investigation requests
   };

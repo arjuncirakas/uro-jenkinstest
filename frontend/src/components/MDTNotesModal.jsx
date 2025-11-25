@@ -893,6 +893,8 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                     date: toLocalYmd(res.data.meetingDate),
                     time: (res.data.meetingTime || '00:00').slice(0,5)
                   }));
+                  // Dispatch event to refresh dashboard MDT schedules
+                  window.dispatchEvent(new CustomEvent('mdt:updated'));
                 } else {
                   setRescheduleError(res.error || 'Failed to reschedule');
                 }
