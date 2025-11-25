@@ -184,6 +184,11 @@ const AddScheduleModal = ({ isOpen, onClose, patient, onSuccess }) => {
       if (result.success) {
         console.log('Urologist Appointment Booked:', result.data);
         
+        // Dispatch event to notify other components to refresh
+        window.dispatchEvent(new CustomEvent('appointment:booked', {
+          detail: { patientId: patient.id, appointmentData: result.data }
+        }));
+        
         // Call success callback
         if (onSuccess) {
           onSuccess(result.data);

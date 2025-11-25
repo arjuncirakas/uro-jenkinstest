@@ -914,14 +914,24 @@ export const getNewPatients = async (req, res) => {
       
     } else {
       // For nurses or other roles: Get only patients WITHOUT appointments (newly added patients)
+      // Exclude patients who have any non-cancelled appointments OR investigation bookings
+      // This includes both urologist appointments (in appointments table) and investigation bookings (in investigation_bookings table)
       console.log(`👥 [getNewPatients ${requestId}] Fetching new patients without appointments (nurse/other role)`);
       
       query = `
         WITH patients_with_appointments AS (
+          -- Get patients with urologist appointments
           SELECT DISTINCT a.patient_id
           FROM appointments a
-          WHERE a.status IN ('scheduled', 'confirmed', 'completed', 'no_show')
-            AND a.status != 'cancelled'
+          WHERE a.status NOT IN ('cancelled')
+            AND a.status IS NOT NULL
+          UNION
+          -- Get patients with investigation bookings
+          SELECT DISTINCT ib.patient_id
+          FROM investigation_bookings ib
+          WHERE ib.status NOT IN ('cancelled', 'completed')
+            AND ib.status IS NOT NULL
+            AND ib.scheduled_date IS NOT NULL
         )
         SELECT 
           p.id,

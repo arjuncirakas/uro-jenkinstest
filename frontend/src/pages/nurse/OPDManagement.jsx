@@ -207,6 +207,29 @@ const OPDManagement = () => {
     };
   }, []);
 
+  // Listen for appointment booking events to refresh new patients list
+  // When an appointment is booked, the patient should be removed from new patients list
+  useEffect(() => {
+    const handleAppointmentBooked = (event) => {
+      console.log('Appointment booked event received in OPD Management:', event.detail);
+      // Refresh new patients list to remove patients who now have appointments
+      // Add a small delay to ensure backend has processed the appointment
+      setTimeout(() => {
+        fetchNewPatients();
+      }, 500);
+    };
+
+    window.addEventListener('appointment:updated', handleAppointmentBooked);
+    window.addEventListener('appointment:booked', handleAppointmentBooked);
+    window.addEventListener('investigationBooked', handleAppointmentBooked);
+
+    return () => {
+      window.removeEventListener('appointment:updated', handleAppointmentBooked);
+      window.removeEventListener('appointment:booked', handleAppointmentBooked);
+      window.removeEventListener('investigationBooked', handleAppointmentBooked);
+    };
+  }, []);
+
   // Listen for test result added events to refresh appointments data
   useEffect(() => {
     const handleTestResultAdded = (event) => {
@@ -1081,7 +1104,10 @@ const OPDManagement = () => {
           console.log('Investigation booked:', data);
           setIsInvestigationModalOpen(false);
           // Refresh all appointment data to show the new booking
-          refreshAllData();
+          // Add small delay to ensure backend has processed the appointment
+          setTimeout(() => {
+            refreshAllData();
+          }, 300);
         }}
       />
 
@@ -1094,7 +1120,10 @@ const OPDManagement = () => {
           console.log('Urologist appointment booked:', data);
           setIsScheduleModalOpen(false);
           // Refresh all appointment data to show the new booking
-          refreshAllData();
+          // Add small delay to ensure backend has processed the appointment
+          setTimeout(() => {
+            refreshAllData();
+          }, 300);
         }}
       />
 
