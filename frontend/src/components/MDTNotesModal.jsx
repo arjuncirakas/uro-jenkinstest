@@ -1089,7 +1089,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
             >
               {isEditing ? 'Cancel' : 'Close'}
             </button>
-            {isEditing ? (
+            {isEditing && (
               <button
                 onClick={handleSave}
                 className="px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all flex items-center gap-2"
@@ -1097,15 +1097,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                 <Save className="h-4 w-4" />
                 Save Meeting Record
               </button>
-            ) : !isMeetingComplete ? (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all flex items-center gap-2"
-              >
-                <Edit3 className="h-4 w-4" />
-                Edit Meeting Record
-              </button>
-            ) : null}
+            )}
           </div>
         </div>
       </div>
