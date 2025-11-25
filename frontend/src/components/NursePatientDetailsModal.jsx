@@ -3,7 +3,7 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Dot } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Dot } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import ConfirmationModal from './modals/ConfirmationModal';
@@ -1057,9 +1057,18 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
               formattedDateStr = `${day}-${month}-${year}`;
             }
             
+            // Format date for chart display (e.g., "Nov 25, 2025")
+            const chartDateStr = dateObj && !isNaN(dateObj.getTime())
+              ? dateObj.toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric' 
+                })
+              : (investigation.formattedDate || formattedDateStr || 'N/A');
+            
             return {
               id: investigation.id,
-              date: investigation.formattedDate || formattedDateStr,
+              date: chartDateStr, // Use formatted date for chart display
               formattedDate: formattedDateStr,
               dateObj: dateObj, // Store date object for proper sorting and charting
               result: formattedResult, // Display format
@@ -3611,19 +3620,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                         const chartData = psaHistory.slice(0, 5).reverse();
                         const rechartsData = chartData.map((psaItem, index) => {
                           const psaValue = psaItem.numericValue || 0;
-                          const date = psaItem.dateObj || (psaItem.date ? new Date(psaItem.date) : new Date());
-                          const dateStr = date && !isNaN(date.getTime()) 
-                            ? date.toLocaleDateString('en-US', { 
-                                month: 'short', 
-                                day: 'numeric',
-                                year: 'numeric' 
-                              })
-                            : psaItem.date || 'N/A';
+                          // Use the date field which is already formatted correctly (e.g., "Nov 25, 2025")
+                          const dateStr = psaItem.date || 'N/A';
                           
                           return {
                             id: psaItem.id,
                             date: dateStr,
-                            dateObj: date,
+                            dateObj: psaItem.dateObj || new Date(),
                             psa: psaValue,
                             originalResult: psaItem.result,
                             numericValue: psaValue
@@ -3825,27 +3828,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                   position: 'insideLeft', 
                                   style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } 
                                 }}
-                              />
-                              <Tooltip 
-                                formatter={(value, name, props) => {
-                                  // The value parameter is the Y-axis value for THIS specific hovered point
-                                  // This is automatically calculated by Recharts from dataKey="psa"
-                                  // Use value directly as it's already the correct PSA value for this point
-                                  const numValue = typeof value === 'number' && !isNaN(value) 
-                                    ? value 
-                                    : parseFloat(String(value)) || 0;
-                                  
-                                  return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
-                                }}
-                                labelFormatter={(label) => label || 'Date'}
-                                contentStyle={{
-                                  backgroundColor: 'white',
-                                  border: '1px solid #e5e7eb',
-                                  borderRadius: '0.5rem',
-                                  padding: '12px',
-                                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                                }}
-                                cursor={{ stroke: '#0d9488', strokeWidth: 1, strokeDasharray: '3 3' }}
                               />
                               <Line 
                                 type="monotone" 

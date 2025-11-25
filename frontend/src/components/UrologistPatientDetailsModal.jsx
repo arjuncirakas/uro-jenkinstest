@@ -3,7 +3,7 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
@@ -1343,25 +1343,46 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
   // Complete PSA history from API data
   const psaHistory = psaResults.map(result => {
-    const date = result.test_date || result.created_at;
+    // Try multiple date fields from API response
+    const dateSource = result.testDate || result.test_date || result.formattedDate || result.created_at;
+    let dateObj = null;
     let formattedDate = 'N/A';
-    if (date) {
-      const dateObj = new Date(date);
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      formattedDate = `${day}-${month}-${year}`;
+    
+    if (dateSource) {
+      // If it's formattedDate (MM/DD/YYYY format)
+      if (result.formattedDate && result.formattedDate.includes('/')) {
+        const parts = result.formattedDate.split('/');
+        if (parts.length === 3) {
+          dateObj = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+        }
+      }
+      // Try parsing as ISO string or standard date string
+      if (!dateObj) {
+        dateObj = new Date(dateSource);
+      }
+      
+      if (dateObj && !isNaN(dateObj.getTime())) {
+        // Format for display: "Nov 25, 2025"
+        formattedDate = dateObj.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          year: 'numeric' 
+        });
+      }
     }
     
     return {
       id: result.id,
       date: formattedDate,
+      dateObj: dateObj, // Store date object for chart
       result: result.result_value || result.result,
       referenceRange: result.reference_range || '0.0 - 4.0 ng/mL',
       status: result.status || 'Available',
       statusColor: 'blue',
       notes: result.notes || result.comments || '',
-      filePath: result.file_path
+      filePath: result.file_path,
+      testDate: result.testDate || result.test_date,
+      formattedDate: result.formattedDate
     };
   });
 
@@ -3788,19 +3809,20 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         const chartData = psaHistory.slice(0, 5).reverse();
                         const rechartsData = chartData.map((psaItem) => {
                           const psaValue = parseFloat(psaItem.result) || 0;
-                          const date = psaItem.date ? new Date(psaItem.date) : new Date();
-                          const dateStr = date && !isNaN(date.getTime()) 
-                            ? date.toLocaleDateString('en-US', { 
+                          
+                          // Use the dateObj if available, otherwise use the formatted date string
+                          const dateStr = psaItem.dateObj && !isNaN(psaItem.dateObj.getTime())
+                            ? psaItem.dateObj.toLocaleDateString('en-US', { 
                                 month: 'short', 
                                 day: 'numeric',
                                 year: 'numeric' 
                               })
-                            : psaItem.date || 'N/A';
+                            : (psaItem.date || 'N/A');
                           
                           return {
                             id: psaItem.id,
                             date: dateStr,
-                            dateObj: date,
+                            dateObj: psaItem.dateObj || new Date(),
                             psa: psaValue,
                             originalResult: psaItem.result,
                             numericValue: psaValue
@@ -3842,27 +3864,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 position: 'insideLeft', 
                                 style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } 
                               }}
-                            />
-                            <Tooltip 
-                              formatter={(value, name, props) => {
-                                // The value parameter is the Y-axis value for THIS specific hovered point
-                                // This is automatically calculated by Recharts from dataKey="psa"
-                                // Use value directly as it's already the correct PSA value for this point
-                                const numValue = typeof value === 'number' && !isNaN(value) 
-                                  ? value 
-                                  : parseFloat(String(value)) || 0;
-                                
-                                return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
-                              }}
-                              labelFormatter={(label) => label || 'Date'}
-                              contentStyle={{
-                                backgroundColor: 'white',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '0.5rem',
-                                padding: '12px',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                              }}
-                              cursor={{ stroke: '#0d9488', strokeWidth: 1, strokeDasharray: '3 3' }}
                             />
                             <Line 
                               type="monotone" 
