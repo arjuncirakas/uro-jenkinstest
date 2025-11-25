@@ -12,11 +12,18 @@ import {
   Plus,
   Upload,
   Edit3,
-  Save
+  Save,
+  Search,
+  Loader2,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import { mdtService } from '../services/mdtService';
 import { patientService } from '../services/patientService';
+import { doctorsService } from '../services/doctorsService';
+import SuccessModal from './modals/SuccessModal';
+import ErrorModal from './modals/ErrorModal';
 
 const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => {
   // Handle Escape key to close modal (read-only, no unsaved changes check)
@@ -368,6 +375,28 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [rescheduleError, setRescheduleError] = useState('');
 
+  // Team member dropdown state
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [dropdownSearchTerm, setDropdownSearchTerm] = useState('');
+  const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false);
+  const [availableTeamMembers, setAvailableTeamMembers] = useState([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [departments, setDepartments] = useState([]);
+  const [newTeamMember, setNewTeamMember] = useState({
+    name: '',
+    department: '',
+    email: '',
+    phone: ''
+  });
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [showAddMemberSuccessModal, setShowAddMemberSuccessModal] = useState(false);
+  const [showAddMemberErrorModal, setShowAddMemberErrorModal] = useState(false);
+  const [addMemberSuccessMessage, setAddMemberSuccessMessage] = useState('');
+  const [addMemberErrorMessage, setAddMemberErrorMessage] = useState('');
+  
+  // Department dropdown state
+  const [isDepartmentDropdownOpen, setIsDepartmentDropdownOpen] = useState(false);
+
   // Check if meeting is complete (has outcome and content entered)
   const isMeetingComplete = formData.mdtOutcome && formData.mdtOutcome.trim() !== '' && 
                            formData.content && formData.content.trim() !== '';
@@ -379,6 +408,172 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
       setRescheduleTime((formData.time || '00:00').slice(0, 5));
     }
   }, [isOpen, formData.date, formData.time]);
+
+  // Fetch doctors and departments
+  const fetchDoctorsAndDepartments = async () => {
+    setLoadingDoctors(true);
+    try {
+      const [doctorsResponse, departmentsResponse] = await Promise.all([
+        doctorsService.getDoctorsForDropdown(),
+        doctorsService.getAllDepartments({ is_active: true })
+      ]);
+      
+      setAvailableTeamMembers(doctorsResponse);
+      setDepartments(departmentsResponse.success ? departmentsResponse.data : []);
+    } catch (error) {
+      console.error('Error fetching doctors and departments:', error);
+      setAvailableTeamMembers([]);
+      setDepartments([]);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
+  // Fetch doctors when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchDoctorsAndDepartments();
+    }
+  }, [isOpen]);
+
+  // Filter team members based on search and exclude already added
+  const filteredTeamMembers = availableTeamMembers.filter(member => {
+    const memberName = member.name || '';
+    const isAlreadyAdded = formData.attendees.some(attendee => 
+      attendee.toLowerCase().includes(memberName.toLowerCase()) ||
+      memberName.toLowerCase().includes(attendee.toLowerCase())
+    );
+    return !isAlreadyAdded && 
+           memberName.toLowerCase().includes(dropdownSearchTerm.toLowerCase());
+  });
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+
+    const handleClickOutside = (event) => {
+      const target = event.target;
+      if (!target.closest('.dropdown-container')) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  // Close department dropdown when clicking outside
+  useEffect(() => {
+    if (!isDepartmentDropdownOpen) return;
+
+    const handleClickOutside = (event) => {
+      const target = event.target;
+      if (!target.closest('.department-dropdown-container')) {
+        setIsDepartmentDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDepartmentDropdownOpen]);
+
+  const handleDropdownToggle = () => {
+    setIsDropdownOpen(!isDropdownOpen);
+  };
+
+  const handleSelectTeamMember = (member) => {
+    const memberName = member.name || '';
+    if (memberName && !formData.attendees.includes(memberName)) {
+      setFormData(prev => ({
+        ...prev,
+        attendees: [...prev.attendees, memberName]
+      }));
+    }
+    setIsDropdownOpen(false);
+    setDropdownSearchTerm('');
+  };
+
+  const handleAddNewTeamMember = async () => {
+    if (newTeamMember.name && newTeamMember.department) {
+      setIsAddingMember(true);
+      setAddMemberErrorMessage('');
+      setAddMemberSuccessMessage('');
+      
+      try {
+        // Find the department ID
+        const department = departments.find(dept => 
+          dept.name.toLowerCase() === newTeamMember.department.toLowerCase()
+        );
+        
+        if (!department) {
+          setAddMemberErrorMessage('Department not found. Please select a valid department.');
+          setShowAddMemberErrorModal(true);
+          setIsAddingMember(false);
+          return;
+        }
+        
+        // Create the doctor
+        const doctorData = {
+          first_name: newTeamMember.name.split(' ')[0] || newTeamMember.name,
+          last_name: newTeamMember.name.split(' ').slice(1).join(' ') || '',
+          email: newTeamMember.email || null,
+          phone: newTeamMember.phone || null,
+          department_id: department.id,
+          specialization: newTeamMember.department
+        };
+        
+        const response = await doctorsService.createDoctor(doctorData);
+        
+        if (response.success) {
+          // Prepare the object used by the dropdown immediately
+          const newDoctor = {
+            id: response.data.id,
+            name: doctorsService.formatDoctorName(response.data),
+            first_name: response.data.first_name,
+            last_name: response.data.last_name,
+            specialization: response.data.specialization,
+            department_name: department.name
+          };
+
+          // Optimistically add to the available list
+          setAvailableTeamMembers(prev => {
+            const exists = prev.some(m => m.id === newDoctor.id);
+            return exists ? prev : [newDoctor, ...prev];
+          });
+
+          // Add the new doctor to the current attendees
+          if (newDoctor.name && !formData.attendees.includes(newDoctor.name)) {
+            setFormData(prev => ({
+              ...prev,
+              attendees: [...prev.attendees, newDoctor.name]
+            }));
+          }
+
+          // Refresh the doctors/department lists in the background
+          fetchDoctorsAndDepartments();
+          setNewTeamMember({ name: '', department: '', email: '', phone: '' });
+          setShowAddTeamMemberModal(false);
+          
+          // Show success modal
+          setAddMemberSuccessMessage(`${newDoctor.name} has been added successfully and is now available as a team member.`);
+          setShowAddMemberSuccessModal(true);
+        } else {
+          setAddMemberErrorMessage(response.error || 'Failed to create team member. Please try again.');
+          setShowAddMemberErrorModal(true);
+        }
+      } catch (error) {
+        console.error('Error creating new team member:', error);
+        setAddMemberErrorMessage(error.message || 'Failed to create new team member. Please try again.');
+        setShowAddMemberErrorModal(true);
+      } finally {
+        setIsAddingMember(false);
+      }
+    }
+  };
 
   // Convert any date string to local YYYY-MM-DD
   const toLocalYmd = (dateString) => {
@@ -460,7 +655,7 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                 </span>
                 <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-md">
                   <Clock className="h-4 w-4" />
-                  {formatTime(formData.time)}
+                  {formData.time ? `${formData.time} (${formatTime(formData.time)})` : formatTime(formData.time)}
                 </span>
               </div>
               {outcome && (
@@ -551,36 +746,75 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                     </h4>
                     {isEditing ? (
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            placeholder="Add attendee (e.g., Dr. Smith (Urologist))"
-                            className="flex-1 text-sm border border-gray-300 rounded px-3 py-2"
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter' && e.target.value.trim()) {
-                                setFormData(prev => ({
-                                  ...prev,
-                                  attendees: [...prev.attendees, e.target.value.trim()]
-                                }));
-                                e.target.value = '';
-                              }
-                            }}
-                          />
+                        <div className="relative dropdown-container">
                           <button
-                            onClick={() => {
-                              const input = document.querySelector('input[placeholder*="Add attendee"]');
-                              if (input && input.value.trim()) {
-                                setFormData(prev => ({
-                                  ...prev,
-                                  attendees: [...prev.attendees, input.value.trim()]
-                                }));
-                                input.value = '';
-                              }
-                            }}
-                            className="px-3 py-2 bg-teal-600 text-white text-sm rounded hover:bg-teal-700"
+                            type="button"
+                            onClick={handleDropdownToggle}
+                            className="flex items-center justify-between w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white hover:bg-gray-50 transition-colors"
                           >
-                            Add
+                            <span className="text-gray-500">Select team member to add</span>
+                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
                           </button>
+                          
+                          {isDropdownOpen && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-80 overflow-hidden">
+                              {/* Search Field */}
+                              <div className="p-3 border-b border-gray-200">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                  <input
+                                    type="text"
+                                    placeholder="Search team members..."
+                                    value={dropdownSearchTerm}
+                                    onChange={(e) => setDropdownSearchTerm(e.target.value)}
+                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                                    autoFocus
+                                  />
+                                </div>
+                              </div>
+                              
+                              {/* Add New Button */}
+                              <div className="p-2 border-b border-gray-200">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowAddTeamMemberModal(true);
+                                    setIsDropdownOpen(false);
+                                  }}
+                                  className="w-full flex items-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add New Team Member
+                                </button>
+                              </div>
+                              
+                              {/* Team Members List */}
+                              <div className="max-h-48 overflow-y-auto">
+                                {loadingDoctors ? (
+                                  <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                                    Loading doctors...
+                                  </div>
+                                ) : filteredTeamMembers.length > 0 ? (
+                                  filteredTeamMembers.map((member, index) => (
+                                    <button
+                                      key={member.id || index}
+                                      type="button"
+                                      onClick={() => handleSelectTeamMember(member)}
+                                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
+                                    >
+                                      {member.name}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                                    {dropdownSearchTerm ? 'No team members found matching your search' : 'No available team members'}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {formData.attendees.map((attendee, idx) => (
@@ -908,6 +1142,152 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
         </div>
       </div>
     )}
+
+    {/* Add Team Member Modal */}
+    {showAddTeamMemberModal && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Add New Team Member</h2>
+            <button
+              onClick={() => setShowAddTeamMemberModal(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Name
+              </label>
+              <input
+                type="text"
+                value={newTeamMember.name}
+                onChange={(e) => setNewTeamMember(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Dr. John Smith"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Department/Specialization
+              </label>
+              <div className="relative department-dropdown-container">
+                <button
+                  type="button"
+                  onClick={() => setIsDepartmentDropdownOpen(!isDepartmentDropdownOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white hover:bg-gray-50 transition-colors text-left"
+                >
+                  <span className={newTeamMember.department ? 'text-gray-900' : 'text-gray-500'}>
+                    {newTeamMember.department || 'Select Department'}
+                  </span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${isDepartmentDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {isDepartmentDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-80 overflow-hidden">
+                    {/* Departments List */}
+                    <div className="max-h-64 overflow-y-auto">
+                      {departments.length === 0 ? (
+                        <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                          No departments available
+                        </div>
+                      ) : (
+                        departments.map((dept) => (
+                          <button
+                            key={dept.id}
+                            type="button"
+                            onClick={() => {
+                              setNewTeamMember(prev => ({ ...prev, department: dept.name }));
+                              setIsDepartmentDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
+                          >
+                            {dept.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={newTeamMember.email}
+                onChange={(e) => setNewTeamMember(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="john.smith@hospital.com"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Phone
+              </label>
+              <input
+                type="tel"
+                value={newTeamMember.phone}
+                onChange={(e) => setNewTeamMember(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="+1 (555) 123-4567"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex space-x-3">
+            <button
+              onClick={handleAddNewTeamMember}
+              disabled={!newTeamMember.name || !newTeamMember.department || isAddingMember}
+              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+            >
+              {isAddingMember ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Member'
+              )}
+            </button>
+            <button
+              onClick={() => setShowAddTeamMemberModal(false)}
+              disabled={isAddingMember}
+              className="flex-1 bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Add Member Success Modal */}
+    <SuccessModal
+      isOpen={showAddMemberSuccessModal}
+      onClose={() => {
+        setShowAddMemberSuccessModal(false);
+        setAddMemberSuccessMessage('');
+      }}
+      title="Team Member Added Successfully!"
+      message={addMemberSuccessMessage}
+    />
+
+    {/* Add Member Error Modal */}
+    <ErrorModal
+      isOpen={showAddMemberErrorModal}
+      onClose={() => {
+        setShowAddMemberErrorModal(false);
+        setAddMemberErrorMessage('');
+      }}
+      title="Error Adding Team Member"
+      message={addMemberErrorMessage}
+    />
     </>
   );
 };
