@@ -3821,7 +3821,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         return (
                           <LineChart 
                             data={rechartsData} 
-                            margin={{ top: 25, right: 20, left: 10, bottom: 30 }}
+                            margin={{ top: 25, right: 20, left: 50, bottom: 30 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis 
@@ -3835,6 +3835,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               stroke="#6b7280"
                               style={{ fontSize: '12px' }}
                               tick={{ fill: '#6b7280' }}
+                              width={45}
                               label={{ 
                                 value: 'PSA Value (ng/mL)', 
                                 angle: -90, 
@@ -3854,6 +3855,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               <LabelList 
                                 dataKey="psa" 
                                 position="top" 
+                                offset={8}
                                 formatter={(value) => `${parseFloat(value).toFixed(1)} ng/mL`}
                                 style={{ fill: '#0d9488', fontSize: '11px', fontWeight: '600' }}
                               />

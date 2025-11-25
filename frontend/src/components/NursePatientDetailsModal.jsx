@@ -3665,22 +3665,23 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px' } 
                               }}
                             />
-                            <Line 
-                              type="monotone" 
-                              dataKey="psa" 
-                              stroke="#0d9488" 
-                              strokeWidth={2}
-                              dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
-                              activeDot={{ r: 7, fill: '#0d9488', stroke: '#0d9488', strokeWidth: 2 }}
-                              isAnimationActive={false}
-                            >
-                              <LabelList 
+                              <Line 
+                                type="monotone" 
                                 dataKey="psa" 
-                                position="top" 
-                                formatter={(value) => `${parseFloat(value).toFixed(1)} ng/mL`}
-                                style={{ fill: '#0d9488', fontSize: '11px', fontWeight: '600' }}
-                              />
-                            </Line>
+                                stroke="#0d9488" 
+                                strokeWidth={2}
+                                dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
+                                activeDot={{ r: 7, fill: '#0d9488', stroke: '#0d9488', strokeWidth: 2 }}
+                                isAnimationActive={false}
+                              >
+                                <LabelList 
+                                  dataKey="psa" 
+                                  position="top" 
+                                  offset={8}
+                                  formatter={(value) => `${parseFloat(value).toFixed(1)} ng/mL`}
+                                  style={{ fill: '#0d9488', fontSize: '11px', fontWeight: '600' }}
+                                />
+                              </Line>
                           </LineChart>
                         );
                       })()}
@@ -3803,7 +3804,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                           return (
                             <LineChart 
                               data={rechartsData} 
-                              margin={{ top: 25, right: 20, left: 10, bottom: 30 }}
+                              margin={{ top: 25, right: 20, left: 50, bottom: 30 }}
                             >
                               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                               <XAxis 
@@ -3817,6 +3818,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 stroke="#6b7280"
                                 style={{ fontSize: '12px' }}
                                 tick={{ fill: '#6b7280' }}
+                                width={45}
                                 label={{ 
                                   value: 'PSA Value (ng/mL)', 
                                   angle: -90, 
@@ -3836,6 +3838,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
                                 <LabelList 
                                   dataKey="psa" 
                                   position="top" 
+                                  offset={8}
                                   formatter={(value) => `${parseFloat(value).toFixed(1)} ng/mL`}
                                   style={{ fill: '#0d9488', fontSize: '11px', fontWeight: '600' }}
                                 />
