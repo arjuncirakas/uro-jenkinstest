@@ -3118,21 +3118,27 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     </div>
                     <div>
                       <span className="text-gray-600">Medical History:</span>
-                      <span className="ml-2 font-medium text-gray-900">
+                      <div className="ml-2 font-medium text-gray-900 whitespace-pre-line">
                         {displayPatient.medicalHistory || displayPatient.medical_history || 'No prior medical conditions'}
-                      </span>
+                      </div>
                     </div>
                     <div>
                       <span className="text-gray-600">Current Medications:</span>
-                      <span className="ml-2 font-medium text-gray-900">
+                      <div className="ml-2 font-medium text-gray-900 whitespace-pre-line">
                         {displayPatient.currentMedications || displayPatient.current_medications || 'None'}
-                      </span>
+                      </div>
                     </div>
                     <div>
                       <span className="text-gray-600">Allergies:</span>
-                      <span className={`ml-2 font-medium ${displayPatient.allergies ? 'text-gray-900' : 'text-gray-500'}`}>
+                      <div className={`ml-2 font-medium whitespace-pre-line ${displayPatient.allergies ? 'text-gray-900' : 'text-gray-500'}`}>
                         {displayPatient.allergies || 'None'}
-                      </span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Additional Notes:</span>
+                      <div className={`ml-2 font-medium whitespace-pre-line ${displayPatient.notes ? 'text-gray-900' : 'text-gray-500'}`}>
+                        {displayPatient.notes || 'None'}
+                      </div>
                     </div>
                   </div>
                 </div>

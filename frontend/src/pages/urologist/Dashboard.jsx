@@ -690,6 +690,18 @@ const UrologistDashboard = () => {
     return () => window.removeEventListener('surgery:updated', handler);
   }, []);
 
+  // Refresh appointments when patient is updated
+  useEffect(() => {
+    const handler = () => {
+      console.log('Patient updated event received, refreshing appointments');
+      fetchTodaysAppointments();
+      fetchSurgicalQueue();
+      fetchRecentPatients();
+    };
+    window.addEventListener('patient:updated', handler);
+    return () => window.removeEventListener('patient:updated', handler);
+  }, []);
+
   // Format MDT date safely (avoid timezone shifts)
   const formatMdtDate = (dateString) => {
     if (!dateString) return '';

@@ -17,8 +17,7 @@ import {
   Loader2,
   Plus,
   Trash2,
-  ChevronDown,
-  CheckCircle2
+  ChevronDown
 } from 'lucide-react';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
@@ -686,9 +685,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     {errors.firstName && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
                     )}
-                    {!errors.firstName && formData.firstName && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                     {errors.firstName && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
                         <AlertCircle className="h-4 w-4 mr-1" />
@@ -724,9 +720,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     {errors.lastName && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
                     )}
-                    {!errors.lastName && formData.lastName && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                     {errors.lastName && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
                         <AlertCircle className="h-4 w-4 mr-1" />
@@ -761,9 +754,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     </label>
                     {errors.dateOfBirth && !formData.age && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {!errors.dateOfBirth && formData.dateOfBirth && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
                     )}
                     {errors.dateOfBirth && !formData.age && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -801,9 +791,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     </label>
                     {errors.age && !formData.dateOfBirth && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {!errors.age && formData.age && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
                     )}
                     {errors.age && !formData.dateOfBirth && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -846,9 +833,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     {errors.gender && (
                       <AlertCircle className="absolute right-8 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
                     )}
-                    {!errors.gender && formData.gender && (
-                      <CheckCircle2 className="absolute right-8 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                     {errors.gender && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
                         <AlertCircle className="h-4 w-4 mr-1" />
@@ -884,9 +868,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     {errors.phone && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
                     )}
-                    {!errors.phone && formData.phone && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                     {errors.phone && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
                         <AlertCircle className="h-4 w-4 mr-1" />
@@ -921,9 +902,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     </label>
                     {errors.email && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {!errors.email && formData.email && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
                     )}
                     {errors.email && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -961,9 +939,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   {errors.address && (
                     <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
                   )}
-                  {!errors.address && formData.address && (
-                    <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                  )}
                   {errors.address && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <AlertCircle className="h-4 w-4 mr-1" />
@@ -995,9 +970,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       Postcode
                     </label>
-                    {formData.postcode && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
 
                   <div className="relative mb-3">
@@ -1022,9 +994,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       City
                     </label>
-                    {formData.city && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
 
                   <div className="relative mb-3">
@@ -1060,9 +1029,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
                       formData.state ? 'text-teal-500' : 'text-gray-400'
                     }`} />
-                    {formData.state && (
-                      <CheckCircle2 className="absolute right-8 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
                 </div>
               </div>
@@ -1102,9 +1068,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       Contact Name
                     </label>
-                    {formData.emergencyContactName && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
 
                   <div className="relative mb-3">
@@ -1133,9 +1096,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     </label>
                     {errors.emergencyContactPhone && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {!errors.emergencyContactPhone && formData.emergencyContactPhone && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
                     )}
                     {errors.emergencyContactPhone && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -1167,9 +1127,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       Relationship
                     </label>
-                    {formData.emergencyContactRelationship && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
                 </div>
               </div>
@@ -1220,9 +1177,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
                       loadingUrologists ? 'text-gray-400' : formData.assignedUrologist ? 'text-teal-500' : 'text-gray-400'
                     }`} />
-                    {formData.assignedUrologist && !loadingUrologists && (
-                      <CheckCircle2 className="absolute right-8 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                     {urologists.length === 0 && !loadingUrologists && (
                       <p className="mt-1 text-sm text-gray-500">
                         No urologists available. Please contact administrator.
@@ -1251,9 +1205,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       Referral Date
                     </label>
-                    {formData.referralDate && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
                 </div>
 
@@ -1342,9 +1293,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                   <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${
                                     symptom.ipssScore ? 'text-teal-500' : 'text-gray-400'
                                   }`} />
-                                  {symptom.ipssScore && (
-                                    <CheckCircle2 className="absolute right-7 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500 pointer-events-none" />
-                                  )}
                                 </div>
                               )}
 
@@ -1372,9 +1320,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                     >
                                       Duration of Symptoms
                                     </label>
-                                    {symptom.duration && (
-                                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500 pointer-events-none" />
-                                    )}
                                   </div>
                                   <div className="relative mb-3" style={{ minWidth: '120px' }}>
                                     <select
@@ -1417,7 +1362,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                       step="1"
                                       value={symptom.frequency}
                                       onChange={(e) => handleSymptomFieldChange(index, 'frequency', e.target.value)}
-                                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
+                                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
                                         symptom.frequency
                                           ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
                                           : 'border-gray-300 focus:border-teal-500 bg-teal-50'
@@ -1433,9 +1378,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                     >
                                       Frequency (times per night)
                                     </label>
-                                    {symptom.frequency && (
-                                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-500 pointer-events-none" />
-                                    )}
                                   </div>
                                 )}
 
@@ -1460,9 +1402,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                   >
                                     Notes
                                   </label>
-                                  {symptom.notes && (
-                                    <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-green-500 pointer-events-none" />
-                                  )}
                                 </div>
                               </div>
                             )}
@@ -1505,9 +1444,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   >
                     Medical History
                   </label>
-                  {formData.medicalHistory && (
-                    <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-green-500 pointer-events-none" />
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -1533,9 +1469,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       Current Medications
                     </label>
-                    {formData.currentMedications && (
-                      <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
 
                   <div className="relative mb-3">
@@ -1560,9 +1493,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       Allergies
                     </label>
-                    {formData.allergies && (
-                      <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
                 </div>
               </div>
@@ -1608,9 +1538,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     {errors.initialPSA && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
                     )}
-                    {!errors.initialPSA && formData.initialPSA && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                     {errors.initialPSA && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
                         <AlertCircle className="h-4 w-4 mr-1" />
@@ -1645,9 +1572,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     </label>
                     {errors.initialPSADate && (
                       <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {!errors.initialPSADate && formData.initialPSADate && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
                     )}
                     {errors.initialPSADate && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -1731,7 +1655,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                         </div>
                         {formData.dreFindings.length > 0 && (
                           <div className="mt-3 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                            <CheckCircle2 className="h-4 w-4" />
                             <span className="font-medium">{formData.dreFindings.length} finding(s) selected</span>
                           </div>
                         )}
@@ -1803,9 +1726,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                             >
                               Biopsy Date <span className="text-red-500">*</span>
                             </label>
-                            {formData.priorBiopsyDate && (
-                              <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                            )}
                           </div>
                           <div className="relative mb-3">
                             <input
@@ -1829,9 +1749,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                             >
                               Gleason Score <span className="text-red-500">*</span>
                             </label>
-                            {formData.gleasonScore && (
-                              <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                            )}
                           </div>
                         </div>
                       </div>
@@ -1918,9 +1835,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   >
                     Notes
                   </label>
-                  {formData.notes && (
-                    <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-green-500 pointer-events-none" />
-                  )}
                 </div>
               </div>
 
@@ -2020,9 +1934,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                 >
                   Symptom Name <span className="text-red-500">*</span>
                 </label>
-                {customSymptomName && (
-                  <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                )}
               </div>
 
               {(customSymptomName === 'LUTS' || customSymptomName === 'Nocturia') && (
@@ -2053,9 +1964,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
                     customSymptomIpssScore ? 'text-teal-500' : 'text-gray-400'
                   }`} />
-                  {customSymptomIpssScore && (
-                    <CheckCircle2 className="absolute right-8 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                  )}
                 </div>
               )}
 
@@ -2083,9 +1991,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     >
                       Duration of Symptoms
                     </label>
-                    {customSymptomDuration && (
-                      <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-500 pointer-events-none" />
-                    )}
                   </div>
                   <div className="relative mb-3" style={{ minWidth: '120px' }}>
                     <select

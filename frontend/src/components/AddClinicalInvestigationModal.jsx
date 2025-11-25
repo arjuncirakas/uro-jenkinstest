@@ -205,8 +205,8 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                 (patient.first_name && patient.last_name ? `${patient.first_name} ${patient.last_name}` : null) ||
                                 (patient.firstName && patient.lastName ? `${patient.firstName} ${patient.lastName}` : null);
               return patientName ? (
-                <p className="text-sm text-teal-100 mt-1">
-                  Patient: <span className="font-medium text-white">{patientName}</span>
+                <p className="text-sm font-medium text-white mt-1">
+                  {patientName}
                 </p>
               ) : null;
             })()}

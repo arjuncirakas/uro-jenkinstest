@@ -251,6 +251,21 @@ const OPDManagement = () => {
     fetchTodaysAppointments(activeAppointmentTab);
   }, [activeAppointmentTab]);
 
+  // Listen for patient update events to refresh all data
+  useEffect(() => {
+    const handlePatientUpdated = (event) => {
+      console.log('Patient updated event received, refreshing all data:', event.detail);
+      // Refresh all data to show updated patient information
+      refreshAllData();
+    };
+
+    window.addEventListener('patient:updated', handlePatientUpdated);
+
+    return () => {
+      window.removeEventListener('patient:updated', handlePatientUpdated);
+    };
+  }, []);
+
   // Listen for patient deletion events to refresh all data
   useEffect(() => {
     const handlePatientDeleted = (event) => {

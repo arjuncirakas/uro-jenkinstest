@@ -469,15 +469,19 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Medical History</label>
-                    <p className="text-sm text-gray-900">{patientData.medicalHistory || 'Not available'}</p>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.medicalHistory || 'Not available'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Current Medications</label>
-                    <p className="text-sm text-gray-900">{patientData.currentMedications || 'None recorded'}</p>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.currentMedications || 'None recorded'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
-                    <p className="text-sm text-gray-900">{patientData.allergies || 'None recorded'}</p>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.allergies || 'None recorded'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.notes || 'None recorded'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact</label>
