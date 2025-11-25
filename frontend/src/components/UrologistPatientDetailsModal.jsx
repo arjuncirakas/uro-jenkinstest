@@ -3828,11 +3828,29 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               }}
                             />
                             <Tooltip 
-                              formatter={(value) => {
-                                const numValue = typeof value === 'number' && !isNaN(value) ? value : parseFloat(String(value)) || 0;
+                              formatter={(value, name, props) => {
+                                // This formatter is called for EACH point individually
+                                // value is the Y-axis value (PSA) for THIS specific hovered point
+                                // props.payload contains the full data object for THIS point from our API response
+                                const dataPoint = props.payload || {};
+                                
+                                // Use the value parameter - this is the Y-axis value for THIS point
+                                // This is calculated by Recharts from dataKey="psa" for this specific data point
+                                const psaValue = value !== undefined && value !== null ? value : 
+                                                (dataPoint.psa !== undefined ? dataPoint.psa : 
+                                                 dataPoint.numericValue !== undefined ? dataPoint.numericValue : 0);
+                                
+                                const numValue = typeof psaValue === 'number' && !isNaN(psaValue) 
+                                  ? psaValue 
+                                  : parseFloat(String(psaValue)) || 0;
+                                
+                                // Return formatted value - this will be displayed in the tooltip
                                 return [`${numValue.toFixed(1)} ng/mL`, 'PSA Value'];
                               }}
-                              labelFormatter={(label) => label || 'Date'}
+                              labelFormatter={(label) => {
+                                // Return the date label
+                                return label || 'Date';
+                              }}
                               contentStyle={{
                                 backgroundColor: 'white',
                                 border: '1px solid #e5e7eb',
