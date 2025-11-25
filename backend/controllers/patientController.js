@@ -913,20 +913,15 @@ export const getNewPatients = async (req, res) => {
       queryParams = ['Active', userId, parseInt(limit)];
       
     } else {
-      // For nurses or other roles: Get all recent patients, including those without appointments
-      console.log(`👥 [getNewPatients ${requestId}] Fetching all recent patients (nurse/other role)`);
+      // For nurses or other roles: Get only patients WITHOUT appointments (newly added patients)
+      console.log(`👥 [getNewPatients ${requestId}] Fetching new patients without appointments (nurse/other role)`);
       
       query = `
-        WITH recent_appointments AS (
-          SELECT DISTINCT ON (a.patient_id)
-            a.patient_id,
-            a.appointment_date,
-            a.appointment_time,
-            a.status as appointment_status
+        WITH patients_with_appointments AS (
+          SELECT DISTINCT a.patient_id
           FROM appointments a
           WHERE a.status IN ('scheduled', 'confirmed', 'completed', 'no_show')
             AND a.status != 'cancelled'
-          ORDER BY a.patient_id, a.appointment_date DESC, a.appointment_time DESC
         )
         SELECT 
           p.id,
@@ -952,20 +947,16 @@ export const getNewPatients = async (req, res) => {
           gp.first_name as gp_first_name,
           gp.last_name as gp_last_name,
           EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-          ra.appointment_date as last_appointment_date,
-          ra.appointment_time as last_appointment_time,
-          ra.appointment_status
+          NULL as last_appointment_date,
+          NULL as last_appointment_time,
+          NULL as appointment_status
         FROM patients p
-        LEFT JOIN recent_appointments ra ON ra.patient_id = p.id
         LEFT JOIN users u ON p.created_by = u.id
         LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
+        LEFT JOIN patients_with_appointments pwa ON pwa.patient_id = p.id
         WHERE p.status = $1
-        ORDER BY 
-          CASE WHEN ra.appointment_date = CURRENT_DATE THEN 0 ELSE 1 END,
-          CASE WHEN ra.appointment_date IS NOT NULL THEN 0 ELSE 1 END,
-          ra.appointment_date DESC NULLS LAST, 
-          ra.appointment_time DESC NULLS LAST,
-          p.created_at DESC
+          AND pwa.patient_id IS NULL
+        ORDER BY p.created_at DESC
         LIMIT $2
       `;
       
