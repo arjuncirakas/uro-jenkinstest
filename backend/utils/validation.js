@@ -140,10 +140,22 @@ export const addPatientSchema = Joi.object({
     }),
   dateOfBirth: Joi.date()
     .max('now')
-    .required()
+    .optional()
+    .allow('')
     .messages({
-      'date.max': 'Date of birth cannot be in the future',
-      'any.required': 'Date of birth is required'
+      'date.max': 'Date of birth cannot be in the future'
+    }),
+  age: Joi.number()
+    .integer()
+    .min(0)
+    .max(120)
+    .optional()
+    .allow('')
+    .messages({
+      'number.base': 'Age must be a valid number',
+      'number.integer': 'Age must be a whole number',
+      'number.min': 'Age must be at least 0',
+      'number.max': 'Age must not exceed 120'
     }),
   gender: Joi.string()
     .valid('Male', 'Female', 'Other')
@@ -175,11 +187,11 @@ export const addPatientSchema = Joi.object({
   email: Joi.string()
     .email()
     .max(255)
-    .required()
+    .optional()
+    .allow('')
     .messages({
       'string.email': 'Please provide a valid email address',
-      'string.max': 'Email must not exceed 255 characters',
-      'any.required': 'Email address is required'
+      'string.max': 'Email must not exceed 255 characters'
     }),
   address: Joi.string()
     .max(500)
@@ -317,7 +329,19 @@ export const addPatientSchema = Joi.object({
     .messages({
       'string.max': 'Notes must not exceed 2000 characters'
     })
-});
+}).custom((value, helpers) => {
+  // Ensure at least one of dateOfBirth or age is provided
+  const hasDateOfBirth = value.dateOfBirth && value.dateOfBirth !== '';
+  const hasAge = value.age !== undefined && value.age !== null && value.age !== '';
+  
+  if (!hasDateOfBirth && !hasAge) {
+    return helpers.error('any.custom', {
+      message: 'Either date of birth or age must be provided'
+    });
+  }
+  
+  return value;
+}, 'Either date of birth or age is required');
 
 // Update patient validation schema (all fields optional)
 export const updatePatientSchema = Joi.object({
@@ -342,8 +366,21 @@ export const updatePatientSchema = Joi.object({
   dateOfBirth: Joi.date()
     .max('now')
     .optional()
+    .allow('')
     .messages({
       'date.max': 'Date of birth cannot be in the future'
+    }),
+  age: Joi.number()
+    .integer()
+    .min(0)
+    .max(120)
+    .optional()
+    .allow('')
+    .messages({
+      'number.base': 'Age must be a valid number',
+      'number.integer': 'Age must be a whole number',
+      'number.min': 'Age must be at least 0',
+      'number.max': 'Age must not exceed 120'
     }),
   gender: Joi.string()
     .valid('Male', 'Female', 'Other')
@@ -375,11 +412,11 @@ export const updatePatientSchema = Joi.object({
   email: Joi.string()
     .email()
     .max(255)
-    .required()
+    .optional()
+    .allow('')
     .messages({
       'string.email': 'Please provide a valid email address',
-      'string.max': 'Email must not exceed 255 characters',
-      'any.required': 'Email address is required'
+      'string.max': 'Email must not exceed 255 characters'
     }),
   address: Joi.string()
     .max(500)

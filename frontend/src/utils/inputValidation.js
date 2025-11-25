@@ -248,11 +248,25 @@ export const validatePatientForm = (formData) => {
     errors.lastName = 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods';
   }
   
-  const dobError = validateRequired(formData.dateOfBirth, 'Date of birth');
-  if (dobError) {
-    errors.dateOfBirth = dobError;
-  } else if (!validateDateOfBirth(formData.dateOfBirth)) {
-    errors.dateOfBirth = 'Date of birth cannot be in the future';
+  // Date of Birth / Age validation - at least one must be provided
+  const hasDateOfBirth = formData.dateOfBirth && formData.dateOfBirth.trim() !== '';
+  const hasAge = formData.age && formData.age.toString().trim() !== '';
+  
+  if (!hasDateOfBirth && !hasAge) {
+    errors.dateOfBirth = 'Either date of birth or age is required';
+    errors.age = 'Either date of birth or age is required';
+  } else {
+    // Validate date of birth if provided
+    if (hasDateOfBirth && !validateDateOfBirth(formData.dateOfBirth)) {
+      errors.dateOfBirth = 'Date of birth cannot be in the future';
+    }
+    // Validate age if provided
+    if (hasAge) {
+      const age = parseInt(formData.age, 10);
+      if (isNaN(age) || age < 0 || age > 120) {
+        errors.age = 'Please enter a valid age (0-120)';
+      }
+    }
   }
   
   const genderError = validateRequired(formData.gender, 'Gender');
@@ -262,8 +276,7 @@ export const validatePatientForm = (formData) => {
                     validatePhoneFormat(formData.phone);
   if (phoneError) errors.phone = phoneError;
   
-  const emailError = validateRequired(formData.email, 'Email address') || 
-                    validateEmailFormat(formData.email);
+  const emailError = validateEmailFormat(formData.email);
   if (emailError) errors.email = emailError;
   
   const addressError = validateRequired(formData.address, 'Address');

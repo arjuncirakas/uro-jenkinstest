@@ -53,6 +53,7 @@ export const addPatient = async (req, res) => {
       firstName,
       lastName,
       dateOfBirth,
+      age,
       gender,
       phone,
       email,
@@ -84,11 +85,23 @@ export const addPatient = async (req, res) => {
       comorbidities // Array of comorbidities
     } = req.body;
 
-    // Validate required fields
-    if (!firstName || !lastName || !dateOfBirth || !gender || !phone || !initialPSA) {
+    // Calculate dateOfBirth from age if dateOfBirth is not provided but age is
+    let finalDateOfBirth = dateOfBirth;
+    if (!dateOfBirth && age) {
+      const ageNum = parseInt(age, 10);
+      if (!isNaN(ageNum) && ageNum >= 0 && ageNum <= 120) {
+        const today = new Date();
+        const birthYear = today.getFullYear() - ageNum;
+        // Set to Jan 1st of the estimated birth year
+        finalDateOfBirth = `${birthYear}-01-01`;
+      }
+    }
+
+    // Validate required fields - either dateOfBirth or age must be provided
+    if (!firstName || !lastName || (!finalDateOfBirth && !age) || !gender || !phone || !initialPSA) {
       return res.status(400).json({
         success: false,
-        message: 'First name, last name, date of birth, gender, phone, and initial PSA are required'
+        message: 'First name, last name, date of birth (or age), gender, phone, and initial PSA are required'
       });
     }
 
@@ -191,7 +204,7 @@ export const addPatient = async (req, res) => {
     }
 
     // Format date fields to prevent timezone conversion issues
-    const formattedDateOfBirth = formatDateOnly(dateOfBirth);
+    const formattedDateOfBirth = formatDateOnly(finalDateOfBirth);
     const formattedReferralDate = formatDateOnly(referralDate);
     const formattedInitialPSADate = formatDateOnly(initialPSADate);
 
@@ -278,8 +291,17 @@ export const addPatient = async (req, res) => {
       }
     }
 
-    // Calculate age
-    const age = new Date().getFullYear() - new Date(dateOfBirth).getFullYear();
+    // Calculate age from finalDateOfBirth if available, otherwise use provided age
+    let calculatedAge = age;
+    if (finalDateOfBirth) {
+      const today = new Date();
+      const birthDate = new Date(finalDateOfBirth);
+      calculatedAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        calculatedAge--;
+      }
+    }
 
     // Format prior biopsy date from database result for response
     const responsePriorBiopsyDate = newPatient.prior_biopsy_date 
@@ -297,7 +319,7 @@ export const addPatient = async (req, res) => {
           lastName: newPatient.last_name,
           fullName: `${newPatient.first_name} ${newPatient.last_name}`,
           dateOfBirth: formattedDateOfBirth, // Use the formatted input date
-          age,
+          age: calculatedAge,
           gender: newPatient.gender,
           phone: newPatient.phone,
           email: newPatient.email,

@@ -4,7 +4,8 @@ import {
   X,
   Save,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
 import { patientService } from '../services/patientService.js';
 import { bookingService } from '../services/bookingService.js';
@@ -50,7 +51,7 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
     notes: '',
     
     // Exam & Prior Tests
-    dreFindings: '',
+    dreFindings: [],
     dreDone: false,
     priorBiopsy: 'no',
     priorBiopsyDate: '',
@@ -112,7 +113,13 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         emergencyContactRelationship: patient.emergencyContactRelationship || patient.emergency_contact_relationship || '',
         priority: patient.priority || 'Normal',
         notes: patient.notes || '',
-        dreFindings: patient.dreFindings || patient.dre_findings || '',
+        dreFindings: (() => {
+          const findings = patient.dreFindings || patient.dre_findings || '';
+          if (typeof findings === 'string' && findings.trim()) {
+            return findings.split(',').map(f => f.trim()).filter(f => f);
+          }
+          return Array.isArray(findings) ? findings : [];
+        })(),
         dreDone: patient.dreDone || patient.dre_done || false,
         priorBiopsy: patient.priorBiopsy || patient.prior_biopsy || 'no',
         priorBiopsyDate: patient.priorBiopsyDate || patient.prior_biopsy_date || '',
@@ -264,7 +271,7 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         priority: formData.priority || 'Normal',
         notes: formData.notes || '',
         dreDone: formData.dreDone || false,
-        dreFindings: formData.dreFindings || '',
+        dreFindings: Array.isArray(formData.dreFindings) ? formData.dreFindings.join(', ') : (formData.dreFindings || ''),
         priorBiopsy: formData.priorBiopsy || 'no',
         priorBiopsyDate: formData.priorBiopsyDate ? convertToISODate(formData.priorBiopsyDate) : '',
         gleasonScore: formData.gleasonScore || '',
@@ -580,21 +587,31 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Initial PSA Level *
-                  </label>
+                <div className="relative mb-3">
                   <input
                     type="number"
                     step="0.1"
                     name="initialPSA"
                     value={formData.initialPSA}
                     onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                      errors.initialPSA ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                    }`}
-                    placeholder="4.5"
+                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
+                      errors.initialPSA
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.initialPSA
+                        ? 'border-teal-500 focus:border-teal-500 bg-white'
+                        : 'border-gray-300 focus:border-teal-500 bg-white'
+                    } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                    placeholder=" "
                   />
+                  <label
+                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
+                      formData.initialPSA
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                    } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.initialPSA ? '!text-red-500' : ''}`}
+                  >
+                    Initial PSA Level <span className="text-red-500">*</span>
+                  </label>
                   {errors.initialPSA && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <AlertCircle className="h-4 w-4 mr-1" />
@@ -603,19 +620,30 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                   )}
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    PSA Test Date *
-                  </label>
+                <div className="relative mb-3">
                   <input
                     type="date"
                     name="initialPSADate"
                     value={formData.initialPSADate}
                     onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                      errors.initialPSADate ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                    }`}
+                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
+                      errors.initialPSADate
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.initialPSADate
+                        ? 'border-teal-500 focus:border-teal-500 bg-white'
+                        : 'border-gray-300 focus:border-teal-500 bg-white'
+                    } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                    placeholder=" "
                   />
+                  <label
+                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
+                      formData.initialPSADate
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                    } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.initialPSADate ? '!text-red-500' : ''}`}
+                  >
+                    PSA Test Date <span className="text-red-500">*</span>
+                  </label>
                   {errors.initialPSADate && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <AlertCircle className="h-4 w-4 mr-1" />
@@ -796,9 +824,9 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
             </div>
 
             {/* Exam & Prior Tests */}
-            <div className="bg-white border border-gray-200 rounded p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+            <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center">
                   <FaStethoscope className="w-6 h-6 text-teal-600" />
                 </div>
                 <div>
@@ -807,120 +835,194 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                 </div>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {/* DRE Findings */}
-                <div>
-                  <div className="flex items-center gap-3 mb-3">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-4">
                     <input
                       type="checkbox"
                       name="dreDone"
                       checked={formData.dreDone}
                       onChange={() => handleCheckboxChange('dreDone')}
-                      className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                      className="w-5 h-5 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
                     />
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="text-sm font-semibold text-gray-900 cursor-pointer">
                       DRE (Digital Rectal Exam) Done
                     </label>
                   </div>
                   
                   {formData.dreDone && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        DRE Findings *
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <label className="block text-sm font-semibold text-gray-900 mb-3">
+                        DRE Findings <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        name="dreFindings"
-                        value={formData.dreFindings}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-                      >
-                        <option value="">Select DRE Findings</option>
-                        <option value="Normal">Normal</option>
-                        <option value="Enlarged">Enlarged</option>
-                        <option value="Nodule">Nodule</option>
-                        <option value="Suspicious">Suspicious</option>
-                      </select>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {['Normal', 'Enlarged', 'Nodule', 'Suspicious'].map((finding) => (
+                          <label 
+                            key={finding} 
+                            className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                              formData.dreFindings.includes(finding)
+                                ? 'border-teal-500 bg-teal-50 shadow-sm'
+                                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.dreFindings.includes(finding)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    dreFindings: [...prev.dreFindings, finding]
+                                  }));
+                                } else {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    dreFindings: prev.dreFindings.filter(f => f !== finding)
+                                  }));
+                                }
+                              }}
+                              className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <span className={`text-sm font-medium ${
+                              formData.dreFindings.includes(finding) ? 'text-teal-900' : 'text-gray-700'
+                            }`}>
+                              {finding}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {formData.dreFindings.length > 0 && (
+                        <div className="mt-3 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="font-medium">{formData.dreFindings.length} finding(s) selected</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Prior Prostate Biopsy */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <label className="block text-sm font-semibold text-gray-900 mb-4">
                     Prior Prostate Biopsy
                   </label>
-                  <div className="flex items-center gap-4 mb-3">
-                    <label className="flex items-center gap-2">
+                  <div className="flex items-center gap-6 mb-4">
+                    <label className="flex items-center gap-2 cursor-pointer group">
                       <input
                         type="radio"
                         name="priorBiopsy"
                         value="no"
                         checked={formData.priorBiopsy === 'no'}
                         onChange={handleInputChange}
-                        className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                        className="w-5 h-5 text-teal-600 border-gray-300 focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
                       />
-                      <span className="text-sm text-gray-700">No</span>
+                      <span className={`text-sm font-medium transition-colors ${
+                        formData.priorBiopsy === 'no' ? 'text-teal-700' : 'text-gray-700 group-hover:text-gray-900'
+                      }`}>
+                        No
+                      </span>
                     </label>
-                    <label className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer group">
                       <input
                         type="radio"
                         name="priorBiopsy"
                         value="yes"
                         checked={formData.priorBiopsy === 'yes'}
                         onChange={handleInputChange}
-                        className="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                        className="w-5 h-5 text-teal-600 border-gray-300 focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
                       />
-                      <span className="text-sm text-gray-700">Yes</span>
+                      <span className={`text-sm font-medium transition-colors ${
+                        formData.priorBiopsy === 'yes' ? 'text-teal-700' : 'text-gray-700 group-hover:text-gray-900'
+                      }`}>
+                        Yes
+                      </span>
                     </label>
                   </div>
                   
                   {formData.priorBiopsy === 'yes' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Biopsy Date *
-                        </label>
-                        <input
-                          type="date"
-                          name="priorBiopsyDate"
-                          value={formData.priorBiopsyDate}
-                          onChange={handleInputChange}
-                          max={new Date().toISOString().split('T')[0]}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Gleason Score *
-                        </label>
-                        <input
-                          type="text"
-                          name="gleasonScore"
-                          value={formData.gleasonScore}
-                          onChange={handleInputChange}
-                          placeholder="e.g., 3+3=6"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        />
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="relative">
+                          <input
+                            type="date"
+                            name="priorBiopsyDate"
+                            value={formData.priorBiopsyDate}
+                            onChange={handleInputChange}
+                            max={new Date().toISOString().split('T')[0]}
+                            className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
+                              formData.priorBiopsyDate
+                                ? 'border-teal-500 focus:border-teal-500 bg-white'
+                                : 'border-gray-300 focus:border-teal-500 bg-white'
+                            } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                            placeholder=" "
+                          />
+                          <label
+                            className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
+                              formData.priorBiopsyDate
+                                ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                                : 'text-gray-500'
+                            } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                          >
+                            Biopsy Date <span className="text-red-500">*</span>
+                          </label>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            name="gleasonScore"
+                            value={formData.gleasonScore}
+                            onChange={handleInputChange}
+                            className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
+                              formData.gleasonScore
+                                ? 'border-teal-500 focus:border-teal-500 bg-white'
+                                : 'border-gray-300 focus:border-teal-500 bg-white'
+                            } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                            placeholder=" "
+                          />
+                          <label
+                            className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
+                              formData.gleasonScore
+                                ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                                : 'text-gray-500'
+                            } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                          >
+                            Gleason Score <span className="text-red-500">*</span>
+                          </label>
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
 
                 {/* Comorbidities */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <label className="block text-sm font-semibold text-gray-900 mb-4">
                     Comorbidities
                   </label>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {availableComorbidities.map((comorbidity) => (
-                      <label key={comorbidity} className="flex items-center gap-2">
+                      <label 
+                        key={comorbidity} 
+                        className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                          formData.comorbidities.includes(comorbidity)
+                            ? 'border-teal-500 bg-teal-50 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
                         <input
                           type="checkbox"
                           checked={formData.comorbidities.includes(comorbidity)}
                           onChange={() => handleComorbidityChange(comorbidity)}
-                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
                         />
-                        <span className="text-sm text-gray-700">{comorbidity}</span>
+                        <span className={`text-sm font-medium ${
+                          formData.comorbidities.includes(comorbidity) ? 'text-teal-900' : 'text-gray-700'
+                        }`}>
+                          {comorbidity}
+                        </span>
                       </label>
                     ))}
                   </div>

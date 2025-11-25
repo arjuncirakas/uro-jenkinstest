@@ -9,7 +9,7 @@ export const sanitizePatientInput = (req, res, next) => {
       'firstName', 'lastName', 'email', 'phone', 'address', 'postcode', 'city', 'state',
       'referringDepartment', 'medicalHistory', 'currentMedications', 'allergies', 
       'assignedUrologist', 'emergencyContactName', 'emergencyContactPhone', 
-      'emergencyContactRelationship', 'notes'
+      'emergencyContactRelationship', 'notes', 'dreFindings', 'gleasonScore'
     ];
     
     stringFields.forEach(field => {
@@ -47,16 +47,24 @@ export const validatePatientInput = [
     .escape(),
     
   body('dateOfBirth')
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('Date of birth must be a valid date')
     .custom((value) => {
-      const birthDate = new Date(value);
-      const today = new Date();
-      if (birthDate > today) {
-        throw new Error('Date of birth cannot be in the future');
+      if (value) {
+        const birthDate = new Date(value);
+        const today = new Date();
+        if (birthDate > today) {
+          throw new Error('Date of birth cannot be in the future');
+        }
       }
       return true;
     }),
+    
+  body('age')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 0, max: 120 })
+    .withMessage('Age must be a whole number between 0 and 120'),
     
   body('gender')
     .isIn(['Male', 'Female', 'Other'])
@@ -243,7 +251,156 @@ export const validatePatientInput = [
     .isLength({ max: 2000 })
     .withMessage('Notes must not exceed 2000 characters')
     .escape(),
+  
+  // Triage Symptoms validation
+  body('triageSymptoms')
+    .optional()
+    .custom((value) => {
+      if (!value || value === '') return true; // Allow empty/null
+      
+      // If it's a string, try to parse it as JSON
+      let parsed;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch (e) {
+          throw new Error('triageSymptoms must be valid JSON');
+        }
+      } else {
+        parsed = value;
+      }
+      
+      // Validate it's an array
+      if (!Array.isArray(parsed)) {
+        throw new Error('triageSymptoms must be an array');
+      }
+      
+      // Validate each symptom object structure
+      for (const symptom of parsed) {
+        if (!symptom.name || typeof symptom.name !== 'string') {
+          throw new Error('Each symptom must have a name');
+        }
+        if (!symptom.duration || typeof symptom.duration !== 'string') {
+          throw new Error('Each symptom must have a duration');
+        }
+        if (!symptom.durationUnit || typeof symptom.durationUnit !== 'string') {
+          throw new Error('Each symptom must have a durationUnit');
+        }
+        // IPSS score is required for LUTS and Nocturia
+        if ((symptom.name === 'LUTS' || symptom.name === 'Nocturia') && !symptom.ipssScore) {
+          throw new Error(`IPSS score is required for ${symptom.name}`);
+        }
+        // Frequency is optional but can be included for Nocturia
+        if (symptom.frequency !== undefined && symptom.frequency !== null && typeof symptom.frequency !== 'string') {
+          throw new Error('Frequency must be a string if provided');
+        }
+        // Notes is optional but can be included for LUTS, Hematuria, and Nocturia
+        if (symptom.notes !== undefined && symptom.notes !== null && typeof symptom.notes !== 'string') {
+          throw new Error('Notes must be a string if provided');
+        }
+      }
+      
+      return true;
+    }),
+  
+  // Exam & Prior Tests validation
+  body('dreDone')
+    .optional()
+    .isBoolean()
+    .withMessage('dreDone must be a boolean'),
     
+  body('dreFindings')
+    .optional()
+    .custom((value) => {
+      if (!value || value === '') return true; // Allow empty/null
+      if (typeof value !== 'string') {
+        throw new Error('dreFindings must be a string');
+      }
+      // Validate length (comma-separated values like "Normal, Enlarged, Nodule, Suspicious")
+      if (value.length > 255) {
+        throw new Error('dreFindings must not exceed 255 characters');
+      }
+      // Validate that it contains only valid findings
+      const validFindings = ['Normal', 'Enlarged', 'Nodule', 'Suspicious'];
+      const findings = value.split(',').map(f => f.trim()).filter(f => f);
+      for (const finding of findings) {
+        if (!validFindings.includes(finding)) {
+          throw new Error(`Invalid DRE finding: ${finding}. Valid values are: ${validFindings.join(', ')}`);
+        }
+      }
+      return true;
+    }),
+    
+  body('priorBiopsy')
+    .optional()
+    .isIn(['no', 'yes'])
+    .withMessage('priorBiopsy must be either "no" or "yes"'),
+    
+  body('priorBiopsyDate')
+    .optional({ checkFalsy: true })
+    .isISO8601()
+    .withMessage('Prior biopsy date must be a valid date')
+    .custom((value, { req }) => {
+      if (value && req.body.priorBiopsy === 'yes') {
+        const biopsyDate = new Date(value);
+        const today = new Date();
+        if (biopsyDate > today) {
+          throw new Error('Prior biopsy date cannot be in the future');
+        }
+      }
+      return true;
+    }),
+    
+  body('gleasonScore')
+    .optional()
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage('Gleason score must not exceed 20 characters')
+    .escape(),
+    
+  body('comorbidities')
+    .optional()
+    .custom((value) => {
+      if (!value || value === '') return true; // Allow empty/null
+      
+      // If it's a string, try to parse it as JSON
+      let parsed;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch (e) {
+          throw new Error('comorbidities must be valid JSON');
+        }
+      } else {
+        parsed = value;
+      }
+      
+      // Validate it's an array
+      if (!Array.isArray(parsed)) {
+        throw new Error('comorbidities must be an array');
+      }
+      
+      // Validate each comorbidity is a string
+      for (const comorbidity of parsed) {
+        if (typeof comorbidity !== 'string') {
+          throw new Error('Each comorbidity must be a string');
+        }
+      }
+      
+      return true;
+    }),
+    
+  // Custom validation: at least one of dateOfBirth or age must be provided
+  body('dateOfBirth').custom((value, { req }) => {
+    const hasDateOfBirth = value && value.trim() !== '';
+    const hasAge = req.body.age !== undefined && req.body.age !== null && req.body.age !== '';
+    
+    if (!hasDateOfBirth && !hasAge) {
+      throw new Error('Either date of birth or age must be provided');
+    }
+    return true;
+  }),
+  
   // Check for validation errors
   (req, res, next) => {
     const errors = validationResult(req);
@@ -490,6 +647,144 @@ export const validatePatientUpdateInput = [
     .optional()
     .isIn(['Active', 'Inactive', 'Discharged'])
     .withMessage('Status must be Active, Inactive, or Discharged'),
+  
+  // Triage Symptoms validation (optional for updates)
+  body('triageSymptoms')
+    .optional()
+    .custom((value) => {
+      if (!value || value === '') return true; // Allow empty/null
+      
+      // If it's a string, try to parse it as JSON
+      let parsed;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch (e) {
+          throw new Error('triageSymptoms must be valid JSON');
+        }
+      } else {
+        parsed = value;
+      }
+      
+      // Validate it's an array
+      if (!Array.isArray(parsed)) {
+        throw new Error('triageSymptoms must be an array');
+      }
+      
+      // Validate each symptom object structure
+      for (const symptom of parsed) {
+        if (!symptom.name || typeof symptom.name !== 'string') {
+          throw new Error('Each symptom must have a name');
+        }
+        if (!symptom.duration || typeof symptom.duration !== 'string') {
+          throw new Error('Each symptom must have a duration');
+        }
+        if (!symptom.durationUnit || typeof symptom.durationUnit !== 'string') {
+          throw new Error('Each symptom must have a durationUnit');
+        }
+        // IPSS score is required for LUTS and Nocturia
+        if ((symptom.name === 'LUTS' || symptom.name === 'Nocturia') && !symptom.ipssScore) {
+          throw new Error(`IPSS score is required for ${symptom.name}`);
+        }
+        // Frequency is optional but can be included for Nocturia
+        if (symptom.frequency !== undefined && symptom.frequency !== null && typeof symptom.frequency !== 'string') {
+          throw new Error('Frequency must be a string if provided');
+        }
+        // Notes is optional but can be included for LUTS, Hematuria, and Nocturia
+        if (symptom.notes !== undefined && symptom.notes !== null && typeof symptom.notes !== 'string') {
+          throw new Error('Notes must be a string if provided');
+        }
+      }
+      
+      return true;
+    }),
+  
+  // Exam & Prior Tests validation (optional for updates)
+  body('dreDone')
+    .optional()
+    .isBoolean()
+    .withMessage('dreDone must be a boolean'),
+    
+  body('dreFindings')
+    .optional()
+    .custom((value) => {
+      if (!value || value === '') return true; // Allow empty/null
+      if (typeof value !== 'string') {
+        throw new Error('dreFindings must be a string');
+      }
+      // Validate length (comma-separated values like "Normal, Enlarged, Nodule, Suspicious")
+      if (value.length > 255) {
+        throw new Error('dreFindings must not exceed 255 characters');
+      }
+      // Validate that it contains only valid findings
+      const validFindings = ['Normal', 'Enlarged', 'Nodule', 'Suspicious'];
+      const findings = value.split(',').map(f => f.trim()).filter(f => f);
+      for (const finding of findings) {
+        if (!validFindings.includes(finding)) {
+          throw new Error(`Invalid DRE finding: ${finding}. Valid values are: ${validFindings.join(', ')}`);
+        }
+      }
+      return true;
+    }),
+    
+  body('priorBiopsy')
+    .optional()
+    .isIn(['no', 'yes'])
+    .withMessage('priorBiopsy must be either "no" or "yes"'),
+    
+  body('priorBiopsyDate')
+    .optional({ checkFalsy: true })
+    .isISO8601()
+    .withMessage('Prior biopsy date must be a valid date')
+    .custom((value, { req }) => {
+      if (value && req.body.priorBiopsy === 'yes') {
+        const biopsyDate = new Date(value);
+        const today = new Date();
+        if (biopsyDate > today) {
+          throw new Error('Prior biopsy date cannot be in the future');
+        }
+      }
+      return true;
+    }),
+    
+  body('gleasonScore')
+    .optional()
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage('Gleason score must not exceed 20 characters')
+    .escape(),
+    
+  body('comorbidities')
+    .optional()
+    .custom((value) => {
+      if (!value || value === '') return true; // Allow empty/null
+      
+      // If it's a string, try to parse it as JSON
+      let parsed;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch (e) {
+          throw new Error('comorbidities must be valid JSON');
+        }
+      } else {
+        parsed = value;
+      }
+      
+      // Validate it's an array
+      if (!Array.isArray(parsed)) {
+        throw new Error('comorbidities must be an array');
+      }
+      
+      // Validate each comorbidity is a string
+      for (const comorbidity of parsed) {
+        if (typeof comorbidity !== 'string') {
+          throw new Error('Each comorbidity must be a string');
+        }
+      }
+      
+      return true;
+    }),
     
   // Check for validation errors
   (req, res, next) => {

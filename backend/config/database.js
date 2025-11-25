@@ -423,7 +423,7 @@ export const initializeDatabase = async () => {
     // Ensure exam & prior tests columns exist on patients
     try {
       await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS dre_done BOOLEAN DEFAULT FALSE`);
-      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS dre_findings VARCHAR(50)`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS dre_findings VARCHAR(255)`);
       await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS prior_biopsy VARCHAR(10) DEFAULT 'no'`);
       await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS prior_biopsy_date DATE`);
       await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS gleason_score VARCHAR(20)`);
