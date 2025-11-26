@@ -281,4 +281,3 @@ export const initAutoAppointmentScheduler = () => {
 
 export default initAutoAppointmentScheduler;
 
-

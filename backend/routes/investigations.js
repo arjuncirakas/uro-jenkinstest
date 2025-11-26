@@ -16,7 +16,6 @@ import {
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
 import { xssProtection } from '../middleware/sanitizer.js';
-import { checkPatientAccess } from '../middleware/idorProtection.js';
 
 const router = express.Router();
 router.use(xssProtection);
@@ -26,7 +25,6 @@ router.post('/patients/:patientId/investigation-requests',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
   createInvestigationRequest
 );
 
@@ -35,7 +33,6 @@ router.get('/patients/:patientId/investigation-requests',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
-  checkPatientAccess,
   getInvestigationRequests
 );
 
@@ -64,7 +61,6 @@ router.post('/patients/:patientId/psa-results',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
   upload.single('testFile'),
   addPSAResult
 );
@@ -83,7 +79,6 @@ router.post('/patients/:patientId/test-results',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
-  checkPatientAccess,
   upload.single('testFile'),
   addOtherTestResult
 );
@@ -93,7 +88,6 @@ router.get('/patients/:patientId/investigations',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
-  checkPatientAccess,
   getInvestigationResults
 );
 
