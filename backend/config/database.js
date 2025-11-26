@@ -962,6 +962,67 @@ export const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_discharge_summaries_consultant_id ON discharge_summaries(consultant_id);
     `);
 
+    // Create consent_forms table
+    const consentFormsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'consent_forms'
+      );
+    `);
+
+    if (!consentFormsTableExists.rows[0].exists) {
+      console.log('📋 Creating consent_forms table...');
+      await client.query(`
+        CREATE TABLE consent_forms (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Consent forms table created successfully');
+    } else {
+      console.log('✅ Consent forms table already exists');
+    }
+
+    // Create patient_consent_forms table
+    const patientConsentFormsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'patient_consent_forms'
+      );
+    `);
+
+    if (!patientConsentFormsTableExists.rows[0].exists) {
+      console.log('📋 Creating patient_consent_forms table...');
+      await client.query(`
+        CREATE TABLE patient_consent_forms (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          consent_form_id INTEGER NOT NULL REFERENCES consent_forms(id) ON DELETE CASCADE,
+          file_path VARCHAR(500) NOT NULL,
+          file_name VARCHAR(255) NOT NULL,
+          file_size INTEGER,
+          uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(patient_id, consent_form_id)
+        )
+      `);
+      console.log('✅ Patient consent forms table created successfully');
+    } else {
+      console.log('✅ Patient consent forms table already exists');
+    }
+
+    // Create indexes for consent forms tables
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patient_consent_forms_patient_id ON patient_consent_forms(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patient_consent_forms_consent_form_id ON patient_consent_forms(consent_form_id);
+    `);
+
     console.log('✅ Database tables initialized successfully');
     
     // Initialize audit logs table

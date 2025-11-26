@@ -18,6 +18,7 @@ import doctorsRoutes from './routes/doctors.js';
 import notificationRoutes from './routes/notifications.js';
 import gpRoutes from './routes/gp.js';
 import nursesRoutes from './routes/nurses.js';
+import consentFormRoutes from './routes/consentForms.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { initializeNotificationsTable } from './services/notificationService.js';
@@ -129,15 +130,16 @@ app.get('/api', (req, res) => {
     success: true,
     message: 'Urology Backend API',
     version: '1.0.0',
-    endpoints: {
-      auth: '/api/auth',
-      superadmin: '/api/superadmin',
-      patients: '/api/patients',
-      doctors: '/api/doctors',
-      nurses: '/api/nurses',
-      gp: '/api/gp',
-      health: '/health'
-    },
+      endpoints: {
+        auth: '/api/auth',
+        superadmin: '/api/superadmin',
+        patients: '/api/patients',
+        doctors: '/api/doctors',
+        nurses: '/api/nurses',
+        gp: '/api/gp',
+        consentForms: '/api/consent-forms',
+        health: '/health'
+      },
     documentation: `http://localhost:${PORT}/api`
   });
 });
@@ -184,6 +186,8 @@ app.use('/api', doctorsRoutes);
 app.use('/api/gp', gpRoutes);
 app.use('/api/nurses', nursesRoutes);
 console.log('✅ Nurses routes registered at /api/nurses');
+app.use('/api/consent-forms', consentFormRoutes);
+console.log('✅ Consent forms routes registered at /api/consent-forms');
 
 // 404 handler
 app.use(notFound);
