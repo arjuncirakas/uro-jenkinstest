@@ -56,19 +56,24 @@ export const checkPatientAccess = async (req, res, next) => {
       // Check access based on role
       let hasAccess = false;
       
+      // Declare variables outside if block for debug logging
+      let doctorId = null;
+      let doctorName = null;
+      let doctorNameFromUser = null;
+      let userResult = null;
+      
       if (user.role === 'urologist' || user.role === 'doctor') {
         // PRIORITY 1: Check appointments FIRST - if doctor has ANY appointment with patient, grant access
         // This is the most important check per user requirement
         
         // Get user's name first (needed for multiple checks)
-        const userResult = await client.query(
+        userResult = await client.query(
           `SELECT CONCAT(first_name, ' ', last_name) as name, email
            FROM users 
            WHERE id = $1`,
           [user.id]
         );
         
-        let doctorNameFromUser = null;
         if (userResult.rows.length > 0) {
           doctorNameFromUser = userResult.rows[0].name?.trim();
         }
@@ -81,9 +86,6 @@ export const checkPatientAccess = async (req, res, next) => {
            WHERE u.id = $1 AND d.is_active = true`,
           [user.id]
         );
-        
-        let doctorId = null;
-        let doctorName = null;
         
         if (doctorResult.rows.length > 0) {
           doctorId = doctorResult.rows[0].id;
@@ -155,6 +157,74 @@ export const checkPatientAccess = async (req, res, next) => {
           }
         }
         
+        // Final fallback: Check appointments by user email directly (in case doctor record doesn't exist)
+        // This handles edge cases where appointments exist but doctor record lookup failed
+        if (!hasAccess && userResult && userResult.rows.length > 0) {
+          const userEmail = userResult.rows[0].email;
+          if (userEmail) {
+            // Check if any appointment for this patient has a doctor with matching email
+            const appointmentByEmailCheck = await client.query(
+              `SELECT COUNT(*) as count 
+               FROM appointments a
+               INNER JOIN doctors d ON a.urologist_id = d.id
+               WHERE a.patient_id = $1 
+               AND a.status != 'cancelled'
+               AND d.email = $2
+               AND d.is_active = true`,
+              [patientId, userEmail]
+            );
+            
+            if (parseInt(appointmentByEmailCheck.rows[0].count) > 0) {
+              hasAccess = true;
+              console.log(`[checkPatientAccess] Granting access: Patient ${patientId} has appointment with doctor email ${userEmail} (email check)`);
+            }
+          }
+        }
+        
+        // Ultimate fallback: Check ALL appointments for this patient, regardless of status or doctor record
+        // This is the most permissive check - if patient has ANY appointment that could match this user
+        if (!hasAccess) {
+          // Get all appointments for this patient
+          const allAppointmentsCheck = await client.query(
+            `SELECT DISTINCT a.urologist_id, a.urologist_name
+             FROM appointments a
+             WHERE a.patient_id = $1 
+             AND a.status != 'cancelled'`,
+            [patientId]
+          );
+          
+          // For each appointment, check if it matches this user
+          for (const apt of allAppointmentsCheck.rows) {
+            if (apt.urologist_id) {
+              // Check if this urologist_id belongs to any doctor linked to this user
+              const doctorMatchCheck = await client.query(
+                `SELECT COUNT(*) as count
+                 FROM doctors d
+                 INNER JOIN users u ON d.email = u.email
+                 WHERE d.id = $1 AND u.id = $2 AND d.is_active = true`,
+                [apt.urologist_id, user.id]
+              );
+              
+              if (parseInt(doctorMatchCheck.rows[0].count) > 0) {
+                hasAccess = true;
+                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} has appointment with urologist_id ${apt.urologist_id} matching user ${user.id} (ultimate fallback)`);
+                break;
+              }
+            }
+            
+            // Also check by name if urologist_id doesn't match
+            if (!hasAccess && apt.urologist_name && doctorNameFromUser) {
+              const aptNameNormalized = apt.urologist_name.trim().replace(/^Dr\.\s*/i, '');
+              const userNameNormalized = doctorNameFromUser.trim().replace(/^Dr\.\s*/i, '');
+              if (aptNameNormalized.toLowerCase() === userNameNormalized.toLowerCase()) {
+                hasAccess = true;
+                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} has appointment with name "${apt.urologist_name}" matching user "${doctorNameFromUser}" (name fallback)`);
+                break;
+              }
+            }
+          }
+        }
+        
         // PRIORITY 2: Check if patient is assigned to this doctor
         if (!hasAccess) {
           // Check assignment with exact match
@@ -194,7 +264,27 @@ export const checkPatientAccess = async (req, res, next) => {
       }
       
       if (!hasAccess) {
-        await logFailedAccess(req, `Unauthorized access attempt to patient ${patientId}`);
+        // Log detailed debug information
+        console.log(`[checkPatientAccess] DENIED: Patient ${patientId}, User ${user.id} (${user.email}), Role: ${user.role}`);
+        if (user.role === 'urologist' || user.role === 'doctor') {
+          console.log(`[checkPatientAccess] Debug - doctorId: ${doctorId}, doctorName: ${doctorName}, doctorNameFromUser: ${doctorNameFromUser}`);
+          console.log(`[checkPatientAccess] Debug - patient assigned_urologist: ${patient.assigned_urologist}`);
+          
+          // Check what appointments exist for this patient
+          const debugAppointments = await client.query(
+            `SELECT id, urologist_id, urologist_name, status, appointment_date
+             FROM appointments 
+             WHERE patient_id = $1 
+             ORDER BY appointment_date DESC
+             LIMIT 5`,
+            [patientId]
+          );
+          console.log(`[checkPatientAccess] Debug - Found ${debugAppointments.rows.length} appointments for patient ${patientId}:`, 
+            debugAppointments.rows.map(a => ({ id: a.id, urologist_id: a.urologist_id, urologist_name: a.urologist_name, status: a.status }))
+          );
+        }
+        
+        await logFailedAccess(req, `Unauthorized access attempt to patient ${patientId} by user ${user.id}`);
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to access this patient'
