@@ -2981,7 +2981,10 @@ export const getAllAppointments = async (req, res) => {
 
       const aptType = (row.type || '').toLowerCase();
 
-      if (aptType === 'investigation') {
+      if (aptType === 'automatic') {
+        typeColor = 'blue';
+        appointmentType = 'Follow-up Appointment';
+      } else if (aptType === 'investigation') {
         typeColor = 'purple';
         appointmentType = 'Investigation Appointment';
       } else if (aptType === 'surgery' || aptType === 'surgical') {

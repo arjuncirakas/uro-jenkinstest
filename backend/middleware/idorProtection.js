@@ -73,16 +73,57 @@ export const checkPatientAccess = async (req, res, next) => {
         
         // Also check if there's a doctor record linked to this user
         const doctorResult = await client.query(
-          `SELECT CONCAT(d.first_name, ' ', d.last_name) as name 
+          `SELECT d.id, CONCAT(d.first_name, ' ', d.last_name) as name 
            FROM doctors d
            JOIN users u ON d.email = u.email
-           WHERE u.id = $1`,
+           WHERE u.id = $1 AND d.is_active = true`,
           [user.id]
         );
         
         if (doctorResult.rows.length > 0) {
-          const doctorName = doctorResult.rows[0].name;
+          const doctor = doctorResult.rows[0];
+          const doctorName = doctor.name;
           hasAccess = hasAccess || patient.assigned_urologist === doctorName;
+          
+          // Also check if patient has an appointment with this doctor (by doctors.id or name)
+          // This allows doctors to access patients they have appointments with, even if not assigned
+          if (!hasAccess) {
+            // Check by doctor ID
+            if (doctor.id) {
+              const appointmentCheckById = await client.query(
+                `SELECT COUNT(*) as count 
+                 FROM appointments 
+                 WHERE patient_id = $1 
+                 AND urologist_id = $2 
+                 AND status IN ('scheduled', 'confirmed')
+                 LIMIT 1`,
+                [patientId, doctor.id]
+              );
+              
+              if (parseInt(appointmentCheckById.rows[0].count) > 0) {
+                hasAccess = true;
+                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} has appointment with doctor ID ${doctor.id}`);
+              }
+            }
+            
+            // Also check by doctor name (in case appointment was created with name instead of ID)
+            if (!hasAccess && doctorName) {
+              const appointmentCheckByName = await client.query(
+                `SELECT COUNT(*) as count 
+                 FROM appointments 
+                 WHERE patient_id = $1 
+                 AND (urologist_name = $2 OR urologist_name = TRIM(REGEXP_REPLACE($2, '^Dr\\.\\s*', '', 'i')))
+                 AND status IN ('scheduled', 'confirmed')
+                 LIMIT 1`,
+                [patientId, doctorName]
+              );
+              
+              if (parseInt(appointmentCheckByName.rows[0].count) > 0) {
+                hasAccess = true;
+                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} has appointment with doctor "${doctorName}"`);
+              }
+            }
+          }
         }
       } else if (user.role === 'urology_nurse' || user.role === 'gp') {
         // Nurses and GPs can access all active patients

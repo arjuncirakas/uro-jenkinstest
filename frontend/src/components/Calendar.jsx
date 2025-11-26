@@ -625,9 +625,11 @@ const Calendar = ({
                             className={`p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity ${
                               appointment.status === 'missed'
                                 ? 'bg-red-500 text-white'
-                                : appointment.typeColor === 'teal' 
-                                  ? 'bg-teal-500 text-white' 
-                                  : 'bg-purple-500 text-white'
+                                : appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                  ? 'bg-blue-500 text-white'
+                                  : appointment.typeColor === 'teal' 
+                                    ? 'bg-teal-500 text-white' 
+                                    : 'bg-purple-500 text-white'
                             }`}
                           >
                             <div className="flex items-center justify-between">
@@ -908,14 +910,22 @@ const Calendar = ({
                             className={`p-3 rounded-lg cursor-pointer group hover:opacity-90 transition-opacity ${
                               appointment.status === 'missed'
                                 ? 'bg-red-500 text-white'
-                                : appointment.typeColor === 'teal' 
-                                  ? 'bg-teal-500 text-white' 
-                                  : 'bg-purple-500 text-white'
+                                : appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                  ? 'bg-blue-500 text-white'
+                                  : appointment.typeColor === 'teal' 
+                                    ? 'bg-teal-500 text-white' 
+                                    : 'bg-purple-500 text-white'
                             }`}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
-                                <div className="font-semibold text-sm">{convertTo12Hour(appointment.time)} - {appointment.patientName}</div>
+                                <div className="font-semibold text-sm">
+                                  {appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic' 
+                                    ? '⚡ ' 
+                                    : appointment.time ? convertTo12Hour(appointment.time) + ' - ' 
+                                    : ''}
+                                  {appointment.patientName}
+                                </div>
                                 <div className="text-xs opacity-90 mt-1">{appointment.type}</div>
                                 {appointment.notes && (
                                   <div className="text-xs opacity-80 mt-1">{appointment.notes}</div>
