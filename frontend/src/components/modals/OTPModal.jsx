@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Mail, RefreshCw } from 'lucide-react';
 
 const OTPModal = ({ 
@@ -14,6 +14,7 @@ const OTPModal = ({
   const [otp, setOtp] = useState('');
   const [timeLeft, setTimeLeft] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -88,11 +89,74 @@ const OTPModal = ({
     }
   }, [otp]);
 
+  // Keep onClose ref updated
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e) => {
+      // Check for Escape key (support both key and keyCode for compatibility)
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        // Use ref to ensure we have the latest onClose
+        if (onCloseRef.current) {
+          onCloseRef.current();
+        }
+      }
+    };
+
+    // Add listener to both window and document with capture phase
+    // Capture phase ensures we catch the event before it bubbles
+    window.addEventListener('keydown', handleEscape, { capture: true, passive: false });
+    document.addEventListener('keydown', handleEscape, { capture: true, passive: false });
+    
+    return () => {
+      window.removeEventListener('keydown', handleEscape, { capture: true });
+      document.removeEventListener('keydown', handleEscape, { capture: true });
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
+  const handleBackdropClick = (e) => {
+    // Only close if clicking the backdrop itself, not the modal content
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <div 
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={handleBackdropClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' || e.keyCode === 27) {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">

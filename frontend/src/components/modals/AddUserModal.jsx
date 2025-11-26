@@ -107,6 +107,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
       case 'firstName':
         if (!value.trim()) {
           error = 'First name is required';
+        } else if (value !== value.trim()) {
+          error = 'First name cannot start or end with a space';
         } else if (value.trim().length < 2) {
           error = 'First name must be at least 2 characters';
         } else if (!/^[a-zA-Z\s'.-]+$/.test(value.trim())) {
@@ -116,6 +118,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
       case 'lastName':
         if (!value.trim()) {
           error = 'Last name is required';
+        } else if (value !== value.trim()) {
+          error = 'Last name cannot start or end with a space';
         } else if (!/^[a-zA-Z\s'.-]+$/.test(value.trim())) {
           error = 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods';
         }
