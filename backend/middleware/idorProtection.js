@@ -226,31 +226,109 @@ export const checkPatientAccess = async (req, res, next) => {
         }
         
         // PRIORITY 2: Check if patient is assigned to this doctor
+        // Use comprehensive matching logic that mirrors getAssignedPatientsForDoctor
         if (!hasAccess) {
-          // Check assignment with exact match
-          if (doctorNameFromUser && patient.assigned_urologist && patient.assigned_urologist.trim() === doctorNameFromUser) {
-            hasAccess = true;
-            console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorNameFromUser}"`);
-          }
+          // Get normalized names for comparison
+          const normalizedDoctorName = doctorName ? doctorName.replace(/^Dr\.\s*/i, '').trim() : null;
+          const normalizedDoctorNameFromUser = doctorNameFromUser ? doctorNameFromUser.replace(/^Dr\.\s*/i, '').trim() : null;
           
-          // Check assignment with doctor name from doctor record
-          if (!hasAccess && doctorName && patient.assigned_urologist) {
+          if (patient.assigned_urologist) {
             const assignedNormalized = patient.assigned_urologist.trim().replace(/^Dr\.\s*/i, '');
-            const doctorNameNormalized = doctorName.replace(/^Dr\.\s*/i, '');
-            if (assignedNormalized.toLowerCase() === doctorNameNormalized.toLowerCase()) {
+            
+            // Check with exact match first
+            if (doctorNameFromUser && patient.assigned_urologist.trim() === doctorNameFromUser.trim()) {
               hasAccess = true;
-              console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorName}"`);
+              console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorNameFromUser}" (exact match)`);
+            }
+            
+            // Check with doctor name from doctor record
+            if (!hasAccess && doctorName && assignedNormalized.toLowerCase() === normalizedDoctorName.toLowerCase()) {
+              hasAccess = true;
+              console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorName}" (normalized match)`);
+            }
+            
+            // Check with user's name (normalized comparison)
+            if (!hasAccess && normalizedDoctorNameFromUser && assignedNormalized.toLowerCase() === normalizedDoctorNameFromUser.toLowerCase()) {
+              hasAccess = true;
+              console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorNameFromUser}" (normalized user name match)`);
+            }
+            
+            // Additional check: Use TRIM and case-insensitive matching (mirrors getAssignedPatientsForDoctor logic)
+            if (!hasAccess) {
+              const assignedTrimmed = patient.assigned_urologist.trim();
+              if (doctorName && assignedTrimmed.toLowerCase() === doctorName.trim().toLowerCase()) {
+                hasAccess = true;
+                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorName}" (trimmed case-insensitive)`);
+              } else if (doctorNameFromUser && assignedTrimmed.toLowerCase() === doctorNameFromUser.trim().toLowerCase()) {
+                hasAccess = true;
+                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorNameFromUser}" (trimmed case-insensitive)`);
+              }
             }
           }
-          
-          // Final check: assignment with user's name (normalized comparison)
-          if (!hasAccess && doctorNameFromUser && patient.assigned_urologist) {
-            const assignedNormalized = patient.assigned_urologist.trim().replace(/^Dr\.\s*/i, '');
-            const userNameNormalized = doctorNameFromUser.trim().replace(/^Dr\.\s*/i, '');
-            if (assignedNormalized.toLowerCase() === userNameNormalized.toLowerCase()) {
-              hasAccess = true;
-              console.log(`[checkPatientAccess] Granting access: Patient ${patientId} assigned to doctor "${doctorNameFromUser}" (normalized)`);
+        }
+        
+        // PRIORITY 3: Final comprehensive check - use same logic as getAssignedPatientsForDoctor
+        // This ensures consistency: if patient appears in assigned list, they can access it
+        if (!hasAccess) {
+          try {
+            // Get all possible name variations
+            const namesToCheck = [];
+            if (normalizedDoctorName) namesToCheck.push(normalizedDoctorName);
+            if (normalizedDoctorNameFromUser) namesToCheck.push(normalizedDoctorNameFromUser);
+            if (doctorName) namesToCheck.push(doctorName.trim());
+            if (doctorNameFromUser) namesToCheck.push(doctorNameFromUser.trim());
+            
+            // Remove duplicates
+            const uniqueNames = [...new Set(namesToCheck.filter(n => n))];
+            
+            if (uniqueNames.length > 0 || doctorId) {
+              // Build name matching conditions
+              const nameConditions = uniqueNames.map((name, idx) => {
+                const paramIdx = idx + 1;
+                return `(
+                  TRIM(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i')) = $${paramIdx}
+                  OR LOWER(TRIM(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = LOWER($${paramIdx})
+                  OR TRIM(p.assigned_urologist) = $${paramIdx}
+                  OR LOWER(TRIM(p.assigned_urologist)) = LOWER($${paramIdx})
+                )`;
+              }).join(' OR ');
+              
+              // Build appointment condition
+              let appointmentCondition = '';
+              if (doctorId) {
+                const appointmentParamIdx = uniqueNames.length + 1;
+                appointmentCondition = `OR EXISTS (
+                  SELECT 1 FROM appointments a
+                  WHERE a.patient_id = p.id
+                  AND a.status != 'cancelled'
+                  AND a.urologist_id = $${appointmentParamIdx}
+                )`;
+              }
+              
+              // Execute check
+              const queryParams = [patientId, ...uniqueNames];
+              if (doctorId) queryParams.push(doctorId);
+              
+              const comprehensiveCheck = await client.query(
+                `SELECT COUNT(*) as count
+                 FROM patients p
+                 WHERE p.id = $1
+                 AND p.status = 'Active'
+                 AND (
+                   (p.assigned_urologist IS NOT NULL AND (${nameConditions}))
+                   ${appointmentCondition}
+                 )`,
+                queryParams
+              );
+              
+              if (parseInt(comprehensiveCheck.rows[0].count) > 0) {
+                hasAccess = true;
+                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} matches assigned list criteria (comprehensive check)`);
+              }
             }
+          } catch (comprehensiveError) {
+            console.error(`[checkPatientAccess] Error in comprehensive check:`, comprehensiveError);
+            // Don't fail on this check, continue with other checks
           }
         }
       } else if (user.role === 'urology_nurse' || user.role === 'gp') {
