@@ -195,7 +195,7 @@ const Doctors = () => {
     }));
   };
 
-  // Validate entire form
+  // Validate entire 
   const validateForm = () => {
     const errors = {};
     
