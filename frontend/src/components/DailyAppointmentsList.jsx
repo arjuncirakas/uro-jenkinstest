@@ -42,7 +42,16 @@ const DailyAppointmentsList = ({
     const statusDiff = statusPriority(a.status) - statusPriority(b.status);
     if (statusDiff !== 0) return statusDiff;
     
+    // Automatic appointments (no time) go to the end
+    const isAutomaticA = a.appointment_type === 'automatic' || a.type === 'automatic' || !a.time;
+    const isAutomaticB = b.appointment_type === 'automatic' || b.type === 'automatic' || !b.time;
+    
+    if (isAutomaticA && !isAutomaticB) return 1;
+    if (!isAutomaticA && isAutomaticB) return -1;
+    if (isAutomaticA && isAutomaticB) return 0;
+    
     // Then sort by time within each status group
+    if (!a.time || !b.time) return 0;
     const timeA = a.time.split(':').map(Number);
     const timeB = b.time.split(':').map(Number);
     return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
@@ -69,6 +78,10 @@ const DailyAppointmentsList = ({
   // Get appointments for a specific hour
   const getAppointmentsForHour = (hour24) => {
     return sortedAppointments.filter(appointment => {
+      // Automatic appointments don't have time slots, skip them in timeline view
+      if (appointment.appointment_type === 'automatic' || appointment.type === 'automatic' || !appointment.time) {
+        return false;
+      }
       const appointmentHour = parseInt(appointment.time.split(':')[0], 10);
       return appointmentHour === hour24;
     });
@@ -169,7 +182,11 @@ const DailyAppointmentsList = ({
                     
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <FiClock className="w-4 h-4" />
-                      <span>{convertTo12Hour(appointment.time)}</span>
+                      <span>
+                        {appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                          ? 'Flexible (no time slot)'
+                          : appointment.time ? convertTo12Hour(appointment.time) : 'N/A'}
+                      </span>
                     </div>
                     
                     {appointment.notes && (
@@ -228,7 +245,10 @@ const DailyAppointmentsList = ({
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="font-semibold text-sm">
-                                  {convertTo12Hour(appointment.time)} - {appointment.patientName}
+                                  {appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                    ? '⚡ Flexible - '
+                                    : appointment.time ? convertTo12Hour(appointment.time) + ' - ' : ''}
+                                  {appointment.patientName}
                                 </div>
                                 <div className="text-xs opacity-90 mt-1">{appointment.type}</div>
                                 {appointment.notes && (

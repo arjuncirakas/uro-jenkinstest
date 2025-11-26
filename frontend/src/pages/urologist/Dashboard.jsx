@@ -1078,7 +1078,9 @@ const UrologistDashboard = () => {
                           appointments.map((appointment, index) => (
                             <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
-                                {formatTime(appointment.time || appointment.appointmentTime || appointment.scheduledTime) || 'N/A'}
+                                {appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                  ? 'Flexible'
+                                  : formatTime(appointment.time || appointment.appointmentTime || appointment.scheduledTime) || 'N/A'}
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-900 text-xs sm:text-sm font-medium">
                                 <div className="flex items-center space-x-2">

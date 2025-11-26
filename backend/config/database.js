@@ -607,6 +607,17 @@ export const initializeDatabase = async () => {
         console.log(`⚠️  reminder_sent_at column might already exist: ${err.message}`);
       }
       
+      // Allow NULL for appointment_time to support automatic appointments without time slots
+      try {
+        await client.query(`
+          ALTER TABLE appointments 
+          ALTER COLUMN appointment_time DROP NOT NULL;
+        `);
+        console.log('✅ Modified appointment_time to allow NULL for automatic appointments');
+      } catch (err) {
+        console.log(`⚠️  appointment_time column might already allow NULL: ${err.message}`);
+      }
+      
       // Try to update foreign key constraint to reference doctors(id) instead of users(id)
       // This is safe to run multiple times - it will only update if the constraint exists
       try {

@@ -2120,7 +2120,6 @@ export const updatePatientPathway = async (req, res) => {
             
             // Book appointments for 1 year: 3, 6, 9, 12 months
             const appointmentIntervals = [3, 6, 9, 12];
-            const preferredTimes = ['09:00', '11:00', '14:00', '16:00']; // Distribute across day
             
             for (let i = 0; i < appointmentIntervals.length; i++) {
               const monthsAhead = appointmentIntervals[i];
@@ -2128,10 +2127,11 @@ export const updatePatientPathway = async (req, res) => {
               followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
               const appointmentDate = followUpDate.toISOString().split('T')[0];
               
-              // Use preferred time (doesn't matter for automatic appointments, but good for display)
-              const appointmentTime = preferredTimes[i % preferredTimes.length];
+              // Automatic appointments don't have time slots - they are additional appointments
+              // that don't block time slots, so set appointmentTime to NULL
+              const appointmentTime = null;
               
-              // Book automatic appointment (doesn't block slots)
+              // Book automatic appointment (doesn't block slots, no time slot assigned)
               const bookedAppointment = await bookAutomaticAppointment(client, {
                 patientId: id,
                 urologistDoctorId,
@@ -2146,7 +2146,7 @@ export const updatePatientPathway = async (req, res) => {
               
               if (bookedAppointment) {
                 autoBookedAppointments.push(bookedAppointment);
-                console.log(`[updatePatientPathway] ✅ Auto-booked automatic appointment (${monthsAhead} months) for ${patientData.upi} on ${appointmentDate} at ${appointmentTime}`);
+                console.log(`[updatePatientPathway] ✅ Auto-booked automatic appointment (${monthsAhead} months) for ${patientData.upi} on ${appointmentDate} (no time slot - additional appointment)`);
               }
             }
             
@@ -2339,7 +2339,7 @@ export const updatePatientPathway = async (req, res) => {
               });
               noteContent += `\n${index + 1}. ${apt.monthsAhead}-Month Follow-up:\n` +
                             `   Date: ${aptDate}\n` +
-                            `   Time: ${apt.time}\n` +
+                            `   Time: ${apt.time || 'Flexible (no time slot - additional appointment)'}\n` +
                             `   Urologist: ${autoBookedAppointment.urologistName}`;
             });
           } else {
@@ -2351,7 +2351,7 @@ export const updatePatientPathway = async (req, res) => {
             });
             noteContent += `\n\n📅 FOLLOW-UP APPOINTMENT AUTO-BOOKED:\n` +
                           `Date: ${aptDate}\n` +
-                          `Time: ${autoBookedAppointment.time}\n` +
+                          `Time: Flexible (no time slot - additional appointment)\n` +
                           `Urologist: ${autoBookedAppointment.urologistName}`;
           }
         }

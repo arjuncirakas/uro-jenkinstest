@@ -12,7 +12,7 @@ const NurseSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
 
   const navigationItems = [
     { name: 'OPD Management', icon: FaDatabase, path: '/nurse/opd-management', active: location.pathname === '/nurse/opd-management' },
-    // { name: 'Patient List', icon: FaUsers, path: '/nurse/patients', active: location.pathname === '/nurse/patients' },
+    { name: 'Patient List', icon: FaUsers, path: '/nurse/patients', active: location.pathname === '/nurse/patients' },
     { name: 'Investigations', icon: FaMicroscope, path: '/nurse/investigations', active: location.pathname === '/nurse/investigations' },
     { name: 'Appointments', icon: FaCalendarAlt, path: '/nurse/appointments', active: location.pathname === '/nurse/appointments' },
     { name: 'Active Monitoring', icon: FaHeartbeat, path: '/nurse/monitoring', active: location.pathname === '/nurse/monitoring' },

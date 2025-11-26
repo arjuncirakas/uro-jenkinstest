@@ -214,8 +214,8 @@ const processAutomaticAppointments = async () => {
         }
         
         // Book appointments for next year: 3, 6, 9, 12 months
+        // Automatic appointments don't have time slots - they are additional appointments
         const appointmentIntervals = [3, 6, 9, 12];
-        const preferredTimes = ['09:00', '11:00', '14:00', '16:00'];
         let appointmentsBooked = 0;
         
         for (let i = 0; i < appointmentIntervals.length; i++) {
@@ -223,7 +223,8 @@ const processAutomaticAppointments = async () => {
           const appointmentDate = new Date();
           appointmentDate.setMonth(appointmentDate.getMonth() + monthsAhead);
           const dateStr = appointmentDate.toISOString().split('T')[0];
-          const appointmentTime = preferredTimes[i % preferredTimes.length];
+          // Automatic appointments don't have time slots - set to NULL
+          const appointmentTime = null;
           
           const booked = await bookAutomaticAppointment(client, {
             patientId: patient.id,

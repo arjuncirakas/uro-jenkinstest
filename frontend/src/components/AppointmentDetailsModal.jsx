@@ -197,7 +197,9 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
                   <FiClock className="w-4 h-4 text-gray-500" />
                   <span className="text-sm text-gray-600">Time:</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {formatTime(appointment.time || appointment.appointment_time || appointment.appointmentTime)}
+                    {appointment.appointment_type === 'automatic' || appointment.type === 'automatic' 
+                      ? 'Flexible (no time slot - additional appointment)'
+                      : formatTime(appointment.time || appointment.appointment_time || appointment.appointmentTime) || 'N/A'}
                   </span>
                 </div>
               </div>
