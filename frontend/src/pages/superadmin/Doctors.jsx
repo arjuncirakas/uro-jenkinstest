@@ -207,7 +207,7 @@ const Doctors = () => {
     
     setFormErrors(errors);
     
-    // Check if there are any errors
+    // Check if there are any errorss
     return !Object.values(errors).some(error => error !== '');
   };
 
