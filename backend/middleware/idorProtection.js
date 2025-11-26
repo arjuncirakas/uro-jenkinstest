@@ -11,15 +11,25 @@ import { logFailedAccess } from '../services/auditLogger.js';
  */
 export const checkPatientAccess = async (req, res, next) => {
   try {
-    const patientId = req.params.patientId || req.body.patientId || req.query.patientId;
+    // Try multiple sources for patientId
+    const patientId = req.params.patientId || req.params.id || req.body.patientId || req.query.patientId;
+    
+    console.log(`[checkPatientAccess] Request: ${req.method} ${req.path}`);
+    console.log(`[checkPatientAccess] PatientId from params.patientId: ${req.params.patientId}`);
+    console.log(`[checkPatientAccess] PatientId from params.id: ${req.params.id}`);
+    console.log(`[checkPatientAccess] PatientId from body: ${req.body.patientId}`);
+    console.log(`[checkPatientAccess] PatientId from query: ${req.query.patientId}`);
+    console.log(`[checkPatientAccess] Final patientId: ${patientId}`);
     
     if (!patientId) {
+      console.log(`[checkPatientAccess] No patientId found, skipping check`);
       return next(); // No patient ID in request, skip check
     }
     
     const user = req.user;
     
     if (!user) {
+      console.log(`[checkPatientAccess] No user found in request`);
       await logFailedAccess(req, 'Unauthenticated patient access attempt');
       return res.status(401).json({
         success: false,
@@ -27,8 +37,11 @@ export const checkPatientAccess = async (req, res, next) => {
       });
     }
     
+    console.log(`[checkPatientAccess] User: ${user.id} (${user.email}), Role: ${user.role}`);
+    
     // Superadmin can access all patients
     if (user.role === 'superadmin') {
+      console.log(`[checkPatientAccess] Superadmin access granted`);
       return next();
     }
     
@@ -271,6 +284,8 @@ export const checkPatientAccess = async (req, res, next) => {
         // This ensures consistency: if patient appears in assigned list, they can access it
         if (!hasAccess) {
           try {
+            console.log(`[checkPatientAccess] Running comprehensive check...`);
+            
             // Get all possible name variations
             const namesToCheck = [];
             if (normalizedDoctorName) namesToCheck.push(normalizedDoctorName);
@@ -278,56 +293,78 @@ export const checkPatientAccess = async (req, res, next) => {
             if (doctorName) namesToCheck.push(doctorName.trim());
             if (doctorNameFromUser) namesToCheck.push(doctorNameFromUser.trim());
             
-            // Remove duplicates
-            const uniqueNames = [...new Set(namesToCheck.filter(n => n))];
+            // Remove duplicates and empty strings
+            const uniqueNames = [...new Set(namesToCheck.filter(n => n && n.trim()))];
             
-            if (uniqueNames.length > 0 || doctorId) {
-              // Build name matching conditions
-              const nameConditions = uniqueNames.map((name, idx) => {
-                const paramIdx = idx + 1;
-                return `(
-                  TRIM(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i')) = $${paramIdx}
-                  OR LOWER(TRIM(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = LOWER($${paramIdx})
-                  OR TRIM(p.assigned_urologist) = $${paramIdx}
-                  OR LOWER(TRIM(p.assigned_urologist)) = LOWER($${paramIdx})
-                )`;
+            console.log(`[checkPatientAccess] Comprehensive check - uniqueNames:`, uniqueNames);
+            console.log(`[checkPatientAccess] Comprehensive check - doctorId:`, doctorId);
+            
+            // Build conditions array
+            const conditions = [];
+            const queryParams = [patientId];
+            let paramIndex = 2;
+            
+            // Add name matching conditions
+            if (uniqueNames.length > 0) {
+              const nameConditions = uniqueNames.map((name) => {
+                const conditions = [];
+                queryParams.push(name);
+                const currentIdx = paramIndex++;
+                
+                // Multiple matching strategies
+                conditions.push(`TRIM(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i')) = $${currentIdx}`);
+                conditions.push(`LOWER(TRIM(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = LOWER($${currentIdx})`);
+                conditions.push(`TRIM(p.assigned_urologist) = $${currentIdx}`);
+                conditions.push(`LOWER(TRIM(p.assigned_urologist)) = LOWER($${currentIdx})`);
+                
+                return `(${conditions.join(' OR ')})`;
               }).join(' OR ');
               
-              // Build appointment condition
-              let appointmentCondition = '';
-              if (doctorId) {
-                const appointmentParamIdx = uniqueNames.length + 1;
-                appointmentCondition = `OR EXISTS (
-                  SELECT 1 FROM appointments a
-                  WHERE a.patient_id = p.id
-                  AND a.status != 'cancelled'
-                  AND a.urologist_id = $${appointmentParamIdx}
-                )`;
-              }
+              conditions.push(`(p.assigned_urologist IS NOT NULL AND (${nameConditions}))`);
+            }
+            
+            // Add appointment condition if doctorId exists
+            if (doctorId) {
+              queryParams.push(doctorId);
+              conditions.push(`EXISTS (
+                SELECT 1 FROM appointments a
+                WHERE a.patient_id = p.id
+                AND a.status != 'cancelled'
+                AND a.urologist_id = $${paramIndex}
+              )`);
+              paramIndex++;
+            }
+            
+            // Only run query if we have conditions
+            if (conditions.length > 0) {
+              const whereClause = conditions.join(' OR ');
               
-              // Execute check
-              const queryParams = [patientId, ...uniqueNames];
-              if (doctorId) queryParams.push(doctorId);
+              console.log(`[checkPatientAccess] Comprehensive check query:`, {
+                whereClause,
+                paramCount: queryParams.length
+              });
               
               const comprehensiveCheck = await client.query(
                 `SELECT COUNT(*) as count
                  FROM patients p
                  WHERE p.id = $1
-                 AND p.status = 'Active'
-                 AND (
-                   (p.assigned_urologist IS NOT NULL AND (${nameConditions}))
-                   ${appointmentCondition}
-                 )`,
+                 AND (${whereClause})`,
                 queryParams
               );
               
-              if (parseInt(comprehensiveCheck.rows[0].count) > 0) {
+              const count = parseInt(comprehensiveCheck.rows[0].count);
+              console.log(`[checkPatientAccess] Comprehensive check result: ${count} matches`);
+              
+              if (count > 0) {
                 hasAccess = true;
-                console.log(`[checkPatientAccess] Granting access: Patient ${patientId} matches assigned list criteria (comprehensive check)`);
+                console.log(`[checkPatientAccess] ✅ Granting access: Patient ${patientId} matches assigned list criteria (comprehensive check)`);
               }
+            } else {
+              console.log(`[checkPatientAccess] Comprehensive check skipped - no conditions to check`);
             }
           } catch (comprehensiveError) {
-            console.error(`[checkPatientAccess] Error in comprehensive check:`, comprehensiveError);
+            console.error(`[checkPatientAccess] ❌ Error in comprehensive check:`, comprehensiveError);
+            console.error(`[checkPatientAccess] Error stack:`, comprehensiveError.stack);
             // Don't fail on this check, continue with other checks
           }
         }
@@ -343,10 +380,18 @@ export const checkPatientAccess = async (req, res, next) => {
       
       if (!hasAccess) {
         // Log detailed debug information
-        console.log(`[checkPatientAccess] DENIED: Patient ${patientId}, User ${user.id} (${user.email}), Role: ${user.role}`);
+        console.log(`[checkPatientAccess] ========== ACCESS DENIED ==========`);
+        console.log(`[checkPatientAccess] Patient ID: ${patientId}`);
+        console.log(`[checkPatientAccess] User ID: ${user.id}`);
+        console.log(`[checkPatientAccess] User Email: ${user.email}`);
+        console.log(`[checkPatientAccess] User Role: ${user.role}`);
+        
         if (user.role === 'urologist' || user.role === 'doctor') {
-          console.log(`[checkPatientAccess] Debug - doctorId: ${doctorId}, doctorName: ${doctorName}, doctorNameFromUser: ${doctorNameFromUser}`);
-          console.log(`[checkPatientAccess] Debug - patient assigned_urologist: ${patient.assigned_urologist}`);
+          console.log(`[checkPatientAccess] Doctor ID: ${doctorId}`);
+          console.log(`[checkPatientAccess] Doctor Name (from doctors table): ${doctorName}`);
+          console.log(`[checkPatientAccess] Doctor Name (from users table): ${doctorNameFromUser}`);
+          console.log(`[checkPatientAccess] Patient assigned_urologist: "${patient.assigned_urologist}"`);
+          console.log(`[checkPatientAccess] Patient created_by: ${patient.created_by}`);
           
           // Check what appointments exist for this patient
           const debugAppointments = await client.query(
@@ -354,13 +399,42 @@ export const checkPatientAccess = async (req, res, next) => {
              FROM appointments 
              WHERE patient_id = $1 
              ORDER BY appointment_date DESC
-             LIMIT 5`,
+             LIMIT 10`,
             [patientId]
           );
-          console.log(`[checkPatientAccess] Debug - Found ${debugAppointments.rows.length} appointments for patient ${patientId}:`, 
-            debugAppointments.rows.map(a => ({ id: a.id, urologist_id: a.urologist_id, urologist_name: a.urologist_name, status: a.status }))
-          );
+          console.log(`[checkPatientAccess] Found ${debugAppointments.rows.length} appointments for patient:`);
+          debugAppointments.rows.forEach((a, idx) => {
+            console.log(`[checkPatientAccess]   Appointment ${idx + 1}: id=${a.id}, urologist_id=${a.urologist_id}, urologist_name="${a.urologist_name}", status=${a.status}`);
+          });
+          
+          // Check if patient would be in assigned list
+          if (doctorName || doctorNameFromUser) {
+            const assignedCheck = await client.query(
+              `SELECT id, assigned_urologist, status 
+               FROM patients 
+               WHERE id = $1 AND status = 'Active'`,
+              [patientId]
+            );
+            if (assignedCheck.rows.length > 0) {
+              const p = assignedCheck.rows[0];
+              console.log(`[checkPatientAccess] Patient status: ${p.status}`);
+              console.log(`[checkPatientAccess] Patient assigned_urologist: "${p.assigned_urologist}"`);
+              console.log(`[checkPatientAccess] Name comparison:`);
+              console.log(`[checkPatientAccess]   - doctorName: "${doctorName}"`);
+              console.log(`[checkPatientAccess]   - doctorNameFromUser: "${doctorNameFromUser}"`);
+              console.log(`[checkPatientAccess]   - assigned_urologist: "${p.assigned_urologist}"`);
+              if (doctorName && p.assigned_urologist) {
+                const normalized1 = doctorName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
+                const normalized2 = p.assigned_urologist.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
+                console.log(`[checkPatientAccess]   - Normalized doctorName: "${normalized1}"`);
+                console.log(`[checkPatientAccess]   - Normalized assigned_urologist: "${normalized2}"`);
+                console.log(`[checkPatientAccess]   - Match: ${normalized1 === normalized2}`);
+              }
+            }
+          }
         }
+        
+        console.log(`[checkPatientAccess] ====================================`);
         
         await logFailedAccess(req, `Unauthorized access attempt to patient ${patientId} by user ${user.id}`);
         return res.status(403).json({
@@ -369,6 +443,7 @@ export const checkPatientAccess = async (req, res, next) => {
         });
       }
       
+      console.log(`[checkPatientAccess] ✅ ACCESS GRANTED for patient ${patientId}`);
       next();
     } finally {
       client.release();
