@@ -238,13 +238,13 @@ export const checkPatientAccess = async (req, res, next) => {
           }
         }
         
+        // Get normalized names for comparison (used in both PRIORITY 2 and PRIORITY 3)
+        const normalizedDoctorName = doctorName ? doctorName.replace(/^Dr\.\s*/i, '').trim() : null;
+        const normalizedDoctorNameFromUser = doctorNameFromUser ? doctorNameFromUser.replace(/^Dr\.\s*/i, '').trim() : null;
+        
         // PRIORITY 2: Check if patient is assigned to this doctor
         // Use comprehensive matching logic that mirrors getAssignedPatientsForDoctor
         if (!hasAccess) {
-          // Get normalized names for comparison
-          const normalizedDoctorName = doctorName ? doctorName.replace(/^Dr\.\s*/i, '').trim() : null;
-          const normalizedDoctorNameFromUser = doctorNameFromUser ? doctorNameFromUser.replace(/^Dr\.\s*/i, '').trim() : null;
-          
           if (patient.assigned_urologist) {
             const assignedNormalized = patient.assigned_urologist.trim().replace(/^Dr\.\s*/i, '');
             
