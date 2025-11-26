@@ -324,16 +324,42 @@ export const checkPatientAccess = async (req, res, next) => {
             }
             
             // Add appointment condition if doctorId exists
+            // Match getAssignedPatientsForDoctor logic: check for 'scheduled' or 'confirmed' appointments
             if (doctorId) {
               queryParams.push(doctorId);
               conditions.push(`EXISTS (
                 SELECT 1 FROM appointments a
                 WHERE a.patient_id = p.id
-                AND a.status != 'cancelled'
+                AND a.status IN ('scheduled', 'confirmed')
                 AND a.urologist_id = $${paramIndex}
               )`);
               paramIndex++;
             }
+            
+            // Also check appointments by name (normalized, case-insensitive) - matches getAssignedPatientsForDoctor
+            if (uniqueNames.length > 0) {
+              // Add appointment check by name (normalized, case-insensitive)
+              const appointmentNameConditions = uniqueNames.map((name) => {
+                const paramIdx = paramIndex;
+                queryParams.push(name);
+                paramIndex++;
+                return `TRIM(LOWER(REGEXP_REPLACE(a.urologist_name, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($${paramIdx}))`;
+              }).join(' OR ');
+              
+              if (appointmentNameConditions) {
+                conditions.push(`EXISTS (
+                  SELECT 1 FROM appointments a
+                  WHERE a.patient_id = p.id
+                  AND a.status IN ('scheduled', 'confirmed')
+                  AND (${appointmentNameConditions})
+                )`);
+              }
+            }
+            
+            // Also check if patient was created by this urologist (my-patients category logic)
+            queryParams.push(user.id);
+            conditions.push(`p.created_by = $${paramIndex}`);
+            paramIndex++;
             
             // Only run query if we have conditions
             if (conditions.length > 0) {
@@ -371,6 +397,13 @@ export const checkPatientAccess = async (req, res, next) => {
       } else if (user.role === 'urology_nurse' || user.role === 'gp') {
         // Nurses and GPs can access all active patients
         hasAccess = true;
+      }
+      
+      // For urologists: Allow access to active patients (broader access for urologist panel)
+      // This ensures urologists can access patients they see in search results
+      if (!hasAccess && user.role === 'urologist' && patient.status === 'Active') {
+        hasAccess = true;
+        console.log(`[checkPatientAccess] Granting access: Urologist can access active patient ${patientId}`);
       }
       
       // Creator can always access
