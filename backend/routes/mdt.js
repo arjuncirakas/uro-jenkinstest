@@ -11,6 +11,7 @@ import {
   rescheduleMDTMeeting,
   saveMDTNotes
 } from '../controllers/mdtController.js';
+import { checkPatientAccess } from '../middleware/idorProtection.js';
 
 const router = express.Router();
 
@@ -18,10 +19,10 @@ const router = express.Router();
 router.use(authenticateToken);
 
 // Schedule MDT meeting for a patient
-router.post('/patients/:patientId/mdt', scheduleMDTMeeting);
+router.post('/patients/:patientId/mdt', checkPatientAccess, scheduleMDTMeeting);
 
 // Get MDT meetings for a specific patient
-router.get('/patients/:patientId/mdt', getPatientMDTMeetings);
+router.get('/patients/:patientId/mdt', checkPatientAccess, getPatientMDTMeetings);
 
 // Get all MDT meetings (with optional filters)
 router.get('/mdt', getAllMDTMeetings);

@@ -22,6 +22,7 @@ import {
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
 import { xssProtection } from '../middleware/sanitizer.js';
+import { checkPatientAccess } from '../middleware/idorProtection.js';
 
 const router = express.Router();
 router.use(xssProtection);
@@ -43,6 +44,7 @@ router.post('/patients/:patientId/appointments',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor']),
+  checkPatientAccess,
   bookUrologistAppointment
 );
 
@@ -51,6 +53,7 @@ router.post('/patients/:patientId/investigations',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor']),
+  checkPatientAccess,
   bookInvestigation
 );
 
@@ -59,6 +62,7 @@ router.get('/patients/:patientId/appointments',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor', 'gp']),
+  checkPatientAccess,
   getPatientAppointments
 );
 
@@ -67,6 +71,7 @@ router.get('/patients/:patientId/investigation-bookings',
   generalLimiter,
   authenticateToken,
   requireRole(['urology_nurse', 'urologist', 'doctor', 'gp']),
+  checkPatientAccess,
   getPatientInvestigationBookings
 );
 
