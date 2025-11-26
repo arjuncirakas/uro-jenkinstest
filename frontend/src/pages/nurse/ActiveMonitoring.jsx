@@ -7,6 +7,7 @@ import { patientService } from '../../services/patientService';
 
 const ActiveMonitoring = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [monitoringTypeFilter, setMonitoringTypeFilter] = useState('all'); // 'all', 'medication', 'discharge'
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [isUpdateAppointmentModalOpen, setIsUpdateAppointmentModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -25,10 +26,12 @@ const ActiveMonitoring = () => {
       // Use the new backend parameter to fetch all active monitoring pathways
       // This includes: Active Monitoring, Active Surveillance, Medication, and Discharge
       // The backend will handle filtering by both Active and Discharged statuses
+      // monitoringTypeFilter can be 'all', 'medication', or 'discharge'
       const result = await patientService.getPatients({
         page: 1,
         limit: 100,
-        activeMonitoring: 'true'
+        activeMonitoring: 'true',
+        monitoringType: monitoringTypeFilter === 'all' ? '' : monitoringTypeFilter
       });
       
       if (result.success) {
@@ -82,7 +85,7 @@ const ActiveMonitoring = () => {
 
   useEffect(() => {
     fetchMonitoringPatients();
-  }, []);
+  }, [monitoringTypeFilter]);
 
   // Get initials from name
   const getInitials = (name) => {
@@ -187,6 +190,23 @@ const ActiveMonitoring = () => {
           onSearch={setSearchQuery}
           searchPlaceholder="Search by name"
         />
+
+        {/* Filter Dropdown */}
+        <div className="mt-6 flex items-center gap-4">
+          <label htmlFor="monitoringTypeFilter" className="text-sm font-medium text-gray-700">
+            Filter by Type:
+          </label>
+          <select
+            id="monitoringTypeFilter"
+            value={monitoringTypeFilter}
+            onChange={(e) => setMonitoringTypeFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+          >
+            <option value="all">All Patients</option>
+            <option value="medication">Active Monitoring, Active Surveillance & Medication</option>
+            <option value="discharge">Discharged</option>
+          </select>
+        </div>
 
         {/* Monitoring Table */}
         <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">

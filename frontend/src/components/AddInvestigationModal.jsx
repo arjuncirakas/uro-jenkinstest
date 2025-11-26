@@ -432,7 +432,7 @@ const AddInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
-              placeholder="Enter clinical indication, symptoms, or reason for investigation..."
+              placeholder="Please add your notes..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none"
             />
           </div>
