@@ -24,9 +24,9 @@ const ActiveMonitoring = () => {
     
     try {
       // Use the new backend parameter to fetch all active monitoring pathways
-      // This includes: Active Monitoring, Active Surveillance, Medication, and Discharge
+      // This includes: Active Monitoring, Medication, and Discharge
       // The backend will handle filtering by both Active and Discharged statuses
-      // monitoringTypeFilter can be 'all', 'medication', or 'discharge'
+      // monitoringTypeFilter can be 'all', 'activeMonitoring', 'medication', or 'discharge'
       const result = await patientService.getPatients({
         page: 1,
         limit: 100,
@@ -203,7 +203,8 @@ const ActiveMonitoring = () => {
             className="px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
           >
             <option value="all">All Patients</option>
-            <option value="medication">Active Monitoring, Active Surveillance & Medication</option>
+            <option value="activeMonitoring">Active Monitoring</option>
+            <option value="medication">Medication</option>
             <option value="discharge">Discharged</option>
           </select>
         </div>

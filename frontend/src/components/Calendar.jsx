@@ -266,6 +266,23 @@ const Calendar = ({
     return filtered;
   };
 
+  // Separate automatic appointments from regular appointments
+  const separateAppointments = (appointments) => {
+    const regular = [];
+    const automatic = [];
+    
+    appointments.forEach(apt => {
+      // Check if appointment is automatic (by type or appointment_type field)
+      if (apt.appointment_type === 'automatic' || apt.type === 'automatic') {
+        automatic.push(apt);
+      } else {
+        regular.push(apt);
+      }
+    });
+    
+    return { regular, automatic };
+  };
+
   // Navigate months/weeks/days
   const navigate = (direction) => {
     setCurrentDate(prev => {
@@ -455,6 +472,10 @@ const Calendar = ({
                 <div className="w-3 h-3 bg-red-500 rounded"></div>
                 <span className="text-sm text-gray-600">Missed Appointments</span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                <span className="text-sm text-gray-600">Follow-up Appointments</span>
+              </div>
             </div>
           
           {/* Patient Filter Toggle */}
@@ -536,8 +557,10 @@ const Calendar = ({
             <div key={`calendar-grid-${refreshKey}-${appointmentsToUse.length}`} className="grid grid-cols-7 gap-1">
               {days.map((day, index) => {
                 const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
-                // Sort appointments: upcoming first (confirmed, pending), then completed/missed
-                const sortedDayAppointments = [...dayAppointments].sort((a, b) => {
+                const { regular, automatic } = separateAppointments(dayAppointments);
+                
+                // Sort regular appointments: upcoming first (confirmed, pending), then completed/missed
+                const sortedRegularAppointments = [...regular].sort((a, b) => {
                   // First sort by status priority: confirmed/pending first, then missed
                   const statusPriority = (status) => {
                     if (status === 'confirmed' || status === 'pending') return 0;
@@ -549,11 +572,22 @@ const Calendar = ({
                   if (statusDiff !== 0) return statusDiff;
                   
                   // Then sort by time within each status group
-                  const timeA = a.time.split(':').map(Number);
-                  const timeB = b.time.split(':').map(Number);
+                  const timeA = a.time ? a.time.split(':').map(Number) : [0, 0];
+                  const timeB = b.time ? b.time.split(':').map(Number) : [0, 0];
                   return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
                 });
-                const hasAppointments = sortedDayAppointments.length > 0;
+                
+                // Sort automatic appointments (no time-based sorting needed)
+                const sortedAutomaticAppointments = [...automatic].sort((a, b) => {
+                  const statusPriority = (status) => {
+                    if (status === 'confirmed' || status === 'pending') return 0;
+                    if (status === 'missed') return 1;
+                    return 2;
+                  };
+                  return statusPriority(a.status) - statusPriority(b.status);
+                });
+                
+                const hasAppointments = sortedRegularAppointments.length > 0 || sortedAutomaticAppointments.length > 0;
 
                 return (
                   <div
@@ -576,10 +610,10 @@ const Calendar = ({
                       {day.date}
                     </div>
 
-                    {/* Appointments */}
+                    {/* Regular Appointments */}
                     <div className="space-y-1 max-h-20 overflow-y-auto">
-                      {sortedDayAppointments.length > 0 ? (
-                        sortedDayAppointments.map((appointment) => (
+                      {sortedRegularAppointments.length > 0 ? (
+                        sortedRegularAppointments.map((appointment) => (
                           <div
                             key={appointment.id}
                             draggable
@@ -599,7 +633,7 @@ const Calendar = ({
                             <div className="flex items-center justify-between">
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium truncate">
-                                  {convertTo12Hour(appointment.time)} {appointment.patientName}
+                                  {appointment.time ? convertTo12Hour(appointment.time) + ' ' : ''}{appointment.patientName}
                                 </div>
                               </div>
                               <button 
@@ -615,7 +649,45 @@ const Calendar = ({
                             </div>
                           </div>
                         ))
-                      ) : (
+                      ) : null}
+                      
+                      {/* Automatic Appointments (shown separately without time) */}
+                      {sortedAutomaticAppointments.length > 0 ? (
+                        sortedAutomaticAppointments.map((appointment) => (
+                          <div
+                            key={appointment.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, appointment)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAppointmentClick(appointment);
+                            }}
+                            className="p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity bg-blue-500 text-white border border-blue-600"
+                            title="Automatic Appointment (No time slot)"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium truncate flex items-center gap-1">
+                                  <span className="text-[10px]">⚡</span>
+                                  {appointment.patientName}
+                                </div>
+                              </div>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAppointmentClick(appointment);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 hover:bg-white/20 rounded p-0.5"
+                                title="View details"
+                              >
+                                <FiMoreVertical className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : null}
+                      
+                      {sortedRegularAppointments.length === 0 && sortedAutomaticAppointments.length === 0 && (
                         <div className="text-xs text-gray-400">No appointments</div>
                       )}
                     </div>
@@ -663,8 +735,10 @@ const Calendar = ({
                     {/* Day columns */}
                     {getWeekDays(currentDate).map((day, dayIndex) => {
                       const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
-                      // Sort appointments: upcoming first (confirmed, pending), then completed/missed
-                      const sortedDayAppointments = [...dayAppointments].sort((a, b) => {
+                      const { regular } = separateAppointments(dayAppointments);
+                      
+                      // Sort regular appointments: upcoming first (confirmed, pending), then completed/missed
+                      const sortedRegularAppointments = [...regular].sort((a, b) => {
                         const statusPriority = (status) => {
                           if (status === 'confirmed' || status === 'pending') return 0;
                           if (status === 'missed') return 1;
@@ -674,11 +748,13 @@ const Calendar = ({
                         const statusDiff = statusPriority(a.status) - statusPriority(b.status);
                         if (statusDiff !== 0) return statusDiff;
                         
-                        const timeA = a.time.split(':').map(Number);
-                        const timeB = b.time.split(':').map(Number);
+                        const timeA = a.time ? a.time.split(':').map(Number) : [0, 0];
+                        const timeB = b.time ? b.time.split(':').map(Number) : [0, 0];
                         return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
                       });
-                      const timeAppointments = sortedDayAppointments.filter(apt => isTimeInSlot(apt.time, time));
+                      
+                      // Filter regular appointments by time slot (automatic appointments don't have time slots)
+                      const timeAppointments = sortedRegularAppointments.filter(apt => apt.time && isTimeInSlot(apt.time, time));
                       
                       return (
                         <div
@@ -717,6 +793,64 @@ const Calendar = ({
                   </React.Fragment>
                 ))}
               </div>
+              
+              {/* Automatic Appointments Section (Week View) */}
+              <div className="mt-4 border-t border-gray-200 pt-4">
+                <div className="mb-2 px-2">
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <span>⚡</span>
+                    Automatic Appointments (No Time Slots)
+                  </h3>
+                </div>
+                <div className="grid grid-cols-8 gap-px bg-gray-200">
+                  <div className="bg-white p-2 text-xs text-gray-500 font-medium border-r border-gray-200"></div>
+                  {getWeekDays(currentDate).map((day, dayIndex) => {
+                    const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
+                    const { automatic } = separateAppointments(dayAppointments);
+                    
+                    const sortedAutomaticAppointments = [...automatic].sort((a, b) => {
+                      const statusPriority = (status) => {
+                        if (status === 'confirmed' || status === 'pending') return 0;
+                        if (status === 'missed') return 1;
+                        return 2;
+                      };
+                      return statusPriority(a.status) - statusPriority(b.status);
+                    });
+                    
+                    return (
+                      <div
+                        key={dayIndex}
+                        className={`bg-white p-2 min-h-[60px] ${
+                          day.isToday ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        {sortedAutomaticAppointments.length > 0 ? (
+                          <div className="space-y-1">
+                            {sortedAutomaticAppointments.map((appointment) => (
+                              <div
+                                key={appointment.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAppointmentClick(appointment);
+                                }}
+                                className="p-1.5 rounded text-xs cursor-pointer bg-blue-500 text-white border border-blue-600 hover:opacity-90 transition-opacity"
+                                title="Automatic Appointment (No time slot)"
+                              >
+                                <div className="font-medium truncate flex items-center gap-1">
+                                  <span className="text-[10px]">⚡</span>
+                                  {appointment.patientName}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 italic">None</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -724,10 +858,13 @@ const Calendar = ({
         {/* Day View */}
         {!isLoading && !hasError && view === 'day' && (
           <div key={refreshKey} className="w-full">
+            {/* Regular Appointments with Time Slots */}
             {timeSlots.map((time, timeIndex) => {
               const dayAppointments = getAppointmentsByDate(formatDate(currentDate), appointmentsToUse);
-              // Sort appointments: upcoming first (confirmed, pending), then completed/missed
-              const sortedDayAppointments = [...dayAppointments].sort((a, b) => {
+              const { regular } = separateAppointments(dayAppointments);
+              
+              // Sort regular appointments: upcoming first (confirmed, pending), then completed/missed
+              const sortedRegularAppointments = [...regular].sort((a, b) => {
                 const statusPriority = (status) => {
                   if (status === 'confirmed' || status === 'pending') return 0;
                   if (status === 'missed') return 1;
@@ -737,11 +874,11 @@ const Calendar = ({
                 const statusDiff = statusPriority(a.status) - statusPriority(b.status);
                 if (statusDiff !== 0) return statusDiff;
                 
-                const timeA = a.time.split(':').map(Number);
-                const timeB = b.time.split(':').map(Number);
+                const timeA = a.time ? a.time.split(':').map(Number) : [0, 0];
+                const timeB = b.time ? b.time.split(':').map(Number) : [0, 0];
                 return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
               });
-              const timeAppointments = sortedDayAppointments.filter(apt => isTimeInSlot(apt.time, time));
+              const timeAppointments = sortedRegularAppointments.filter(apt => apt.time && isTimeInSlot(apt.time, time));
               
               return (
                 <div
@@ -805,6 +942,75 @@ const Calendar = ({
                 </div>
               );
             })}
+            
+            {/* Automatic Appointments Section (Day View) */}
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <div className="mb-3">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <span>⚡</span>
+                  Automatic Appointments (No Time Slots)
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">These appointments don't block time slots and can be managed separately</p>
+              </div>
+              <div className="space-y-2">
+                {(() => {
+                  const dayAppointments = getAppointmentsByDate(formatDate(currentDate), appointmentsToUse);
+                  const { automatic } = separateAppointments(dayAppointments);
+                  
+                  const sortedAutomaticAppointments = [...automatic].sort((a, b) => {
+                    const statusPriority = (status) => {
+                      if (status === 'confirmed' || status === 'pending') return 0;
+                      if (status === 'missed') return 1;
+                      return 2;
+                    };
+                    return statusPriority(a.status) - statusPriority(b.status);
+                  });
+                  
+                  if (sortedAutomaticAppointments.length === 0) {
+                    return (
+                      <div className="text-sm text-gray-400 italic p-4 bg-gray-50 rounded-lg">
+                        No automatic appointments for this day
+                      </div>
+                    );
+                  }
+                  
+                  return sortedAutomaticAppointments.map((appointment) => (
+                    <div
+                      key={appointment.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAppointmentClick(appointment);
+                      }}
+                      className="p-4 rounded-lg cursor-pointer bg-blue-500 text-white border border-blue-600 hover:opacity-90 transition-opacity"
+                      title="Automatic Appointment (No time slot)"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="font-semibold text-base flex items-center gap-2">
+                            <span>⚡</span>
+                            {appointment.patientName}
+                          </div>
+                          <div className="text-xs opacity-90 mt-1">{appointment.type || 'Automatic Appointment'}</div>
+                          {appointment.notes && (
+                            <div className="text-xs opacity-80 mt-1">{appointment.notes}</div>
+                          )}
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAppointmentClick(appointment);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20 rounded p-1"
+                          title="View details"
+                        >
+                          <FiMoreVertical className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
           </div>
         )}
       </div>

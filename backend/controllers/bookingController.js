@@ -94,10 +94,12 @@ export const bookUrologistAppointment = async (req, res) => {
     console.log(`[bookUrologistAppointment] Found urologist: ${urologistCheck.rows[0].first_name} ${urologistCheck.rows[0].last_name}, using ID: ${finalUrologistId}`);
 
     // Check for conflicting appointments using doctors.id
+    // EXCLUDE automatic appointments - they don't block slots
     const conflictCheck = await client.query(
       `SELECT id FROM appointments 
        WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
-       AND status IN ('scheduled', 'confirmed')`,
+       AND status IN ('scheduled', 'confirmed')
+       AND appointment_type != 'automatic'`,
       [finalUrologistId, appointmentDate, appointmentTime]
     );
 
@@ -2553,6 +2555,7 @@ export const getAvailableTimeSlots = async (req, res) => {
     `;
 
     // Query 2: Check urologist appointments for this doctor (including surgery appointments)
+    // EXCLUDE automatic appointments - they don't block slots
     const appointmentsQuery = `
       SELECT a.appointment_time, a.status, a.notes, a.appointment_type, a.surgery_type,
              p.first_name || ' ' || p.last_name as patient_name
@@ -2561,6 +2564,7 @@ export const getAvailableTimeSlots = async (req, res) => {
       WHERE a.urologist_id = $1
       AND a.appointment_date = $2
       AND a.status NOT IN ('cancelled', 'no_show')
+      AND a.appointment_type != 'automatic'
     `;
 
     // Execute both queries

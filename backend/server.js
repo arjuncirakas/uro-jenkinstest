@@ -223,6 +223,12 @@ const startServer = async () => {
 
     // Initialize automatic no-show scheduler
     initAutoNoShowScheduler();
+    
+    // Initialize automatic appointment scheduler
+    const { initAutoAppointmentScheduler } = await import('./schedulers/autoAppointmentScheduler.js');
+    initAutoAppointmentScheduler();
+    
+    console.log(`⏰ Auto appointment scheduler: Active (runs daily at 2:00 AM)`);
 
     // Start the server
     app.listen(PORT, () => {

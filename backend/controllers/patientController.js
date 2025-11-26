@@ -2,6 +2,131 @@ import pool from '../config/database.js';
 import { sendNotificationEmail } from '../services/emailService.js';
 import { createPathwayTransferNotification } from '../services/notificationService.js';
 
+/**
+ * Check if patient has 3 consecutive no-shows without profile changes
+ * @param {Object} client - Database client
+ * @param {number} patientId - Patient ID
+ * @returns {boolean} - True if patient has 3 consecutive no-shows
+ */
+const hasThreeConsecutiveNoShows = async (client, patientId) => {
+  try {
+    // Get last 3 appointments ordered by date (most recent first)
+    const appointmentsQuery = `
+      SELECT id, appointment_date, appointment_time, status, created_at
+      FROM appointments
+      WHERE patient_id = $1
+      AND status = 'no_show'
+      ORDER BY appointment_date DESC, appointment_time DESC
+      LIMIT 3
+    `;
+    
+    const appointmentsResult = await client.query(appointmentsQuery, [patientId]);
+    
+    // Need exactly 3 no-shows
+    if (appointmentsResult.rows.length < 3) {
+      return false;
+    }
+    
+    // Check if these are consecutive (no completed/scheduled appointments between them)
+    const noShowDates = appointmentsResult.rows.map(apt => apt.appointment_date).sort();
+    const firstNoShow = noShowDates[0];
+    const lastNoShow = noShowDates[noShowDates.length - 1];
+    
+    // Check if there are any completed or scheduled appointments between first and last no-show
+    const betweenAppointmentsQuery = `
+      SELECT COUNT(*) as count
+      FROM appointments
+      WHERE patient_id = $1
+      AND appointment_date BETWEEN $2 AND $3
+      AND status IN ('scheduled', 'confirmed', 'completed')
+    `;
+    
+    const betweenResult = await client.query(betweenAppointmentsQuery, [
+      patientId,
+      firstNoShow,
+      lastNoShow
+    ]);
+    
+    // If there are completed appointments between, they're not consecutive
+    if (parseInt(betweenResult.rows[0].count) > 0) {
+      return false;
+    }
+    
+    // Check if patient profile was updated after the first no-show
+    const firstNoShowDateTime = new Date(`${appointmentsResult.rows[0].appointment_date} ${appointmentsResult.rows[0].appointment_time}`);
+    
+    const profileUpdateQuery = `
+      SELECT updated_at
+      FROM patients
+      WHERE id = $1
+      AND updated_at > $2
+    `;
+    
+    const profileResult = await client.query(profileUpdateQuery, [patientId, firstNoShowDateTime]);
+    
+    // If profile was updated, don't consider as consecutive no-shows
+    if (profileResult.rows.length > 0) {
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('[hasThreeConsecutiveNoShows] Error:', error);
+    return false; // On error, assume no consecutive no-shows (safer)
+  }
+};
+
+/**
+ * Book automatic appointment that doesn't block time slots
+ * @param {Object} client - Database client
+ * @param {Object} params - Appointment parameters
+ * @returns {Object|null} - Booked appointment or null
+ */
+const bookAutomaticAppointment = async (client, {
+  patientId,
+  urologistDoctorId,
+  urologistName,
+  appointmentDate,
+  appointmentTime,
+  pathway,
+  monthsAhead,
+  reason,
+  userId
+}) => {
+  try {
+    // Book appointment with type 'automatic' - this won't block slots
+    const appointment = await client.query(
+      `INSERT INTO appointments (
+        patient_id, appointment_type, appointment_date, appointment_time, 
+        urologist_id, urologist_name, notes, created_by, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *`,
+      [
+        patientId,
+        'automatic', // Special type that doesn't block slots
+        appointmentDate,
+        appointmentTime,
+        urologistDoctorId,
+        urologistName,
+        `Auto-booked automatic appointment for ${pathway} follow-up (${monthsAhead} months). This appointment does not block time slots and can be managed by doctor/nurse. ${reason || ''}`.trim(),
+        userId,
+        'scheduled'
+      ]
+    );
+    
+    return {
+      id: appointment.rows[0].id,
+      date: appointmentDate,
+      time: appointmentTime,
+      urologistName: urologistName,
+      type: 'automatic'
+    };
+  } catch (error) {
+    console.error('[bookAutomaticAppointment] Error:', error);
+    return null;
+  }
+};
+
 // Generate unique UPI (Urology Patient ID)
 const generateUPI = () => {
   const year = new Date().getFullYear();
@@ -418,6 +543,7 @@ export const getPatients = async (req, res) => {
       carePathway = '',
       carePathways = '', // Support multiple pathways (comma-separated)
       activeMonitoring = '', // Special flag for active monitoring pathways
+      monitoringType = '', // Filter type: 'medication', 'discharge', or 'all' (default)
       sortBy = 'created_at',
       sortOrder = 'DESC'
     } = req.query;
@@ -427,8 +553,20 @@ export const getPatients = async (req, res) => {
     // Determine pathways to filter
     let pathwaysToFilter = [];
     if (activeMonitoring === 'true' || activeMonitoring === true) {
-      // For active monitoring, include all relevant pathways
-      pathwaysToFilter = ['Active Monitoring', 'Active Surveillance', 'Medication', 'Discharge'];
+      // For active monitoring, filter by monitoringType if provided
+      if (monitoringType === 'activeMonitoring') {
+        // Filter for Active Monitoring pathway only
+        pathwaysToFilter = ['Active Monitoring'];
+      } else if (monitoringType === 'medication') {
+        // Filter for Medication pathway only
+        pathwaysToFilter = ['Medication'];
+      } else if (monitoringType === 'discharge') {
+        // Filter for discharge pathway only
+        pathwaysToFilter = ['Discharge'];
+      } else {
+        // Default: include all relevant pathways
+        pathwaysToFilter = ['Active Monitoring', 'Medication', 'Discharge'];
+      }
     } else if (carePathways) {
       // Support comma-separated pathways
       pathwaysToFilter = carePathways.split(',').map(p => p.trim()).filter(p => p);
@@ -1939,102 +2077,86 @@ export const updatePatientPathway = async (req, res) => {
       console.error('[updatePatientPathway] Failed to get user info:', e.message);
     }
 
-    // AUTO-BOOK FOLLOW-UP APPOINTMENT FOR ACTIVE MONITORING
-    let autoBookedAppointment = null;
-    if (pathway === 'Active Monitoring') {
+    // AUTO-BOOK AUTOMATIC FOLLOW-UP APPOINTMENTS FOR ACTIVE MONITORING, MEDICATION, AND DISCHARGE
+    // These appointments don't block time slots and are managed by doctors/nurses
+    let autoBookedAppointment = null; // For backward compatibility
+    let autoBookedAppointments = [];
+    const pathwaysForAutomaticBooking = ['Active Monitoring', 'Medication', 'Discharge'];
+    
+    if (pathwaysForAutomaticBooking.includes(pathway)) {
       try {
-        console.log(`[updatePatientPathway] Patient transferred to Active Monitoring - Auto-booking follow-up...`);
+        // Check for 3 consecutive no-shows - if yes, don't auto-book
+        const hasConsecutiveNoShows = await hasThreeConsecutiveNoShows(client, id);
         
-        // Get the urologist who is transferring the patient (logged-in user)
-        // IMPORTANT: Use doctors.id for appointments, not users.id
-        const userInfo = await client.query(
-          'SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role = $2',
-          [userId, 'urologist']
-        );
-
-        if (userInfo.rows.length > 0) {
-          const user = userInfo.rows[0];
-          const urologistName = `${user.first_name} ${user.last_name}`;
+        if (hasConsecutiveNoShows) {
+          console.log(`[updatePatientPathway] ⚠️ Patient ${patientData.upi} has 3 consecutive no-shows - skipping automatic appointment booking`);
+        } else {
+          console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking automatic follow-up appointments (1 year)...`);
           
-          // Get the corresponding doctors.id
-          let urologistDoctorId = null;
-          const doctorCheck = await client.query(
-            'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
-            [user.email]
-          );
-          
-          if (doctorCheck.rows.length > 0) {
-            urologistDoctorId = doctorCheck.rows[0].id;
-          } else {
-            console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Urologist ${urologistName} does not have a doctors table record`);
-            throw new Error('Urologist does not have a doctors table record');
-          }
-          
-          // Calculate follow-up date (3 months from today for Active Monitoring)
-          const followUpDate = new Date();
-          followUpDate.setMonth(followUpDate.getMonth() + 3);
-          const appointmentDate = followUpDate.toISOString().split('T')[0];
-          
-          // Default time: 10:00 AM
-          const appointmentTime = '10:00';
-          
-          // Check if time slot is available (using doctors.id)
-          const conflictCheck = await client.query(
-            `SELECT id FROM appointments 
-             WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
-             AND status IN ('scheduled', 'confirmed')`,
-            [urologistDoctorId, appointmentDate, appointmentTime]
+          // Get the urologist who is transferring the patient (logged-in user)
+          // IMPORTANT: Use doctors.id for appointments, not users.id
+          const userInfo = await client.query(
+            'SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role = $2',
+            [userId, 'urologist']
           );
 
-          // If slot is taken, find next available slot
-          let finalTime = appointmentTime;
-          if (conflictCheck.rows.length > 0) {
-            // Try next 30-minute slot
-            const timeSlots = ['10:30', '11:00', '11:30', '14:00', '14:30', '15:00'];
-            for (const slot of timeSlots) {
-              const slotCheck = await client.query(
-                `SELECT id FROM appointments 
-                 WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
-                 AND status IN ('scheduled', 'confirmed')`,
-                [urologistDoctorId, appointmentDate, slot]
-              );
-              if (slotCheck.rows.length === 0) {
-                finalTime = slot;
-                break;
+          if (userInfo.rows.length > 0) {
+            const user = userInfo.rows[0];
+            const urologistName = `${user.first_name} ${user.last_name}`;
+            
+            // Get the corresponding doctors.id
+            let urologistDoctorId = null;
+            const doctorCheck = await client.query(
+              'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
+              [user.email]
+            );
+            
+            if (doctorCheck.rows.length > 0) {
+              urologistDoctorId = doctorCheck.rows[0].id;
+            } else {
+              console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Urologist ${urologistName} does not have a doctors table record`);
+              throw new Error('Urologist does not have a doctors table record');
+            }
+            
+            // Book appointments for 1 year: 3, 6, 9, 12 months
+            const appointmentIntervals = [3, 6, 9, 12];
+            const preferredTimes = ['09:00', '11:00', '14:00', '16:00']; // Distribute across day
+            
+            for (let i = 0; i < appointmentIntervals.length; i++) {
+              const monthsAhead = appointmentIntervals[i];
+              const followUpDate = new Date();
+              followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
+              const appointmentDate = followUpDate.toISOString().split('T')[0];
+              
+              // Use preferred time (doesn't matter for automatic appointments, but good for display)
+              const appointmentTime = preferredTimes[i % preferredTimes.length];
+              
+              // Book automatic appointment (doesn't block slots)
+              const bookedAppointment = await bookAutomaticAppointment(client, {
+                patientId: id,
+                urologistDoctorId,
+                urologistName,
+                appointmentDate,
+                appointmentTime,
+                pathway,
+                monthsAhead,
+                reason,
+                userId
+              });
+              
+              if (bookedAppointment) {
+                autoBookedAppointments.push(bookedAppointment);
+                console.log(`[updatePatientPathway] ✅ Auto-booked automatic appointment (${monthsAhead} months) for ${patientData.upi} on ${appointmentDate} at ${appointmentTime}`);
               }
             }
+            
+            // Set the first appointment as the main auto-booked appointment (for backward compatibility)
+            if (autoBookedAppointments.length > 0) {
+              autoBookedAppointment = autoBookedAppointments[0];
+            }
+          } else {
+            console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Current user is not a urologist`);
           }
-
-          // Book the appointment (using doctors.id)
-          const appointment = await client.query(
-            `INSERT INTO appointments (
-              patient_id, appointment_type, appointment_date, appointment_time, 
-              urologist_id, urologist_name, notes, created_by, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING *`,
-            [
-              id, 
-              'urologist', 
-              appointmentDate, 
-              finalTime, 
-              urologistDoctorId, // Use doctors.id, not users.id
-              urologistName, 
-              `Auto-booked for Active Monitoring follow-up. ${reason || ''}`.trim(), 
-              userId,
-              'scheduled'
-            ]
-          );
-
-          autoBookedAppointment = {
-            id: appointment.rows[0].id,
-            date: appointmentDate,
-            time: finalTime,
-            urologistName: urologistName
-          };
-
-          console.log(`[updatePatientPathway] ✅ Auto-booked appointment for ${patientData.upi} on ${appointmentDate} at ${finalTime} with ${urologistName}`);
-        } else {
-          console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Current user is not a urologist`);
         }
       } catch (autoBookError) {
         console.error('[updatePatientPathway] Auto-booking failed (non-fatal):', autoBookError.message);
@@ -2113,10 +2235,12 @@ export const updatePatientPathway = async (req, res) => {
             let appointmentTime = '10:00';
             
             // Check if time slot is available (using doctors.id)
+            // EXCLUDE automatic appointments - they don't block slots
             const conflictCheck = await client.query(
               `SELECT id FROM appointments 
                WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
-               AND status IN ('scheduled', 'confirmed')`,
+               AND status IN ('scheduled', 'confirmed')
+               AND appointment_type != 'automatic'`,
               [urologistDoctorId, appointmentDate, appointmentTime]
             );
 
@@ -2127,7 +2251,8 @@ export const updatePatientPathway = async (req, res) => {
                 const slotCheck = await client.query(
                   `SELECT id FROM appointments 
                    WHERE urologist_id = $1 AND appointment_date = $2 AND appointment_time = $3 
-                   AND status IN ('scheduled', 'confirmed')`,
+                   AND status IN ('scheduled', 'confirmed')
+                   AND appointment_type != 'automatic'`,
                   [urologistDoctorId, appointmentDate, slot]
                 );
                 if (slotCheck.rows.length === 0) {
@@ -2356,7 +2481,8 @@ export const updatePatientPathway = async (req, res) => {
       message: 'Patient pathway updated',
       data: {
         ...update.rows[0],
-        autoBookedAppointment
+        autoBookedAppointment, // For backward compatibility (first appointment)
+        autoBookedAppointments // All automatic appointments (for new features)
       }
     });
   } catch (error) {
