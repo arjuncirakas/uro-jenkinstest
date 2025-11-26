@@ -344,7 +344,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={5}
-              placeholder="Please add your notes..."
+              placeholder="Enter clinical indication, symptoms, or reason for investigation..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none transition-all bg-white"
             />
           </div>

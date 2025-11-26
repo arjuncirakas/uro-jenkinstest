@@ -2775,44 +2775,28 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                               View
                                             </button>
                                           ) : (
-                                            (() => {
-                                              // Check if this is a PSA-related test
-                                              const isPSATest = investigationName.includes('PSA');
-                                              
-                                              return (
-                                                <button
-                                                  onClick={() => {
-                                                    // For clinical investigations, create a request object
-                                                    const requestToUse = request.isClinicalInvestigation ? {
-                                                      id: request.noteId,
-                                                      investigationName: request.investigationName,
-                                                      investigation_name: request.investigation_name,
-                                                      investigationType: request.investigationType,
-                                                      investigation_type: request.investigation_type,
-                                                      scheduledDate: request.scheduledDate,
-                                                      scheduled_date: request.scheduled_date,
-                                                      status: request.status,
-                                                      notes: request.notes
-                                                    } : request;
-                                                    setSelectedInvestigationRequest(requestToUse);
-                                                    setIsAddResultModalOpen(true);
-                                                  }}
-                                                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
-                                                >
-                                                  {isPSATest ? (
-                                                    <>
-                                                      <Plus className="w-4 h-4" />
-                                                      Add Result
-                                                    </>
-                                                  ) : (
-                                                    <>
-                                                      <Upload className="w-4 h-4" />
-                                                      Upload
-                                                    </>
-                                                  )}
-                                                </button>
-                                              );
-                                            })()
+                                            <button
+                                              onClick={() => {
+                                                // For clinical investigations, create a request object
+                                                const requestToUse = request.isClinicalInvestigation ? {
+                                                  id: request.noteId,
+                                                  investigationName: request.investigationName,
+                                                  investigation_name: request.investigation_name,
+                                                  investigationType: request.investigationType,
+                                                  investigation_type: request.investigation_type,
+                                                  scheduledDate: request.scheduledDate,
+                                                  scheduled_date: request.scheduled_date,
+                                                  status: request.status,
+                                                  notes: request.notes
+                                                } : request;
+                                                setSelectedInvestigationRequest(requestToUse);
+                                                setIsAddResultModalOpen(true);
+                                              }}
+                                              className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
+                                            >
+                                              <Upload className="w-4 h-4" />
+                                              Upload
+                                            </button>
                                           )}
                                         </div>
                                       </div>
