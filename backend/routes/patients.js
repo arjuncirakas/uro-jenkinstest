@@ -9,7 +9,8 @@ import {
   getAssignedPatientsForDoctor, 
   updatePatientPathway,
   getPatientsDueForReview,
-  searchPatients
+  searchPatients,
+  expirePatient
 } from '../controllers/patientController.js';
 import {
   getDischargeSummary,
@@ -141,6 +142,20 @@ router.put('/:id/pathway',
   },
   checkPatientAccess,
   updatePatientPathway
+);
+
+// Expire patient - marks patient as expired and removes all future appointments
+router.put('/:id/expire',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
+  (req, res, next) => {
+    // Map :id parameter to patientId for IDOR protection
+    req.params.patientId = req.params.id;
+    next();
+  },
+  checkPatientAccess,
+  expirePatient
 );
 
 // Delete patient (soft delete) - accessible by urologists, doctors, and nurses

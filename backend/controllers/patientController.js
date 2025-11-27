@@ -2493,6 +2493,143 @@ export const updatePatientPathway = async (req, res) => {
   }
 };
 
+// Expire patient - marks patient as expired, removes all future appointments, and prevents future bookings
+export const expirePatient = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+    const { reason, notes } = req.body;
+    const userId = req.user.id;
+
+    // Get user info for timeline entry
+    let userName = 'System';
+    let userRole = 'Automated';
+    try {
+      const userQuery = await client.query(
+        'SELECT first_name, last_name, role FROM users WHERE id = $1',
+        [userId]
+      );
+      if (userQuery.rows.length > 0) {
+        const userInfo = userQuery.rows[0];
+        userName = `${userInfo.first_name} ${userInfo.last_name}`;
+        userRole = (userInfo.role === 'urologist' || userInfo.role === 'doctor') ? 'Urologist' : 
+                   userInfo.role === 'urology_nurse' ? 'Nurse' : 
+                   userInfo.role === 'gp' ? 'GP' : 
+                   userInfo.role === 'admin' ? 'Admin' : 'User';
+      }
+    } catch (e) {
+      console.error('[expirePatient] Failed to get user info:', e.message);
+    }
+
+    // Check if patient exists
+    const patientCheck = await client.query(
+      'SELECT id, upi, first_name, last_name, status FROM patients WHERE id = $1',
+      [id]
+    );
+
+    if (patientCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found'
+      });
+    }
+
+    const patient = patientCheck.rows[0];
+
+    // Check if patient is already expired
+    if (patient.status === 'Expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'Patient is already expired'
+      });
+    }
+
+    // Start transaction
+    await client.query('BEGIN');
+
+    // Get today's date for filtering future appointments
+    const now = new Date();
+    const today = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+
+    // 1. Cancel/remove all future urologist appointments
+    const cancelAppointmentsQuery = `
+      UPDATE appointments 
+      SET status = 'cancelled',
+          notes = COALESCE(notes, '') || ' | Cancelled: Patient marked as expired',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE patient_id = $1 
+        AND appointment_date >= $2
+        AND status IN ('scheduled', 'confirmed')
+      RETURNING id, appointment_date, appointment_time
+    `;
+    const cancelledAppointments = await client.query(cancelAppointmentsQuery, [id, today]);
+    console.log(`[expirePatient] Cancelled ${cancelledAppointments.rows.length} future urologist appointments`);
+
+    // 2. Cancel/remove all future investigation bookings
+    const cancelInvestigationsQuery = `
+      UPDATE investigation_bookings 
+      SET status = 'cancelled',
+          notes = COALESCE(notes, '') || ' | Cancelled: Patient marked as expired',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE patient_id = $1 
+        AND scheduled_date >= $2
+        AND status IN ('scheduled', 'confirmed')
+      RETURNING id, scheduled_date, scheduled_time
+    `;
+    const cancelledInvestigations = await client.query(cancelInvestigationsQuery, [id, today]);
+    console.log(`[expirePatient] Cancelled ${cancelledInvestigations.rows.length} future investigation bookings`);
+
+    // 3. Update patient status to 'Expired'
+    const updatePatientQuery = `
+      UPDATE patients 
+      SET status = 'Expired',
+          notes = COALESCE(notes, '') || CASE 
+            WHEN COALESCE(notes, '') = '' THEN 'Patient marked as expired'
+            ELSE ' | Patient marked as expired' || CASE WHEN $1 IS NOT NULL THEN ': ' || $1 ELSE '' END
+          END,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, upi, first_name, last_name, status
+    `;
+    const updatedPatient = await client.query(updatePatientQuery, [reason || null, id]);
+
+    // 4. Add timeline entry
+    const timelineContent = `Patient marked as expired${reason ? `: ${reason}` : ''}. All future appointments have been cancelled.`;
+    const timelineQuery = `
+      INSERT INTO patient_notes (patient_id, note_type, note_content, author_name, author_role, created_at)
+      VALUES ($1, 'status_change', $2, $3, $4, CURRENT_TIMESTAMP)
+    `;
+    await client.query(timelineQuery, [id, timelineContent, userName, userRole]);
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      message: 'Patient marked as expired successfully',
+      data: {
+        patient: updatedPatient.rows[0],
+        cancelledAppointments: cancelledAppointments.rows.length,
+        cancelledInvestigations: cancelledInvestigations.rows.length
+      }
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Expire patient error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
+  }
+};
+
 // Search patients with autocomplete
 export const searchPatients = async (req, res) => {
   const client = await pool.connect();

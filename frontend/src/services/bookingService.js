@@ -315,5 +315,20 @@ export const bookingService = {
         details: error.response?.data?.errors
       };
     }
+  },
+
+  // Expire patient - marks patient as expired and removes all future appointments
+  expirePatient: async (patientId, expireData = {}) => {
+    try {
+      const response = await apiClient.put(`/patients/${patientId}/expire`, expireData);
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error expiring patient:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
   }
 };

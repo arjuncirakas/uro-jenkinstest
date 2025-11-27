@@ -645,8 +645,8 @@ export const validatePatientUpdateInput = [
     
   body('status')
     .optional()
-    .isIn(['Active', 'Inactive', 'Discharged'])
-    .withMessage('Status must be Active, Inactive, or Discharged'),
+    .isIn(['Active', 'Inactive', 'Discharged', 'Expired'])
+    .withMessage('Status must be Active, Inactive, Discharged, or Expired'),
   
   // Triage Symptoms validation (optional for updates)
   body('triageSymptoms')

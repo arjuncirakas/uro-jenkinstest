@@ -555,10 +555,10 @@ export const updatePatientSchema = Joi.object({
       'string.max': 'Notes must not exceed 2000 characters'
     }),
   status: Joi.string()
-    .valid('Active', 'Inactive', 'Discharged')
+    .valid('Active', 'Inactive', 'Discharged', 'Expired')
     .optional()
     .messages({
-      'any.only': 'Status must be Active, Inactive, or Discharged'
+      'any.only': 'Status must be Active, Inactive, Discharged, or Expired'
     })
 });
 

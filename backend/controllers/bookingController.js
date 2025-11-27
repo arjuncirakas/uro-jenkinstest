@@ -35,9 +35,9 @@ export const bookUrologistAppointment = async (req, res) => {
       });
     }
 
-    // Check if patient exists
+    // Check if patient exists and is not expired
     const patientCheck = await client.query(
-      'SELECT id, first_name, last_name FROM patients WHERE id = $1',
+      'SELECT id, first_name, last_name, status FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -45,6 +45,13 @@ export const bookUrologistAppointment = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Patient not found'
+      });
+    }
+
+    if (patientCheck.rows[0].status === 'Expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot book appointment for an expired patient'
       });
     }
 
@@ -198,9 +205,9 @@ export const bookInvestigation = async (req, res) => {
       });
     }
 
-    // Check if patient exists
+    // Check if patient exists and is not expired
     const patientCheck = await client.query(
-      'SELECT id, first_name, last_name FROM patients WHERE id = $1',
+      'SELECT id, first_name, last_name, status FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -208,6 +215,13 @@ export const bookInvestigation = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Patient not found'
+      });
+    }
+
+    if (patientCheck.rows[0].status === 'Expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot book investigation for an expired patient'
       });
     }
 
@@ -1355,7 +1369,7 @@ export const getUpcomingAppointments = async (req, res) => {
   }
 
   try {
-    const { view = 'week', limit = 50, offset = 0 } = req.query;
+    const { limit = 20, offset = 0 } = req.query;
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const userEmail = req.user?.email;
@@ -1389,34 +1403,27 @@ export const getUpcomingAppointments = async (req, res) => {
       }
     }
 
-    // Use local timezone
+    // Use local timezone - exclude today's appointments (only show future dates)
     const now = new Date();
     const today = now.getFullYear() + '-' +
       String(now.getMonth() + 1).padStart(2, '0') + '-' +
       String(now.getDate()).padStart(2, '0');
+    
+    // Calculate tomorrow's date (to exclude today)
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.getFullYear() + '-' +
+      String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' +
+      String(tomorrow.getDate()).padStart(2, '0');
 
-    let endDate;
-    const endDateObj = new Date(now);
-
-    if (view === 'month') {
-      endDateObj.setDate(endDateObj.getDate() + 30);
-    } else {
-      // Default to week (7 days)
-      endDateObj.setDate(endDateObj.getDate() + 7);
-    }
-
-    endDate = endDateObj.getFullYear() + '-' +
-      String(endDateObj.getMonth() + 1).padStart(2, '0') + '-' +
-      String(endDateObj.getDate()).padStart(2, '0');
-
-    console.log(`📅 [getUpcomingAppointments ${requestId}] Fetching for view: ${view}, range: ${today} to ${endDate}, limit: ${limit}, offset: ${offset}, doctorId: ${doctorId}`);
+    console.log(`📅 [getUpcomingAppointments ${requestId}] Fetching appointments from tomorrow (${tomorrowStr}) onwards, limit: ${limit}, offset: ${offset}, doctorId: ${doctorId}`);
 
     // Build query with doctor filter for urologists/doctors
     let query;
     let queryParams = [];
     
     if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
-      // Filter by doctor for urologists/doctors
+      // Filter by doctor for urologists/doctors - exclude today's appointments
       query = `
         SELECT 
           a.id,
@@ -1435,41 +1442,39 @@ export const getUpcomingAppointments = async (req, res) => {
           a.appointment_type as type
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
-        WHERE a.appointment_date >= $1 
-        AND a.appointment_date <= $2
+        WHERE a.appointment_date > $1
         AND a.status != 'cancelled'
-        AND a.urologist_id = $3
-        ORDER BY a.appointment_date ASC, a.appointment_time ASC
-        LIMIT $4 OFFSET $5
-      `;
-      queryParams = [today, endDate, doctorId, parseInt(limit), parseInt(offset)];
-    } else {
-      // For nurses, show all appointments
-      query = `
-        SELECT 
-          a.id,
-          a.patient_id,
-          p.first_name,
-          p.last_name,
-          p.upi,
-          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-          p.gender,
-          p.care_pathway,
-          a.appointment_date,
-          a.appointment_time,
-          a.urologist_name as urologist,
-          a.status,
-          a.notes,
-          a.appointment_type as type
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.id
-        WHERE a.appointment_date >= $1 
-        AND a.appointment_date <= $2
-        AND a.status != 'cancelled'
+        AND a.urologist_id = $2
         ORDER BY a.appointment_date ASC, a.appointment_time ASC
         LIMIT $3 OFFSET $4
       `;
-      queryParams = [today, endDate, parseInt(limit), parseInt(offset)];
+      queryParams = [today, doctorId, parseInt(limit), parseInt(offset)];
+    } else {
+      // For nurses, show all appointments - exclude today's appointments
+      query = `
+        SELECT 
+          a.id,
+          a.patient_id,
+          p.first_name,
+          p.last_name,
+          p.upi,
+          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+          p.gender,
+          p.care_pathway,
+          a.appointment_date,
+          a.appointment_time,
+          a.urologist_name as urologist,
+          a.status,
+          a.notes,
+          a.appointment_type as type
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.id
+        WHERE a.appointment_date > $1
+        AND a.status != 'cancelled'
+        ORDER BY a.appointment_date ASC, a.appointment_time ASC
+        LIMIT $2 OFFSET $3
+      `;
+      queryParams = [today, parseInt(limit), parseInt(offset)];
     }
 
     const result = await client.query(query, queryParams);

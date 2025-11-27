@@ -15,14 +15,15 @@ import {
   FiPhoneCall,
   FiMail as FiEmail,
   FiClock as FiTime,
-  FiTrash2
+  FiTrash2,
+  FiUserX
 } from 'react-icons/fi';
 import RescheduleConfirmationModal from './RescheduleConfirmationModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { bookingService } from '../services/bookingService';
 
-const NoShowPatientModal = ({ isOpen, onClose, patient, appointmentId, appointmentType, onReschedule, onAddTimelineEntry }) => {
+const NoShowPatientModal = ({ isOpen, onClose, patient, appointmentId, appointmentType, onReschedule, onAddTimelineEntry, onSuccess }) => {
   const [timelineEntries, setTimelineEntries] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [isAddingNote, setIsAddingNote] = useState(false);
@@ -33,6 +34,8 @@ const NoShowPatientModal = ({ isOpen, onClose, patient, appointmentId, appointme
   const [noteToDelete, setNoteToDelete] = useState(null);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [error, setError] = useState(null);
+  const [showExpireConfirmModal, setShowExpireConfirmModal] = useState(false);
+  const [isExpiring, setIsExpiring] = useState(false);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -224,6 +227,45 @@ const NoShowPatientModal = ({ isOpen, onClose, patient, appointmentId, appointme
 
   const handleReschedule = () => {
     setIsRescheduleModalOpen(true);
+  };
+
+  const handleExpirePatient = () => {
+    setShowExpireConfirmModal(true);
+  };
+
+  const confirmExpirePatient = async () => {
+    if (!patient || !patient.id) {
+      setError('Patient information is missing');
+      return;
+    }
+
+    setIsExpiring(true);
+    setError(null);
+
+    try {
+      const result = await bookingService.expirePatient(patient.id, {
+        reason: 'Patient marked as expired from no-show management',
+        notes: `Patient expired due to no-show. Original appointment: ${formatDate(patient.scheduledDate)} at ${formatTime(patient.scheduledTime)}`
+      });
+
+      if (result.success) {
+        // Call onSuccess callback if provided to refresh data
+        if (onSuccess) {
+          onSuccess();
+        }
+        // Close modal
+        setShowExpireConfirmModal(false);
+        onClose();
+      } else {
+        setError(result.error || 'Failed to expire patient');
+        console.error('Error expiring patient:', result.error);
+      }
+    } catch (error) {
+      setError('Failed to expire patient');
+      console.error('Error expiring patient:', error);
+    } finally {
+      setIsExpiring(false);
+    }
   };
 
   const handleRescheduleConfirm = async (appointmentId, newDate, newTime, selectedDoctor) => {
@@ -479,6 +521,23 @@ const NoShowPatientModal = ({ isOpen, onClose, patient, appointmentId, appointme
                   Reschedule
                 </button>
                 <button
+                  onClick={handleExpirePatient}
+                  disabled={isExpiring}
+                  className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {isExpiring ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Expiring...
+                    </>
+                  ) : (
+                    <>
+                      <FiUserX className="w-4 h-4" />
+                      Expire Patient
+                    </>
+                  )}
+                </button>
+                <button
                   onClick={onClose}
                   className="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
                 >
@@ -531,6 +590,19 @@ const NoShowPatientModal = ({ isOpen, onClose, patient, appointmentId, appointme
           noteToDelete ? `\n\nNote: "${noteToDelete.note_content.substring(0, 100)}${noteToDelete.note_content.length > 100 ? '...' : ''}"` : ''
         }`}
         confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        showSaveButton={false}
+      />
+
+      {/* Expire Patient Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showExpireConfirmModal}
+        onConfirm={confirmExpirePatient}
+        onCancel={() => setShowExpireConfirmModal(false)}
+        title="Expire Patient"
+        message={`Are you sure you want to expire this patient? This action will:\n\n• Mark the patient as expired\n• Cancel all future appointments\n• Prevent any future appointment bookings\n\nThis action cannot be undone.`}
+        confirmText="Yes, Expire Patient"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         showSaveButton={false}

@@ -111,6 +111,7 @@ const OPDManagement = () => {
       setUpcomingOffset(0);
       setUpcomingAppointments([]);
       setHasMoreUpcoming(true);
+      setInitialLoading(true);
     }
 
     setLoadingUpcoming(true);
@@ -119,7 +120,6 @@ const OPDManagement = () => {
     try {
       const offset = reset ? 0 : upcomingOffset;
       const result = await bookingService.getUpcomingAppointments({
-        view: upcomingView,
         limit: upcomingLimit,
         offset: offset
       });
@@ -145,6 +145,7 @@ const OPDManagement = () => {
       console.error('Error fetching upcoming appointments:', error);
     } finally {
       setLoadingUpcoming(false);
+      setInitialLoading(false);
     }
   };
 
@@ -170,9 +171,9 @@ const OPDManagement = () => {
   // State for upcoming appointments
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [upcomingError, setUpcomingError] = useState(null);
-  const [upcomingView, setUpcomingView] = useState('week');
-  const [upcomingLimit, setUpcomingLimit] = useState(5);
+  const [upcomingLimit, setUpcomingLimit] = useState(20);
   const [upcomingOffset, setUpcomingOffset] = useState(0);
   const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true);
   const upcomingScrollRef = useRef(null);
@@ -186,10 +187,6 @@ const OPDManagement = () => {
     fetchUpcomingAppointments(true);
   }, []);
 
-  // Fetch upcoming appointments when view changes
-  useEffect(() => {
-    fetchUpcomingAppointments(true);
-  }, [upcomingView]);
 
 
   // Listen for patient added event to refresh new patients list
@@ -1003,43 +1000,56 @@ const OPDManagement = () => {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[32rem]">
               <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex-shrink-0">
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900">Upcoming Appointments</h2>
+                <p className="text-xs text-gray-500 mt-1">Future appointments (excluding today)</p>
               </div>
               <div className="p-4 sm:p-6 flex-1 flex flex-col overflow-hidden">
-                {/* Week/Month Toggle */}
-                <div className="flex space-x-2 border-b border-gray-200 pb-3 mb-4 flex-shrink-0">
-                  <button
-                    onClick={() => setUpcomingView('week')}
-                    className={`px-4 py-2 text-sm transition-colors ${upcomingView === 'week'
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                  >
-                    This Week
-                  </button>
-                  <button
-                    onClick={() => setUpcomingView('month')}
-                    className={`px-4 py-2 text-sm transition-colors ${upcomingView === 'month'
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                  >
-                    This Month
-                  </button>
-                </div>
-
                 {/* Appointments List */}
                 <div
                   className="space-y-3 flex-1 overflow-y-auto"
                   onScroll={handleUpcomingScroll}
                   ref={upcomingScrollRef}
                 >
-                  {upcomingAppointments.length === 0 && !loadingUpcoming && !upcomingError ? (
-                    <div className="text-center py-8 text-gray-500 text-sm">
-                      No upcoming appointments for this period
+                  {initialLoading ? (
+                    // Skeleton Loader
+                    <div className="space-y-3">
+                      {[...Array(5)].map((_, index) => (
+                        <div
+                          key={index}
+                          className="bg-white border border-gray-200 rounded-lg p-3 animate-pulse"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="h-4 bg-gray-200 rounded w-24"></div>
+                                <div className="h-5 bg-gray-200 rounded-full w-16"></div>
+                              </div>
+                              <div className="h-3 bg-gray-200 rounded w-32 mb-2"></div>
+                            </div>
+                            <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="h-4 bg-gray-200 rounded w-40"></div>
+                            <div className="flex items-center justify-between">
+                              <div className="h-3 bg-gray-200 rounded w-32"></div>
+                              <div className="h-5 bg-gray-200 rounded-full w-20"></div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : upcomingError ? (
                     <div className="text-center py-8 text-red-500 text-sm">
                       Error: {upcomingError}
+                      <button
+                        onClick={() => fetchUpcomingAppointments(true)}
+                        className="mt-2 px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : upcomingAppointments.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 text-sm">
+                      No upcoming appointments
                     </div>
                   ) : (
                     <>

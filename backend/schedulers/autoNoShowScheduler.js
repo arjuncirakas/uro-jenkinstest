@@ -5,14 +5,15 @@ import pool from '../config/database.js';
  * Automatic No-Show Scheduler
  * 
  * This scheduler runs every hour to automatically mark appointments as "no_show"
- * if they are more than 24 hours old AND no patient data was updated.
+ * if the appointment date is before today (i.e., after the day ends at 12 AM next day)
+ * AND no patient data was updated.
  * 
  * Smart Logic:
  * - If patient showed up, SOMETHING will be updated (PSA, notes, test results, etc.)
  * - If NOTHING changed in patient's records after appointment → TRUE no-show
  * 
  * Appointments are marked as no-show if:
- * - The appointment date/time is more than 24 hours in the past
+ * - The appointment date is before today (any appointment from yesterday or earlier)
  * - The status is still 'scheduled' or 'confirmed'
  * - NO changes to patient data after appointment time:
  *   • No PSA updates
@@ -92,20 +93,20 @@ const markOldAppointmentsAsNoShow = async () => {
   try {
     console.log('[Auto No-Show Scheduler] Running scheduled check for old appointments...');
     
-    // Calculate the timestamp 24 hours ago
-    const twentyFourHoursAgo = new Date();
-    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+    // Get today's date in local timezone (YYYY-MM-DD format)
+    // This ensures appointments from yesterday or earlier are marked as no-show
+    const now = new Date();
+    const today = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
     
-    // Format the date and time for SQL query
-    const cutoffDate = twentyFourHoursAgo.toISOString().split('T')[0]; // YYYY-MM-DD
-    const cutoffTime = twentyFourHoursAgo.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
-    
-    console.log(`[Auto No-Show Scheduler] Cutoff date/time: ${cutoffDate} ${cutoffTime}`);
+    console.log(`[Auto No-Show Scheduler] Today's date: ${today} - marking appointments from previous days as no-show`);
     
     // Start transaction
     await client.query('BEGIN');
     
-    // Find old urologist appointments (don't update yet - need to check patient activity first)
+    // Find old urologist appointments (appointments from yesterday or earlier)
+    // Don't update yet - need to check patient activity first
     const findAppointmentsQuery = `
       SELECT 
         id, 
@@ -116,15 +117,12 @@ const markOldAppointmentsAsNoShow = async () => {
         CONCAT(appointment_date, ' ', appointment_time)::timestamp as appointment_datetime
       FROM appointments 
       WHERE status IN ('scheduled', 'confirmed')
-        AND (
-          appointment_date < $1 
-          OR (appointment_date = $1 AND appointment_time < $2)
-        )
+        AND appointment_date < $1
     `;
     
-    const appointmentsList = await client.query(findAppointmentsQuery, [cutoffDate, cutoffTime]);
+    const appointmentsList = await client.query(findAppointmentsQuery, [today]);
     
-    // Find old investigation bookings
+    // Find old investigation bookings (appointments from yesterday or earlier)
     const findInvestigationsQuery = `
       SELECT 
         id, 
@@ -135,13 +133,10 @@ const markOldAppointmentsAsNoShow = async () => {
         CONCAT(scheduled_date, ' ', scheduled_time)::timestamp as appointment_datetime
       FROM investigation_bookings 
       WHERE status IN ('scheduled', 'confirmed')
-        AND (
-          scheduled_date < $1 
-          OR (scheduled_date = $1 AND scheduled_time < $2)
-        )
+        AND scheduled_date < $1
     `;
     
-    const investigationsList = await client.query(findInvestigationsQuery, [cutoffDate, cutoffTime]);
+    const investigationsList = await client.query(findInvestigationsQuery, [today]);
     
     // Check each appointment for patient activity
     const appointmentsToMarkNoShow = [];
@@ -172,7 +167,7 @@ const markOldAppointmentsAsNoShow = async () => {
         UPDATE appointments 
         SET status = 'no_show', 
             updated_at = CURRENT_TIMESTAMP,
-            notes = COALESCE(notes, '') || ' | Auto-marked as no-show after 24 hours (no patient activity detected)'
+            notes = COALESCE(notes, '') || ' | Auto-marked as no-show after day ended (no patient activity detected)'
         WHERE id = $1
       `;
       await client.query(updateQuery, [appointment.id]);
@@ -182,7 +177,7 @@ const markOldAppointmentsAsNoShow = async () => {
         INSERT INTO patient_notes (patient_id, note_type, note_content, author_name, author_role, created_at)
         VALUES ($1, 'no_show', $2, 'System', 'Automated', CURRENT_TIMESTAMP)
       `;
-      const timelineContent = `Appointment automatically marked as No Show after 24 hours - no patient activity detected (scheduled for ${appointment.appointment_date} at ${appointment.appointment_time} with ${appointment.urologist_name})`;
+      const timelineContent = `Appointment automatically marked as No Show after day ended - no patient activity detected (scheduled for ${appointment.appointment_date} at ${appointment.appointment_time} with ${appointment.urologist_name})`;
       await client.query(timelineQuery, [appointment.patient_id, timelineContent]);
     }
     
@@ -191,7 +186,7 @@ const markOldAppointmentsAsNoShow = async () => {
         UPDATE investigation_bookings 
         SET status = 'no_show', 
             updated_at = CURRENT_TIMESTAMP,
-            notes = COALESCE(notes, '') || ' | Auto-marked as no-show after 24 hours (no patient activity detected)'
+            notes = COALESCE(notes, '') || ' | Auto-marked as no-show after day ended (no patient activity detected)'
         WHERE id = $1
       `;
       await client.query(updateQuery, [investigation.id]);
@@ -201,7 +196,7 @@ const markOldAppointmentsAsNoShow = async () => {
         INSERT INTO patient_notes (patient_id, note_type, note_content, author_name, author_role, created_at)
         VALUES ($1, 'no_show', $2, 'System', 'Automated', CURRENT_TIMESTAMP)
       `;
-      const timelineContent = `Investigation automatically marked as No Show after 24 hours - no patient activity detected (scheduled for ${investigation.scheduled_date} at ${investigation.scheduled_time} with ${investigation.investigation_name})`;
+      const timelineContent = `Investigation automatically marked as No Show after day ended - no patient activity detected (scheduled for ${investigation.scheduled_date} at ${investigation.scheduled_time} with ${investigation.investigation_name})`;
       await client.query(timelineQuery, [investigation.patient_id, timelineContent]);
     }
     
