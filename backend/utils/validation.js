@@ -172,7 +172,7 @@ export const addPatientSchema = Joi.object({
       if (cleaned.length < 8) {
         return helpers.error('string.phoneMin');
       }
-      if (cleaned.length > 12) {
+      if (cleaned.length > 15) {
         return helpers.error('string.phoneMax');
       }
       return value;
@@ -181,7 +181,7 @@ export const addPatientSchema = Joi.object({
     .messages({
       'string.pattern.base': 'Please provide a valid phone number',
       'string.phoneMin': 'Phone number must be at least 8 digits',
-      'string.phoneMax': 'Phone number must not exceed 12 digits',
+      'string.phoneMax': 'Phone number must not exceed 15 digits',
       'any.required': 'Phone number is required'
     }),
   email: Joi.string()
@@ -298,7 +298,7 @@ export const addPatientSchema = Joi.object({
       if (cleaned.length < 8) {
         return helpers.error('string.emergencyPhoneMin');
       }
-      if (cleaned.length > 12) {
+      if (cleaned.length > 15) {
         return helpers.error('string.emergencyPhoneMax');
       }
       return value;
@@ -307,7 +307,7 @@ export const addPatientSchema = Joi.object({
     .messages({
       'string.pattern.base': 'Please provide a valid emergency contact phone number',
       'string.emergencyPhoneMin': 'Emergency contact phone number must be at least 8 digits',
-      'string.emergencyPhoneMax': 'Emergency contact phone number must not exceed 12 digits'
+      'string.emergencyPhoneMax': 'Emergency contact phone number must not exceed 15 digits'
     }),
   emergencyContactRelationship: Joi.string()
     .max(50)
@@ -398,7 +398,7 @@ export const updatePatientSchema = Joi.object({
       if (cleaned.length < 8) {
         return helpers.error('string.phoneMin');
       }
-      if (cleaned.length > 12) {
+      if (cleaned.length > 15) {
         return helpers.error('string.phoneMax');
       }
       return value;
@@ -407,7 +407,7 @@ export const updatePatientSchema = Joi.object({
     .messages({
       'string.pattern.base': 'Please provide a valid phone number',
       'string.phoneMin': 'Phone number must be at least 8 digits',
-      'string.phoneMax': 'Phone number must not exceed 12 digits'
+      'string.phoneMax': 'Phone number must not exceed 15 digits'
     }),
   email: Joi.string()
     .email()
@@ -523,7 +523,7 @@ export const updatePatientSchema = Joi.object({
       if (cleaned.length < 8) {
         return helpers.error('string.emergencyPhoneMin');
       }
-      if (cleaned.length > 12) {
+      if (cleaned.length > 15) {
         return helpers.error('string.emergencyPhoneMax');
       }
       return value;
@@ -532,7 +532,7 @@ export const updatePatientSchema = Joi.object({
     .messages({
       'string.pattern.base': 'Please provide a valid emergency contact phone number',
       'string.emergencyPhoneMin': 'Emergency contact phone number must be at least 8 digits',
-      'string.emergencyPhoneMax': 'Emergency contact phone number must not exceed 12 digits'
+      'string.emergencyPhoneMax': 'Emergency contact phone number must not exceed 15 digits'
     }),
   emergencyContactRelationship: Joi.string()
     .max(50)

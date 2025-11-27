@@ -178,13 +178,13 @@ export const validatePhoneFormat = (phone) => {
   // Remove all non-digits
   const cleaned = phone.replace(/\D/g, '');
   
-  // Check if it has between 8 and 12 digits
+  // Check if it has between 8 and 15 digits
   if (cleaned.length < 8) {
     return 'Phone number must be at least 8 digits';
   }
   
-  if (cleaned.length > 12) {
-    return 'Phone number must not exceed 12 digits';
+  if (cleaned.length > 15) {
+    return 'Phone number must not exceed 15 digits';
   }
   
   return '';

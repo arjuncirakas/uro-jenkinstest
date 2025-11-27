@@ -1780,8 +1780,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   </h3>
                   
                   <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-                    <div className="flex flex-col mb-3 sm:mb-4 flex-shrink-0">
-                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 flex-shrink-0">
+                    <div className="flex flex-col mb-2 sm:mb-3 flex-shrink-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2 flex-shrink-0">
                         Note Content
                       </label>
                       <textarea
@@ -1789,38 +1789,39 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         onChange={(e) => setNoteContent(e.target.value)}
                         placeholder="Enter clinical note details..."
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none min-h-[100px] max-h-[200px] sm:max-h-[250px] lg:max-h-[300px] overflow-y-auto"
+                        className="w-full px-2.5 sm:px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none min-h-[80px] sm:min-h-[100px] max-h-[150px] sm:max-h-[180px] lg:max-h-[220px] overflow-y-auto text-sm"
                       />
                     </div>
                     
-                    <div className="flex justify-between space-x-2 sm:space-x-3 flex-shrink-0 mb-2 sm:mb-0">
+                    <div className="flex justify-between space-x-2 flex-shrink-0 mb-2">
                       <button
                         onClick={() => {
                           setNoteContent('');
                         }}
-                        className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        className="px-2.5 sm:px-3 lg:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 whitespace-nowrap"
                       >
                         Clear
                       </button>
                       <button
                         onClick={handleSaveNote}
                         disabled={savingNote || !noteContent.trim()}
-                        className="px-4 py-2 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-2.5 sm:px-3 lg:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                       >
                         {savingNote ? (
                           <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Saving...
+                            <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 sm:mr-2"></div>
+                            <span className="hidden sm:inline">Saving...</span>
+                            <span className="sm:hidden">Saving</span>
                           </>
                         ) : noteSaved ? (
                           <>
-                            <IoCheckmark className="mr-2" />
-                            Saved
+                            <IoCheckmark className="mr-1.5 sm:mr-2 text-sm sm:text-base" />
+                            <span>Saved</span>
                           </>
                         ) : (
                           <>
-                            <FaNotesMedical className="mr-2" />
-                            Save Note
+                            <FaNotesMedical className="mr-1.5 sm:mr-2 text-xs sm:text-sm" />
+                            <span>Save Note</span>
                           </>
                         )}
                       </button>
@@ -1828,21 +1829,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="border-t border-gray-200 mt-2 sm:mt-3 lg:mt-4 pt-2 sm:pt-3 lg:pt-4 flex-shrink-0">
-                    <div className="flex gap-3">
+                  <div className="border-t border-gray-200 mt-2 pt-2 sm:pt-3 flex-shrink-0">
+                    <div className="flex gap-2 sm:gap-3">
                       <button
                         onClick={() => setIsMDTSchedulingModalOpen(true)}
-                        className="flex-1 px-3 py-3 text-sm font-medium text-teal-600 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors flex items-center justify-center"
+                        className="flex-1 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-teal-600 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors flex items-center justify-center"
                       >
-                        <FaUserNurse className="mr-2" />
-                        Schedule MDT
+                        <FaUserNurse className="mr-1 sm:mr-2 text-xs sm:text-sm" />
+                        <span className="whitespace-nowrap">Schedule MDT</span>
                       </button>
                       <button
                         onClick={() => setIsAddInvestigationModalOpen(true)}
-                        className="flex-1 px-3 py-3 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center"
+                        className="flex-1 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center"
                       >
-                        <FaFlask className="mr-2" />
-                        Add Clinical Investigation
+                        <FaFlask className="mr-1 sm:mr-2 text-xs sm:text-sm" />
+                        <span className="whitespace-nowrap">Add Clinical Investigation</span>
                       </button>
                     </div>
                   </div>

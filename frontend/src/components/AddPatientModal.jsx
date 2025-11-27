@@ -825,11 +825,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       First Name <span className="text-red-500">*</span>
                     </label>
                     {errors.firstName && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.firstName && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.firstName}
                       </p>
                     )}
@@ -860,11 +856,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       Last Name <span className="text-red-500">*</span>
                     </label>
                     {errors.lastName && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.lastName && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.lastName}
                       </p>
                     )}
@@ -895,11 +887,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       Date of Birth {formData.age ? '' : <span className="text-red-500">*</span>}
                     </label>
                     {errors.dateOfBirth && !formData.age && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.dateOfBirth && !formData.age && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.dateOfBirth}
                       </p>
                     )}
@@ -932,11 +920,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       Age {formData.dateOfBirth ? '' : <span className="text-red-500">*</span>}
                     </label>
                     {errors.age && !formData.dateOfBirth && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.age && !formData.dateOfBirth && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.age}
                       </p>
                     )}
@@ -973,11 +957,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       errors.gender ? 'text-red-500' : formData.gender ? 'text-teal-500' : 'text-gray-400'
                     }`} />
                     {errors.gender && (
-                      <AlertCircle className="absolute right-8 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.gender && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.gender}
                       </p>
                     )}
@@ -1008,11 +988,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       Phone Number <span className="text-red-500">*</span>
                     </label>
                     {errors.phone && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.phone && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.phone}
                       </p>
                     )}
@@ -1043,11 +1019,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       Email Address
                     </label>
                     {errors.email && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.email && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.email}
                       </p>
                     )}
@@ -1079,11 +1051,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     Address <span className="text-red-500">*</span>
                   </label>
                   {errors.address && (
-                    <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                  )}
-                  {errors.address && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
+                    <p className="mt-1 text-sm text-red-600">
                       {errors.address}
                     </p>
                   )}
@@ -1237,11 +1205,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       Contact Phone
                     </label>
                     {errors.emergencyContactPhone && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.emergencyContactPhone && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.emergencyContactPhone}
                       </p>
                     )}
@@ -1813,11 +1777,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       Initial PSA Level <span className="text-red-500">*</span>
                     </label>
                     {errors.initialPSA && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.initialPSA && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.initialPSA}
                       </p>
                     )}
@@ -1848,11 +1808,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       PSA Test Date <span className="text-red-500">*</span>
                     </label>
                     {errors.initialPSADate && (
-                      <AlertCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500 pointer-events-none" />
-                    )}
-                    {errors.initialPSADate && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
+                      <p className="mt-1 text-sm text-red-600">
                         {errors.initialPSADate}
                       </p>
                     )}
@@ -2121,10 +2077,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
           {/* Error Display */}
           {errors.submit && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mx-6 mb-4">
-              <div className="flex items-center">
-                <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-                <p className="text-sm text-red-600">{errors.submit}</p>
-              </div>
+              <p className="text-sm text-red-600">{errors.submit}</p>
             </div>
           )}
 
@@ -2219,8 +2172,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
 
               {errors.consentForms && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-sm text-red-600 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-2" />
+                  <p className="text-sm text-red-600">
                     {errors.consentForms}
                   </p>
                 </div>

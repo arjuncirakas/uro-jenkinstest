@@ -317,6 +317,10 @@ const ActiveMonitoring = () => {
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
+        onPatientUpdated={() => {
+          // Refresh the patient list to show updated information
+          fetchMonitoringPatients();
+        }}
       />
 
       {/* Update Appointment Modal */}
@@ -324,6 +328,10 @@ const ActiveMonitoring = () => {
         isOpen={isUpdateAppointmentModalOpen}
         onClose={() => setIsUpdateAppointmentModalOpen(false)}
         patient={selectedPatient}
+        onSuccess={() => {
+          // Refresh the patient list after successful appointment update
+          fetchMonitoringPatients();
+        }}
       />
     </div>
   );

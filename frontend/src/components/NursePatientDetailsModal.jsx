@@ -22,7 +22,7 @@ import { bookingService } from '../services/bookingService';
 import { patientService } from '../services/patientService';
 import EditPatientModal from './EditPatientModal';
 
-const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
+const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
   const [noteContent, setNoteContent] = useState('');
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
@@ -5299,7 +5299,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient }) => {
         }
         // Then refresh from API to ensure we have the latest data
         await fetchFullPatientData();
-        // Dispatch event to refresh patient list
+        // Notify parent component to refresh patient list
+        if (onPatientUpdated) {
+          onPatientUpdated(updatedPatient);
+        }
+        // Dispatch event to refresh patient list (for other components that might be listening)
         window.dispatchEvent(new CustomEvent('patient:updated', {
           detail: { patient: updatedPatient }
         }));

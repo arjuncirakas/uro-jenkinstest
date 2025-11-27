@@ -91,14 +91,15 @@ const AddUser = () => {
     return roleToCategoryMap[role] || role;
   };
 
-  const validateField = (name, value, formDataToValidate = formData) => {
+  const validateField = (name, value, formDataToValidate = formData, isBlur = false) => {
     let error = '';
     
     switch (name) {
       case 'firstName':
         if (!value.trim()) {
           error = 'First name is required';
-        } else if (value !== value.trim()) {
+        } else if (isBlur && value !== value.trim()) {
+          // Only check for leading/trailing spaces on blur, not during typing
           error = 'First name cannot start or end with a space';
         } else if (value.trim().length < 2) {
           error = 'First name must be at least 2 characters';
@@ -109,7 +110,8 @@ const AddUser = () => {
       case 'lastName':
         if (!value.trim()) {
           error = 'Last name is required';
-        } else if (value !== value.trim()) {
+        } else if (isBlur && value !== value.trim()) {
+          // Only check for leading/trailing spaces on blur, not during typing
           error = 'Last name cannot start or end with a space';
         } else if (!/^[a-zA-Z\s'.-]+$/.test(value.trim())) {
           error = 'Last name can only contain letters, spaces, hyphens, apostrophes, and periods';
@@ -179,21 +181,50 @@ const AddUser = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
+    console.log('🔍 handleChange called:', { name, value, valueLength: value.length, hasSpace: value.includes(' ') });
+    
     // Apply input validation based on field type
     let isValid = true;
     let sanitizedValue = value;
     
-    // Name fields - only allow letters, spaces, hyphens, apostrophes
-    // Spaces are allowed only between letters, not at start or end
+    // Name fields - allow letters, spaces, hyphens, apostrophes, periods
+    // Allow spaces during typing (including at end temporarily)
     if (['firstName', 'lastName'].includes(name)) {
-      isValid = validateNameInput(value);
-      if (!isValid) return; // Don't update if invalid characters (including spaces at start/end)
+      // Only check for invalid characters, allow spaces anywhere during typing
+      // Test regex explicitly - allow: letters, spaces, apostrophes, periods, hyphens
+      const nameRegex = /^[a-zA-Z\s'.-]*$/;
+      const regexTest = nameRegex.test(value);
+      
+      // Also explicitly check if value contains only allowed characters
+      const hasOnlyAllowedChars = /^[a-zA-Z\s'.-]*$/.test(value);
+      const spaceCount = (value.match(/\s/g) || []).length;
+      
+      console.log('📝 Name field validation:', { 
+        name, 
+        value, 
+        valueLength: value.length,
+        regexTest, 
+        hasOnlyAllowedChars,
+        spaceCount,
+        hasSpace: value.includes(' '),
+        regex: nameRegex.toString(),
+        charCodes: value.split('').map(c => c.charCodeAt(0))
+      });
+      
+      if (!regexTest || !hasOnlyAllowedChars) {
+        console.log('❌ Name field regex failed - blocking input', {
+          failedAtChar: value.split('').find((c, i) => !/^[a-zA-Z\s'.-]*$/.test(c))
+        });
+        return; // Don't update if invalid characters
+      }
+      console.log('✅ Name field regex passed - allowing input with spaces');
     }
     
     // Phone field - only allow digits, spaces, hyphens, parentheses, plus
     // Strictly block alphabets
     if (name === 'phone') {
       isValid = validatePhoneInput(value);
+      console.log('📞 Phone validation:', { value, isValid });
       if (!isValid) {
         // Show immediate error for invalid characters (especially alphabets)
         setErrors(prev => ({
@@ -204,9 +235,30 @@ const AddUser = () => {
       }
     }
     
-    // Sanitize text inputs to prevent XSS
-    if (typeof value === 'string' && !['email', 'phone'].includes(name)) {
+    // Organization field - allow spaces and common characters
+    if (name === 'organization') {
+      // Allow alphanumeric, spaces, hyphens, apostrophes, periods, and common punctuation
+      // Note: hyphen must be at the end or escaped to avoid being interpreted as a range
+      const orgRegex = /^[a-zA-Z0-9\s'.,()&-]*$/;
+      const regexTest = orgRegex.test(value);
+      console.log('🏢 Organization field validation:', { name, value, regexTest, regex: orgRegex.toString() });
+      
+      if (!regexTest) {
+        console.log('❌ Organization field regex failed - blocking input');
+        return; // Don't update if invalid characters
+      }
+      console.log('✅ Organization field regex passed - allowing input');
+    }
+    
+    // For name and organization fields, use value directly to preserve spaces during typing
+    // Sanitization will happen on blur/submit to prevent XSS
+    if (['firstName', 'lastName', 'organization'].includes(name)) {
+      sanitizedValue = value; // Use value directly to preserve all spaces
+      console.log('💾 Using value directly for name/org field:', { name, sanitizedValue, originalValue: value, areEqual: sanitizedValue === value });
+    } else if (typeof value === 'string' && !['email', 'phone'].includes(name)) {
+      // Sanitize other text inputs to prevent XSS
       sanitizedValue = sanitizeInput(value);
+      console.log('🧹 Sanitized value:', { name, originalValue: value, sanitizedValue });
     }
     
     // If role changes, reset department_id if not doctor
@@ -214,6 +266,8 @@ const AddUser = () => {
       ...formData,
       [name]: sanitizedValue
     };
+    
+    console.log('📦 Updated form data:', { name, newValue: updatedFormData[name], oldValue: formData[name] });
     
     if (name === 'role' && value !== 'doctor') {
       updatedFormData.department_id = '';
@@ -226,13 +280,74 @@ const AddUser = () => {
     }
     
     setFormData(updatedFormData);
+    console.log('✅ Form data updated successfully');
     
-    // Validate field and update errors
-    const error = validateField(name, sanitizedValue, updatedFormData);
+    // Validate field and update errors (isBlur = false during typing, allow spaces)
+    const error = validateField(name, sanitizedValue, updatedFormData, false);
+    console.log('✔️ Field validation result:', { name, error });
     setErrors(prev => ({
       ...prev,
       [name]: error
     }));
+  };
+
+  const handleKeyDown = (e) => {
+    const { name, key } = e.target;
+    
+    // Log key events for name fields to debug space input
+    if (['firstName', 'lastName', 'organization'].includes(name)) {
+      console.log('⌨️ KeyDown event:', { name, key, keyCode: e.keyCode, code: e.code, isSpace: key === ' ' || key === 'Spacebar' });
+      
+      // Explicitly allow space key
+      if (key === ' ' || key === 'Spacebar' || e.keyCode === 32) {
+        console.log('✅ Space key detected - should be allowed');
+        // Don't prevent default - allow space to be entered
+        return;
+      }
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    
+    console.log('👋 handleBlur called:', { name, value });
+    
+    // Trim leading/trailing spaces for name and organization fields when user leaves the field
+    if (['firstName', 'lastName', 'organization'].includes(name)) {
+      // Sanitize and trim the value on blur
+      const sanitized = sanitizeInput(value, { preserveWhitespace: true });
+      const trimmedValue = sanitized.trim();
+      
+      if (trimmedValue !== value) {
+        const updatedFormData = {
+          ...formData,
+          [name]: trimmedValue
+        };
+        setFormData(updatedFormData);
+        
+        // Re-validate after trimming (isBlur = true to check for leading/trailing spaces)
+        const error = validateField(name, trimmedValue, updatedFormData, true);
+        setErrors(prev => ({
+          ...prev,
+          [name]: error
+        }));
+      } else {
+        // Even if no trimming needed, sanitize and validate on blur
+        const sanitizedValue = sanitizeInput(value, { preserveWhitespace: true });
+        if (sanitizedValue !== value) {
+          const updatedFormData = {
+            ...formData,
+            [name]: sanitizedValue
+          };
+          setFormData(updatedFormData);
+        }
+        const error = validateField(name, sanitizedValue || value, formData, true);
+        setErrors(prev => ({
+          ...prev,
+          [name]: error
+        }));
+      }
+    }
   };
 
   const validateForm = () => {
@@ -265,9 +380,13 @@ const AddUser = () => {
     }
 
     try {
-      // Prepare data for submission - convert department_id to number if present
+      // Prepare data for submission - sanitize and trim name fields
       const submitData = {
         ...formData,
+        // Sanitize and trim name fields to prevent XSS while preserving spaces between words
+        firstName: sanitizeInput(formData.firstName.trim(), { preserveWhitespace: true }),
+        lastName: sanitizeInput(formData.lastName.trim(), { preserveWhitespace: true }),
+        organization: sanitizeInput(formData.organization.trim(), { preserveWhitespace: true }),
         department_id: formData.role === 'doctor' && formData.department_id 
           ? parseInt(formData.department_id, 10) 
           : undefined
@@ -384,6 +503,8 @@ const AddUser = () => {
                         type="text"
                         value={formData.firstName}
                         onChange={handleChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleBlur}
                         autoComplete="given-name"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
@@ -414,6 +535,8 @@ const AddUser = () => {
                         type="text"
                         value={formData.lastName}
                         onChange={handleChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleBlur}
                         autoComplete="family-name"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
@@ -504,6 +627,8 @@ const AddUser = () => {
                         type="text"
                         value={formData.organization}
                         onChange={handleChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleBlur}
                         autoComplete="organization"
                         className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200 ${
                           errors.organization ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
