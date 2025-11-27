@@ -1494,6 +1494,17 @@ export const getUpcomingAppointments = async (req, res) => {
         formattedTime = formattedTime.substring(0, 5);
       }
 
+      // Determine appointment type label
+      let appointmentTypeLabel = 'Appointment';
+      const aptType = (row.type || '').toLowerCase();
+      if (aptType === 'automatic') {
+        appointmentTypeLabel = 'Follow-up Appointment';
+      } else if (aptType === 'investigation') {
+        appointmentTypeLabel = 'Investigation Appointment';
+      } else if (aptType === 'surgery' || aptType === 'surgical') {
+        appointmentTypeLabel = 'Surgery Appointment';
+      }
+
       return {
         id: row.id,
         patientId: row.patient_id,
@@ -1507,6 +1518,7 @@ export const getUpcomingAppointments = async (req, res) => {
         urologist: row.urologist,
         status: row.status,
         type: row.type,
+        typeLabel: appointmentTypeLabel,
         notes: row.notes
       };
     });

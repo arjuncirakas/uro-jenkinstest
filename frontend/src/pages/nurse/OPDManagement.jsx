@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FiCalendar, FiClock, FiUser } from 'react-icons/fi';
 import { IoChevronForward } from 'react-icons/io5';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
@@ -106,7 +106,7 @@ const OPDManagement = () => {
   };
 
   // Fetch upcoming appointments
-  const fetchUpcomingAppointments = async (reset = false) => {
+  const fetchUpcomingAppointments = useCallback(async (reset = false, loadMore = false) => {
     if (reset) {
       setUpcomingOffset(0);
       setUpcomingAppointments([]);
@@ -114,13 +114,18 @@ const OPDManagement = () => {
       setInitialLoading(true);
     }
 
+    // Don't load if already loading
+    if (loadingUpcoming) return;
+
     setLoadingUpcoming(true);
     setUpcomingError(null);
 
     try {
       const offset = reset ? 0 : upcomingOffset;
+      const limit = reset ? 3 : 10; // First load: 3 items, subsequent: 10 items
+      
       const result = await bookingService.getUpcomingAppointments({
-        limit: upcomingLimit,
+        limit: limit,
         offset: offset
       });
 
@@ -135,7 +140,7 @@ const OPDManagement = () => {
 
         setHasMoreUpcoming(result.data.hasMore);
         if (result.data.hasMore) {
-          setUpcomingOffset(prev => prev + upcomingLimit);
+          setUpcomingOffset(prev => prev + limit);
         }
       } else {
         setUpcomingError(result.error || 'Failed to fetch upcoming appointments');
@@ -147,15 +152,44 @@ const OPDManagement = () => {
       setLoadingUpcoming(false);
       setInitialLoading(false);
     }
-  };
+  }, [loadingUpcoming, upcomingOffset]);
 
-  // Handle scroll for infinite loading
-  const handleUpcomingScroll = (e) => {
-    const { scrollTop, clientHeight, scrollHeight } = e.target;
-    if (scrollHeight - scrollTop <= clientHeight + 50 && !loadingUpcoming && hasMoreUpcoming) {
-      fetchUpcomingAppointments(false);
+  // Setup Intersection Observer for lazy loading
+  useEffect(() => {
+    if (!lastItemRef.current || !hasMoreUpcoming || loadingUpcoming) return;
+
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
     }
-  };
+
+    // Create new observer
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        const lastEntry = entries[0];
+        if (lastEntry.isIntersecting && hasMoreUpcoming && !loadingUpcoming) {
+          fetchUpcomingAppointments(false, true);
+        }
+      },
+      {
+        root: upcomingScrollRef.current,
+        rootMargin: '100px', // Start loading 100px before reaching the bottom
+        threshold: 0.1
+      }
+    );
+
+    // Observe the last item
+    if (lastItemRef.current) {
+      observerRef.current.observe(lastItemRef.current);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [upcomingAppointments.length, hasMoreUpcoming, loadingUpcoming, fetchUpcomingAppointments]);
 
 
   // State for appointments data
@@ -173,10 +207,12 @@ const OPDManagement = () => {
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [upcomingError, setUpcomingError] = useState(null);
-  const [upcomingLimit, setUpcomingLimit] = useState(20);
+  const [upcomingLimit, setUpcomingLimit] = useState(3); // Start with 3 items
   const [upcomingOffset, setUpcomingOffset] = useState(0);
   const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true);
   const upcomingScrollRef = useRef(null);
+  const observerRef = useRef(null);
+  const lastItemRef = useRef(null);
 
 
   // Load data on component mount
@@ -1053,47 +1089,58 @@ const OPDManagement = () => {
                     </div>
                   ) : (
                     <>
-                      {upcomingAppointments.map((appointment) => (
-                        <div
-                          key={appointment.id}
-                          onClick={() => handleViewEdit(appointment)}
-                          className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md hover:border-teal-300 transition-all cursor-pointer"
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-semibold text-gray-900">
-                                  {formatDate(appointment.appointmentDate)}
-                                </span>
-                                <span className="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full font-medium">
-                                  {appointment.appointmentTime}
-                                </span>
+                      {upcomingAppointments.map((appointment, index) => {
+                        const isLastItem = index === upcomingAppointments.length - 1;
+                        const isFollowUp = appointment.type === 'automatic' || appointment.typeLabel === 'Follow-up Appointment';
+                        
+                        return (
+                          <div
+                            key={appointment.id}
+                            ref={isLastItem ? lastItemRef : null}
+                            onClick={() => handleViewEdit(appointment)}
+                            className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md hover:border-teal-300 transition-all cursor-pointer"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {formatDate(appointment.appointmentDate)}
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full font-medium">
+                                    {appointment.appointmentTime}
+                                  </span>
+                                  {isFollowUp && (
+                                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                                      Follow-up
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-600 mb-2">
+                                  {appointment.urologist}
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-600 mb-2">
-                                {appointment.urologist}
-                              </div>
+                              <IoChevronForward className="text-gray-400 text-sm flex-shrink-0" />
                             </div>
-                            <IoChevronForward className="text-gray-400 text-sm flex-shrink-0" />
-                          </div>
 
-                          <div className="space-y-1">
-                            <div className="font-medium text-gray-900 text-sm">
-                              {appointment.patientName}
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="text-xs text-gray-500">
-                                Age: {appointment.age || 'N/A'} • {appointment.gender || 'Unknown'}
+                            <div className="space-y-1">
+                              <div className="font-medium text-gray-900 text-sm">
+                                {appointment.patientName}
                               </div>
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${appointment.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
-                                  appointment.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                                    appointment.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
-                                }`}>
-                                {appointment.status}
-                              </span>
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs text-gray-500">
+                                  Age: {appointment.age || 'N/A'} • {appointment.gender || 'Unknown'}
+                                </div>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${appointment.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
+                                    appointment.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                      appointment.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                  {appointment.status}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
 
                       {loadingUpcoming && (
                         <div className="text-center py-4 text-gray-500 text-sm">
