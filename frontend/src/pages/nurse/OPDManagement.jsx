@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FiCalendar, FiClock, FiUser } from 'react-icons/fi';
 import { IoChevronForward } from 'react-icons/io5';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
@@ -105,17 +105,33 @@ const OPDManagement = () => {
     }
   };
 
-  // Use ref to track loading state to avoid dependency issues
+  // State for upcoming appointments - MUST be declared before useEffect
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+  const [loadingUpcoming, setLoadingUpcoming] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [upcomingError, setUpcomingError] = useState(null);
+  const [upcomingLimit, setUpcomingLimit] = useState(3); // Start with 3 items
+  const [upcomingOffset, setUpcomingOffset] = useState(0);
+  const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true);
+  const upcomingScrollRef = useRef(null);
+  const observerRef = useRef(null);
+  const lastItemRef = useRef(null);
+
+  // Use refs to track state to avoid dependency issues
   const isLoadingRef = useRef(false);
+  const offsetRef = useRef(0);
+  const hasMoreRef = useRef(true);
 
   // Fetch upcoming appointments
-  const fetchUpcomingAppointments = useCallback(async (reset = false, loadMore = false) => {
+  const fetchUpcomingAppointments = async (reset = false) => {
     // Don't load if already loading
     if (isLoadingRef.current) return;
 
     if (reset) {
+      offsetRef.current = 0;
       setUpcomingOffset(0);
       setUpcomingAppointments([]);
+      hasMoreRef.current = true;
       setHasMoreUpcoming(true);
       setInitialLoading(true);
     }
@@ -125,13 +141,7 @@ const OPDManagement = () => {
     setUpcomingError(null);
 
     try {
-      // Get current offset using functional update
-      let currentOffset = 0;
-      setUpcomingOffset(prev => {
-        currentOffset = reset ? 0 : prev;
-        return currentOffset;
-      });
-
+      const currentOffset = reset ? 0 : offsetRef.current;
       const limit = reset ? 3 : 10; // First load: 3 items, subsequent: 10 items
       
       const result = await bookingService.getUpcomingAppointments({
@@ -148,9 +158,12 @@ const OPDManagement = () => {
           setUpcomingAppointments(prev => [...prev, ...newAppointments]);
         }
 
-        setHasMoreUpcoming(result.data.hasMore);
-        if (result.data.hasMore) {
-          setUpcomingOffset(prev => prev + limit);
+        hasMoreRef.current = result.data.hasMore || false;
+        setHasMoreUpcoming(hasMoreRef.current);
+        
+        if (hasMoreRef.current) {
+          offsetRef.current = currentOffset + limit;
+          setUpcomingOffset(offsetRef.current);
         }
       } else {
         setUpcomingError(result.error || 'Failed to fetch upcoming appointments');
@@ -163,11 +176,18 @@ const OPDManagement = () => {
       setLoadingUpcoming(false);
       setInitialLoading(false);
     }
-  }, []); // Empty dependencies - using refs and functional updates
+  };
 
   // Setup Intersection Observer for lazy loading
   useEffect(() => {
-    if (!lastItemRef.current || !hasMoreUpcoming || isLoadingRef.current) return;
+    // Store the function reference to avoid closure issues
+    const loadMore = () => {
+      if (hasMoreRef.current && !isLoadingRef.current) {
+        fetchUpcomingAppointments(false);
+      }
+    };
+
+    if (!lastItemRef.current || !hasMoreRef.current || isLoadingRef.current) return;
 
     // Cleanup previous observer
     if (observerRef.current) {
@@ -178,8 +198,8 @@ const OPDManagement = () => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
         const lastEntry = entries[0];
-        if (lastEntry.isIntersecting && hasMoreUpcoming && !isLoadingRef.current) {
-          fetchUpcomingAppointments(false, true);
+        if (lastEntry.isIntersecting) {
+          loadMore();
         }
       },
       {
@@ -200,7 +220,7 @@ const OPDManagement = () => {
         observerRef.current.disconnect();
       }
     };
-  }, [upcomingAppointments.length, hasMoreUpcoming, fetchUpcomingAppointments]);
+  }, [upcomingAppointments.length]);
 
 
   // State for appointments data
@@ -212,18 +232,6 @@ const OPDManagement = () => {
   const [noShowPatients, setNoShowPatients] = useState([]);
   const [loadingNoShow, setLoadingNoShow] = useState(false);
   const [noShowError, setNoShowError] = useState(null);
-
-  // State for upcoming appointments
-  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
-  const [loadingUpcoming, setLoadingUpcoming] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [upcomingError, setUpcomingError] = useState(null);
-  const [upcomingLimit, setUpcomingLimit] = useState(3); // Start with 3 items
-  const [upcomingOffset, setUpcomingOffset] = useState(0);
-  const [hasMoreUpcoming, setHasMoreUpcoming] = useState(true);
-  const upcomingScrollRef = useRef(null);
-  const observerRef = useRef(null);
-  const lastItemRef = useRef(null);
 
 
   // Load data on component mount
@@ -1053,7 +1061,6 @@ const OPDManagement = () => {
                 {/* Appointments List */}
                 <div
                   className="space-y-3 flex-1 overflow-y-auto"
-                  onScroll={handleUpcomingScroll}
                   ref={upcomingScrollRef}
                 >
                   {initialLoading ? (

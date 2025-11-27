@@ -14,6 +14,7 @@ const OTPModal = ({
   const [otp, setOtp] = useState('');
   const [timeLeft, setTimeLeft] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ const OTPModal = ({
       setOtp('');
       setTimeLeft(60);
       setCanResend(false);
+      setResendLoading(false);
     }
   }, [isOpen]);
 
@@ -40,11 +42,23 @@ const OTPModal = ({
     }
   };
 
-  const handleResend = () => {
-    if (canResend) {
-      onResend();
-      setTimeLeft(60);
-      setCanResend(false);
+  const handleResend = async () => {
+    if (canResend && !resendLoading && !loading) {
+      setResendLoading(true);
+      try {
+        const result = onResend();
+        // Handle both promise and non-promise returns
+        if (result && typeof result.then === 'function') {
+          await result;
+        }
+        setTimeLeft(60);
+        setCanResend(false);
+      } catch (err) {
+        // Error handling is done by parent component
+        console.error('Resend error:', err);
+      } finally {
+        setResendLoading(false);
+      }
     }
   };
 
@@ -249,10 +263,10 @@ const OTPModal = ({
           </p>
           <button
             onClick={handleResend}
-            disabled={!canResend || loading}
+            disabled={!canResend || loading || resendLoading}
             className="inline-flex items-center space-x-2 text-teal-600 hover:text-teal-700 font-medium disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${resendLoading ? 'animate-spin' : ''}`} />
             <span>
               {canResend ? 'Resend Code' : `Resend in ${timeLeft}s`}
             </span>
