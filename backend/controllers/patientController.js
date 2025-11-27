@@ -198,7 +198,7 @@ export const addPatient = async (req, res) => {
       emergencyContactPhone,
       emergencyContactRelationship,
       priority = 'Normal',
-      notes,
+      notes = '',
       referredByGpId, // Added to accept referring GP from frontend
       triageSymptoms, // Nurse triage symptoms data (JSON string)
       // Exam & Prior Tests
@@ -359,7 +359,7 @@ export const addPatient = async (req, res) => {
         postcode, city, state, referringDepartment, formattedReferralDate, initialPSA,
         formattedInitialPSADate, medicalHistory, currentMedications, allergies,
         finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
-        emergencyContactRelationship, priority, notes, req.user.id, finalReferredByGpId, triageSymptoms || null,
+        emergencyContactRelationship, priority, notes || '', req.user.id, finalReferredByGpId, triageSymptoms || null,
         dreDone || false, dreFindings || null, priorBiopsy || 'no', formattedPriorBiopsyDate, gleasonScore || null, comorbiditiesJson
       ]
     );
@@ -464,7 +464,7 @@ export const addPatient = async (req, res) => {
           emergencyContactPhone: newPatient.emergency_contact_phone,
           emergencyContactRelationship: newPatient.emergency_contact_relationship,
           priority: newPatient.priority,
-          notes: newPatient.notes,
+          notes: newPatient.notes || '',
           status: newPatient.status,
           createdBy: newPatient.created_by,
           createdAt: newPatient.created_at,
@@ -814,7 +814,7 @@ export const getPatients = async (req, res) => {
         emergencyContactPhone: patient.emergency_contact_phone,
         emergencyContactRelationship: patient.emergency_contact_relationship,
         priority: patient.priority,
-        notes: patient.notes,
+        notes: patient.notes || '',
         status: patient.status,
         carePathway: patient.care_pathway,
         createdBy: patient.created_by,
@@ -1316,7 +1316,7 @@ export const getPatientById = async (req, res) => {
           emergencyContactPhone: patient.emergency_contact_phone,
           emergencyContactRelationship: patient.emergency_contact_relationship,
           priority: patient.priority,
-          notes: patient.notes,
+          notes: patient.notes || '',
           status: patient.status,
           createdBy: patient.created_by,
           createdByName: patient.created_by_first_name && patient.created_by_last_name 
@@ -1495,7 +1495,7 @@ export const updatePatient = async (req, res) => {
           emergencyContactPhone: updatedPatient.emergency_contact_phone,
           emergencyContactRelationship: updatedPatient.emergency_contact_relationship,
           priority: updatedPatient.priority,
-          notes: updatedPatient.notes,
+          notes: updatedPatient.notes || '',
           status: updatedPatient.status,
           createdBy: updatedPatient.created_by,
           createdAt: updatedPatient.created_at,

@@ -3,7 +3,7 @@ import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoA
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
@@ -3041,6 +3041,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
+                                <span className="text-gray-600">First Name:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.firstName || displayPatient.first_name || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Last Name:</span>
+                                <span className="ml-2 font-medium text-gray-900">{displayPatient.lastName || displayPatient.last_name || 'N/A'}</span>
+                              </div>
+                              <div>
                                 <span className="text-gray-600">Date of Birth:</span>
                                 <span className="ml-2 font-medium text-gray-900">
                                   {displayPatient.dateOfBirth || displayPatient.date_of_birth 
@@ -3232,38 +3240,82 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-3">Symptoms & Presentation - Chief Complaint</h4>
-                      {(displayPatient.triageSymptoms || displayPatient.triage_symptoms) && (displayPatient.triageSymptoms || displayPatient.triage_symptoms).length > 0 ? (
-                        <div className="space-y-3">
-                          {(displayPatient.triageSymptoms || displayPatient.triage_symptoms || []).map((symptom, index) => (
-                            <div key={index} className={`border border-gray-200 rounded-lg p-4 ${symptom.isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <span className="font-medium text-gray-900">{symptom.name}</span>
-                                    {symptom.isCustom && <span className="text-xs text-blue-600">(Custom)</span>}
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                                    <div>
-                                      <span className="text-gray-600">IPSS Score:</span>
-                                      <span className="ml-2 font-medium text-gray-900">{symptom.ipssScore || 'N/A'}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-600">Duration:</span>
-                                      <span className="ml-2 font-medium text-gray-900">
-                                        {symptom.duration ? `${symptom.duration} ${symptom.durationUnit}` : 'N/A'}
-                                      </span>
+                      {(() => {
+                        // Parse triage symptoms if it's a JSON string
+                        let triageSymptoms = displayPatient.triageSymptoms || displayPatient.triage_symptoms;
+                        if (typeof triageSymptoms === 'string') {
+                          try {
+                            triageSymptoms = JSON.parse(triageSymptoms);
+                          } catch (e) {
+                            triageSymptoms = [];
+                          }
+                        }
+                        
+                        // Ensure it's an array
+                        if (!Array.isArray(triageSymptoms)) {
+                          triageSymptoms = [];
+                        }
+                        
+                        return triageSymptoms && triageSymptoms.length > 0 ? (
+                          <div className="space-y-3">
+                            {triageSymptoms.map((symptom, index) => {
+                              // Normalize field names (handle both camelCase and snake_case)
+                              const symptomName = symptom.name || '';
+                              const ipssScore = symptom.ipssScore || symptom.ipss_score || null;
+                              const duration = symptom.duration || null;
+                              const durationUnit = symptom.durationUnit || symptom.duration_unit || '';
+                              const frequency = symptom.frequency || null;
+                              const notes = symptom.notes || null;
+                              const isCustom = symptom.isCustom || false;
+                              
+                              return (
+                                <div key={index} className={`border border-gray-200 rounded-lg p-4 ${isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <span className="font-medium text-gray-900 text-base">{symptomName}</span>
+                                        {isCustom && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">(Custom)</span>}
+                                      </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-3">
+                                        <div>
+                                          <span className="text-gray-600">IPSS Score:</span>
+                                          <span className="ml-2 font-medium text-gray-900">{ipssScore || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-600">Duration:</span>
+                                          <span className="ml-2 font-medium text-gray-900">
+                                            {duration ? `${duration} ${durationUnit}`.trim() : 'N/A'}
+                                          </span>
+                                        </div>
+                                        {frequency && (
+                                          <div>
+                                            <span className="text-gray-600">Frequency:</span>
+                                            <span className="ml-2 font-medium text-gray-900">
+                                              {frequency} {symptomName === 'Nocturia' ? (frequency === 1 ? 'time per night' : 'times per night') : 'times'}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      {notes && (
+                                        <div className="mt-3 pt-3 border-t border-gray-200">
+                                          <span className="text-gray-600 text-sm font-medium">Notes:</span>
+                                          <div className="mt-1 text-sm text-gray-900 whitespace-pre-line bg-white p-2 rounded border border-gray-200">
+                                            {notes}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-gray-500">
-                          <p>No triage symptoms recorded.</p>
-                        </div>
-                      )}
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-gray-500">
+                            <p>No triage symptoms recorded.</p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -3903,7 +3955,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         return (
                           <LineChart 
                             data={rechartsData} 
-                            margin={{ top: 5, right: 20, left: 50, bottom: 30 }}
+                            margin={{ top: 35, right: 20, left: 50, bottom: 30 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis 
@@ -3911,6 +3963,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               stroke="#6b7280"
                               style={{ fontSize: '12px' }}
                               tick={{ fill: '#6b7280' }}
+                              padding={{ left: 20, right: 20 }}
                             />
                             <YAxis 
                               domain={yDomain}
@@ -3933,7 +3986,30 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               dot={{ fill: '#0d9488', r: 5, strokeWidth: 2, stroke: 'white' }}
                               activeDot={{ r: 7, fill: '#0d9488', stroke: '#0d9488', strokeWidth: 2 }}
                               isAnimationActive={false}
-                            />
+                            >
+                              <LabelList 
+                                dataKey="psa" 
+                                content={({ x, y, value, index, payload }) => {
+                                  const isFirstPoint = index === 0;
+                                  // Add significant offset for first point to avoid Y-axis overlap
+                                  const extraOffset = isFirstPoint ? 30 : 0;
+                                  // Increase vertical offset to avoid overlap with the line
+                                  const verticalOffset = -15;
+                                  return (
+                                    <text
+                                      x={x + extraOffset}
+                                      y={y + verticalOffset}
+                                      fill="#0d9488"
+                                      fontSize="11px"
+                                      fontWeight="600"
+                                      textAnchor={isFirstPoint ? "start" : "middle"}
+                                    >
+                                      {`${parseFloat(value).toFixed(1)} ng/mL`}
+                                    </text>
+                                  );
+                                }}
+                              />
+                            </Line>
                           </LineChart>
                         );
                       })()}

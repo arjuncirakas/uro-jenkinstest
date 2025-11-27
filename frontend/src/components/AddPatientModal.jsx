@@ -111,6 +111,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
   const [customSymptomIpssScore, setCustomSymptomIpssScore] = useState('');
   const [customSymptomDuration, setCustomSymptomDuration] = useState('');
   const [customSymptomDurationUnit, setCustomSymptomDurationUnit] = useState('months');
+  const [customSymptomNotes, setCustomSymptomNotes] = useState('');
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -657,7 +658,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       duration: customSymptomDuration,
       durationUnit: customSymptomDurationUnit,
       frequency: '',
-      notes: '',
+      notes: customSymptomNotes || '',
       isCustom: true
     };
 
@@ -668,6 +669,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     setCustomSymptomIpssScore('');
     setCustomSymptomDuration('');
     setCustomSymptomDurationUnit('months');
+    setCustomSymptomNotes('');
     setShowCustomSymptomModal(false);
   };
 
@@ -2273,6 +2275,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   setCustomSymptomIpssScore('');
                   setCustomSymptomDuration('');
                   setCustomSymptomDurationUnit('months');
+                  setCustomSymptomNotes('');
                 }}
                 className="p-1 hover:bg-white/10 rounded transition-colors"
               >
@@ -2389,6 +2392,30 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   </div>
                 </div>
               </div>
+
+              {/* Notes field */}
+              <div className="relative mb-3">
+                <textarea
+                  value={customSymptomNotes}
+                  onChange={(e) => setCustomSymptomNotes(e.target.value)}
+                  rows={3}
+                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear resize-none ${
+                    customSymptomNotes
+                      ? 'border-teal-500 focus:border-teal-500 bg-white'
+                      : 'border-gray-300 focus:border-teal-500 bg-white'
+                  } focus:placeholder:opacity-100 peer-focus:text-teal-600 motion-reduce:transition-none`}
+                  placeholder=" "
+                />
+                <label
+                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-white px-1 ${
+                    customSymptomNotes
+                      ? 'text-teal-600'
+                      : 'text-gray-500'
+                  } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                >
+                  Notes
+                </label>
+              </div>
             </div>
 
             <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
@@ -2400,6 +2427,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   setCustomSymptomIpssScore('');
                   setCustomSymptomDuration('');
                   setCustomSymptomDurationUnit('months');
+                  setCustomSymptomNotes('');
                 }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors"
               >

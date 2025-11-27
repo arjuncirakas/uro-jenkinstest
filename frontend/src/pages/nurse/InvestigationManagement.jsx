@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { FiEye, FiSearch } from 'react-icons/fi';
+import React, { useState, useEffect, useRef } from 'react';
+import { FiEye, FiClock, FiX, FiPlus } from 'react-icons/fi';
+import { Upload, Eye, Check } from 'lucide-react';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
+import AddInvestigationResultModal from '../../components/AddInvestigationResultModal';
 import { investigationService } from '../../services/investigationService';
 import { patientService } from '../../services/patientService';
 
@@ -16,6 +18,15 @@ const InvestigationManagement = () => {
   const [loadingInvestigations, setLoadingInvestigations] = useState(false);
   const [investigationsError, setInvestigationsError] = useState(null);
 
+  // State for test result management
+  const [openDropdown, setOpenDropdown] = useState(null); // Format: "patientId-testType"
+  const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
+  const [selectedPatientForUpload, setSelectedPatientForUpload] = useState(null);
+  const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
+  const [investigationRequests, setInvestigationRequests] = useState({}); // Map of patientId -> { mri: requestId, biopsy: requestId, trus: requestId }
+  const [testResults, setTestResults] = useState({}); // Map of patientId -> { mri: result, biopsy: result, trus: result }
+  const [loadingRequests, setLoadingRequests] = useState({});
+
   // Fetch investigations data
   const fetchInvestigations = async () => {
     setLoadingInvestigations(true);
@@ -23,16 +34,19 @@ const InvestigationManagement = () => {
     
     try {
       const result = await investigationService.getAllInvestigations();
+      console.log('🔍 InvestigationManagement: getAllInvestigations result:', result);
       
       if (result.success) {
-        setInvestigations(result.data.investigations || []);
+        const investigationsData = result.data?.investigations || result.data || [];
+        console.log('✅ InvestigationManagement: Setting investigations:', investigationsData);
+        setInvestigations(investigationsData);
       } else {
         setInvestigationsError(result.error || 'Failed to fetch investigations');
-        console.error('Error fetching investigations:', result.error);
+        console.error('❌ Error fetching investigations:', result.error);
       }
     } catch (error) {
       setInvestigationsError('Failed to fetch investigations');
-      console.error('Error fetching investigations:', error);
+      console.error('❌ Exception fetching investigations:', error);
     } finally {
       setLoadingInvestigations(false);
     }
@@ -42,6 +56,85 @@ const InvestigationManagement = () => {
   useEffect(() => {
     fetchInvestigations();
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Check if click is outside any dropdown
+      const clickedElement = event.target;
+      const isDropdown = clickedElement.closest('[data-dropdown-menu]');
+      const isDropdownButton = clickedElement.closest('[data-dropdown-button]');
+      
+      if (!isDropdown && !isDropdownButton && openDropdown) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdown]);
+
+  // Fetch investigation requests for a patient
+  const fetchInvestigationRequests = async (patientId) => {
+    if (loadingRequests[patientId]) return;
+    
+    setLoadingRequests(prev => ({ ...prev, [patientId]: true }));
+    
+    try {
+      const result = await investigationService.getInvestigationRequests(patientId);
+      if (result.success && result.data) {
+        const requests = Array.isArray(result.data) ? result.data : (result.data.requests || []);
+        
+        // Find MRI, BIOPSY, and TRUS requests
+        const requestMap = {};
+        requests.forEach(req => {
+          const name = (req.investigationName || req.investigation_name || '').toUpperCase();
+          if (name === 'MRI') requestMap.mri = req.id;
+          else if (name === 'BIOPSY') requestMap.biopsy = req.id;
+          else if (name === 'TRUS') requestMap.trus = req.id;
+        });
+        
+        setInvestigationRequests(prev => ({
+          ...prev,
+          [patientId]: requestMap
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching investigation requests:', error);
+    } finally {
+      setLoadingRequests(prev => ({ ...prev, [patientId]: false }));
+    }
+  };
+
+  // Fetch test results for a patient
+  const fetchTestResults = async (patientId) => {
+    try {
+      const result = await investigationService.getInvestigationResults(patientId);
+      if (result.success) {
+        const results = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data.results || result.data.investigations || []);
+        
+        // Find MRI, BIOPSY, and TRUS results
+        const resultMap = {};
+        results.forEach(res => {
+          const name = (res.testName || res.test_name || '').toUpperCase();
+          if (name === 'MRI') resultMap.mri = res;
+          else if (name === 'BIOPSY') resultMap.biopsy = res;
+          else if (name === 'TRUS') resultMap.trus = res;
+        });
+        
+        setTestResults(prev => ({
+          ...prev,
+          [patientId]: resultMap
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching test results:', error);
+    }
+  };
 
   // Listen for investigation status updates
   useEffect(() => {
@@ -239,6 +332,112 @@ const InvestigationManagement = () => {
     return matchesSearch;
   });
 
+  // Handle test status update
+  const handleStatusUpdate = async (patientId, testType, newStatus) => {
+    const requestMap = investigationRequests[patientId];
+    if (!requestMap || !requestMap[testType]) {
+      // Try to fetch requests first
+      await fetchInvestigationRequests(patientId);
+      // Wait a bit and try again
+      setTimeout(async () => {
+        const updatedMap = investigationRequests[patientId];
+        if (updatedMap && updatedMap[testType]) {
+          await updateStatus(updatedMap[testType], newStatus, patientId, testType);
+        } else {
+          console.error('Investigation request not found for', testType);
+        }
+      }, 500);
+      return;
+    }
+    
+    await updateStatus(requestMap[testType], newStatus, patientId, testType);
+  };
+
+  const updateStatus = async (requestId, newStatus, patientId, testType) => {
+    try {
+      const result = await investigationService.updateInvestigationRequestStatus(requestId, newStatus);
+      if (result.success) {
+        // Refresh investigations
+        fetchInvestigations();
+        // Close dropdown
+        setOpenDropdown(null);
+        
+        // Trigger event
+        window.dispatchEvent(new CustomEvent('investigationStatusUpdated', {
+          detail: {
+            patientId,
+            testName: testType.toUpperCase(),
+            status: newStatus
+          }
+        }));
+      } else {
+        console.error('Failed to update status:', result.error);
+        alert('Failed to update status: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status');
+    }
+  };
+
+  // Handle upload result
+  const handleUploadResult = async (patientId, testType) => {
+    // Find the investigation object for this patient
+    const investigation = investigations.find(inv => inv.id === patientId);
+    if (!investigation) return;
+    
+    // Fetch requests if not already loaded
+    if (!investigationRequests[patientId]) {
+      await fetchInvestigationRequests(patientId);
+    }
+    
+    const requestMap = investigationRequests[patientId] || {};
+    const requestId = requestMap[testType];
+    
+    // Create a mock investigation request object
+    const investigationRequest = {
+      id: requestId,
+      investigationName: testType.toUpperCase(),
+      investigation_name: testType.toUpperCase(),
+      testType: testType
+    };
+    
+    // Create patient object for the modal
+    const patientForModal = {
+      id: investigation.id,
+      name: investigation.patientName,
+      fullName: investigation.patientName
+    };
+    
+    setSelectedInvestigationRequest(investigationRequest);
+    setSelectedPatientForUpload(patientForModal);
+    setIsAddResultModalOpen(true);
+    setOpenDropdown(null);
+  };
+
+  // Handle view result
+  const handleViewResult = (filePath) => {
+    if (filePath) {
+      investigationService.viewFile(filePath);
+    }
+  };
+
+  // Handle result added successfully
+  const handleResultAdded = (message, requestId) => {
+    // Refresh investigations
+    fetchInvestigations();
+    
+    // Refresh test results for the patient who just uploaded
+    if (selectedPatientForUpload && selectedPatientForUpload.id) {
+      fetchTestResults(selectedPatientForUpload.id);
+    }
+    
+    // Trigger event
+    window.dispatchEvent(new CustomEvent('testResultAdded', {
+      detail: { requestId }
+    }));
+  };
+
   // Handle patient actions
   const handleViewEdit = async (patient) => {
     // Fetch full patient details to ensure all fields are available
@@ -381,11 +580,21 @@ const InvestigationManagement = () => {
                 ) : filteredInvestigations.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="text-center py-8 text-gray-500 text-sm">
-                      No investigations found matching your criteria
+                      {investigations.length === 0 
+                        ? 'No investigations found' 
+                        : 'No investigations found matching your criteria'}
+                      <div className="text-xs text-gray-400 mt-2">
+                        Total investigations: {investigations.length} | Filtered: {filteredInvestigations.length}
+                      </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredInvestigations.map((investigation) => (
+                  filteredInvestigations.map((investigation) => {
+                    if (!investigation || !investigation.id) {
+                      console.warn('⚠️ Invalid investigation data:', investigation);
+                      return null;
+                    }
+                    return (
                     <tr key={investigation.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center space-x-3">
@@ -412,25 +621,55 @@ const InvestigationManagement = () => {
                         <div className="truncate">{investigation.urologist}</div>
                       </td>
                       <td className="py-3 px-2">
-                        <div className="flex justify-center items-center">
-                          <div title={getStatusText(investigation.mri)}>
-                            {getStatusIcon(investigation.mri)}
-                          </div>
-                        </div>
+                        <TestStatusCell
+                          investigation={investigation}
+                          testType="mri"
+                          status={investigation.mri}
+                          onFetchRequests={() => fetchInvestigationRequests(investigation.id)}
+                          onFetchResults={() => fetchTestResults(investigation.id)}
+                          onStatusUpdate={(newStatus) => handleStatusUpdate(investigation.id, 'mri', newStatus)}
+                          onUploadResult={() => handleUploadResult(investigation.id, 'mri')}
+                          onViewResult={(filePath) => handleViewResult(filePath)}
+                          testResult={testResults[investigation.id]?.mri}
+                          openDropdown={openDropdown}
+                          setOpenDropdown={setOpenDropdown}
+                          getStatusIcon={getStatusIcon}
+                          getStatusText={getStatusText}
+                        />
                       </td>
                       <td className="py-3 px-2">
-                        <div className="flex justify-center items-center">
-                          <div title={getStatusText(investigation.biopsy)}>
-                            {getStatusIcon(investigation.biopsy)}
-                          </div>
-                        </div>
+                        <TestStatusCell
+                          investigation={investigation}
+                          testType="biopsy"
+                          status={investigation.biopsy}
+                          onFetchRequests={() => fetchInvestigationRequests(investigation.id)}
+                          onFetchResults={() => fetchTestResults(investigation.id)}
+                          onStatusUpdate={(newStatus) => handleStatusUpdate(investigation.id, 'biopsy', newStatus)}
+                          onUploadResult={() => handleUploadResult(investigation.id, 'biopsy')}
+                          onViewResult={(filePath) => handleViewResult(filePath)}
+                          testResult={testResults[investigation.id]?.biopsy}
+                          openDropdown={openDropdown}
+                          setOpenDropdown={setOpenDropdown}
+                          getStatusIcon={getStatusIcon}
+                          getStatusText={getStatusText}
+                        />
                       </td>
                       <td className="py-3 px-2">
-                        <div className="flex justify-center items-center">
-                          <div title={getStatusText(investigation.trus)}>
-                            {getStatusIcon(investigation.trus)}
-                          </div>
-                        </div>
+                        <TestStatusCell
+                          investigation={investigation}
+                          testType="trus"
+                          status={investigation.trus}
+                          onFetchRequests={() => fetchInvestigationRequests(investigation.id)}
+                          onFetchResults={() => fetchTestResults(investigation.id)}
+                          onStatusUpdate={(newStatus) => handleStatusUpdate(investigation.id, 'trus', newStatus)}
+                          onUploadResult={() => handleUploadResult(investigation.id, 'trus')}
+                          onViewResult={(filePath) => handleViewResult(filePath)}
+                          testResult={testResults[investigation.id]?.trus}
+                          openDropdown={openDropdown}
+                          setOpenDropdown={setOpenDropdown}
+                          getStatusIcon={getStatusIcon}
+                          getStatusText={getStatusText}
+                        />
                       </td>
                       <td className="py-3 px-3 text-center">
                         <button
@@ -442,7 +681,8 @@ const InvestigationManagement = () => {
                         </button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  }).filter(Boolean)
                 )}
               </tbody>
             </table>
@@ -456,6 +696,163 @@ const InvestigationManagement = () => {
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
       />
+
+      {/* Add Investigation Result Modal */}
+      {selectedInvestigationRequest && selectedPatientForUpload && (
+        <AddInvestigationResultModal
+          isOpen={isAddResultModalOpen}
+          onClose={() => {
+            setIsAddResultModalOpen(false);
+            setSelectedInvestigationRequest(null);
+            setSelectedPatientForUpload(null);
+          }}
+          investigationRequest={selectedInvestigationRequest}
+          patient={selectedPatientForUpload}
+          onSuccess={handleResultAdded}
+          onStatusUpdate={(newStatus) => {
+            if (selectedInvestigationRequest.testType && selectedPatientForUpload?.id) {
+              handleStatusUpdate(selectedPatientForUpload.id, selectedInvestigationRequest.testType, newStatus);
+            }
+            setIsAddResultModalOpen(false);
+            setSelectedInvestigationRequest(null);
+            setSelectedPatientForUpload(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Test Status Cell Component
+const TestStatusCell = ({
+  investigation,
+  testType,
+  status,
+  onFetchRequests,
+  onFetchResults,
+  onStatusUpdate,
+  onUploadResult,
+  onViewResult,
+  testResult,
+  openDropdown,
+  setOpenDropdown,
+  getStatusIcon,
+  getStatusText
+}) => {
+  const dropdownId = `${investigation.id}-${testType}`;
+  const isOpen = openDropdown === dropdownId;
+  const hasResult = testResult && (testResult.filePath || testResult.file_path || testResult.result);
+  const cellRef = useRef(null);
+
+  // Fetch data when cell is clicked
+  const handleCellClick = (e) => {
+    e.stopPropagation();
+    if (!isOpen) {
+      onFetchRequests();
+      onFetchResults();
+    }
+    setOpenDropdown(isOpen ? null : dropdownId);
+  };
+
+  // If marked as not required, show N/A
+  if (status === 'not_required') {
+    return (
+      <div className="flex justify-center items-center">
+        <span className="text-xs text-gray-500 font-medium">N/A</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-center items-center relative" ref={cellRef}>
+      {/* Action Button - Check icon if result exists, Plus icon if no result */}
+      <div className="flex items-center justify-center">
+        {hasResult ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const filePath = testResult.filePath || testResult.file_path;
+              if (filePath) {
+                onViewResult(filePath);
+              }
+            }}
+            className="p-2 text-green-600 hover:text-green-800 transition-colors rounded-full hover:bg-green-50 group relative"
+            title="View result"
+          >
+            <Check className="w-5 h-5" />
+            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+              View Result
+            </span>
+          </button>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isOpen) {
+                onFetchRequests();
+                onFetchResults();
+              }
+              onUploadResult();
+            }}
+            className="p-2 text-teal-600 hover:text-teal-800 transition-colors rounded-full hover:bg-teal-50 group relative"
+            title="Add result or update status"
+          >
+            <FiPlus className="w-5 h-5" />
+            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+              Add Result
+            </span>
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div 
+          data-dropdown-menu
+          className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[180px]"
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUploadResult();
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Upload Result
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStatusUpdate('results_awaited');
+            }}
+            disabled={status === 'results_awaited'}
+            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+              status === 'results_awaited'
+                ? 'text-gray-400 cursor-not-allowed bg-gray-50'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <FiClock className="w-4 h-4" />
+            Results Awaited
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStatusUpdate('not_required');
+            }}
+            disabled={status === 'not_required'}
+            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+              status === 'not_required'
+                ? 'text-gray-400 cursor-not-allowed bg-gray-50'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <FiX className="w-4 h-4" />
+            Not Required
+          </button>
+        </div>
+      )}
     </div>
   );
 };
