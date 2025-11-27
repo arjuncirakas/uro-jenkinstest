@@ -105,8 +105,14 @@ const OPDManagement = () => {
     }
   };
 
+  // Use ref to track loading state to avoid dependency issues
+  const isLoadingRef = useRef(false);
+
   // Fetch upcoming appointments
   const fetchUpcomingAppointments = useCallback(async (reset = false, loadMore = false) => {
+    // Don't load if already loading
+    if (isLoadingRef.current) return;
+
     if (reset) {
       setUpcomingOffset(0);
       setUpcomingAppointments([]);
@@ -114,19 +120,23 @@ const OPDManagement = () => {
       setInitialLoading(true);
     }
 
-    // Don't load if already loading
-    if (loadingUpcoming) return;
-
+    isLoadingRef.current = true;
     setLoadingUpcoming(true);
     setUpcomingError(null);
 
     try {
-      const offset = reset ? 0 : upcomingOffset;
+      // Get current offset using functional update
+      let currentOffset = 0;
+      setUpcomingOffset(prev => {
+        currentOffset = reset ? 0 : prev;
+        return currentOffset;
+      });
+
       const limit = reset ? 3 : 10; // First load: 3 items, subsequent: 10 items
       
       const result = await bookingService.getUpcomingAppointments({
         limit: limit,
-        offset: offset
+        offset: currentOffset
       });
 
       if (result.success) {
@@ -149,14 +159,15 @@ const OPDManagement = () => {
       setUpcomingError('Failed to fetch upcoming appointments');
       console.error('Error fetching upcoming appointments:', error);
     } finally {
+      isLoadingRef.current = false;
       setLoadingUpcoming(false);
       setInitialLoading(false);
     }
-  }, [loadingUpcoming, upcomingOffset]);
+  }, []); // Empty dependencies - using refs and functional updates
 
   // Setup Intersection Observer for lazy loading
   useEffect(() => {
-    if (!lastItemRef.current || !hasMoreUpcoming || loadingUpcoming) return;
+    if (!lastItemRef.current || !hasMoreUpcoming || isLoadingRef.current) return;
 
     // Cleanup previous observer
     if (observerRef.current) {
@@ -167,7 +178,7 @@ const OPDManagement = () => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
         const lastEntry = entries[0];
-        if (lastEntry.isIntersecting && hasMoreUpcoming && !loadingUpcoming) {
+        if (lastEntry.isIntersecting && hasMoreUpcoming && !isLoadingRef.current) {
           fetchUpcomingAppointments(false, true);
         }
       },
@@ -189,7 +200,7 @@ const OPDManagement = () => {
         observerRef.current.disconnect();
       }
     };
-  }, [upcomingAppointments.length, hasMoreUpcoming, loadingUpcoming, fetchUpcomingAppointments]);
+  }, [upcomingAppointments.length, hasMoreUpcoming, fetchUpcomingAppointments]);
 
 
   // State for appointments data
