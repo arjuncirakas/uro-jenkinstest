@@ -294,7 +294,7 @@ export const validatePatientInput = [
         if (symptom.frequency !== undefined && symptom.frequency !== null && typeof symptom.frequency !== 'string') {
           throw new Error('Frequency must be a string if provided');
         }
-        // Notes is optional but can be included for LUTS, Hematuria, and Nocturia
+        // Notes is optional and can be included for all symptoms
         if (symptom.notes !== undefined && symptom.notes !== null && typeof symptom.notes !== 'string') {
           throw new Error('Notes must be a string if provided');
         }
@@ -690,7 +690,7 @@ export const validatePatientUpdateInput = [
         if (symptom.frequency !== undefined && symptom.frequency !== null && typeof symptom.frequency !== 'string') {
           throw new Error('Frequency must be a string if provided');
         }
-        // Notes is optional but can be included for LUTS, Hematuria, and Nocturia
+        // Notes is optional and can be included for all symptoms
         if (symptom.notes !== undefined && symptom.notes !== null && typeof symptom.notes !== 'string') {
           throw new Error('Notes must be a string if provided');
         }

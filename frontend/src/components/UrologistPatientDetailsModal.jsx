@@ -2426,21 +2426,19 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               {/* Other Test Results Section - Right Side */}
               <div className="w-1/2 p-6">
                 <div className="bg-white rounded-lg border border-gray-200 h-full flex flex-col">
-                <div className="px-6 py-4 border-b border-gray-200">
+                <div className="px-6 py-4 border-b border-gray-100">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                       <IoDocument className="mr-2 text-teal-600" />
                       Other Test Results & Reports
                     </h3>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setIsAddInvestigationModalOpen(true)}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-1"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Add Test</span>
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setIsAddInvestigationModalOpen(true)}
+                      className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors text-sm font-medium flex items-center space-x-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Test</span>
+                    </button>
                   </div>
                 </div>
                   
@@ -2640,26 +2638,64 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             return b.localeCompare(a);
                           });
 
-                          return sortedDates.map((dateKey) => (
-                            <div key={dateKey} className="border-l-2 border-teal-500 pl-4">
-                              <div className="mb-3">
-                                <h4 className="text-sm font-semibold text-gray-700 flex items-center">
-                                  <IoCalendar className="mr-2 text-teal-600" />
-                                  {dateKey}
-                                </h4>
-                              </div>
-                              <div className="space-y-3 ml-6">
-                                {groupedByDate[dateKey].map((request) => {
-                                  // Check if results have been uploaded for this investigation
-                                  const investigationName = (request.investigationName || request.investigation_name || '').toUpperCase();
-                                  const hasResults = latestOtherTests.some(result => {
-                                    const resultName = (result.testName || '').toUpperCase();
-                                    return resultName === investigationName || resultName.includes(investigationName) || investigationName.includes(resultName);
-                                  });
-                                  const uploadedResult = latestOtherTests.find(result => {
-                                    const resultName = (result.testName || '').toUpperCase();
-                                    return resultName === investigationName || resultName.includes(investigationName) || investigationName.includes(resultName);
-                                  });
+                          return sortedDates.map((dateKey) => {
+                            // Sort tests within this date group: 
+                            // Tests needing action (no results AND not "not_required") come first
+                            // Tests with results OR marked "not_required" come last
+                            const sortedTests = [...groupedByDate[dateKey]].sort((a, b) => {
+                              const aName = (a.investigationName || a.investigation_name || '').trim().toUpperCase();
+                              const bName = (b.investigationName || b.investigation_name || '').trim().toUpperCase();
+                              
+                              // Use exact match only to prevent false matches (e.g., "MRI" matching "MRI SUB TEST")
+                              const aHasResults = latestOtherTests.some(result => {
+                                const resultName = (result.testName || '').trim().toUpperCase();
+                                return resultName === aName;
+                              });
+                              
+                              const bHasResults = latestOtherTests.some(result => {
+                                const resultName = (result.testName || '').trim().toUpperCase();
+                                return resultName === bName;
+                              });
+                              
+                              const aIsNotRequired = (a.status || '').toLowerCase() === 'not_required';
+                              const bIsNotRequired = (b.status || '').toLowerCase() === 'not_required';
+                              
+                              // Tests that need action (no results AND not "not_required") should come first
+                              const aNeedsAction = !aHasResults && !aIsNotRequired;
+                              const bNeedsAction = !bHasResults && !bIsNotRequired;
+                              
+                              // If one needs action and the other doesn't, prioritize the one that needs action
+                              if (aNeedsAction && !bNeedsAction) return -1;
+                              if (!aNeedsAction && bNeedsAction) return 1;
+                              return 0; // Keep original order if both have same priority
+                            });
+
+                            return (
+                              <div key={dateKey} className="mb-6 last:mb-0">
+                                <div className="mb-4 flex items-center">
+                                  <div className="flex items-center space-x-2">
+                                    <IoCalendar className="text-teal-600 text-base" />
+                                    <h4 className="text-sm font-semibold text-gray-800">
+                                      {dateKey}
+                                    </h4>
+                                  </div>
+                                  <div className="flex-1 h-px bg-gray-100 ml-3"></div>
+                                </div>
+                                <div className="space-y-2.5">
+                                  {sortedTests.map((request) => {
+                                    // Check if results have been uploaded for this investigation
+                                    // Use exact match only to prevent false matches (e.g., "MRI" matching "MRI SUB TEST")
+                                    const investigationName = (request.investigationName || request.investigation_name || '').trim().toUpperCase();
+                                    const hasResults = latestOtherTests.some(result => {
+                                      const resultName = (result.testName || '').trim().toUpperCase();
+                                      // Only use exact match to prevent false positives
+                                      return resultName === investigationName;
+                                    });
+                                    const uploadedResult = latestOtherTests.find(result => {
+                                      const resultName = (result.testName || '').trim().toUpperCase();
+                                      // Only use exact match to prevent false positives
+                                      return resultName === investigationName;
+                                    });
 
                                   // Handle status update for investigation requests
                                   const handleStatusUpdate = async (newStatus) => {
@@ -2699,10 +2735,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   };
 
                                   return (
-                                    <div key={`request-${request.id}`} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all shadow-sm">
+                                    <div key={`request-${request.id}`} className="bg-gray-50 rounded-md p-4 border border-gray-200 hover:border-gray-300 transition-colors">
                                       <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-3 mb-3">
+                                          <div className="flex items-center gap-2 mb-3">
                                             <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
                                           </div>
                                           
@@ -2732,10 +2768,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                             <div className="mt-3 flex items-center gap-2 flex-wrap">
                                               <button
                                                 onClick={() => handleStatusUpdate('results_awaited')}
-                                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                                                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                                                   request.status === 'results_awaited'
                                                     ? 'bg-amber-500 text-white cursor-not-allowed'
-                                                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+                                                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-300'
                                                 }`}
                                                 disabled={request.status === 'results_awaited'}
                                               >
@@ -2743,10 +2779,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                               </button>
                                               <button
                                                 onClick={() => handleStatusUpdate('not_required')}
-                                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                                                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                                                   request.status === 'not_required'
                                                     ? 'bg-gray-400 text-white cursor-not-allowed'
-                                                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                                                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300'
                                                 }`}
                                                 disabled={request.status === 'not_required'}
                                               >
@@ -2769,51 +2805,67 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                   setIsSuccessModalOpen(true);
                                                 }
                                               }}
-                                              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                                              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
                                             >
                                               <Eye className="w-4 h-4" />
                                               View
                                             </button>
                                           ) : (
-                                            <button
-                                              onClick={() => {
-                                                // For clinical investigations, create a request object
-                                                const requestToUse = request.isClinicalInvestigation ? {
-                                                  id: request.noteId,
-                                                  investigationName: request.investigationName,
-                                                  investigation_name: request.investigation_name,
-                                                  investigationType: request.investigationType,
-                                                  investigation_type: request.investigation_type,
-                                                  scheduledDate: request.scheduledDate,
-                                                  scheduled_date: request.scheduled_date,
-                                                  status: request.status,
-                                                  notes: request.notes
-                                                } : request;
-                                                setSelectedInvestigationRequest(requestToUse);
-                                                setIsAddResultModalOpen(true);
-                                              }}
-                                              className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
-                                            >
-                                              <Upload className="w-4 h-4" />
-                                              Upload
-                                            </button>
+                                            (() => {
+                                              // Check if this is a PSA-related test
+                                              const isPSATest = investigationName.includes('PSA');
+                                              return (
+                                                <button
+                                                  onClick={() => {
+                                                    // For clinical investigations, create a request object
+                                                    const requestToUse = request.isClinicalInvestigation ? {
+                                                      id: request.noteId,
+                                                      investigationName: request.investigationName,
+                                                      investigation_name: request.investigation_name,
+                                                      investigationType: request.investigationType,
+                                                      investigation_type: request.investigation_type,
+                                                      scheduledDate: request.scheduledDate,
+                                                      scheduled_date: request.scheduled_date,
+                                                      status: request.status,
+                                                      notes: request.notes
+                                                    } : request;
+                                                    setSelectedInvestigationRequest(requestToUse);
+                                                    setIsAddResultModalOpen(true);
+                                                  }}
+                                                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-teal-700 transition-colors flex items-center gap-2"
+                                                >
+                                                  {isPSATest ? (
+                                                    <>
+                                                      <Plus className="w-4 h-4" />
+                                                      Add Value
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <Upload className="w-4 h-4" />
+                                                      Upload
+                                                    </>
+                                                  )}
+                                                </button>
+                                              );
+                                            })()
                                           )}
                                         </div>
                                       </div>
                                     </div>
                                   );
-                                })}
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          ));
+                            );
+                          });
                         })()}
                       </div>
                     ) : (
-                      <div className="text-center py-8">
-                        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
-                          <IoDocument className="text-xl text-gray-400" />
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-50 flex items-center justify-center border border-gray-200">
+                          <IoDocument className="text-2xl text-gray-400" />
                         </div>
-                        <h4 className="text-base font-medium text-gray-900 mb-1">No Test Results</h4>
+                        <h4 className="text-base font-semibold text-gray-900 mb-1">No Test Results</h4>
                         <p className="text-gray-500 text-sm">No other test results have been recorded for this patient yet.</p>
                       </div>
                     )}
@@ -4187,10 +4239,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         }}
         investigationRequest={selectedInvestigationRequest}
         patient={patient}
+        isPSATest={selectedInvestigationRequest ? (selectedInvestigationRequest.investigationName || selectedInvestigationRequest.investigation_name || '').toUpperCase().includes('PSA') : false}
         onSuccess={(message, requestId) => {
-          setSuccessModalTitle('Result Added Successfully!');
-          setSuccessModalMessage(message);
-          setIsSuccessModalOpen(true);
           setIsAddResultModalOpen(false);
           setSelectedInvestigationRequest(null);
           // Refresh both investigation results and requests
