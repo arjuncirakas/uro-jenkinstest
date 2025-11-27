@@ -1779,8 +1779,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     Add Clinical Note
                   </h3>
                   
-                  <div className="flex flex-col flex-1 min-h-0">
-                    <div className="flex-1 flex flex-col min-h-0 mb-3">
+                  <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div className="flex flex-col mb-3 sm:mb-4 flex-shrink-0">
                       <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 flex-shrink-0">
                         Note Content
                       </label>
@@ -1789,11 +1789,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         onChange={(e) => setNoteContent(e.target.value)}
                         placeholder="Enter clinical note details..."
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none flex-1 min-h-[100px]"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none min-h-[100px] max-h-[200px] sm:max-h-[250px] lg:max-h-[300px] overflow-y-auto"
                       />
                     </div>
                     
-                    <div className="flex justify-between space-x-3 flex-shrink-0">
+                    <div className="flex justify-between space-x-2 sm:space-x-3 flex-shrink-0 mb-2 sm:mb-0">
                       <button
                         onClick={() => {
                           setNoteContent('');

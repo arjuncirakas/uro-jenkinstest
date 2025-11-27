@@ -1124,10 +1124,12 @@ const OPDManagement = () => {
                                   <span className="text-sm font-semibold text-gray-900">
                                     {formatDate(appointment.appointmentDate)}
                                   </span>
-                                  <span className="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full font-medium">
-                                    {appointment.appointmentTime}
-                                  </span>
-                                  {isFollowUp && (
+                                  {appointment.appointmentTime && (
+                                    <span className="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full font-medium">
+                                      {formatTime(appointment.appointmentTime)}
+                                    </span>
+                                  )}
+                                  {isFollowUp && !appointment.appointmentTime && (
                                     <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
                                       Follow-up
                                     </span>
@@ -1144,16 +1146,8 @@ const OPDManagement = () => {
                               <div className="font-medium text-gray-900 text-sm">
                                 {appointment.patientName}
                               </div>
-                              <div className="flex items-center justify-between">
-                                <div className="text-xs text-gray-500">
-                                  Age: {appointment.age || 'N/A'} • {appointment.gender || 'Unknown'}
-                                </div>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${appointment.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
-                                    appointment.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                                      appointment.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
-                                  }`}>
-                                  {appointment.status}
-                                </span>
+                              <div className="text-xs text-gray-500">
+                                Age: {appointment.age || 'N/A'} • {appointment.gender || 'Unknown'}
                               </div>
                             </div>
                           </div>
