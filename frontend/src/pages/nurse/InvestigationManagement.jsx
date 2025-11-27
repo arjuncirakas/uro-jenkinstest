@@ -120,10 +120,15 @@ const InvestigationManagement = () => {
         // Find MRI, BIOPSY, and TRUS results
         const resultMap = {};
         results.forEach(res => {
-          const name = (res.testName || res.test_name || '').toUpperCase();
-          if (name === 'MRI') resultMap.mri = res;
-          else if (name === 'BIOPSY') resultMap.biopsy = res;
-          else if (name === 'TRUS') resultMap.trus = res;
+          const name = (res.testName || res.test_name || res.testType || res.test_type || '').toUpperCase().trim();
+          // Match exact or if name contains the test type
+          if (name === 'MRI' || name.includes('MRI')) {
+            resultMap.mri = res;
+          } else if (name === 'BIOPSY' || name.includes('BIOPSY')) {
+            resultMap.biopsy = res;
+          } else if (name === 'TRUS' || name.includes('TRUS')) {
+            resultMap.trus = res;
+          }
         });
         
         setTestResults(prev => ({
@@ -153,11 +158,18 @@ const InvestigationManagement = () => {
 
   // Listen for test result added events to refresh data
   useEffect(() => {
-    const handleTestResultAdded = (event) => {
+    const handleTestResultAdded = async (event) => {
       console.log('Test result added event received:', event.detail);
+      const { patientId } = event.detail || {};
+      
       // Show brief loading indicator and refresh investigations data
       setLoadingInvestigations(true);
-      fetchInvestigations();
+      await fetchInvestigations();
+      
+      // Also refresh test results for the specific patient if patientId is provided
+      if (patientId) {
+        await fetchTestResults(patientId);
+      }
     };
 
     window.addEventListener('testResultAdded', handleTestResultAdded);

@@ -84,6 +84,15 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       if (resultResponse.success) {
         console.log('✅ Investigation result added:', resultResponse.data);
         
+        // Dispatch event to refresh investigation management table
+        window.dispatchEvent(new CustomEvent('testResultAdded', {
+          detail: {
+            patientId: patient?.id,
+            requestId: investigationRequest.id,
+            testName: investigationRequest.investigationName || investigationRequest.investigation_name
+          }
+        }));
+        
         // Call success callback
         if (onSuccess) {
           onSuccess('Investigation result added successfully!', investigationRequest.id);

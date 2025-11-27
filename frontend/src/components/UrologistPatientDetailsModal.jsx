@@ -4322,6 +4322,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           // Refresh both investigation results and requests
           fetchInvestigations();
           fetchInvestigationRequests();
+          
+          // Dispatch event to refresh investigation management table
+          window.dispatchEvent(new CustomEvent('testResultAdded', {
+            detail: {
+              patientId: patient?.id,
+              requestId: requestId,
+              testName: selectedInvestigationRequest?.investigationName || selectedInvestigationRequest?.investigation_name
+            }
+          }));
         }}
       />
 

@@ -751,12 +751,13 @@ export const getAllInvestigations = async (req, res) => {
           trus: false
         };
       }
-      const testType = (row.test_type || row.test_name || '').toLowerCase();
-      if (testType === 'mri') {
+      const testType = (row.test_type || row.test_name || '').toLowerCase().trim();
+      // Check if test type/name contains or matches MRI, Biopsy, or TRUS (case-insensitive)
+      if (testType === 'mri' || testType.includes('mri')) {
         patientResults[row.patient_id].mri = true;
-      } else if (testType === 'biopsy') {
+      } else if (testType === 'biopsy' || testType.includes('biopsy')) {
         patientResults[row.patient_id].biopsy = true;
-      } else if (testType === 'trus') {
+      } else if (testType === 'trus' || testType.includes('trus')) {
         patientResults[row.patient_id].trus = true;
       }
     });
