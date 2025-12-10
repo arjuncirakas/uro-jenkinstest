@@ -179,7 +179,9 @@ export const getDischargeToGPPercentage = async (req, res) => {
 export const getAllKPIs = async (req, res) => {
   const client = await pool.connect();
   try {
+    // Make date filter optional - if not provided, show all data
     const { startDate, endDate } = req.query;
+    const hasDateFilter = startDate && endDate && startDate.trim() !== '' && endDate.trim() !== '';
     
     // Get all KPIs in parallel
     const [waitTimeResult, complianceResult, dischargeResult] = await Promise.all([
@@ -188,7 +190,7 @@ export const getAllKPIs = async (req, res) => {
         let dateFilter = '';
         const params = [];
         
-        if (startDate && endDate) {
+        if (hasDateFilter) {
           dateFilter = 'WHERE p.referral_date BETWEEN $1 AND $2';
           params.push(startDate, endDate);
         }
@@ -217,7 +219,7 @@ export const getAllKPIs = async (req, res) => {
         let dateFilter = '';
         const params = [];
         
-        if (startDate && endDate) {
+        if (hasDateFilter) {
           dateFilter = 'AND p.care_pathway_updated_at BETWEEN $1 AND $2';
           params.push(startDate, endDate);
         }
@@ -249,7 +251,7 @@ export const getAllKPIs = async (req, res) => {
         let dateFilter = '';
         const params = [];
         
-        if (startDate && endDate) {
+        if (hasDateFilter) {
           dateFilter = 'WHERE p.care_pathway_updated_at BETWEEN $1 AND $2';
           params.push(startDate, endDate);
         }

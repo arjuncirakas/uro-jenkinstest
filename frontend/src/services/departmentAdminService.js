@@ -5,8 +5,9 @@ class DepartmentAdminService {
   async getAllKPIs(startDate = null, endDate = null) {
     try {
       const params = {};
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
+      // Only add date params if both are provided and not empty
+      if (startDate && startDate.trim() !== '') params.startDate = startDate;
+      if (endDate && endDate.trim() !== '') params.endDate = endDate;
       
       const response = await axios.get('/kpi/all', { params });
       return response.data;

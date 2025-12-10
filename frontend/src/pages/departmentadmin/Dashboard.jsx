@@ -9,8 +9,8 @@ const DepartmentAdminDashboard = () => {
   const [kpiData, setKpiData] = useState(null);
   const [trends, setTrends] = useState(null);
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setMonth(new Date().getMonth() - 12)).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    startDate: '', // Empty means no filter - show all data
+    endDate: ''
   });
   const [trendPeriod, setTrendPeriod] = useState('month');
   const [trendMonths, setTrendMonths] = useState(12);
@@ -111,6 +111,11 @@ const DepartmentAdminDashboard = () => {
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
             />
           </div>
+          {(!dateRange.startDate || !dateRange.endDate) && (
+            <span className="text-xs text-gray-500 italic">
+              (Showing all data - select dates to filter)
+            </span>
+          )}
         </div>
       </div>
 
