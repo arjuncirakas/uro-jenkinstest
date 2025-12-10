@@ -1884,16 +1884,22 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     let appointmentParams = [];
     let paramIndex = 1;
     
+    // For 'all' category, include all appointment statuses (scheduled, confirmed, completed)
+    // For other categories, only include scheduled/confirmed to show active patients
+    const appointmentStatusFilter = category === 'all' 
+      ? `a.status NOT IN ('cancelled')` 
+      : `a.status IN ('scheduled', 'confirmed')`;
+    
     if (doctorId) {
       // Use doctor ID for matching (most reliable)
-      appointmentWhere = `a.urologist_id = $${paramIndex} AND a.status IN ('scheduled', 'confirmed')`;
+      appointmentWhere = `a.urologist_id = $${paramIndex} AND ${appointmentStatusFilter}`;
       appointmentParams.push(doctorId);
       paramIndex++;
       console.log(`[getAssignedPatientsForDoctor] Using doctor ID ${doctorId} for appointments query`);
     } else {
       // Fall back to name matching if doctor ID not found
       // Match by urologist_name in appointments table (normalized, case-insensitive)
-      appointmentWhere = `TRIM(LOWER(REGEXP_REPLACE(a.urologist_name, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($${paramIndex})) AND a.status IN ('scheduled', 'confirmed')`;
+      appointmentWhere = `TRIM(LOWER(REGEXP_REPLACE(a.urologist_name, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($${paramIndex})) AND ${appointmentStatusFilter}`;
       appointmentParams.push(normalizedDoctorName || doctorName);
       paramIndex++;
       console.log(`[getAssignedPatientsForDoctor] Using doctor name "${normalizedDoctorName || doctorName}" for appointments query (ID not found)`);

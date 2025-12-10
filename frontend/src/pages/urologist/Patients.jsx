@@ -107,15 +107,20 @@ const Patients = () => {
     const handleAppointmentUpdated = (event) => {
       console.log('🔄 Appointment updated event received, refreshing patient list...', event.detail);
       // Refresh the patient list to show newly assigned patients
+      // This applies to all categories (new, all, surgery-pathway, etc.)
       fetchPatients();
     };
 
     window.addEventListener('appointment:updated', handleAppointmentUpdated);
+    window.addEventListener('appointment:booked', handleAppointmentUpdated);
     window.addEventListener('surgery:updated', handleAppointmentUpdated);
+    window.addEventListener('investigationBooked', handleAppointmentUpdated);
     
     return () => {
       window.removeEventListener('appointment:updated', handleAppointmentUpdated);
+      window.removeEventListener('appointment:booked', handleAppointmentUpdated);
       window.removeEventListener('surgery:updated', handleAppointmentUpdated);
+      window.removeEventListener('investigationBooked', handleAppointmentUpdated);
     };
   }, [fetchPatients]);
 
