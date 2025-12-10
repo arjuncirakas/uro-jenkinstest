@@ -7,18 +7,11 @@
 import DOMPurify from 'dompurify';
 
 // Validate name fields (only letters, spaces, hyphens, apostrophes, periods)
-// Spaces are allowed only between letters, not at the start or end
+// Spaces are allowed anywhere in the name (will be trimmed on form submission)
 export const validateNameInput = (value) => {
   // Allow letters, spaces, hyphens, apostrophes, periods
   const nameRegex = /^[a-zA-Z\s'.-]*$/;
-  if (!nameRegex.test(value)) {
-    return false;
-  }
-  // Check that value doesn't start or end with a space
-  if (value.trim() !== value) {
-    return false;
-  }
-  return true;
+  return nameRegex.test(value);
 };
 
 // Validate phone number (only digits, spaces, hyphens, parentheses, plus sign)
@@ -205,15 +198,19 @@ export const validateEmailFormat = (email) => {
 export const validateNameFormat = (name, fieldName) => {
   if (!name) return '';
   
-  if (name.length < 2) {
+  // Trim the name for validation but allow spaces within the name
+  const trimmedName = name.trim();
+  
+  if (trimmedName.length < 2) {
     return `${fieldName} must be at least 2 characters`;
   }
   
-  if (name.length > 50) {
+  if (trimmedName.length > 50) {
     return `${fieldName} must be less than 50 characters`;
   }
   
-  if (!/^[a-zA-Z\s'.-]+$/.test(name)) {
+  // Allow spaces anywhere in the name (will be trimmed on submission)
+  if (!/^[a-zA-Z\s'.-]+$/.test(trimmedName)) {
     return `${fieldName} can only contain letters, spaces, hyphens, apostrophes, and periods`;
   }
   

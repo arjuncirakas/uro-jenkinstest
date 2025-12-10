@@ -222,9 +222,10 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       if (!isValid) return; // Don't update if invalid characters
     }
 
-    // Textarea fields and address field - check if this is a field that needs whitespace preserved
+    // Textarea fields, address field, and name fields - check if this is a field that needs whitespace preserved
     const textareaFields = ['medicalHistory', 'currentMedications', 'allergies', 'notes', 'address'];
-    const preserveWhitespace = textareaFields.includes(name);
+    const nameFields = ['firstName', 'lastName', 'emergencyContactName', 'city', 'state'];
+    const preserveWhitespace = textareaFields.includes(name) || nameFields.includes(name);
 
     // Sanitize text inputs to prevent XSS
     if (typeof value === 'string') {
@@ -310,6 +311,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       }
     }
 
+    // Validate symptoms - IPSS score is required for LUTS
+    triageSymptoms.forEach((symptom, index) => {
+      if (symptom.checked && symptom.name === 'LUTS' && !symptom.ipssScore) {
+        // Store error using symptom index
+        if (!newErrors.symptoms) {
+          newErrors.symptoms = {};
+        }
+        newErrors.symptoms[`${index}_ipss`] = 'IPSS score is required for LUTS';
+      }
+    });
+
     setErrors(newErrors);
 
     // Scroll to first error if validation fails
@@ -358,8 +370,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       const triageData = triageSymptoms
         .filter(symptom => {
           if (!symptom.checked || !symptom.duration) return false;
-          // IPSS score is only required for LUTS and Nocturia
-          if (symptom.name === 'LUTS' || symptom.name === 'Nocturia') {
+          // IPSS score is required only for LUTS
+          if (symptom.name === 'LUTS') {
             return symptom.ipssScore;
           }
           return true;
@@ -376,8 +388,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
 
       // Prepare patient data for API
       const patientData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
         dateOfBirth: convertToISODate(formData.dateOfBirth),
         age: formData.age ? parseInt(formData.age, 10) : null,
         gender: formData.gender,
@@ -636,6 +648,20 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       };
       return updated;
     });
+    
+    // Clear error when IPSS score is selected for LUTS
+    if (field === 'ipssScore' && value) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        if (newErrors.symptoms && newErrors.symptoms[`${index}_ipss`]) {
+          delete newErrors.symptoms[`${index}_ipss`];
+          if (Object.keys(newErrors.symptoms).length === 0) {
+            delete newErrors.symptoms;
+          }
+        }
+        return newErrors;
+      });
+    }
   };
 
   // Handle add custom symptom
@@ -1367,17 +1393,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                         <div className="px-4 pb-4 pt-3 border-t border-gray-200" onClick={(e) => e.stopPropagation()}>
                           <div className="space-y-4">
                             <div className={`grid gap-4 ${
-                              symptom.name === 'LUTS' || symptom.name === 'Nocturia'
+                              symptom.name === 'LUTS'
                                 ? 'grid-cols-1 md:grid-cols-2' 
                                 : 'grid-cols-1'
                             }`}>
-                              {(symptom.name === 'LUTS' || symptom.name === 'Nocturia') && (
+                              {symptom.name === 'LUTS' && (
                                 <div className="relative mb-3">
                                   <select
                                     value={symptom.ipssScore}
                                     onChange={(e) => handleSymptomFieldChange(index, 'ipssScore', e.target.value)}
                                     className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                                      symptom.ipssScore
+                                      errors.symptoms && errors.symptoms[`${index}_ipss`]
+                                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                                        : symptom.ipssScore
                                         ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
                                         : 'border-gray-300 focus:border-teal-500 bg-teal-50'
                                     } motion-reduce:transition-none`}
@@ -1389,16 +1417,25 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                   </select>
                                   <label
                                     className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${
-                                      symptom.ipssScore
+                                      errors.symptoms && errors.symptoms[`${index}_ipss`]
+                                        ? 'text-red-500'
+                                        : symptom.ipssScore
                                         ? 'text-teal-600'
                                         : 'text-gray-500'
                                     } peer-focus:text-teal-600 motion-reduce:transition-none`}
                                   >
-                                    IPSS Score
+                                    IPSS Score <span className="text-red-500">*</span>
                                   </label>
                                   <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${
-                                    symptom.ipssScore ? 'text-teal-500' : 'text-gray-400'
+                                    errors.symptoms && errors.symptoms[`${index}_ipss`]
+                                      ? 'text-red-500'
+                                      : symptom.ipssScore ? 'text-teal-500' : 'text-gray-400'
                                   }`} />
+                                  {errors.symptoms && errors.symptoms[`${index}_ipss`] && (
+                                    <p className="mt-1 text-xs text-red-600">
+                                      {errors.symptoms[`${index}_ipss`]}
+                                    </p>
+                                  )}
                                 </div>
                               )}
 
@@ -2259,7 +2296,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                 </label>
               </div>
 
-              {(customSymptomName === 'LUTS' || customSymptomName === 'Nocturia') && (
+              {customSymptomName === 'LUTS' && (
                 <div className="relative mb-6">
                   <select
                     value={customSymptomIpssScore}
@@ -2282,7 +2319,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                         : 'text-gray-500'
                     } peer-focus:text-teal-600 motion-reduce:transition-none`}
                   >
-                    IPSS Score
+                    IPSS Score <span className="text-red-500">*</span>
                   </label>
                   <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
                     customSymptomIpssScore ? 'text-teal-500' : 'text-gray-400'
