@@ -24,12 +24,12 @@ export const createUser = async (req, res) => {
     const { email, firstName, lastName, phone, organization, role, department_id } = req.body;
 
     // Validate role
-    const allowedRoles = ['urologist', 'gp', 'urology_nurse', 'doctor'];
+    const allowedRoles = ['urologist', 'gp', 'urology_nurse', 'doctor', 'department_admin'];
     if (!allowedRoles.includes(role)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse, doctor'
+        message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse, doctor, department_admin'
       });
     }
 
@@ -567,11 +567,11 @@ export const updateUser = async (req, res) => {
 
     // Validate role if provided
     if (role) {
-      const allowedRoles = ['urologist', 'gp', 'urology_nurse', 'doctor'];
+      const allowedRoles = ['urologist', 'gp', 'urology_nurse', 'doctor', 'department_admin'];
       if (!allowedRoles.includes(role)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse, doctor'
+          message: 'Invalid role. Allowed roles: urologist, gp, urology_nurse, doctor, department_admin'
         });
       }
     }
