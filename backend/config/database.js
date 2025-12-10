@@ -96,7 +96,7 @@ export const initializeDatabase = async () => {
         `);
         await client.query(`
           ALTER TABLE users ADD CONSTRAINT users_role_check 
-          CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse', 'doctor'));
+          CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse', 'doctor', 'department_admin'));
         `);
         console.log('✅ Updated role constraint');
       } catch (err) {
@@ -115,7 +115,7 @@ export const initializeDatabase = async () => {
           last_name VARCHAR(100) NOT NULL,
           phone VARCHAR(20) UNIQUE,
           organization VARCHAR(255),
-          role VARCHAR(50) NOT NULL CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse', 'doctor')),
+          role VARCHAR(50) NOT NULL CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse', 'doctor', 'department_admin')),
           is_active BOOLEAN DEFAULT false,
           is_verified BOOLEAN DEFAULT false,
           email_verified_at TIMESTAMP,

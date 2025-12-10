@@ -260,7 +260,8 @@ class AuthService {
       urologist: '/urologist/dashboard',
       doctor: '/urologist/dashboard', // Doctors use the same routes as urologists
       gp: '/gp/dashboard',
-      urology_nurse: '/nurse/opd-management'
+      urology_nurse: '/nurse/opd-management',
+      department_admin: '/department-admin/dashboard'
     };
 
     return roleRoutes[role] || '/login';
@@ -278,7 +279,8 @@ class AuthService {
       urologist: ['/urologist', '/dashboard', '/profile'],
       doctor: ['/urologist', '/dashboard', '/profile'], // Doctors have same access as urologists
       gp: ['/gp', '/dashboard', '/profile'],
-      urology_nurse: ['/nurse', '/dashboard', '/profile']
+      urology_nurse: ['/nurse', '/dashboard', '/profile'],
+      department_admin: ['/department-admin', '/dashboard', '/profile']
     };
 
     const allowedRoutes = accessRules[role] || [];

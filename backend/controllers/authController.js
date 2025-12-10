@@ -300,11 +300,11 @@ export const login = async (req, res) => {
 
     console.log(`✅ Password verified for: ${email}, role: ${user.role}`);
 
-    // Check if user is superadmin - skip OTP verification
-    if (user.role === 'superadmin') {
-      console.log(`🔓 Superadmin login - skipping OTP verification for: ${email}`);
+    // Check if user is superadmin or department_admin - skip OTP verification
+    if (user.role === 'superadmin' || user.role === 'department_admin') {
+      console.log(`🔓 ${user.role} login - skipping OTP verification for: ${email}`);
       
-      // Generate tokens directly for superadmin
+      // Generate tokens directly
       const tokens = generateTokens(user);
 
       // Store refresh token in database
@@ -316,7 +316,7 @@ export const login = async (req, res) => {
       // Set secure HTTP-only cookie for refresh token
       res.cookie('refreshToken', tokens.refreshToken, getCookieOptions());
 
-      // Return tokens directly for superadmin
+      // Return tokens directly
       res.json({
         success: true,
         message: 'Login successful',

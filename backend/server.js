@@ -19,6 +19,8 @@ import notificationRoutes from './routes/notifications.js';
 import gpRoutes from './routes/gp.js';
 import nursesRoutes from './routes/nurses.js';
 import consentFormRoutes from './routes/consentForms.js';
+import kpiRoutes from './routes/kpi.js';
+import exportRoutes from './routes/export.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { initializeNotificationsTable } from './services/notificationService.js';
@@ -188,6 +190,10 @@ app.use('/api/nurses', nursesRoutes);
 console.log('✅ Nurses routes registered at /api/nurses');
 app.use('/api/consent-forms', consentFormRoutes);
 console.log('✅ Consent forms routes registered at /api/consent-forms');
+app.use('/api/kpi', kpiRoutes);
+console.log('✅ KPI routes registered at /api/kpi');
+app.use('/api/export', exportRoutes);
+console.log('✅ Export routes registered at /api/export');
 
 // 404 handler
 app.use(notFound);

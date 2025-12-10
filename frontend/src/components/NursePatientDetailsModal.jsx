@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct } from 'react-icons/io5';
+import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
@@ -21,6 +21,8 @@ import { investigationService } from '../services/investigationService';
 import { bookingService } from '../services/bookingService';
 import { patientService } from '../services/patientService';
 import EditPatientModal from './EditPatientModal';
+import { calculatePSAVelocity } from '../utils/psaVelocity';
+import { getPatientPipelineStage } from '../utils/patientPipeline';
 
 const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -2203,6 +2205,39 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                 </div>
                   
                   <div className="flex-1 overflow-y-auto p-6">
+                    {/* PSA Velocity Display */}
+                    {psaResults.length >= 2 && (() => {
+                      const velocityData = calculatePSAVelocity(psaResults);
+                      return (
+                        <div className={`mb-4 p-4 rounded-lg border-2 ${velocityData.isHighRisk ? 'bg-red-50 border-red-300' : 'bg-teal-50 border-teal-200'}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-700 mb-1">PSA Velocity</h4>
+                              <p className={`text-lg font-bold ${velocityData.isHighRisk ? 'text-red-700' : 'text-teal-700'}`}>
+                                {velocityData.velocityText}
+                              </p>
+                              {velocityData.hasEnoughData && (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Based on {velocityData.timeDiffYears} years between measurements
+                                </p>
+                              )}
+                            </div>
+                            {velocityData.isHighRisk && (
+                              <div className="flex items-center gap-2">
+                                <IoAlertCircle className="text-red-600 text-xl" />
+                                <span className="text-sm font-semibold text-red-700">High Risk</span>
+                              </div>
+                            )}
+                          </div>
+                          {velocityData.isHighRisk && (
+                            <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800">
+                              ⚠️ PSA velocity exceeds 0.75 ng/mL/year threshold. Consider MDT referral.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    
                     {loadingInvestigations ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="flex items-center space-x-2">
@@ -3261,6 +3296,14 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                     {/* Use fullPatientData if available, otherwise fallback to patient prop */}
                     {(() => {
                       const displayPatient = fullPatientData || patient;
+                      
+                      // Get patient pipeline stage
+                      const pipelineData = getPatientPipelineStage(
+                        displayPatient,
+                        [], // Appointments - could be fetched if needed
+                        []  // MDT meetings - could be fetched if needed
+                      );
+                      
                       return (
                         <>
                           {/* Edit Button */}
@@ -3272,6 +3315,190 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                               <Edit className="w-4 h-4 mr-2" />
                               Edit Patient Details
                             </button>
+                          </div>
+
+                          {/* Patient Journey Pipeline */}
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                              <IoCalendar className="mr-2 text-teal-600" />
+                              Patient Journey Pipeline
+                            </h3>
+                            <div className="relative">
+                              {/* Pipeline Flow */}
+                              <div className="flex items-center justify-between">
+                                {pipelineData.stages.map((stage, index) => {
+                                  // Get color classes based on stage color
+                                  const getColorClasses = (color, type) => {
+                                    const colorMap = {
+                                      blue: {
+                                        bg: 'bg-blue-500',
+                                        bgLight: 'bg-blue-100',
+                                        bgLighter: 'bg-blue-50',
+                                        text: 'text-blue-700',
+                                        textLight: 'text-blue-600',
+                                        border: 'border-blue-300',
+                                        borderLight: 'border-blue-200',
+                                        ring: 'ring-blue-200'
+                                      },
+                                      indigo: {
+                                        bg: 'bg-indigo-500',
+                                        bgLight: 'bg-indigo-100',
+                                        bgLighter: 'bg-indigo-50',
+                                        text: 'text-indigo-700',
+                                        textLight: 'text-indigo-600',
+                                        border: 'border-indigo-300',
+                                        borderLight: 'border-indigo-200',
+                                        ring: 'ring-indigo-200'
+                                      },
+                                      purple: {
+                                        bg: 'bg-purple-500',
+                                        bgLight: 'bg-purple-100',
+                                        bgLighter: 'bg-purple-50',
+                                        text: 'text-purple-700',
+                                        textLight: 'text-purple-600',
+                                        border: 'border-purple-300',
+                                        borderLight: 'border-purple-200',
+                                        ring: 'ring-purple-200'
+                                      },
+                                      orange: {
+                                        bg: 'bg-orange-500',
+                                        bgLight: 'bg-orange-100',
+                                        bgLighter: 'bg-orange-50',
+                                        text: 'text-orange-700',
+                                        textLight: 'text-orange-600',
+                                        border: 'border-orange-300',
+                                        borderLight: 'border-orange-200',
+                                        ring: 'ring-orange-200'
+                                      },
+                                      green: {
+                                        bg: 'bg-green-500',
+                                        bgLight: 'bg-green-100',
+                                        bgLighter: 'bg-green-50',
+                                        text: 'text-green-700',
+                                        textLight: 'text-green-600',
+                                        border: 'border-green-300',
+                                        borderLight: 'border-green-200',
+                                        ring: 'ring-green-200'
+                                      }
+                                    };
+                                    return colorMap[color]?.[type] || '';
+                                  };
+
+                                  return (
+                                    <>
+                                      {/* Stage Circle */}
+                                      <div key={stage.id} className="flex flex-col items-center flex-1">
+                                        <div
+                                          className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
+                                            stage.isActive
+                                              ? `${getColorClasses(stage.color, 'bg')} text-white shadow-lg ring-4 ${getColorClasses(stage.color, 'ring')}`
+                                              : stage.isCompleted
+                                              ? `${getColorClasses(stage.color, 'bgLight')} ${getColorClasses(stage.color, 'text')} border-2 ${getColorClasses(stage.color, 'border')}`
+                                              : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
+                                          }`}
+                                        >
+                                          {(() => {
+                                            switch(stage.icon) {
+                                              case 'referral':
+                                                return <IoClipboard className="w-7 h-7" />;
+                                              case 'opd':
+                                                return <IoBusiness className="w-7 h-7" />;
+                                              case 'mdt':
+                                                return <IoPeople className="w-7 h-7" />;
+                                              case 'surgery':
+                                                return <IoMedical className="w-7 h-7" />;
+                                              case 'discharge':
+                                                return <IoCheckmarkDone className="w-7 h-7" />;
+                                              default:
+                                                return <IoDocument className="w-7 h-7" />;
+                                            }
+                                          })()}
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                          <p
+                                            className={`text-sm font-medium ${
+                                              stage.isActive
+                                                ? getColorClasses(stage.color, 'text')
+                                                : stage.isCompleted
+                                                ? getColorClasses(stage.color, 'textLight')
+                                                : 'text-gray-500'
+                                            }`}
+                                          >
+                                            {stage.name}
+                                          </p>
+                                          {stage.isActive && (
+                                            <span className="inline-block mt-1 px-2 py-0.5 bg-teal-100 text-teal-700 text-xs font-semibold rounded-full">
+                                              Current
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Arrow Connector */}
+                                      {index < pipelineData.stages.length - 1 && (
+                                        <div className="flex-1 mx-2 h-0.5 relative flex items-center">
+                                          <div
+                                            className={`h-full flex-1 ${
+                                              stage.isCompleted || stage.isActive
+                                                ? getColorClasses(stage.color, 'bgLight')
+                                                : 'bg-gray-300'
+                                            }`}
+                                          />
+                                          <div className="flex items-center justify-center">
+                                            <svg
+                                              className={`w-5 h-5 ${
+                                                stage.isCompleted || stage.isActive
+                                                  ? getColorClasses(stage.color, 'text')
+                                                  : 'text-gray-400'
+                                              }`}
+                                              fill="currentColor"
+                                              viewBox="0 0 20 20"
+                                            >
+                                              <path
+                                                fillRule="evenodd"
+                                                d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z"
+                                                clipRule="evenodd"
+                                              />
+                                            </svg>
+                                          </div>
+                                        </div>
+                                      )}
+                                      </>
+                                    );
+                                  })}
+                              </div>
+                              
+                              {/* Current Stage Info */}
+                              {(() => {
+                                const currentStage = pipelineData.stages[pipelineData.stages.length - 1];
+                                const getColorClasses = (color, type) => {
+                                  const colorMap = {
+                                    blue: { bgLighter: 'bg-blue-50', borderLight: 'border-blue-200', text: 'text-blue-700' },
+                                    indigo: { bgLighter: 'bg-indigo-50', borderLight: 'border-indigo-200', text: 'text-indigo-700' },
+                                    purple: { bgLighter: 'bg-purple-50', borderLight: 'border-purple-200', text: 'text-purple-700' },
+                                    orange: { bgLighter: 'bg-orange-50', borderLight: 'border-orange-200', text: 'text-orange-700' },
+                                    green: { bgLighter: 'bg-green-50', borderLight: 'border-green-200', text: 'text-green-700' }
+                                  };
+                                  return colorMap[color]?.[type] || '';
+                                };
+                                
+                                return (
+                                  <div className={`mt-6 p-4 rounded-lg ${getColorClasses(currentStage.color, 'bgLighter')} border ${getColorClasses(currentStage.color, 'borderLight')}`}>
+                                    <div className="flex items-center">
+                                      <span className="text-2xl mr-3">{currentStage.icon}</span>
+                                      <div>
+                                        <p className="text-sm font-semibold text-gray-700">
+                                          Current Stage: <span className={getColorClasses(currentStage.color, 'text')}>{currentStage.name}</span>
+                                        </p>
+                                        <p className="text-xs text-gray-600 mt-1">
+                                          Care Pathway: {displayPatient.carePathway || displayPatient.care_pathway || 'Not assigned'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
 
                           {/* Personal Information */}
@@ -3693,6 +3920,39 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
             {/* Modal Content - Graph Only */}
             <div className="flex-1 overflow-y-auto p-6">
               <div className="bg-white rounded-lg p-4 border border-gray-200">
+                {/* PSA Velocity Display in Plot Modal */}
+                {!loadingPSAHistory && !psaHistoryError && psaHistory.length >= 2 && (() => {
+                  const velocityData = calculatePSAVelocity(psaHistory);
+                  return (
+                    <div className={`mb-4 p-4 rounded-lg border-2 ${velocityData.isHighRisk ? 'bg-red-50 border-red-300' : 'bg-teal-50 border-teal-200'}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-700 mb-1">PSA Velocity</h4>
+                          <p className={`text-lg font-bold ${velocityData.isHighRisk ? 'text-red-700' : 'text-teal-700'}`}>
+                            {velocityData.velocityText}
+                          </p>
+                          {velocityData.hasEnoughData && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              Based on {velocityData.timeDiffYears} years between measurements
+                            </p>
+                          )}
+                        </div>
+                        {velocityData.isHighRisk && (
+                          <div className="flex items-center gap-2">
+                            <IoAlertCircle className="text-red-600 text-xl" />
+                            <span className="text-sm font-semibold text-red-700">High Risk</span>
+                          </div>
+                        )}
+                      </div>
+                      {velocityData.isHighRisk && (
+                        <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800">
+                          ⚠️ PSA velocity exceeds 0.75 ng/mL/year threshold. Consider MDT referral.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                
                 <h3 className="text-base font-semibold text-gray-900 mb-4">PSA Trend</h3>
                 <div className="h-64 bg-gray-50 rounded-lg border border-gray-200 p-4">
                   {loadingPSAHistory ? (

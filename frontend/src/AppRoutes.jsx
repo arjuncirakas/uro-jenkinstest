@@ -9,6 +9,7 @@ import UrologistLayout from './layouts/UrologistLayout';
 import GPLayout from './layouts/GPLayout';
 import NurseLayout from './layouts/NurseLayout';
 import SuperadminLayout from './layouts/SuperadminLayout';
+import DepartmentAdminLayout from './layouts/DepartmentAdminLayout';
 
 // Auth
 import Login from './components/auth/Login';
@@ -43,6 +44,10 @@ import AddUser from './pages/superadmin/AddUser';
 import Departments from './pages/superadmin/Departments';
 import Doctors from './pages/superadmin/Doctors';
 import Nurses from './pages/superadmin/Nurses';
+
+// Department Admin Pages
+import DepartmentAdminDashboard from './pages/departmentadmin/Dashboard';
+import DataExport from './pages/departmentadmin/DataExport';
 
 const AppRoutes = () => {
   return (
@@ -126,6 +131,20 @@ const AppRoutes = () => {
         <Route path="doctors" element={<Doctors />} />
         <Route path="nurses" element={<Nurses />} />
         <Route path="departments" element={<Departments />} />
+      </Route>
+
+      {/* Department Admin Routes - Only accessible by department admins */}
+      <Route
+        path="/department-admin"
+        element={
+          <ProtectedRoute allowedRoles={['department_admin', 'superadmin']}>
+            <DepartmentAdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/department-admin/dashboard" replace />} />
+        <Route path="dashboard" element={<DepartmentAdminDashboard />} />
+        <Route path="export" element={<DataExport />} />
       </Route>
 
       {/* Default Route - Redirect to Login */}
