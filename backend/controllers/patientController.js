@@ -1827,7 +1827,19 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     
     try {
       const result = await client.query(query, queryParams);
-      console.log(`[getAssignedPatientsForDoctor] Query returned ${result.rows.length} results`);
+      console.log(`[getAssignedPatientsForDoctor] First query (assigned_urologist) returned ${result.rows.length} results for category "${category}"`);
+      if (result.rows.length > 0) {
+        console.log(`[getAssignedPatientsForDoctor] First query sample patient:`, {
+          id: result.rows[0].id,
+          name: `${result.rows[0].first_name} ${result.rows[0].last_name}`,
+          upi: result.rows[0].upi,
+          care_pathway: result.rows[0].care_pathway,
+          assigned_urologist: 'matched'
+        });
+        console.log(`[getAssignedPatientsForDoctor] First query patient IDs:`, result.rows.map(r => r.id));
+      } else {
+        console.log(`[getAssignedPatientsForDoctor] First query returned 0 results - will rely on appointments query`);
+      }
       finalResult = result;
       
       // If no results with normalized name, try with original name (only for non-my-patients categories)
@@ -1886,17 +1898,25 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     
     if (doctorId) {
       // Use doctor ID for matching (most reliable)
-      appointmentWhere = `a.urologist_id = $${paramIndex} AND a.status IN ('scheduled', 'confirmed')`;
+      // For 'new' category, include more statuses to catch all relevant appointments
+      // This ensures we find patients even if appointment status varies
+      const statusFilter = category === 'new' 
+        ? `a.status IN ('scheduled', 'confirmed', 'no_show')`
+        : `a.status IN ('scheduled', 'confirmed')`;
+      appointmentWhere = `a.urologist_id = $${paramIndex} AND ${statusFilter}`;
       appointmentParams.push(doctorId);
       paramIndex++;
-      console.log(`[getAssignedPatientsForDoctor] Using doctor ID ${doctorId} for appointments query`);
+      console.log(`[getAssignedPatientsForDoctor] Using doctor ID ${doctorId} for appointments query with status filter: ${statusFilter}`);
     } else {
       // Fall back to name matching if doctor ID not found
       // Match by urologist_name in appointments table (normalized, case-insensitive)
-      appointmentWhere = `TRIM(LOWER(REGEXP_REPLACE(a.urologist_name, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($${paramIndex})) AND a.status IN ('scheduled', 'confirmed')`;
+      const statusFilter = category === 'new' 
+        ? `a.status IN ('scheduled', 'confirmed', 'no_show')`
+        : `a.status IN ('scheduled', 'confirmed')`;
+      appointmentWhere = `TRIM(LOWER(REGEXP_REPLACE(a.urologist_name, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($${paramIndex})) AND ${statusFilter}`;
       appointmentParams.push(normalizedDoctorName || doctorName);
       paramIndex++;
-      console.log(`[getAssignedPatientsForDoctor] Using doctor name "${normalizedDoctorName || doctorName}" for appointments query (ID not found)`);
+      console.log(`[getAssignedPatientsForDoctor] Using doctor name "${normalizedDoctorName || doctorName}" for appointments query (ID not found) with status filter: ${statusFilter}`);
     }
     
     // For my-patients category, skip appointments table check since we only want patients created by the urologist
@@ -1960,15 +1980,36 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
             upi: appointmentResult.rows[0].upi,
             care_pathway: appointmentResult.rows[0].care_pathway
           });
+          // Log first few patient IDs for debugging
+          console.log(`[getAssignedPatientsForDoctor] First 5 patient IDs from appointments:`, 
+            appointmentResult.rows.slice(0, 5).map(r => r.id));
+        } else {
+          // If no results, try a diagnostic query to see what appointments exist
+          console.log(`[getAssignedPatientsForDoctor] No patients found via appointments query. Running diagnostic...`);
+          try {
+            const diagnosticQuery = doctorId 
+              ? `SELECT COUNT(*) as count, a.status, a.appointment_type FROM appointments a WHERE a.urologist_id = $1 GROUP BY a.status, a.appointment_type`
+              : `SELECT COUNT(*) as count, a.status, a.appointment_type FROM appointments a WHERE TRIM(LOWER(REGEXP_REPLACE(a.urologist_name, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($1)) GROUP BY a.status, a.appointment_type`;
+            const diagnosticParams = doctorId ? [doctorId] : [normalizedDoctorName || doctorName];
+            const diagnosticResult = await client.query(diagnosticQuery, diagnosticParams);
+            console.log(`[getAssignedPatientsForDoctor] Diagnostic - appointments by status/type:`, diagnosticResult.rows);
+          } catch (diagError) {
+            console.error(`[getAssignedPatientsForDoctor] Diagnostic query failed:`, diagError.message);
+          }
         }
         
         // Combine results from both queries, removing duplicates by patient ID
         const existingIds = new Set(finalResult.rows.map(r => r.id));
+        console.log(`[getAssignedPatientsForDoctor] Existing patient IDs from first query:`, Array.from(existingIds));
         const newPatients = appointmentResult.rows.filter(r => !existingIds.has(r.id));
         
+        console.log(`[getAssignedPatientsForDoctor] New patients to add (not in existing list): ${newPatients.length}`);
         if (newPatients.length > 0) {
           console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
+          console.log(`[getAssignedPatientsForDoctor] New patient IDs:`, newPatients.map(p => p.id));
           finalResult.rows = [...finalResult.rows, ...newPatients];
+        } else if (appointmentResult.rows.length > 0) {
+          console.log(`[getAssignedPatientsForDoctor] All ${appointmentResult.rows.length} appointment patients were already in the first query results`);
         }
         
         // Apply final limit after combining (in case we exceeded it)
@@ -1995,12 +2036,19 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       finalResult = { rows: [] };
     }
     
+    console.log(`[getAssignedPatientsForDoctor] FINAL RESULT: Found ${finalResult.rows.length} total patients for category "${category}"`);
     if (finalResult.rows.length > 0) {
       console.log(`[getAssignedPatientsForDoctor] Sample patient:`, {
         id: finalResult.rows[0].id,
         name: `${finalResult.rows[0].first_name} ${finalResult.rows[0].last_name}`,
-        upi: finalResult.rows[0].upi
+        upi: finalResult.rows[0].upi,
+        care_pathway: finalResult.rows[0].care_pathway
       });
+      console.log(`[getAssignedPatientsForDoctor] All patient IDs being returned:`, finalResult.rows.map(r => r.id));
+    } else {
+      console.log(`[getAssignedPatientsForDoctor] WARNING: No patients found for category "${category}"`);
+      console.log(`[getAssignedPatientsForDoctor] Doctor name used: "${doctorName}" (normalized: "${normalizedDoctorName}")`);
+      console.log(`[getAssignedPatientsForDoctor] Doctor ID used: ${doctorId || 'none'}`);
     }
 
     const patients = finalResult.rows.map(r => ({
@@ -2017,6 +2065,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       category: category // Requested category filter
     }));
 
+    console.log(`[getAssignedPatientsForDoctor] Returning ${patients.length} patients to frontend`);
     res.json({ success: true, message: 'Assigned patients retrieved', data: { patients, count: patients.length } });
   } catch (error) {
     console.error('Get assigned patients error:', error);
