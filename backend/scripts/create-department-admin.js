@@ -11,23 +11,50 @@ const createDepartmentAdmin = async () => {
   try {
     console.log('🔧 Creating department admin user...');
     
-    // Check if department admin already exists
-    const existingAdmin = await client.query(
-      'SELECT id FROM users WHERE role = $1',
-      ['department_admin']
-    );
-
-    if (existingAdmin.rows.length > 0) {
-      console.log('⚠️  Department admin user already exists');
-      console.log('💡 You can create additional department admin users via the superadmin panel');
-      return;
-    }
-
     // Default department admin credentials
     const email = process.env.DEPT_ADMIN_EMAIL || 'departmenthead@yopmail.com';
     const password = process.env.DEPT_ADMIN_PASSWORD || 'DeptAdmin123!';
     const firstName = 'Department';
-    const lastName = 'Admin';
+    const lastName = 'Head';
+    
+    // Check if this specific user already exists
+    const existingUser = await client.query(
+      'SELECT id, email, role FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0];
+      console.log(`⚠️  User with email ${email} already exists`);
+      console.log(`   Current role: ${user.role}`);
+      
+      // Update role if needed
+      if (user.role !== 'department_admin') {
+        console.log('🔄 Updating role to department_admin...');
+        await client.query(
+          'UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2',
+          ['department_admin', user.id]
+        );
+        console.log('✅ Role updated successfully');
+      }
+      
+      // Update password and ensure user is active
+      const saltRounds = 12;
+      const passwordHash = await bcrypt.hash(password, saltRounds);
+      await client.query(
+        'UPDATE users SET password_hash = $1, is_active = true, is_verified = true, email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = $2',
+        [passwordHash, user.id]
+      );
+      
+      console.log('✅ Department admin user updated successfully!');
+      console.log('📧 Email:', email);
+      console.log('🔑 Password:', password);
+      console.log('⚠️  Please change the password after first login!');
+      console.log('');
+      console.log('🌐 Login URL: http://localhost:5173/login');
+      console.log('📊 Dashboard URL: http://localhost:5173/department-admin/dashboard');
+      return;
+    }
 
     // Hash password
     const saltRounds = 12;

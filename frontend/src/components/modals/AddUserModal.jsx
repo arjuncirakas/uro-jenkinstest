@@ -626,6 +626,7 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
                         <option value="gp">General Practitioner</option>
                         <option value="urology_nurse">Urology Nurse</option>
                         <option value="doctor">Urologist</option>
+                        <option value="department_admin">Department Admin</option>
                       </select>
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                         <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

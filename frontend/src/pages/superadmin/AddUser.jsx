@@ -78,7 +78,8 @@ const AddUser = () => {
   const roleIcons = {
     gp: <Activity className="h-4 w-4" />,
     urology_nurse: <Stethoscope className="h-4 w-4" />,
-    doctor: <UserCircle className="h-4 w-4" />
+    doctor: <UserCircle className="h-4 w-4" />,
+    department_admin: <Shield className="h-4 w-4" />
   };
 
   // Map role to category
@@ -670,6 +671,7 @@ const AddUser = () => {
                         <option value="gp">General Practitioner</option>
                         <option value="urology_nurse">Urology Clinical Nurse</option>
                         <option value="doctor">Doctor</option>
+                        <option value="department_admin">Department Admin</option>
                       </select>
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                         <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
