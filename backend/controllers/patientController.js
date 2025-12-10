@@ -1903,69 +1903,88 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     if (category === 'my-patients') {
       console.log(`[getAssignedPatientsForDoctor] Skipping appointments table check for my-patients category`);
     } else {
-      // Add category filters for appointments query
+      // Add category-specific filters
+      let categoryFilter = '';
       if (category === 'new') {
-        appointmentWhere += ` AND NOT EXISTS (
-        SELECT 1 FROM appointments a2 
-        WHERE a2.patient_id = p.id 
-        AND a2.appointment_type ILIKE 'urologist' 
-        AND a2.status = 'completed'
-      ) AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
-    } else if (category === 'surgery-pathway') {
-      appointmentWhere += ` AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
-    } else if (category === 'post-op-followup') {
-      appointmentWhere += ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
-    }
-    
-    // Use a higher limit for appointments query to ensure we get all patients with appointments
-    // We'll apply the final limit after combining results
-    const appointmentQueryLimit = queryLimit * 2; // Get more to ensure we don't miss any
-    
-    const appointmentQuery = `
-      SELECT DISTINCT
-        p.id,
-        p.upi,
-        p.first_name,
-        p.last_name,
-        p.date_of_birth,
-        p.gender,
-        p.priority,
-        p.status,
-        p.care_pathway,
-        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
-      FROM patients p
-      INNER JOIN appointments a ON a.patient_id = p.id
-      WHERE p.status = 'Active' AND ${appointmentWhere}
-      ORDER BY p.created_at DESC
-      LIMIT $${paramIndex}
-    `;
-    appointmentParams.push(appointmentQueryLimit);
-    
-    try {
-      const appointmentResult = await client.query(appointmentQuery, appointmentParams);
-      console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
-      
-      // Combine results from both queries, removing duplicates by patient ID
-      const existingIds = new Set(finalResult.rows.map(r => r.id));
-      const newPatients = appointmentResult.rows.filter(r => !existingIds.has(r.id));
-      
-      if (newPatients.length > 0) {
-        console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
-        finalResult.rows = [...finalResult.rows, ...newPatients];
+        // New = patients with appointments but no completed urologist appointments and no care pathway
+        categoryFilter = ` AND NOT EXISTS (
+          SELECT 1 FROM appointments a2 
+          WHERE a2.patient_id = p.id 
+          AND a2.appointment_type ILIKE 'urologist' 
+          AND a2.status = 'completed'
+        ) AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
+      } else if (category === 'surgery-pathway') {
+        categoryFilter = ` AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
+      } else if (category === 'post-op-followup') {
+        categoryFilter = ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
       }
       
-      // Apply final limit after combining (in case we exceeded it)
-      if (finalResult.rows.length > queryLimit) {
-        finalResult.rows = finalResult.rows.slice(0, queryLimit);
-        console.log(`[getAssignedPatientsForDoctor] Limited combined results to ${queryLimit} patients`);
-      }
+      // Use a higher limit for appointments query to ensure we get all patients with appointments
+      // We'll apply the final limit after combining results
+      const appointmentQueryLimit = queryLimit * 2; // Get more to ensure we don't miss any
       
-      // Re-sort by created_at DESC (we need to get created_at for proper sorting)
-      // For now, keep the order as is since both queries order by created_at DESC
+      const appointmentQuery = `
+        SELECT DISTINCT
+          p.id,
+          p.upi,
+          p.first_name,
+          p.last_name,
+          p.date_of_birth,
+          p.gender,
+          p.priority,
+          p.status,
+          p.care_pathway,
+          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+        FROM patients p
+        INNER JOIN appointments a ON a.patient_id = p.id
+        WHERE p.status = 'Active' 
+          AND ${appointmentWhere}
+          ${categoryFilter}
+        ORDER BY p.created_at DESC
+        LIMIT $${paramIndex}
+      `;
+      appointmentParams.push(appointmentQueryLimit);
+      
+      console.log(`[getAssignedPatientsForDoctor] Executing appointments query for category "${category}"`);
+      console.log(`[getAssignedPatientsForDoctor] Appointment query:`, appointmentQuery.replace(/\s+/g, ' ').trim());
+      console.log(`[getAssignedPatientsForDoctor] Appointment params:`, appointmentParams);
+      
+      try {
+        const appointmentResult = await client.query(appointmentQuery, appointmentParams);
+        console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
+        
+        if (appointmentResult.rows.length > 0) {
+          console.log(`[getAssignedPatientsForDoctor] Sample appointment patient:`, {
+            id: appointmentResult.rows[0].id,
+            name: `${appointmentResult.rows[0].first_name} ${appointmentResult.rows[0].last_name}`,
+            upi: appointmentResult.rows[0].upi,
+            care_pathway: appointmentResult.rows[0].care_pathway
+          });
+        }
+        
+        // Combine results from both queries, removing duplicates by patient ID
+        const existingIds = new Set(finalResult.rows.map(r => r.id));
+        const newPatients = appointmentResult.rows.filter(r => !existingIds.has(r.id));
+        
+        if (newPatients.length > 0) {
+          console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
+          finalResult.rows = [...finalResult.rows, ...newPatients];
+        }
+        
+        // Apply final limit after combining (in case we exceeded it)
+        if (finalResult.rows.length > queryLimit) {
+          finalResult.rows = finalResult.rows.slice(0, queryLimit);
+          console.log(`[getAssignedPatientsForDoctor] Limited combined results to ${queryLimit} patients`);
+        }
+        
+        // Re-sort by created_at DESC (we need to get created_at for proper sorting)
+        // For now, keep the order as is since both queries order by created_at DESC
       } catch (appointmentQueryError) {
         console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
         console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
         console.error(`[getAssignedPatientsForDoctor] Appointment query stack:`, appointmentQueryError.stack);
+        console.error(`[getAssignedPatientsForDoctor] Failed query was:`, appointmentQuery);
+        console.error(`[getAssignedPatientsForDoctor] Query params were:`, appointmentParams);
         // Continue with existing result - don't fail the entire request
       }
     }
