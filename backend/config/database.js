@@ -1029,6 +1029,146 @@ export const initializeDatabase = async () => {
     const { initializeAuditLogsTable } = await import('../services/auditLogger.js');
     await initializeAuditLogsTable();
     
+    // Create clinical_guidelines table
+    const clinicalGuidelinesTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'clinical_guidelines'
+      );
+    `);
+    
+    if (!clinicalGuidelinesTableExists.rows[0].exists) {
+      console.log('📋 Creating clinical_guidelines table...');
+      await client.query(`
+        CREATE TABLE clinical_guidelines (
+          id SERIAL PRIMARY KEY,
+          guideline_name VARCHAR(255) NOT NULL,
+          guideline_version VARCHAR(50),
+          category VARCHAR(100),
+          criteria JSONB,
+          recommendations JSONB,
+          evidence_level VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Clinical guidelines table created successfully');
+    } else {
+      console.log('✅ Clinical guidelines table already exists');
+    }
+
+    // Create guideline_compliance_checks table
+    const complianceChecksTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'guideline_compliance_checks'
+      );
+    `);
+    
+    if (!complianceChecksTableExists.rows[0].exists) {
+      console.log('📋 Creating guideline_compliance_checks table...');
+      await client.query(`
+        CREATE TABLE guideline_compliance_checks (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          guideline_id INTEGER REFERENCES clinical_guidelines(id) ON DELETE SET NULL,
+          check_type VARCHAR(100),
+          check_result VARCHAR(50),
+          details JSONB,
+          checked_by INTEGER REFERENCES users(id),
+          checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Guideline compliance checks table created successfully');
+    } else {
+      console.log('✅ Guideline compliance checks table already exists');
+    }
+
+    // Create decision_support_recommendations table
+    const decisionSupportTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'decision_support_recommendations'
+      );
+    `);
+    
+    if (!decisionSupportTableExists.rows[0].exists) {
+      console.log('📋 Creating decision_support_recommendations table...');
+      await client.query(`
+        CREATE TABLE decision_support_recommendations (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          recommendation_type VARCHAR(100),
+          recommendation_text TEXT,
+          guideline_reference VARCHAR(255),
+          evidence_level VARCHAR(50),
+          priority VARCHAR(50),
+          status VARCHAR(50) DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Decision support recommendations table created successfully');
+    } else {
+      console.log('✅ Decision support recommendations table already exists');
+    }
+
+    // Create pathway_validations table
+    const pathwayValidationsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'pathway_validations'
+      );
+    `);
+    
+    if (!pathwayValidationsTableExists.rows[0].exists) {
+      console.log('📋 Creating pathway_validations table...');
+      await client.query(`
+        CREATE TABLE pathway_validations (
+          id SERIAL PRIMARY KEY,
+          patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+          from_pathway VARCHAR(100),
+          to_pathway VARCHAR(100),
+          validation_result VARCHAR(50),
+          missing_requirements JSONB,
+          validated_by INTEGER REFERENCES users(id),
+          validated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Pathway validations table created successfully');
+    } else {
+      console.log('✅ Pathway validations table already exists');
+    }
+
+    // Create indexes for guideline tables
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_clinical_guidelines_category ON clinical_guidelines(category);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_compliance_checks_patient_id ON guideline_compliance_checks(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_compliance_checks_checked_at ON guideline_compliance_checks(checked_at);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_decision_support_patient_id ON decision_support_recommendations(patient_id);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_decision_support_status ON decision_support_recommendations(status);
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_pathway_validations_patient_id ON pathway_validations(patient_id);
+    `);
+    
     client.release();
     return true;
   } catch (err) {

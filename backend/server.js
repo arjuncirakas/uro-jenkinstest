@@ -21,6 +21,7 @@ import nursesRoutes from './routes/nurses.js';
 import consentFormRoutes from './routes/consentForms.js';
 import kpiRoutes from './routes/kpi.js';
 import exportRoutes from './routes/export.js';
+import guidelineRoutes from './routes/guidelines.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import { initializeNotificationsTable } from './services/notificationService.js';
@@ -194,6 +195,8 @@ app.use('/api/kpi', kpiRoutes);
 console.log('✅ KPI routes registered at /api/kpi');
 app.use('/api/export', exportRoutes);
 console.log('✅ Export routes registered at /api/export');
+app.use('/api/guidelines', guidelineRoutes);
+console.log('✅ Guidelines routes registered at /api/guidelines');
 
 // 404 handler
 app.use(notFound);

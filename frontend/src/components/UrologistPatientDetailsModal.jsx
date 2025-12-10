@@ -23,6 +23,9 @@ import { bookingService } from '../services/bookingService';
 import authService from '../services/authService';
 import { calculatePSAVelocity } from '../utils/psaVelocity';
 import { getPatientPipelineStage } from '../utils/patientPipeline';
+import DecisionSupportPanel from './DecisionSupportPanel';
+import PathwayValidator from './PathwayValidator';
+import ComplianceChecker from './ComplianceChecker';
 
 const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error, onTransferSuccess }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -1715,6 +1718,22 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               )}
             </button>
             
+            {/* Decision Support tab */}
+            <button
+              onClick={() => setActiveTab('decisionSupport')}
+              className={`px-4 py-3 font-medium text-sm relative flex items-center ${
+                activeTab === 'decisionSupport'
+                  ? 'text-teal-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <IoMedical className="mr-2" />
+              Decision Support
+              {activeTab === 'decisionSupport' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600"></div>
+              )}
+            </button>
+            
             {/* MDT Notes tab - only visible for surgery-pathway and post-op-followup patients */}
             {(patient.category === 'surgery-pathway' || patient.category === 'post-op-followup') && (
               <button
@@ -2907,6 +2926,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Decision Support Tab */}
+          {activeTab === 'decisionSupport' && (
+            <div className="flex w-full h-full overflow-y-auto">
+              <div className="w-full p-6">
+                <DecisionSupportPanel patientId={patient?.id} />
               </div>
             </div>
           )}
@@ -4694,6 +4722,31 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   </p>
                 </div>
               </div>
+
+              {/* Pathway Validation */}
+              {patient?.id && selectedPathway && (
+                <div className="mb-4">
+                  <PathwayValidator
+                    patientId={patient.id}
+                    fromPathway={patient.carePathway || patient.care_pathway || ''}
+                    toPathway={selectedPathway}
+                  />
+                </div>
+              )}
+
+              {/* Compliance Check */}
+              {patient?.id && selectedPathway && (
+                <div className="mb-4">
+                  <ComplianceChecker
+                    patientId={patient.id}
+                    checkType="pathway"
+                    checkData={{
+                      fromPathway: patient.carePathway || patient.care_pathway || '',
+                      toPathway: selectedPathway
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Medication Pathway Content */}
               {selectedPathway === 'Medication' && (
