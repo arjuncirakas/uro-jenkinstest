@@ -7,12 +7,12 @@ import {
   checkInvestigationComplianceEndpoint,
   getGuidelinesByCategoryEndpoint
 } from '../controllers/guidelineController.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authenticate);
+router.use(authenticateToken);
 
 // Get applicable guidelines for a patient
 router.get('/patient/:patientId', getPatientGuidelines);
