@@ -8,7 +8,7 @@ class DepartmentAdminService {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       
-      const response = await axios.get('/api/kpi/all', { params });
+      const response = await axios.get('/kpi/all', { params });
       return response.data;
     } catch (error) {
       console.error('Get all KPIs error:', error);
@@ -22,7 +22,7 @@ class DepartmentAdminService {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       
-      const response = await axios.get('/api/kpi/wait-time', { params });
+      const response = await axios.get('/kpi/wait-time', { params });
       return response.data;
     } catch (error) {
       console.error('Get average wait time error:', error);
@@ -36,7 +36,7 @@ class DepartmentAdminService {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       
-      const response = await axios.get('/api/kpi/active-surveillance-compliance', { params });
+      const response = await axios.get('/kpi/active-surveillance-compliance', { params });
       return response.data;
     } catch (error) {
       console.error('Get active surveillance compliance error:', error);
@@ -50,7 +50,7 @@ class DepartmentAdminService {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
       
-      const response = await axios.get('/api/kpi/discharge-to-gp', { params });
+      const response = await axios.get('/kpi/discharge-to-gp', { params });
       return response.data;
     } catch (error) {
       console.error('Get discharge to GP percentage error:', error);
@@ -60,7 +60,7 @@ class DepartmentAdminService {
 
   async getKPITrends(period = 'month', months = 12) {
     try {
-      const response = await axios.get('/api/kpi/trends', {
+      const response = await axios.get('/kpi/trends', {
         params: { period, months }
       });
       return response.data;
@@ -73,7 +73,7 @@ class DepartmentAdminService {
   // Export Methods
   async getExportFields() {
     try {
-      const response = await axios.get('/api/export/fields');
+      const response = await axios.get('/export/fields');
       return response.data;
     } catch (error) {
       console.error('Get export fields error:', error);
@@ -88,7 +88,7 @@ class DepartmentAdminService {
         params.fields = fields.join(',');
       }
       
-      const response = await axios.get('/api/export/patients/csv', {
+      const response = await axios.get('/export/patients/csv', {
         params,
         responseType: 'blob'
       });
@@ -117,7 +117,7 @@ class DepartmentAdminService {
         params.fields = fields.join(',');
       }
       
-      const response = await axios.get('/api/export/patients/excel', {
+      const response = await axios.get('/export/patients/excel', {
         params,
         responseType: 'blob'
       });

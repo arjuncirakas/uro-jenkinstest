@@ -18,11 +18,11 @@ export const getAverageWaitTime = async (req, res) => {
     
     const query = `
       SELECT 
-        AVG(EXTRACT(EPOCH FROM (first_consult_date - p.referral_date)) / 86400) as avg_wait_days,
+        AVG((first_consult_date - p.referral_date)) as avg_wait_days,
         COUNT(*) as total_patients,
-        MIN(EXTRACT(EPOCH FROM (first_consult_date - p.referral_date)) / 86400) as min_wait_days,
-        MAX(EXTRACT(EPOCH FROM (first_consult_date - p.referral_date)) / 86400) as max_wait_days,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (first_consult_date - p.referral_date)) / 86400) as median_wait_days
+        MIN((first_consult_date - p.referral_date)) as min_wait_days,
+        MAX((first_consult_date - p.referral_date)) as max_wait_days,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (first_consult_date - p.referral_date)) as median_wait_days
       FROM patients p
       LEFT JOIN LATERAL (
         SELECT MIN(appointment_date) as first_consult_date
@@ -31,7 +31,7 @@ export const getAverageWaitTime = async (req, res) => {
         AND status IN ('completed', 'confirmed', 'scheduled')
         AND appointment_type = 'urologist'
       ) first_consult ON true
-      ${dateFilter}
+      ${dateFilter || 'WHERE 1=1'}
       AND first_consult.first_consult_date IS NOT NULL
     `;
     
@@ -195,7 +195,7 @@ export const getAllKPIs = async (req, res) => {
         
         const query = `
           SELECT 
-            AVG(EXTRACT(EPOCH FROM (first_consult_date - p.referral_date)) / 86400) as avg_wait_days,
+            AVG((first_consult_date - p.referral_date)) as avg_wait_days,
             COUNT(*) as total_patients
           FROM patients p
           LEFT JOIN LATERAL (
@@ -203,10 +203,11 @@ export const getAllKPIs = async (req, res) => {
             FROM appointments
             WHERE patient_id = p.id
             AND status IN ('completed', 'confirmed', 'scheduled')
-            AND appointment_type = 'urologist'
+            AND (appointment_type = 'urologist' OR appointment_type = 'doctor')
           ) first_consult ON true
-          ${dateFilter}
+          ${dateFilter || 'WHERE 1=1'}
           AND first_consult.first_consult_date IS NOT NULL
+          AND p.referral_date IS NOT NULL
         `;
         return await client.query(query, params);
       })(),
@@ -308,7 +309,17 @@ export const getAllKPIs = async (req, res) => {
     });
   } catch (error) {
     console.error('Get all KPIs error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      detail: error.detail
+    });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error',
+      ...(process.env.NODE_ENV === 'development' && { error: error.message })
+    });
   } finally {
     client.release();
   }
@@ -329,12 +340,13 @@ export const getKPITrends = async (req, res) => {
       'year': 'year'
     };
     const periodType = periodMap[period] || 'month';
+    const monthsInt = parseInt(months) || 12;
     
     // Get wait time trends
     const waitTimeTrendsQuery = `
       SELECT 
-        DATE_TRUNC('${periodType}', p.referral_date) as period,
-        AVG(EXTRACT(EPOCH FROM (first_consult_date - p.referral_date)) / 86400) as avg_wait_days,
+        DATE_TRUNC($1, p.referral_date) as period,
+        AVG((first_consult_date - p.referral_date)) as avg_wait_days,
         COUNT(*) as patient_count
       FROM patients p
       LEFT JOIN LATERAL (
@@ -344,18 +356,18 @@ export const getKPITrends = async (req, res) => {
         AND status IN ('completed', 'confirmed', 'scheduled')
         AND appointment_type = 'urologist'
       ) first_consult ON true
-      WHERE p.referral_date >= CURRENT_DATE - INTERVAL '${parseInt(months)} months'
+      WHERE p.referral_date >= CURRENT_DATE - INTERVAL '${monthsInt} months'
       AND first_consult.first_consult_date IS NOT NULL
-      GROUP BY DATE_TRUNC('${periodType}', p.referral_date)
+      GROUP BY DATE_TRUNC($1, p.referral_date)
       ORDER BY period ASC
     `;
     
-    const waitTimeResult = await client.query(waitTimeTrendsQuery);
+    const waitTimeResult = await client.query(waitTimeTrendsQuery, [periodType]);
     
     // Get compliance trends
     const complianceTrendsQuery = `
       SELECT 
-        DATE_TRUNC('${periodType}', p.care_pathway_updated_at) as period,
+        DATE_TRUNC($1, p.care_pathway_updated_at) as period,
         COUNT(*) as total_patients,
         COUNT(CASE 
           WHEN last_psa_date IS NOT NULL 
@@ -371,12 +383,12 @@ export const getKPITrends = async (req, res) => {
       ) last_psa ON true
       WHERE p.care_pathway = 'Active Surveillance'
       AND p.status = 'Active'
-      AND p.care_pathway_updated_at >= CURRENT_DATE - INTERVAL '${parseInt(months)} months'
-      GROUP BY DATE_TRUNC('${periodType}', p.care_pathway_updated_at)
+      AND p.care_pathway_updated_at >= CURRENT_DATE - INTERVAL '${monthsInt} months'
+      GROUP BY DATE_TRUNC($1, p.care_pathway_updated_at)
       ORDER BY period ASC
     `;
     
-    const complianceResult = await client.query(complianceTrendsQuery);
+    const complianceResult = await client.query(complianceTrendsQuery, [periodType]);
     
     res.json({
       success: true,
