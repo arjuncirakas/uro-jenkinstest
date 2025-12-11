@@ -766,14 +766,8 @@ const TestStatusCell = ({
     setOpenDropdown(isOpen ? null : dropdownId);
   };
 
-  // If marked as not required, show status icon with N/A
-  if (status === 'not_required') {
-    return (
-      <div className="flex justify-center items-center">
-        {getStatusIcon('not_required')}
-      </div>
-    );
-  }
+  // If marked as not required, show status icon (but allow dropdown to change status back)
+  const isNotRequired = status === 'not_required';
 
   // Determine what to show based on status
   // If status is null/undefined, check if there's a result to determine status
@@ -788,7 +782,22 @@ const TestStatusCell = ({
     <div className="flex justify-center items-center relative" ref={cellRef}>
       {/* Status Icon or Plus Icon - Clickable to open dropdown or view result */}
       <div className="flex items-center justify-center">
-        {hasResult && (status === 'completed' || displayStatus === 'completed') ? (
+        {isNotRequired ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isOpen) {
+                onFetchRequests();
+                onFetchResults();
+              }
+              setOpenDropdown(isOpen ? null : dropdownId);
+            }}
+            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
+            data-dropdown-button
+          >
+            {getStatusIcon('not_required')}
+          </button>
+        ) : hasResult && (status === 'completed' || displayStatus === 'completed') ? (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -849,31 +858,36 @@ const TestStatusCell = ({
           data-dropdown-menu
           className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[180px]"
         >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onUploadResult();
-            }}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-          >
-            <Upload className="w-4 h-4" />
-            Upload Result
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStatusUpdate('results_awaited');
-            }}
-            disabled={status === 'results_awaited'}
-            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-              status === 'results_awaited'
-                ? 'text-gray-400 cursor-not-allowed bg-gray-50'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <FiClock className="w-4 h-4" />
-            Results Awaited
-          </button>
+          {/* Only show Upload Result and Results Awaited if status is not "not_required" */}
+          {!isNotRequired && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUploadResult();
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Upload Result
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStatusUpdate('results_awaited');
+                }}
+                disabled={status === 'results_awaited'}
+                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+                  status === 'results_awaited'
+                    ? 'text-gray-400 cursor-not-allowed bg-gray-50'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <FiClock className="w-4 h-4" />
+                Results Awaited
+              </button>
+            </>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
