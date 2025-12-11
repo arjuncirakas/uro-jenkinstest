@@ -103,6 +103,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [fullPatientData, setFullPatientData] = useState(null);
   const [loadingPatientData, setLoadingPatientData] = useState(false);
   
+  // Appointments and MDT meetings state for pipeline
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [appointmentsError, setAppointmentsError] = useState(null);
+  const [mdtMeetings, setMdtMeetings] = useState([]);
+  const [loadingMdtMeetings, setLoadingMdtMeetings] = useState(false);
+  const [mdtMeetingsError, setMdtMeetingsError] = useState(null);
+  
   // API state management
   const [clinicalNotes, setClinicalNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -235,6 +243,57 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   };
 
+  // Fetch appointments for patient (for pipeline)
+  const fetchAppointments = useCallback(async () => {
+    if (!patient?.id) return;
+    
+    setLoadingAppointments(true);
+    setAppointmentsError(null);
+    
+    try {
+      const result = await bookingService.getPatientAppointments(patient.id);
+      
+      if (result.success) {
+        const appointmentsArray = result.data?.appointments || result.data || [];
+        setAppointments(appointmentsArray);
+      } else {
+        setAppointmentsError(result.error || 'Failed to fetch appointments');
+        setAppointments([]);
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      setAppointmentsError('Failed to fetch appointments');
+      setAppointments([]);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, [patient?.id]);
+
+  // Fetch MDT meetings for patient (for pipeline)
+  const fetchMDTMeetings = useCallback(async () => {
+    if (!patient?.id) return;
+    
+    setLoadingMdtMeetings(true);
+    setMdtMeetingsError(null);
+    
+    try {
+      const result = await patientService.getPatientMDTMeetings(patient.id);
+      
+      if (result.success) {
+        setMdtMeetings(result.data || []);
+      } else {
+        setMdtMeetingsError(result.error || 'Failed to fetch MDT meetings');
+        setMdtMeetings([]);
+      }
+    } catch (error) {
+      console.error('Error fetching MDT meetings:', error);
+      setMdtMeetingsError('Failed to fetch MDT meetings');
+      setMdtMeetings([]);
+    } finally {
+      setLoadingMdtMeetings(false);
+    }
+  }, [patient?.id]);
+
   // Load patient data when modal opens
   useEffect(() => {
     console.log('🔍 UrologistPatientDetailsModal: useEffect triggered', { isOpen, patient });
@@ -249,6 +308,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       fetchInvestigations();
       fetchInvestigationRequests();
       checkSurgeryAppointment();
+      fetchAppointments();
+      fetchMDTMeetings();
       
       // Also set any existing data from props
       if (patient.recentNotes) {
@@ -268,7 +329,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setHasSurgeryAppointment(false);
       setFullPatientData(null);
     }
-  }, [isOpen, patient?.id, checkSurgeryAppointment]);
+  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings]);
 
   // Reset surgery time when date changes
   useEffect(() => {
@@ -3112,8 +3173,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       // Get patient pipeline stage
                       const pipelineData = getPatientPipelineStage(
                         displayPatient,
-                        [], // Appointments - could be fetched if needed
-                        []  // MDT meetings - could be fetched if needed
+                        appointments || [], // Appointments for pipeline
+                        mdtMeetings || []  // MDT meetings for pipeline
                       );
                       
                       return (

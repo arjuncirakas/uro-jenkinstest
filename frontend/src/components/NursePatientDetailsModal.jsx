@@ -108,6 +108,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   const [loadingMdtMeetings, setLoadingMdtMeetings] = useState(false);
   const [mdtMeetingsError, setMdtMeetingsError] = useState(null);
 
+  // Appointments state for pipeline
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [appointmentsError, setAppointmentsError] = useState(null);
+
   // Discharge summary state
   const [dischargeSummary, setDischargeSummary] = useState(null);
   const [loadingDischargeSummary, setLoadingDischargeSummary] = useState(false);
@@ -1183,6 +1188,32 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     }
   }, [patient?.id]);
 
+  // Fetch appointments for patient (for pipeline)
+  const fetchAppointments = useCallback(async () => {
+    if (!patient?.id) return;
+    
+    setLoadingAppointments(true);
+    setAppointmentsError(null);
+    
+    try {
+      const result = await bookingService.getPatientAppointments(patient.id);
+      
+      if (result.success) {
+        const appointmentsArray = result.data?.appointments || result.data || [];
+        setAppointments(appointmentsArray);
+      } else {
+        setAppointmentsError(result.error || 'Failed to fetch appointments');
+        setAppointments([]);
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      setAppointmentsError('Failed to fetch appointments');
+      setAppointments([]);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, [patient?.id]);
+
   // Fetch discharge summary for patient
   const fetchDischargeSummary = useCallback(async () => {
     if (!patient?.id) return;
@@ -1436,6 +1467,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       fetchInvestigations();
       fetchInvestigationRequests();
       fetchMDTMeetings();
+      fetchAppointments();
       // Fetch discharge summary for post-op followup patients
       if (isPostOpFollowupPatient()) {
         fetchDischargeSummary();
@@ -1443,7 +1475,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     } else {
       console.log('❌ NursePatientDetailsModal: Cannot fetch data - isOpen:', isOpen, 'patient?.id:', patient?.id);
     }
-  }, [isOpen, patient?.id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchDischargeSummary, isPostOpFollowupPatient]);
+  }, [isOpen, patient?.id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchAppointments, fetchDischargeSummary, isPostOpFollowupPatient]);
 
   // Listen for image viewer events
   useEffect(() => {
@@ -3321,8 +3353,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                       // Get patient pipeline stage
                       const pipelineData = getPatientPipelineStage(
                         displayPatient,
-                        [], // Appointments - could be fetched if needed
-                        []  // MDT meetings - could be fetched if needed
+                        appointments || [], // Appointments for pipeline
+                        mdtMeetings || []  // MDT meetings for pipeline
                       );
                       
                       return (

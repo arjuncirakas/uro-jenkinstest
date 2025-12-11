@@ -33,21 +33,38 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
   let stageIndex = 0;
 
   // Determine current stage based on care pathway and status
+  // Priority order: Discharge > Post-op > Surgery > MDT > Monitoring/Medication > OPD > Referral
+  
   if (status === 'Discharged' || carePathway === 'Discharge') {
+    // Discharged patients
     currentStage = 'discharge';
     stageIndex = 4;
+  } else if (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') {
+    // Post-operative patients - they've completed surgery, show surgery stage
+    currentStage = 'surgery';
+    stageIndex = 3;
   } else if (carePathway === 'Surgery Pathway' || carePathway === 'Surgical Pathway' || hasSurgeryAppointment) {
+    // Patients scheduled for or in surgery pathway
     currentStage = 'surgery';
     stageIndex = 3;
   } else if (hasMDTMeeting || hasUpcomingMDT || carePathway === 'Active Surveillance') {
+    // Patients with MDT meetings or in active surveillance
     currentStage = 'mdt';
     stageIndex = 2;
-  } else if (carePathway === 'OPD Queue' || carePathway === '' || !carePathway) {
-    currentStage = 'opd';
-    stageIndex = 1;
   } else if (carePathway === 'Active Monitoring' || carePathway === 'Medication' || carePathway === 'Radiotherapy') {
-    // These are monitoring pathways, could be after MDT or OPD
-    // Check if they have MDT history
+    // Ongoing care pathways - these typically come after MDT or OPD
+    // If they have MDT history, show MDT stage; otherwise show OPD (they've progressed past referral)
+    if (hasMDTMeeting) {
+      currentStage = 'mdt';
+      stageIndex = 2;
+    } else {
+      // They're on ongoing care, so they've at least reached OPD
+      currentStage = 'opd';
+      stageIndex = 1;
+    }
+  } else if (carePathway === 'Investigation Pathway') {
+    // Investigation pathway - typically after OPD, could be before or after MDT
+    // If they have MDT, show MDT; otherwise show OPD
     if (hasMDTMeeting) {
       currentStage = 'mdt';
       stageIndex = 2;
@@ -55,8 +72,12 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
       currentStage = 'opd';
       stageIndex = 1;
     }
+  } else if (carePathway === 'OPD Queue' || carePathway === '' || !carePathway) {
+    // Patients in OPD queue or no pathway assigned
+    currentStage = 'opd';
+    stageIndex = 1;
   } else {
-    // Default to referral if no clear pathway
+    // Default to referral if no clear pathway matches
     currentStage = 'referral';
     stageIndex = 0;
   }
