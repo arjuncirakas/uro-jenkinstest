@@ -755,16 +755,8 @@ const TestStatusCell = ({
   const isOpen = openDropdown === dropdownId;
   const hasResult = testResult && (testResult.filePath || testResult.file_path || testResult.result);
   const cellRef = useRef(null);
-
-  // Fetch data when cell is clicked
-  const handleCellClick = (e) => {
-    e.stopPropagation();
-    if (!isOpen) {
-      onFetchRequests();
-      onFetchResults();
-    }
-    setOpenDropdown(isOpen ? null : dropdownId);
-  };
+  const buttonRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   // If marked as not required, show status icon (but allow dropdown to change status back)
   const isNotRequired = status === 'not_required';
@@ -781,6 +773,7 @@ const TestStatusCell = ({
       <div className="flex items-center justify-center">
         {isNotRequired ? (
           <button
+            ref={buttonRef}
             onClick={(e) => {
               e.stopPropagation();
               if (!isOpen) {
@@ -797,6 +790,7 @@ const TestStatusCell = ({
         ) : hasResult ? (
           // If result is uploaded, always show checkmark icon (completed status)
           <button
+            ref={buttonRef}
             onClick={(e) => {
               e.stopPropagation();
               const filePath = testResult.filePath || testResult.file_path;
@@ -819,6 +813,7 @@ const TestStatusCell = ({
         ) : (
           // No result uploaded - show plus icon
           <button
+            ref={buttonRef}
             onClick={(e) => {
               e.stopPropagation();
               if (!isOpen) {
@@ -836,12 +831,41 @@ const TestStatusCell = ({
         )}
       </div>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div 
-          data-dropdown-menu
-          className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[180px]"
-        >
+      {/* Dropdown Menu - Positioned to always be visible */}
+      {isOpen && buttonRef.current && (() => {
+        const buttonRect = buttonRef.current.getBoundingClientRect();
+        const dropdownHeight = 180; // Approximate height including all options
+        const spaceBelow = window.innerHeight - buttonRect.bottom;
+        const spaceAbove = buttonRect.top;
+        const showAbove = spaceBelow < dropdownHeight && spaceAbove > dropdownHeight;
+        
+        // Calculate horizontal position, ensuring it doesn't go off-screen
+        const dropdownWidth = 180;
+        const leftPosition = buttonRect.left + buttonRect.width / 2;
+        const adjustedLeft = Math.max(
+          dropdownWidth / 2 + 8, // 8px padding from screen edge
+          Math.min(
+            leftPosition,
+            window.innerWidth - dropdownWidth / 2 - 8
+          )
+        );
+        
+        return (
+          <div 
+            ref={dropdownRef}
+            data-dropdown-menu
+            className="z-[9999] bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[180px]"
+            style={{
+              position: 'fixed',
+              left: `${adjustedLeft}px`,
+              top: showAbove 
+                ? `${Math.max(8, buttonRect.top - dropdownHeight - 4)}px`
+                : `${Math.min(buttonRect.bottom + 4, window.innerHeight - dropdownHeight - 8)}px`,
+              transform: 'translateX(-50%)',
+              maxHeight: 'calc(100vh - 16px)',
+              overflowY: 'auto',
+            }}
+          >
           {/* Only show Upload Result and Results Awaited if status is not "not_required" */}
           {!isNotRequired && (
             <>
@@ -892,8 +916,9 @@ const TestStatusCell = ({
             <FiX className="w-4 h-4" />
             {status === 'not_required' ? 'Remove Not Required' : 'Not Required'}
           </button>
-        </div>
-      )}
+          </div>
+        );
+      })()}
     </div>
   );
 };
