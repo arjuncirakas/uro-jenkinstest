@@ -891,17 +891,22 @@ const TestStatusCell = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onStatusUpdate('not_required');
+              // If already not_required, set to pending to allow changing it back
+              // Otherwise, set to not_required
+              if (status === 'not_required') {
+                onStatusUpdate('pending');
+              } else {
+                onStatusUpdate('not_required');
+              }
             }}
-            disabled={status === 'not_required'}
             className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
               status === 'not_required'
-                ? 'text-gray-400 cursor-not-allowed bg-gray-50'
+                ? 'text-teal-700 hover:bg-teal-50 bg-teal-50'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <FiX className="w-4 h-4" />
-            Not Required
+            {status === 'not_required' ? 'Remove Not Required' : 'Not Required'}
           </button>
         </div>
       )}
