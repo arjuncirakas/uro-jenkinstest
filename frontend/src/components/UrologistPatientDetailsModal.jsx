@@ -5616,150 +5616,19 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       }
                     }
 
-                    // First, handle manual appointment booking if needed (BEFORE pathway transfer)
-                    let appointmentBooked = false;
-                    const hasManualBooking = (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') && 
-                                             appointmentBooking.appointmentDate && appointmentBooking.appointmentTime;
+                    // Check if a date is selected for automatic appointment booking
+                    const hasSelectedDate = (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') && 
+                                           appointmentBooking.appointmentDate;
                     
-                    if (hasManualBooking) {
-                      try {
-                        console.log('🔍 Creating manual appointment BEFORE pathway transfer');
-                        console.log('📋 Patient data:', patient);
-                        console.log('📋 Appointment booking state:', appointmentBooking);
-                        
-                        const currentUser = authService.getCurrentUser();
-                        console.log('👤 Current user:', currentUser);
-                        
-                        // Validate user data
-                        if (!currentUser || !currentUser.id) {
-                          throw new Error('User data is incomplete. Please log in again.');
-                        }
-                        
-                        const urologistId = currentUser.id;
-                        
-                        // Try multiple ways to get the urologist name
-                        let urologistName = '';
-                        if (currentUser.firstName && currentUser.lastName) {
-                          urologistName = `${currentUser.firstName} ${currentUser.lastName}`;
-                        } else if (currentUser.first_name && currentUser.last_name) {
-                          urologistName = `${currentUser.first_name} ${currentUser.last_name}`;
-                        } else if (currentUser.name) {
-                          urologistName = currentUser.name;
-                        } else if (currentUser.username) {
-                          urologistName = currentUser.username;
-                        }
-                        
-                        console.log('👤 Extracted urologist name:', urologistName);
-                        
-                        if (!urologistName || urologistName.trim() === '') {
-                          throw new Error('Urologist name could not be determined. Please update your profile.');
-                        }
-                        
-                        // Validate appointment data
-                        if (!appointmentBooking.appointmentDate) {
-                          throw new Error('Appointment date is required.');
-                        }
-                        if (!appointmentBooking.appointmentTime) {
-                          throw new Error('Appointment time is required.');
-                        }
-                        // Validate appointment date is not in the past
-                        const appointmentDate = new Date(appointmentBooking.appointmentDate);
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        appointmentDate.setHours(0, 0, 0, 0);
-                        if (appointmentDate < today) {
-                          throw new Error('Appointment date cannot be in the past.');
-                        }
-                        // Validate time format (should be HH:MM)
-                        if (!/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(appointmentBooking.appointmentTime)) {
-                          throw new Error('Please provide a valid time in HH:MM format.');
-                        }
-                        
-                        // Build appointment data with all required fields (matching backend expectations)
-                        const appointmentData = {
-                          appointmentDate: appointmentBooking.appointmentDate,  // Backend expects 'appointmentDate'
-                          appointmentTime: appointmentBooking.appointmentTime,  // Backend expects 'appointmentTime'
-                          urologistId: urologistId,
-                          urologistName: urologistName.trim(),
-                          appointmentType: 'urologist',  // Backend expects 'appointmentType'
-                          notes: `Follow-up for ${selectedPathway} - Check-up frequency: Every ${recurringAppointments.interval} month(s)${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
-                          patientName: patient.name || 'Unknown Patient',
-                          upi: patient.upi || patient.patientId || 'N/A'
-                        };
-                        
-                        console.log('📤 Final appointment data being sent:', JSON.stringify(appointmentData, null, 2));
-                        console.log('🔍 Patient ID for booking:', patient.id);
-                        
-                        // Validate all required fields before sending
-                        const requiredFields = ['appointmentDate', 'appointmentTime', 'urologistId', 'urologistName'];
-                        const missingFields = requiredFields.filter(field => !appointmentData[field]);
-                        
-                        if (missingFields.length > 0) {
-                          throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
-                        }
-                        
-                        const appointmentResult = await bookingService.bookUrologistAppointment(patient.id, appointmentData);
-                        
-                        console.log('📥 Appointment booking result:', appointmentResult);
-                        
-                        if (appointmentResult.success) {
-                          console.log('✅ Manual appointment created successfully');
-                          appointmentBooked = true;
-                          
-                          // Create recurring appointments based on frequency
-                          const intervalMonths = parseInt(recurringAppointments.interval) || 1;
-                          const numberOfRecurringAppointments = 12 / intervalMonths; // Create appointments for 1 year
-                          
-                          console.log(`🔄 Creating ${numberOfRecurringAppointments - 1} additional recurring appointments (every ${intervalMonths} month(s))`);
-                          
-                          // Create recurring appointments (starting from the second one, first is already created)
-                          for (let i = 1; i < numberOfRecurringAppointments; i++) {
-                            try {
-                              // Calculate next appointment date
-                              const nextDate = new Date(appointmentBooking.appointmentDate);
-                              nextDate.setMonth(nextDate.getMonth() + (intervalMonths * i));
-                              
-                              const nextDateStr = nextDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-                              
-                              const recurringAppointmentData = {
-                                appointmentDate: nextDateStr,
-                                appointmentTime: appointmentBooking.appointmentTime,
-                                urologistId: urologistId,
-                                urologistName: urologistName.trim(),
-                                appointmentType: 'urologist',
-                                notes: `Recurring follow-up for ${selectedPathway} - Appointment ${i + 1}/${numberOfRecurringAppointments} (Every ${intervalMonths} month(s))${transferDetails.additionalNotes ? `\n\nAdditional Notes: ${transferDetails.additionalNotes}` : ''}`,
-                                patientName: patient.name || 'Unknown Patient',
-                                upi: patient.upi || patient.patientId || 'N/A'
-                              };
-                              
-                              console.log(`🔄 Creating recurring appointment ${i + 1}/${numberOfRecurringAppointments - 1} for ${nextDateStr}`);
-                              
-                              const recurringResult = await bookingService.bookUrologistAppointment(patient.id, recurringAppointmentData);
-                              
-                              if (recurringResult.success) {
-                                console.log(`✅ Recurring appointment ${i + 1} created successfully`);
-                              } else {
-                                console.error(`⚠️ Failed to create recurring appointment ${i + 1}:`, recurringResult.error);
-                                // Continue creating other appointments even if one fails
-                              }
-                            } catch (recurringError) {
-                              console.error(`⚠️ Error creating recurring appointment ${i + 1}:`, recurringError);
-                              // Continue creating other appointments
-                            }
-                          }
-                          
-                          console.log('✅ All recurring appointments processed');
-                          
-                        } else {
-                          console.error('❌ Failed to create manual appointment:', appointmentResult.error);
-                          // Show error and STOP the entire process
-                          showErrorModal('Appointment Scheduling Failed', `Failed to schedule appointment: ${appointmentResult.error}\n\nPathway transfer has been cancelled. Please try again.`);
-                          return; // Exit early - don't proceed with pathway transfer
-                        }
-                      } catch (appointmentError) {
-                        console.error('❌ Error creating manual appointment:', appointmentError);
-                        showErrorModal('Appointment Scheduling Error', `An error occurred while scheduling the appointment: ${appointmentError.message}\n\nPathway transfer has been cancelled. Please try again.`);
-                        return; // Exit early - don't proceed with pathway transfer
+                    // Validate date if provided
+                    if (hasSelectedDate) {
+                      const appointmentDate = new Date(appointmentBooking.appointmentDate);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      appointmentDate.setHours(0, 0, 0, 0);
+                      if (appointmentDate < today) {
+                        showErrorModal('Validation Error', 'Appointment date cannot be in the past.');
+                        return;
                       }
                     }
 
@@ -5837,7 +5706,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         pathway: selectedPathway,
                         reason: transferDetails.reason,
                         notes: transferDetails.clinicalRationale || transferDetails.additionalNotes || '',
-                        skipAutoBooking: hasManualBooking || surgeryScheduled // Tell backend to skip auto-booking if we're doing manual booking or surgery scheduling
+                        skipAutoBooking: surgeryScheduled, // Only skip if surgery is scheduled
+                        // Pass the selected date and frequency to backend for automatic appointment booking
+                        appointmentStartDate: hasSelectedDate ? appointmentBooking.appointmentDate : null,
+                        appointmentInterval: hasSelectedDate ? parseInt(recurringAppointments.interval) || 3 : null
                       };
                       const res = await patientService.updatePatientPathway(patient.id, payload);
                       if (res.success) {
@@ -5940,16 +5812,21 @@ ${transferDetails.additionalNotes}` : ''}
                           } else {
                             // Handle all other pathways
                             let appointmentSection = '';
-                            if (appointmentBooked && hasManualBooking) {
+                            if (hasSelectedDate && (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance')) {
                               const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' : 
                                                    recurringAppointments.interval === '3' ? 'Every 3 months' :
                                                    recurringAppointments.interval === '6' ? 'Every 6 months' : 'Annual';
+                              const dateDisplay = new Date(appointmentBooking.appointmentDate).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              });
                               appointmentSection = `
                               
-Follow-up Appointment Scheduled:
-- Date: ${appointmentBooking.appointmentDate}
-- Time: ${appointmentBooking.appointmentTime}
-- Frequency: ${frequencyText}`;
+Follow-up Appointments Scheduled:
+- Start Date: ${dateDisplay}
+- Frequency: ${frequencyText}
+- Appointments will be automatically scheduled starting from the selected date`;
                             }
                             
                             // Add surgery appointment section if surgery was scheduled
@@ -6006,15 +5883,15 @@ ${transferDetails.additionalNotes}` : ''}
                         let message = `Patient successfully transferred to ${selectedPathway}`;
                         let appointmentDetails = null;
                         
-                        // Show manual appointment confirmation if successfully created
-                        if (appointmentBooked && hasManualBooking) {
+                        // Show appointment confirmation if appointments were scheduled
+                        if (hasSelectedDate && (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance')) {
                           const aptDate = new Date(appointmentBooking.appointmentDate).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric'
                           });
                           
-                          const intervalMonths = parseInt(recurringAppointments.interval) || 1;
+                          const intervalMonths = parseInt(recurringAppointments.interval) || 3;
                           const numberOfAppointments = 12 / intervalMonths;
                           
                           const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' : 
@@ -6024,14 +5901,14 @@ ${transferDetails.additionalNotes}` : ''}
                           
                           appointmentDetails = {
                             date: aptDate,
-                            time: appointmentBooking.appointmentTime,
+                            time: appointmentBooking.appointmentTime || 'Not specified',
                             frequency: frequencyText,
                             total: numberOfAppointments,
                             urologist: null
                           };
                         } 
-                        // Only show auto-booking notification if NO manual scheduling was attempted
-                        else if (!hasManualBooking && (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') && res.data?.autoBookedAppointment) {
+                        // Show auto-booking notification if NO date was selected and backend auto-booked
+                        else if (!hasSelectedDate && (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') && res.data?.autoBookedAppointment) {
                           const apt = res.data.autoBookedAppointment;
                           const aptDate = new Date(apt.date).toLocaleDateString('en-US', {
                             year: 'numeric',

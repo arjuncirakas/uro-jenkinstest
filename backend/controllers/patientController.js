@@ -2047,7 +2047,7 @@ export const updatePatientPathway = async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { pathway, reason, notes, skipAutoBooking } = req.body;
+    const { pathway, reason, notes, skipAutoBooking, appointmentStartDate, appointmentInterval } = req.body;
     const userId = req.user.id;
 
     const allowed = ['Active Monitoring','Surgery Pathway','Medication','Radiotherapy','Post-op Transfer','Post-op Followup','Discharge'];
@@ -2152,12 +2152,28 @@ export const updatePatientPathway = async (req, res) => {
               throw new Error('Urologist does not have a doctors table record');
             }
             
-            // Book appointments for 1 year: 3, 6, 9, 12 months
-            const appointmentIntervals = [3, 6, 9, 12];
+            // Determine appointment intervals and start date
+            let appointmentIntervals;
+            let startDate;
+            
+            // If a specific date and interval are provided, use those
+            if (appointmentStartDate && appointmentInterval) {
+              startDate = new Date(appointmentStartDate);
+              // Calculate intervals based on the provided interval (e.g., if 3 months, create appointments at 0, 3, 6, 9 months from start date)
+              const numberOfAppointments = 12 / appointmentInterval; // Create appointments for 1 year
+              appointmentIntervals = [];
+              for (let i = 0; i < numberOfAppointments; i++) {
+                appointmentIntervals.push(appointmentInterval * i);
+              }
+            } else {
+              // Default: Book appointments for 1 year: 3, 6, 9, 12 months starting from today
+              appointmentIntervals = [3, 6, 9, 12];
+              startDate = new Date();
+            }
             
             for (let i = 0; i < appointmentIntervals.length; i++) {
               const monthsAhead = appointmentIntervals[i];
-              const followUpDate = new Date();
+              const followUpDate = new Date(startDate);
               followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
               const appointmentDate = followUpDate.toISOString().split('T')[0];
               
