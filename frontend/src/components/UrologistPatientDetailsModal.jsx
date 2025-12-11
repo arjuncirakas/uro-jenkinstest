@@ -254,7 +254,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       const result = await bookingService.getPatientAppointments(patient.id);
       
       if (result.success) {
-        const appointmentsArray = result.data?.appointments || result.data || [];
+        // Ensure we always get an array
+        let appointmentsArray = [];
+        if (Array.isArray(result.data)) {
+          appointmentsArray = result.data;
+        } else if (result.data?.appointments && Array.isArray(result.data.appointments)) {
+          appointmentsArray = result.data.appointments;
+        } else if (result.data && Array.isArray(result.data)) {
+          appointmentsArray = result.data;
+        }
         setAppointments(appointmentsArray);
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
@@ -280,7 +288,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       const result = await patientService.getPatientMDTMeetings(patient.id);
       
       if (result.success) {
-        setMdtMeetings(result.data || []);
+        // Ensure we always get an array
+        let mdtArray = [];
+        if (Array.isArray(result.data)) {
+          mdtArray = result.data;
+        } else if (result.data?.meetings && Array.isArray(result.data.meetings)) {
+          mdtArray = result.data.meetings;
+        } else if (result.data && Array.isArray(result.data)) {
+          mdtArray = result.data;
+        }
+        setMdtMeetings(mdtArray);
       } else {
         setMdtMeetingsError(result.error || 'Failed to fetch MDT meetings');
         setMdtMeetings([]);

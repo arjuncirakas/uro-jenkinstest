@@ -16,15 +16,19 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
     { id: 'discharge', name: 'Discharge', icon: 'discharge', color: 'green' }
   ];
 
+  // Ensure appointments and mdtMeetings are always arrays
+  const appointmentsArray = Array.isArray(appointments) ? appointments : [];
+  const mdtMeetingsArray = Array.isArray(mdtMeetings) ? mdtMeetings : [];
+
   const carePathway = patient?.carePathway || patient?.care_pathway || '';
   const status = patient?.status || '';
-  const hasSurgeryAppointment = appointments?.some(apt => {
+  const hasSurgeryAppointment = appointmentsArray.some(apt => {
     const aptType = (apt.appointmentType || apt.type || apt.appointment_type || '').toLowerCase();
     const surgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
     return aptType === 'surgery' || aptType.includes('surgery') || surgeryType.includes('surgery');
   });
-  const hasMDTMeeting = mdtMeetings && mdtMeetings.length > 0;
-  const hasUpcomingMDT = mdtMeetings?.some(mdt => {
+  const hasMDTMeeting = mdtMeetingsArray.length > 0;
+  const hasUpcomingMDT = mdtMeetingsArray.some(mdt => {
     const meetingDate = new Date(mdt.meetingDate || mdt.meeting_date);
     return meetingDate >= new Date();
   });
