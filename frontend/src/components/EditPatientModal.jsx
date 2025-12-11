@@ -57,7 +57,10 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
     priorBiopsy: 'no',
     priorBiopsyDate: '',
     gleasonScore: '',
-    comorbidities: []
+    comorbidities: [],
+    
+    // Nurse Triage Symptoms
+    triageSymptoms: []
   });
 
   const [errors, setErrors] = useState({});
@@ -125,7 +128,8 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         priorBiopsy: patient.priorBiopsy || patient.prior_biopsy || 'no',
         priorBiopsyDate: patient.priorBiopsyDate || patient.prior_biopsy_date || '',
         gleasonScore: patient.gleasonScore || patient.gleason_score || '',
-        comorbidities: Array.isArray(comorbidities) ? comorbidities : []
+        comorbidities: Array.isArray(comorbidities) ? comorbidities : [],
+        triageSymptoms: Array.isArray(triageSymptoms) ? triageSymptoms : []
       });
       setErrors({});
       fetchUrologists();
@@ -281,7 +285,8 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         priorBiopsy: formData.priorBiopsy || 'no',
         priorBiopsyDate: formData.priorBiopsyDate ? convertToISODate(formData.priorBiopsyDate) : '',
         gleasonScore: formData.gleasonScore || '',
-        comorbidities: formData.comorbidities || []
+        comorbidities: formData.comorbidities || [],
+        triageSymptoms: formData.triageSymptoms && formData.triageSymptoms.length > 0 ? JSON.stringify(formData.triageSymptoms) : null
       };
 
       // Call the API
@@ -1035,6 +1040,74 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                 </div>
               </div>
             </div>
+
+            {/* Nurse Triage Information */}
+            {formData.triageSymptoms && formData.triageSymptoms.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                    <FaStethoscope className="w-6 h-6 text-teal-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900">Nurse Triage Information</h4>
+                    <p className="text-sm text-gray-600">Symptoms & Presentation - Chief Complaint</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {formData.triageSymptoms.map((symptom, index) => {
+                    const symptomName = symptom.name || '';
+                    const ipssScore = symptom.ipssScore || symptom.ipss_score || null;
+                    const duration = symptom.duration || null;
+                    const durationUnit = symptom.durationUnit || symptom.duration_unit || 'months';
+                    const frequency = symptom.frequency || null;
+                    const notes = symptom.notes || null;
+                    const isCustom = symptom.isCustom || false;
+
+                    return (
+                      <div key={index} className={`border border-gray-200 rounded-lg p-4 ${isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900 text-base">{symptomName}</span>
+                            {isCustom && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">(Custom)</span>}
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-3">
+                          <div>
+                            <span className="text-gray-600">IPSS Score:</span>
+                            <span className="ml-2 font-medium text-gray-900">{ipssScore || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Duration:</span>
+                            <span className="ml-2 font-medium text-gray-900">
+                              {duration ? `${duration} ${durationUnit}`.trim() : 'N/A'}
+                            </span>
+                          </div>
+                          {frequency && (
+                            <div>
+                              <span className="text-gray-600">Frequency:</span>
+                              <span className="ml-2 font-medium text-gray-900">
+                                {frequency} {symptomName === 'Nocturia' ? (frequency === 1 || frequency === '1' ? 'time per night' : 'times per night') : 'times'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {notes && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <span className="text-gray-600 text-sm font-medium">Notes:</span>
+                            <div className="mt-1 text-sm text-gray-900 whitespace-pre-line bg-white p-2 rounded border border-gray-200">
+                              {notes}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Additional Notes */}
             <div className="bg-gray-50 border border-gray-200 rounded p-4">
