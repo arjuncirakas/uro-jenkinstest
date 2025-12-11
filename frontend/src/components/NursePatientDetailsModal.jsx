@@ -2219,11 +2219,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                               <p className={`text-lg font-bold ${velocityData.isHighRisk ? 'text-red-700' : 'text-teal-700'}`}>
                                 {velocityData.velocityText}
                               </p>
-                              {velocityData.hasEnoughData && (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  Based on {velocityData.timeDiffYears} years between measurements
-                                </p>
-                              )}
                             </div>
                             {velocityData.isHighRisk && (
                               <div className="flex items-center gap-2">
@@ -3764,11 +3759,17 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                   <span className="font-medium text-gray-900 text-base">{symptomName}</span>
                                                   {isCustom && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">(Custom)</span>}
                                                 </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-3">
-                                                  <div>
-                                                    <span className="text-gray-600">IPSS Score:</span>
-                                                    <span className="ml-2 font-medium text-gray-900">{ipssScore || 'N/A'}</span>
-                                                  </div>
+                                                <div className={`grid gap-3 text-sm mb-3 ${
+                                                  symptomName === 'LUTS' 
+                                                    ? (frequency ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2')
+                                                    : (frequency ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')
+                                                }`}>
+                                                  {symptomName === 'LUTS' && (
+                                                    <div>
+                                                      <span className="text-gray-600">IPSS Score:</span>
+                                                      <span className="ml-2 font-medium text-gray-900">{ipssScore || 'N/A'}</span>
+                                                    </div>
+                                                  )}
                                                   <div>
                                                     <span className="text-gray-600">Duration:</span>
                                                     <span className="ml-2 font-medium text-gray-900">
@@ -3779,7 +3780,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                     <div>
                                                       <span className="text-gray-600">Frequency:</span>
                                                       <span className="ml-2 font-medium text-gray-900">
-                                                        {frequency} {symptomName === 'Nocturia' ? (frequency === 1 ? 'time per night' : 'times per night') : 'times'}
+                                                        {frequency} {symptomName === 'Nocturia' ? (frequency === 1 || frequency === '1' ? 'time per night' : 'times per night') : 'times'}
                                                       </span>
                                                     </div>
                                                   )}
@@ -3951,11 +3952,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                           <p className={`text-lg font-bold ${velocityData.isHighRisk ? 'text-red-700' : 'text-teal-700'}`}>
                             {velocityData.velocityText}
                           </p>
-                          {velocityData.hasEnoughData && (
-                            <p className="text-xs text-gray-600 mt-1">
-                              Based on {velocityData.timeDiffYears} years between measurements
-                            </p>
-                          )}
                         </div>
                         {velocityData.isHighRisk && (
                           <div className="flex items-center gap-2">
