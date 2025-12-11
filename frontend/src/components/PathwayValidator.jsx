@@ -14,7 +14,7 @@ const PathwayValidator = React.memo(({
 }) => {
   const [validation, setValidation] = useState(null);
   const [loading, setLoading] = useState(false);
-  const previousValues = useRef({ patientId, fromPathway, toPathway });
+  const previousValues = useRef({ patientId: null, fromPathway: null, toPathway: null });
 
   useEffect(() => {
     // Only validate if pathway-related values actually changed
@@ -23,12 +23,17 @@ const PathwayValidator = React.memo(({
       previousValues.current.fromPathway !== fromPathway ||
       previousValues.current.toPathway !== toPathway;
 
-    if (!hasChanged) {
+    // Update ref with current values BEFORE checking if we should validate
+    // This prevents infinite loops
+    const currentValues = { patientId, fromPathway, toPathway };
+    
+    if (!hasChanged && previousValues.current.patientId !== null) {
+      // Values haven't changed and we've already validated before
       return;
     }
 
     // Update ref with current values
-    previousValues.current = { patientId, fromPathway, toPathway };
+    previousValues.current = currentValues;
 
     if (!patientId || !toPathway) {
       setValidation(null);
@@ -177,6 +182,13 @@ const PathwayValidator = React.memo(({
         </div>
       )}
     </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if pathway-related props actually changed
+  return (
+    prevProps.patientId === nextProps.patientId &&
+    prevProps.fromPathway === nextProps.fromPathway &&
+    prevProps.toPathway === nextProps.toPathway
   );
 });
 

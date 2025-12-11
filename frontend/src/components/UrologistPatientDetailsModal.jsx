@@ -4859,21 +4859,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               </div>
 
               {/* Pathway Validation & Compliance Check - Consolidated Display */}
-              {useMemo(() => {
-                if (!patient?.id || !selectedPathway) return null;
-                
-                const fromPathway = patient.carePathway || patient.care_pathway || '';
-                
-                return (
-                  <div className="mb-4" key={`validation-${patient.id}-${selectedPathway}`}>
-                    <PathwayValidator
-                      patientId={patient.id}
-                      fromPathway={fromPathway}
-                      toPathway={selectedPathway}
-                    />
-                  </div>
-                );
-              }, [patient?.id, patient?.carePathway, patient?.care_pathway, selectedPathway])}
+              {patient?.id && selectedPathway && (
+                <div className="mb-4" key={`validation-${patient.id}-${selectedPathway}`}>
+                  <PathwayValidator
+                    patientId={patient.id}
+                    fromPathway={patient.carePathway || patient.care_pathway || ''}
+                    toPathway={selectedPathway}
+                  />
+                </div>
+              )}
 
               {/* Medication Pathway Content */}
               {selectedPathway === 'Medication' && (
