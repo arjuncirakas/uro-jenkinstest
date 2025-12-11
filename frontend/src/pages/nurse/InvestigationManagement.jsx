@@ -775,10 +775,6 @@ const TestStatusCell = ({
   const statusIcon = getStatusIcon(displayStatus || 'pending');
   const statusText = getStatusText(displayStatus || 'pending');
 
-  // Show plus icon for all cases except: not_required (gray X) and completed with result (green checkmark)
-  // This includes: results_awaited, pending, null/undefined, and any other status without a result
-  const showPlusIcon = !isNotRequired && !(status === 'completed' && hasResult);
-
   return (
     <div className="flex justify-center items-center relative" ref={cellRef}>
       {/* Status Icon or Plus Icon - Clickable to open dropdown or view result */}
@@ -798,7 +794,8 @@ const TestStatusCell = ({
           >
             {getStatusIcon('not_required')}
           </button>
-        ) : hasResult && (status === 'completed' || displayStatus === 'completed') ? (
+        ) : hasResult ? (
+          // If result is uploaded, always show checkmark icon (completed status)
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -817,9 +814,10 @@ const TestStatusCell = ({
             className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
             data-dropdown-button
           >
-            {statusIcon}
+            {getStatusIcon('completed')}
           </button>
         ) : (
+          // No result uploaded - show plus icon
           <button
             onClick={(e) => {
               e.stopPropagation();
