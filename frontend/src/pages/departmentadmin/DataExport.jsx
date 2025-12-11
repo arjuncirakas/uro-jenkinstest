@@ -91,7 +91,31 @@ const DataExport = () => {
       }
     } catch (error) {
       console.error('Export error:', error);
-      setErrorMessage(error.response?.data?.message || 'Failed to export data');
+      
+      // Handle blob error responses (when responseType is 'blob', errors are also blobs)
+      let errorMessage = 'Failed to export data';
+      
+      if (error.response?.data) {
+        // Check if the error response is a Blob
+        if (error.response.data instanceof Blob) {
+          try {
+            // Convert blob to text and parse as JSON
+            const text = await error.response.data.text();
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.message || errorData.error || 'Failed to export data';
+          } catch (parseError) {
+            console.error('Error parsing blob error response:', parseError);
+            errorMessage = 'Failed to export data';
+          }
+        } else {
+          // Standard JSON error response
+          errorMessage = error.response.data.message || error.response.data.error || 'Failed to export data';
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setErrorMessage(errorMessage);
       setIsErrorModalOpen(true);
     } finally {
       setLoading(false);
