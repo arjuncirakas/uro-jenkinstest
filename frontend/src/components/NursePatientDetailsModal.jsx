@@ -69,6 +69,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
   const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
   const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
+  const [isViewResultsModalOpen, setIsViewResultsModalOpen] = useState(false);
+  const [selectedTestResults, setSelectedTestResults] = useState([]);
+  const [selectedTestName, setSelectedTestName] = useState('');
   
   // Edit Surgery Appointment Modal state
   const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
@@ -2592,16 +2595,18 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                     // Check if results have been uploaded for this investigation
                                     // Use exact match only to prevent false matches (e.g., "MRI" matching "MRI SUB TEST")
                                     const investigationName = (request.investigationName || request.investigation_name || '').trim().toUpperCase();
-                                    const hasResults = otherTestResults.some(result => {
+                                    
+                                    // Find all results for this test (check both testName and testType)
+                                    const allTestResults = otherTestResults.filter(result => {
                                       const resultName = (result.testName || result.test_name || '').trim().toUpperCase();
-                                      // Only use exact match to prevent false positives
-                                      return resultName === investigationName;
+                                      const resultType = (result.testType || result.test_type || '').trim().toUpperCase();
+                                      // Match by test name or test type
+                                      return resultName === investigationName || resultType === investigationName;
                                     });
-                                    const uploadedResult = otherTestResults.find(result => {
-                                      const resultName = (result.testName || result.test_name || '').trim().toUpperCase();
-                                      // Only use exact match to prevent false positives
-                                      return resultName === investigationName;
-                                    });
+                                    
+                                    const hasResults = allTestResults.length > 0;
+                                    // Get the latest result for display
+                                    const uploadedResult = allTestResults.length > 0 ? allTestResults[0] : null;
 
                                   // Check if this is a main test (MRI, TRUS, Biopsy)
                                   const isMainTest = ['MRI', 'TRUS', 'BIOPSY'].includes(investigationName);
@@ -2688,17 +2693,32 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                         </div>
                                         
                                         <div className="flex-shrink-0">
-                                          {hasResults && uploadedResult ? (
+                                          {hasResults ? (
                                             <button
                                               onClick={() => {
-                                                const filePath = uploadedResult.filePath || uploadedResult.file_path;
-                                                if (filePath) {
-                                                  handleViewFile(filePath);
-                                                } else {
-                                                  setSuccessModalTitle('Test Result');
-                                                  setSuccessModalMessage(`Result: ${uploadedResult.result || 'N/A'}\nReference Range: ${uploadedResult.referenceRange || 'N/A'}\nNotes: ${uploadedResult.notes || 'No notes'}`);
-                                                  setIsSuccessModalOpen(true);
-                                                }
+                                                // Map all results to display format
+                                                const formattedResults = allTestResults.map(result => ({
+                                                  id: result.id,
+                                                  testName: result.testName || result.test_name || result.testType || result.test_type,
+                                                  date: result.testDate || result.test_date || result.created_at,
+                                                  result: result.result || result.result_value,
+                                                  referenceRange: result.referenceRange || result.reference_range || 'N/A',
+                                                  status: result.status || 'Completed',
+                                                  notes: result.notes || result.comments || '',
+                                                  filePath: result.filePath || result.file_path,
+                                                  authorName: result.authorName || result.author_name,
+                                                  authorRole: result.authorRole || result.author_role,
+                                                  createdAt: result.createdAt || result.created_at
+                                                })).sort((a, b) => {
+                                                  // Sort by date, most recent first
+                                                  const dateA = new Date(a.date || a.createdAt || 0);
+                                                  const dateB = new Date(b.date || b.createdAt || 0);
+                                                  return dateB - dateA;
+                                                });
+                                                
+                                                setSelectedTestResults(formattedResults);
+                                                setSelectedTestName(investigationName);
+                                                setIsViewResultsModalOpen(true);
                                               }}
                                               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
                                             >
@@ -5438,6 +5458,128 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         }));
       }}
     />
+
+    {/* View Test Results Modal */}
+    {isViewResultsModalOpen && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="flex-shrink-0 bg-gradient-to-r from-teal-600 to-gray-800 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Test Results: {selectedTestName}</h2>
+                {patient && (
+                  <p className="text-sm text-teal-100 mt-1">
+                    Patient: <span className="font-medium">{patient.name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim()}</span>
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setIsViewResultsModalOpen(false);
+                  setSelectedTestResults([]);
+                  setSelectedTestName('');
+                }}
+                className="text-white hover:text-gray-200 transition-colors p-1"
+              >
+                <IoClose className="text-2xl" />
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {selectedTestResults.length === 0 ? (
+              <div className="text-center py-12">
+                <IoDocument className="text-4xl text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No results found for this test.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {selectedTestResults.map((result, index) => {
+                  const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  }) : 'N/A';
+                  
+                  return (
+                    <div key={result.id || index} className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-gray-900">Result #{selectedTestResults.length - index}</h3>
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
+                              {result.status || 'Completed'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            Date: <span className="font-medium">{resultDate}</span>
+                          </p>
+                          {result.authorName && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Added by: {result.authorName} {result.authorRole ? `(${result.authorRole})` : ''}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <span className="text-sm font-medium text-gray-600">Result Value:</span>
+                            <p className="text-lg font-semibold text-gray-900 mt-0.5">{result.result || 'N/A'}</p>
+                          </div>
+                          {result.referenceRange && result.referenceRange !== 'N/A' && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-600">Reference Range:</span>
+                              <p className="text-sm text-gray-700 mt-0.5">{result.referenceRange}</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {result.notes && (
+                          <div className="pt-2 border-t border-gray-200">
+                            <span className="text-sm font-medium text-gray-600">Notes:</span>
+                            <p className="text-sm text-gray-700 mt-1">{result.notes}</p>
+                          </div>
+                        )}
+                        
+                        {result.filePath && (
+                          <div className="pt-2 border-t border-gray-200">
+                            <button
+                              onClick={() => handleViewFile(result.filePath)}
+                              className="flex items-center gap-2 text-sm text-teal-600 hover:text-teal-700 font-medium"
+                            >
+                              <IoDocument className="w-4 h-4" />
+                              View Attached File
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex-shrink-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
+            <button
+              onClick={() => {
+                setIsViewResultsModalOpen(false);
+                setSelectedTestResults([]);
+                setSelectedTestName('');
+              }}
+              className="w-full px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-teal-700 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Image Viewer Modal */}
     <ImageViewerModal
