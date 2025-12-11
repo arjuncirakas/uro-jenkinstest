@@ -766,32 +766,46 @@ const TestStatusCell = ({
     setOpenDropdown(isOpen ? null : dropdownId);
   };
 
-  // If marked as not required, show N/A
+  // If marked as not required, show status icon with N/A
   if (status === 'not_required') {
     return (
       <div className="flex justify-center items-center">
-        <span className="text-xs text-gray-500 font-medium">N/A</span>
+        {getStatusIcon('not_required')}
       </div>
     );
   }
 
+  // Determine what to show based on status
+  // If status is null/undefined, check if there's a result to determine status
+  const displayStatus = status || (hasResult ? 'completed' : null);
+  const statusIcon = getStatusIcon(displayStatus || 'pending');
+  const statusText = getStatusText(displayStatus || 'pending');
+
   return (
     <div className="flex justify-center items-center relative" ref={cellRef}>
-      {/* Action Button - Check icon if result exists, Plus icon if no result */}
+      {/* Status Icon - Clickable to open dropdown or view result */}
       <div className="flex items-center justify-center">
-        {hasResult ? (
+        {hasResult && (status === 'completed' || displayStatus === 'completed') ? (
           <button
             onClick={(e) => {
               e.stopPropagation();
               const filePath = testResult.filePath || testResult.file_path;
               if (filePath) {
                 onViewResult(filePath);
+              } else {
+                // If no file path, open dropdown instead
+                if (!isOpen) {
+                  onFetchRequests();
+                  onFetchResults();
+                }
+                setOpenDropdown(isOpen ? null : dropdownId);
               }
             }}
-            className="p-2 text-green-600 hover:text-green-800 transition-colors rounded-full hover:bg-green-50 group relative"
-            title="View result"
+            className="p-1 hover:bg-gray-50 rounded-full transition-colors group relative cursor-pointer"
+            title={`${statusText} - Click to view result`}
+            data-dropdown-button
           >
-            <Check className="w-5 h-5" />
+            {statusIcon}
             <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
               View Result
             </span>
@@ -804,14 +818,15 @@ const TestStatusCell = ({
                 onFetchRequests();
                 onFetchResults();
               }
-              onUploadResult();
+              setOpenDropdown(isOpen ? null : dropdownId);
             }}
-            className="p-2 text-teal-600 hover:text-teal-800 transition-colors rounded-full hover:bg-teal-50 group relative"
-            title="Add result or update status"
+            className="p-1 hover:bg-gray-50 rounded-full transition-colors group relative cursor-pointer"
+            title={`${statusText} - Click to manage`}
+            data-dropdown-button
           >
-            <FiPlus className="w-5 h-5" />
+            {statusIcon}
             <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-              Add Result
+              {statusText}
             </span>
           </button>
         )}
