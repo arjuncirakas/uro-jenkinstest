@@ -12,12 +12,15 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
   
   // Auto-expand Patients menu when on any patients route
   const isPatientsExpanded = location.pathname.startsWith('/urologist/patients');
-  const [manuallyCollapsed, setManuallyCollapsed] = useState(false);
+  // Track manual expand/collapse state - initialize based on whether we're on patients route
+  const [isPatientsMenuOpen, setIsPatientsMenuOpen] = useState(() => 
+    location.pathname.startsWith('/urologist/patients')
+  );
 
-  // Reset manual collapse when navigating away from patients routes
+  // Auto-expand when navigating to patients route, but preserve manual state when navigating away
   useEffect(() => {
-    if (!isPatientsExpanded) {
-      setManuallyCollapsed(false);
+    if (isPatientsExpanded) {
+      setIsPatientsMenuOpen(true);
     }
   }, [isPatientsExpanded]);
 
@@ -107,7 +110,7 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                       <Link
                         to={item.path}
                         onClick={() => {
-                          setManuallyCollapsed(false); // Always expand when clicking main Patients link
+                          setIsPatientsMenuOpen(true); // Always expand when clicking main Patients link
                           handleLinkClick();
                         }}
                         className="flex items-center flex-1"
@@ -121,12 +124,12 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            setManuallyCollapsed(!manuallyCollapsed);
+                            setIsPatientsMenuOpen(!isPatientsMenuOpen);
                           }}
                           className="p-1 hover:bg-teal-100 rounded transition-colors"
-                          aria-label={manuallyCollapsed ? "Expand patients menu" : "Collapse patients menu"}
+                          aria-label={isPatientsMenuOpen ? "Collapse patients menu" : "Expand patients menu"}
                         >
-                          {(isPatientsExpanded && !manuallyCollapsed) ? (
+                          {isPatientsMenuOpen ? (
                             <FaChevronDown className={`text-sm ${item.active ? 'text-teal-600' : 'text-gray-500'}`} />
                           ) : (
                             <FaChevronRight className={`text-sm ${item.active ? 'text-teal-600' : 'text-gray-500'}`} />
@@ -134,7 +137,7 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                         </button>
                       )}
                     </div>
-                    {isPatientsExpanded && !isCollapsed && !manuallyCollapsed && (
+                    {!isCollapsed && isPatientsMenuOpen && (
                       <div className="mt-2 ml-4 relative">
                         {/* Main vertical line */}
                         <div className="absolute left-[20px] top-0 w-[2px] h-full bg-teal-300"></div>
