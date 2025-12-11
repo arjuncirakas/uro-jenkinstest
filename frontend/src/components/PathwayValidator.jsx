@@ -58,7 +58,8 @@ const PathwayValidator = React.memo(({
     };
 
     validatePathway();
-  }, [patientId, fromPathway, toPathway, onValidationChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId, fromPathway, toPathway]); // Only re-validate when these change, not onValidationChange
 
   // Show loading state only if we don't have previous validation data
   if (loading && !validation) {

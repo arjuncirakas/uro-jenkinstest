@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
@@ -4859,15 +4859,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               </div>
 
               {/* Pathway Validation & Compliance Check - Consolidated Display */}
-              {patient?.id && selectedPathway && (
-                <div className="mb-4" key={`validation-${patient.id}-${selectedPathway}`}>
-                  <PathwayValidator
-                    patientId={patient.id}
-                    fromPathway={patient.carePathway || patient.care_pathway || ''}
-                    toPathway={selectedPathway}
-                  />
-                </div>
-              )}
+              {useMemo(() => {
+                if (!patient?.id || !selectedPathway) return null;
+                
+                const fromPathway = patient.carePathway || patient.care_pathway || '';
+                
+                return (
+                  <div className="mb-4" key={`validation-${patient.id}-${selectedPathway}`}>
+                    <PathwayValidator
+                      patientId={patient.id}
+                      fromPathway={fromPathway}
+                      toPathway={selectedPathway}
+                    />
+                  </div>
+                );
+              }, [patient?.id, patient?.carePathway, patient?.care_pathway, selectedPathway])}
 
               {/* Medication Pathway Content */}
               {selectedPathway === 'Medication' && (
@@ -5686,6 +5692,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     }
 
                     // Persist pathway (only if appointment booking succeeded or wasn't needed)
+                    let transferSucceeded = false;
                     try {
                       const payload = {
                         pathway: selectedPathway,
@@ -5698,6 +5705,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       };
                       const res = await patientService.updatePatientPathway(patient.id, payload);
                       if (res.success) {
+                        transferSucceeded = true;
                         // If backend auto-booked an appointment and we didn't manually book, create recurring appointments
                         if (!appointmentBooked && res.data?.autoBookedAppointment && 
                             (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance')) {
@@ -5940,14 +5948,23 @@ ${transferDetails.additionalNotes}` : ''}
                           onTransferSuccess(patient.id, selectedPathway);
                         }
                       } else {
+                        // Transfer failed - show error
                         setSuccessModalTitle('Error');
                         setSuccessModalMessage(res.error || 'Failed to update pathway');
                         setIsSuccessModalOpen(true);
                       }
                     } catch (e) {
-                      setSuccessModalTitle('Error');
-                      setSuccessModalMessage('Failed to update pathway');
-                      setIsSuccessModalOpen(true);
+                      // Only show error if transfer didn't succeed
+                      if (!transferSucceeded) {
+                        console.error('❌ Pathway transfer error:', e);
+                        setSuccessModalTitle('Error');
+                        setSuccessModalMessage('Failed to update pathway: ' + (e.message || 'Unknown error'));
+                        setIsSuccessModalOpen(true);
+                      } else {
+                        // Transfer succeeded but something else failed (like note creation)
+                        // Don't show error modal, just log it
+                        console.error('⚠️ Pathway transfer succeeded but post-processing failed:', e);
+                      }
                     } finally {
                       setIsPathwayModalOpen(false);
                       // Reset states
