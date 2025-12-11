@@ -234,16 +234,21 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
     try {
       // Helper function to convert date to ISO format
       const convertToISODate = (dateString) => {
-        if (!dateString) return '';
+        if (!dateString || dateString.trim() === '') return null;
         try {
+          // If already in YYYY-MM-DD format, return as is
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
+            return dateString.trim();
+          }
           const date = new Date(dateString);
           if (isNaN(date.getTime())) {
-            throw new Error('Invalid date');
+            console.error('Invalid date:', dateString);
+            return null;
           }
           return date.toISOString().split('T')[0];
         } catch (error) {
-          console.error('Date conversion error:', error);
-          return dateString;
+          console.error('Date conversion error:', error, dateString);
+          return null;
         }
       };
 
@@ -259,9 +264,9 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         postcode: formData.postcode || '',
         city: formData.city || '',
         state: formData.state || '',
-        referralDate: convertToISODate(formData.referralDate),
-        initialPSA: formData.initialPSA ? parseFloat(formData.initialPSA) : null,
-        initialPSADate: convertToISODate(formData.initialPSADate),
+        referralDate: convertToISODate(formData.referralDate) || null,
+        initialPSA: formData.initialPSA && formData.initialPSA !== '' ? (isNaN(parseFloat(formData.initialPSA)) ? null : parseFloat(formData.initialPSA)) : null,
+        initialPSADate: formData.initialPSADate ? convertToISODate(formData.initialPSADate) : null,
         medicalHistory: formData.medicalHistory || '',
         currentMedications: formData.currentMedications || '',
         allergies: formData.allergies || '',

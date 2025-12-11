@@ -1398,6 +1398,7 @@ export const updatePatient = async (req, res) => {
     ];
 
     const dateFields = ['date_of_birth', 'referral_date', 'initial_psa_date', 'prior_biopsy_date'];
+    const numericFields = ['initial_psa']; // Fields that need numeric casting
     const updateFields = [];
     const updateValues = [];
     let paramCount = 0;
@@ -1405,20 +1406,43 @@ export const updatePatient = async (req, res) => {
     for (const [key, value] of Object.entries(updateData)) {
       const dbField = key.replace(/([A-Z])/g, '_$1').toLowerCase();
       if (allowedFields.includes(dbField)) {
-        paramCount++;
         // Format dates and cast them as DATE type in PostgreSQL
         if (dateFields.includes(dbField)) {
-          updateFields.push(`${dbField} = $${paramCount}::date`);
-          updateValues.push(value ? formatDateOnly(value) : null);
+          // Always include date fields if value is provided
+          if (value !== null && value !== undefined && value !== '') {
+            const formattedDate = formatDateOnly(value);
+            if (formattedDate) {
+              paramCount++;
+              updateFields.push(`${dbField} = $${paramCount}::date`);
+              updateValues.push(formattedDate);
+            }
+            // If formatting fails, skip this field (don't update)
+          }
+          // If date is null/undefined/empty, skip updating this field (keep existing value)
+        } else if (numericFields.includes(dbField)) {
+          // Handle numeric fields - cast to DECIMAL
+          // Ensure value is a valid number, convert to number if it's a string
+          if (value !== null && value !== undefined && value !== '') {
+            const numValue = typeof value === 'string' ? parseFloat(value) : Number(value);
+            if (!isNaN(numValue)) {
+              paramCount++;
+              updateFields.push(`${dbField} = $${paramCount}::DECIMAL(5,2)`);
+              updateValues.push(numValue);
+            }
+          }
+          // If value is null/empty, skip updating this field (keep existing value)
         } else if (dbField === 'triage_symptoms' || dbField === 'comorbidities') {
           // Handle JSON fields
+          paramCount++;
           updateFields.push(`${dbField} = $${paramCount}`);
           updateValues.push(value ? (typeof value === 'string' ? value : JSON.stringify(value)) : null);
         } else if (dbField === 'dre_done') {
           // Handle boolean field
+          paramCount++;
           updateFields.push(`${dbField} = $${paramCount}`);
           updateValues.push(value || false);
         } else {
+          paramCount++;
           updateFields.push(`${dbField} = $${paramCount}`);
           updateValues.push(value);
         }
