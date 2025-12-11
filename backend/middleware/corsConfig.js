@@ -43,18 +43,15 @@ export const corsOptions = {
     // Get allowed origins based on environment
     const allowedOrigins = getAllowedOrigins();
     
-    // Handle requests with no origin (mobile apps, Postman, server-to-server)
+    // Handle requests with no origin (same-origin requests, mobile apps, Postman, server-to-server)
     if (!origin) {
-      // In development, allow requests with no origin for testing
-      // In production, reject requests with no origin for security
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ CORS: Allowing request with no origin (development mode)');
-        return callback(null, true);
-      } else {
-        // In production, reject requests with no origin unless explicitly allowed
-        console.warn('⚠️  CORS: Rejecting request with no origin (production mode)');
-        return callback(new Error('Not allowed by CORS - no origin provided'));
-      }
+      // Allow requests with no origin because:
+      // 1. Same-origin requests don't send Origin header (normal browser behavior)
+      // 2. CORS only applies to cross-origin requests
+      // 3. Server-to-server requests may not have Origin header
+      // Security: We still validate all requests that DO have an origin header
+      console.log('✅ CORS: Allowing request with no origin (same-origin or server-to-server)');
+      return callback(null, true);
     }
     
     // If allowedOrigins is false, only allow same-origin requests
