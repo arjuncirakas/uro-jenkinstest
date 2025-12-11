@@ -5,7 +5,8 @@ import {
   Save,
   Loader2,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  MessageSquare
 } from 'lucide-react';
 import { patientService } from '../services/patientService.js';
 import { bookingService } from '../services/bookingService.js';
@@ -1027,6 +1028,43 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Additional Notes */}
+            <div className="bg-gray-50 border border-gray-200 rounded p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                  <MessageSquare className="w-6 h-6 text-teal-600" />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold text-gray-900">Additional Notes</h4>
+                  <p className="text-sm text-gray-600">Any additional notes or special considerations</p>
+                </div>
+              </div>
+
+              <div className="relative mb-3">
+                <textarea
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleInputChange}
+                  rows={4}
+                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
+                    formData.notes
+                      ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                      : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                  } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                  placeholder=" "
+                />
+                <label
+                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
+                    formData.notes
+                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                      : 'text-gray-500'
+                  } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                >
+                  Notes
+                </label>
               </div>
             </div>
 
