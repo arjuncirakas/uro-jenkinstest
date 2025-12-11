@@ -18,6 +18,7 @@ import {
 } from '../utils/inputValidation.js';
 import { IoHeart, IoAnalytics, IoDocument } from 'react-icons/io5';
 import { FaStethoscope } from 'react-icons/fa';
+import { ChevronDown } from 'lucide-react';
 
 const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError }) => {
   const [formData, setFormData] = useState({
@@ -82,6 +83,19 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         } catch (e) {
           triageSymptoms = [];
         }
+      }
+      
+      // Normalize triage symptoms field names (handle both camelCase and snake_case)
+      if (Array.isArray(triageSymptoms)) {
+        triageSymptoms = triageSymptoms.map(symptom => ({
+          name: symptom.name || '',
+          ipssScore: symptom.ipssScore || symptom.ipss_score || '',
+          duration: symptom.duration || '',
+          durationUnit: symptom.durationUnit || symptom.duration_unit || 'months',
+          frequency: symptom.frequency || '',
+          notes: symptom.notes || '',
+          isCustom: symptom.isCustom || symptom.is_custom || false
+        }));
       }
 
       // Parse comorbidities if it's a JSON string or array
@@ -226,6 +240,21 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
           comorbidities: [...current, comorbidity]
         };
       }
+    });
+  };
+
+  // Handle triage symptom field changes
+  const handleTriageSymptomFieldChange = (index, field, value) => {
+    setFormData(prev => {
+      const updatedSymptoms = [...(prev.triageSymptoms || [])];
+      updatedSymptoms[index] = {
+        ...updatedSymptoms[index],
+        [field]: value
+      };
+      return {
+        ...prev,
+        triageSymptoms: updatedSymptoms
+      };
     });
   };
 
@@ -1057,51 +1086,168 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                 <div className="space-y-4">
                   {formData.triageSymptoms.map((symptom, index) => {
                     const symptomName = symptom.name || '';
-                    const ipssScore = symptom.ipssScore || symptom.ipss_score || null;
-                    const duration = symptom.duration || null;
+                    const ipssScore = symptom.ipssScore || symptom.ipss_score || '';
+                    const duration = symptom.duration || '';
                     const durationUnit = symptom.durationUnit || symptom.duration_unit || 'months';
-                    const frequency = symptom.frequency || null;
-                    const notes = symptom.notes || null;
+                    const frequency = symptom.frequency || '';
+                    const notes = symptom.notes || '';
                     const isCustom = symptom.isCustom || false;
 
                     return (
                       <div key={index} className={`border border-gray-200 rounded-lg p-4 ${isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                        <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-gray-900 text-base">{symptomName}</span>
                             {isCustom && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">(Custom)</span>}
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-3">
-                          <div>
-                            <span className="text-gray-600">IPSS Score:</span>
-                            <span className="ml-2 font-medium text-gray-900">{ipssScore || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Duration:</span>
-                            <span className="ml-2 font-medium text-gray-900">
-                              {duration ? `${duration} ${durationUnit}`.trim() : 'N/A'}
-                            </span>
-                          </div>
-                          {frequency && (
+                        <div className="space-y-4">
+                          <div className={`grid gap-4 ${
+                            symptomName === 'LUTS'
+                              ? 'grid-cols-1 md:grid-cols-2' 
+                              : 'grid-cols-1'
+                          }`}>
+                            {symptomName === 'LUTS' && (
+                              <div className="relative mb-3">
+                                <select
+                                  value={ipssScore}
+                                  onChange={(e) => handleTriageSymptomFieldChange(index, 'ipssScore', e.target.value)}
+                                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
+                                    ipssScore
+                                      ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                      : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                  } motion-reduce:transition-none`}
+                                >
+                                  <option value="">Select IPSS Score</option>
+                                  <option value="Mild">Mild (0-7 points)</option>
+                                  <option value="Moderate">Moderate (8-19 points)</option>
+                                  <option value="Severe">Severe (20-35 points)</option>
+                                </select>
+                                <label
+                                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${
+                                    ipssScore
+                                      ? 'text-teal-600'
+                                      : 'text-gray-500'
+                                  } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                                >
+                                  IPSS Score
+                                </label>
+                                <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${
+                                  ipssScore ? 'text-teal-500' : 'text-gray-400'
+                                }`} />
+                              </div>
+                            )}
+
                             <div>
-                              <span className="text-gray-600">Frequency:</span>
-                              <span className="ml-2 font-medium text-gray-900">
-                                {frequency} {symptomName === 'Nocturia' ? (frequency === 1 || frequency === '1' ? 'time per night' : 'times per night') : 'times'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {notes && (
-                          <div className="mt-3 pt-3 border-t border-gray-200">
-                            <span className="text-gray-600 text-sm font-medium">Notes:</span>
-                            <div className="mt-1 text-sm text-gray-900 whitespace-pre-line bg-white p-2 rounded border border-gray-200">
-                              {notes}
+                              <div className="flex gap-2">
+                                <div className="flex-1 relative mb-3">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={duration}
+                                    onChange={(e) => handleTriageSymptomFieldChange(index, 'duration', e.target.value)}
+                                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
+                                      duration
+                                        ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                        : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                    } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                                    placeholder=" "
+                                  />
+                                  <label
+                                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs ${
+                                      duration
+                                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-teal-50 px-1'
+                                        : 'text-gray-500'
+                                    } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-teal-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-teal-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                                  >
+                                    Duration of Symptoms
+                                  </label>
+                                </div>
+                                <div className="relative mb-3" style={{ minWidth: '120px' }}>
+                                  <select
+                                    value={durationUnit}
+                                    onChange={(e) => handleTriageSymptomFieldChange(index, 'durationUnit', e.target.value)}
+                                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
+                                      durationUnit
+                                        ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                        : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                    } motion-reduce:transition-none`}
+                                  >
+                                    <option value="weeks">Weeks</option>
+                                    <option value="months">Months</option>
+                                    <option value="years">Years</option>
+                                  </select>
+                                  <label
+                                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${
+                                      durationUnit
+                                        ? 'text-teal-600'
+                                        : 'text-gray-500'
+                                    } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                                  >
+                                    Unit
+                                  </label>
+                                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${
+                                    durationUnit ? 'text-teal-500' : 'text-gray-400'
+                                  }`} />
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        )}
+                          
+                          {/* Notes field for all symptoms */}
+                          <div className={`grid gap-4 ${symptomName === 'Nocturia' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+                            {symptomName === 'Nocturia' && (
+                              <div className="relative mb-3">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={frequency}
+                                  onChange={(e) => handleTriageSymptomFieldChange(index, 'frequency', e.target.value)}
+                                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                                    frequency
+                                      ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                      : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                  } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                                  placeholder=" "
+                                />
+                                <label
+                                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs ${
+                                    frequency
+                                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-teal-50 px-1'
+                                      : 'text-gray-500'
+                                  } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-teal-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-teal-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                                >
+                                  Frequency (times per night)
+                                </label>
+                              </div>
+                            )}
+
+                            <div className="relative mb-3">
+                              <textarea
+                                value={notes}
+                                onChange={(e) => handleTriageSymptomFieldChange(index, 'notes', e.target.value)}
+                                rows={3}
+                                className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear resize-none ${
+                                  notes
+                                    ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                    : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                } focus:placeholder:opacity-100 peer-focus:text-teal-600 motion-reduce:transition-none`}
+                                placeholder=" "
+                              />
+                              <label
+                                className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${
+                                  notes
+                                    ? 'text-teal-600'
+                                    : 'text-gray-500'
+                                } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                              >
+                                Notes
+                              </label>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
