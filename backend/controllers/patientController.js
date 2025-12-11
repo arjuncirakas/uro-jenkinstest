@@ -2047,7 +2047,7 @@ export const updatePatientPathway = async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { pathway, reason, notes } = req.body;
+    const { pathway, reason, notes, skipAutoBooking } = req.body;
     const userId = req.user.id;
 
     const allowed = ['Active Monitoring','Surgery Pathway','Medication','Radiotherapy','Post-op Transfer','Post-op Followup','Discharge'];
@@ -2115,12 +2115,16 @@ export const updatePatientPathway = async (req, res) => {
     
     if (pathwaysForAutomaticBooking.includes(pathway)) {
       try {
-        // Check for 3 consecutive no-shows - if yes, don't auto-book
-        const hasConsecutiveNoShows = await hasThreeConsecutiveNoShows(client, id);
-        
-        if (hasConsecutiveNoShows) {
-          console.log(`[updatePatientPathway] ⚠️ Patient ${patientData.upi} has 3 consecutive no-shows - skipping automatic appointment booking`);
+        // Skip auto-booking if manual appointment was already created (skipAutoBooking flag is set)
+        if (skipAutoBooking) {
+          console.log(`[updatePatientPathway] ⚠️ Skipping automatic appointment booking for ${patientData.upi} - manual appointment already created`);
         } else {
+          // Check for 3 consecutive no-shows - if yes, don't auto-book
+          const hasConsecutiveNoShows = await hasThreeConsecutiveNoShows(client, id);
+          
+          if (hasConsecutiveNoShows) {
+            console.log(`[updatePatientPathway] ⚠️ Patient ${patientData.upi} has 3 consecutive no-shows - skipping automatic appointment booking`);
+          } else {
           console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking automatic follow-up appointments (1 year)...`);
           
           // Get the urologist who is transferring the patient (logged-in user)
@@ -2187,6 +2191,7 @@ export const updatePatientPathway = async (req, res) => {
           } else {
             console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Current user is not a urologist`);
           }
+        }
         }
       } catch (autoBookError) {
         console.error('[updatePatientPathway] Auto-booking failed (non-fatal):', autoBookError.message);
