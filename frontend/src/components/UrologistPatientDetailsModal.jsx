@@ -2822,8 +2822,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                             </div>
                                           )}
                                           
-                                          {/* Status update controls for investigation requests - only show if no results exist */}
-                                          {!hasResults && !request.isClinicalInvestigation && request.id && (
+                                          {/* Status update controls for investigation requests - only show if no results exist and not marked as not_required */}
+                                          {!hasResults && !request.isClinicalInvestigation && request.id && (request.status || '').toLowerCase() !== 'not_required' && (
                                             <div className="mt-3 flex items-center gap-2 flex-wrap">
                                               <button
                                                 onClick={() => handleStatusUpdate('results_awaited')}
@@ -2885,6 +2885,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                             </button>
                                           ) : (
                                             (() => {
+                                              // Don't show upload button if status is not_required
+                                              const isNotRequired = (request.status || '').toLowerCase() === 'not_required';
+                                              if (isNotRequired) {
+                                                return null;
+                                              }
+                                              
                                               // Check if this is a PSA-related test
                                               const isPSATest = investigationName.includes('PSA');
                                               return (
