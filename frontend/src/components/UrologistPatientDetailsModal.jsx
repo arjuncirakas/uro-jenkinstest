@@ -4860,7 +4860,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
               {/* Pathway Validation & Compliance Check - Consolidated Display */}
               {patient?.id && selectedPathway && (
-                <div className="mb-4">
+                <div className="mb-4" key={`validation-${patient.id}-${selectedPathway}`}>
                   <PathwayValidator
                     patientId={patient.id}
                     fromPathway={patient.carePathway || patient.care_pathway || ''}

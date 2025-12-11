@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle, XCircle, AlertTriangle, ClipboardCheck } from 'lucide-react';
 import { guidelineService } from '../services/guidelineService';
 
@@ -6,7 +6,7 @@ import { guidelineService } from '../services/guidelineService';
  * Pathway Validator Component
  * Validates pathway transitions before submission
  */
-const PathwayValidator = ({ 
+const PathwayValidator = React.memo(({ 
   patientId, 
   fromPathway, 
   toPathway,
@@ -14,8 +14,22 @@ const PathwayValidator = ({
 }) => {
   const [validation, setValidation] = useState(null);
   const [loading, setLoading] = useState(false);
+  const previousValues = useRef({ patientId, fromPathway, toPathway });
 
   useEffect(() => {
+    // Only validate if pathway-related values actually changed
+    const hasChanged = 
+      previousValues.current.patientId !== patientId ||
+      previousValues.current.fromPathway !== fromPathway ||
+      previousValues.current.toPathway !== toPathway;
+
+    if (!hasChanged) {
+      return;
+    }
+
+    // Update ref with current values
+    previousValues.current = { patientId, fromPathway, toPathway };
+
     if (!patientId || !toPathway) {
       setValidation(null);
       return;
@@ -46,7 +60,8 @@ const PathwayValidator = ({
     validatePathway();
   }, [patientId, fromPathway, toPathway, onValidationChange]);
 
-  if (loading) {
+  // Show loading state only if we don't have previous validation data
+  if (loading && !validation) {
     return (
       <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
         <div className="flex items-center space-x-2">
@@ -56,6 +71,14 @@ const PathwayValidator = ({
       </div>
     );
   }
+
+  // If no validation data and not loading, don't show anything
+  if (!validation && !loading) {
+    return null;
+  }
+
+  // If loading but we have previous validation, show previous validation to prevent jumping
+  // Continue to show previous validation below
 
   if (!validation) {
     return null;
@@ -154,7 +177,9 @@ const PathwayValidator = ({
       )}
     </div>
   );
-};
+});
+
+PathwayValidator.displayName = 'PathwayValidator';
 
 export default PathwayValidator;
 
