@@ -473,10 +473,10 @@ export const updatePatientSchema = Joi.object({
     }),
   initialPSADate: Joi.date()
     .max('now')
-    .required()
+    .optional()
+    .allow('')
     .messages({
-      'date.max': 'PSA test date cannot be in the future',
-      'any.required': 'PSA test date is required'
+      'date.max': 'PSA test date cannot be in the future'
     }),
   medicalHistory: Joi.string()
     .max(2000)

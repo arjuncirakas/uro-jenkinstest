@@ -553,8 +553,7 @@ export const validatePatientUpdateInput = [
     }),
     
   body('initialPSADate')
-    .notEmpty()
-    .withMessage('PSA test date is required')
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('PSA test date must be a valid date')
     .custom((value) => {

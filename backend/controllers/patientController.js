@@ -1403,8 +1403,42 @@ export const updatePatient = async (req, res) => {
     const updateValues = [];
     let paramCount = 0;
 
+    // Helper function to convert camelCase to snake_case properly
+    const camelToSnake = (str) => {
+      // Handle known field mappings first
+      const fieldMap = {
+        'initialPSA': 'initial_psa',
+        'initialPSADate': 'initial_psa_date',
+        'firstName': 'first_name',
+        'lastName': 'last_name',
+        'dateOfBirth': 'date_of_birth',
+        'referralDate': 'referral_date',
+        'medicalHistory': 'medical_history',
+        'currentMedications': 'current_medications',
+        'assignedUrologist': 'assigned_urologist',
+        'emergencyContactName': 'emergency_contact_name',
+        'emergencyContactPhone': 'emergency_contact_phone',
+        'emergencyContactRelationship': 'emergency_contact_relationship',
+        'referringDepartment': 'referring_department',
+        'triageSymptoms': 'triage_symptoms',
+        'dreDone': 'dre_done',
+        'dreFindings': 'dre_findings',
+        'priorBiopsy': 'prior_biopsy',
+        'priorBiopsyDate': 'prior_biopsy_date',
+        'gleasonScore': 'gleason_score'
+      };
+      
+      if (fieldMap[str]) {
+        return fieldMap[str];
+      }
+      
+      // Fallback: convert camelCase to snake_case
+      // Insert underscore before capital letters (but not at the start)
+      return str.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    };
+
     for (const [key, value] of Object.entries(updateData)) {
-      const dbField = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      const dbField = camelToSnake(key);
       if (allowedFields.includes(dbField)) {
         // Format dates and cast them as DATE type in PostgreSQL
         if (dateFields.includes(dbField)) {
