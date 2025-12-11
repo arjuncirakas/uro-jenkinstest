@@ -25,7 +25,6 @@ import { calculatePSAVelocity } from '../utils/psaVelocity';
 import { getPatientPipelineStage } from '../utils/patientPipeline';
 import DecisionSupportPanel from './DecisionSupportPanel';
 import PathwayValidator from './PathwayValidator';
-import ComplianceChecker from './ComplianceChecker';
 
 const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error, onTransferSuccess }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -4859,27 +4858,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 </div>
               </div>
 
-              {/* Pathway Validation */}
+              {/* Pathway Validation & Compliance Check - Consolidated Display */}
               {patient?.id && selectedPathway && (
                 <div className="mb-4">
                   <PathwayValidator
                     patientId={patient.id}
                     fromPathway={patient.carePathway || patient.care_pathway || ''}
                     toPathway={selectedPathway}
-                  />
-                </div>
-              )}
-
-              {/* Compliance Check */}
-              {patient?.id && selectedPathway && (
-                <div className="mb-4">
-                  <ComplianceChecker
-                    patientId={patient.id}
-                    checkType="pathway"
-                    checkData={{
-                      fromPathway: patient.carePathway || patient.care_pathway || '',
-                      toPathway: selectedPathway
-                    }}
                   />
                 </div>
               )}
