@@ -34,23 +34,62 @@ export const getAllowedOrigins = () => {
 };
 
 /**
- * Enhanced CORS options with better logging
- * TEMPORARY: Allow all origins globally (returns specific origin to support credentials)
- * TODO: Restore proper origin checking before final deployment
+ * Enhanced CORS options with proper origin validation
+ * Restricts access to only allowed origins for security
  */
 export const corsOptions = {
-  // Allow all origins by returning the requesting origin dynamically
-  // This allows credentials to work (browser requires specific origin, not "*")
+  // Validate origin against allowed list
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, server-to-server)
+    // Get allowed origins based on environment
+    const allowedOrigins = getAllowedOrigins();
+    
+    // Handle requests with no origin (mobile apps, Postman, server-to-server)
     if (!origin) {
-      return callback(null, true);
+      // In development, allow requests with no origin for testing
+      // In production, reject requests with no origin for security
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ CORS: Allowing request with no origin (development mode)');
+        return callback(null, true);
+      } else {
+        // In production, reject requests with no origin unless explicitly allowed
+        console.warn('⚠️  CORS: Rejecting request with no origin (production mode)');
+        return callback(new Error('Not allowed by CORS - no origin provided'));
+      }
     }
     
-    // TEMPORARY: Allow all origins - return the requesting origin
-    // This satisfies the browser's requirement for credentials mode
-    console.log(`✅ CORS: Allowing origin (global access): ${origin}`);
-    return callback(null, origin);
+    // If allowedOrigins is false, only allow same-origin requests
+    if (allowedOrigins === false) {
+      console.warn(`⚠️  CORS: Rejecting origin ${origin} - no allowed origins configured`);
+      return callback(new Error('Not allowed by CORS'));
+    }
+    
+    // Check if origin is in allowed list
+    if (Array.isArray(allowedOrigins)) {
+      if (allowedOrigins.includes(origin)) {
+        console.log(`✅ CORS: Allowing origin: ${origin}`);
+        return callback(null, origin);
+      } else {
+        console.warn(`⚠️  CORS: Rejecting unauthorized origin: ${origin}`);
+        console.warn(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+        return callback(new Error('Not allowed by CORS'));
+      }
+    }
+    
+    // If allowedOrigins is a string (single origin)
+    if (typeof allowedOrigins === 'string') {
+      if (allowedOrigins === origin) {
+        console.log(`✅ CORS: Allowing origin: ${origin}`);
+        return callback(null, origin);
+      } else {
+        console.warn(`⚠️  CORS: Rejecting unauthorized origin: ${origin}`);
+        console.warn(`   Allowed origin: ${allowedOrigins}`);
+        return callback(new Error('Not allowed by CORS'));
+      }
+    }
+    
+    // Fallback: reject if we can't determine allowed origins
+    console.error('❌ CORS: Unable to determine allowed origins');
+    return callback(new Error('Not allowed by CORS'));
   },
   
   // Enable credentials to work with withCredentials: true from frontend

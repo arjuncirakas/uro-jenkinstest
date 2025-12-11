@@ -613,7 +613,7 @@ const Nurses = () => {
                   onChange={handleInputChange}
                   onBlur={handleBlur}
                   required
-                  placeholder="jane.doe@hospital.com"
+                  placeholder="email@example.com"
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
                     formErrors.email ? 'border-red-300' : 'border-gray-300'
                   }`}
@@ -741,7 +741,7 @@ const Nurses = () => {
                   onChange={handleInputChange}
                   onBlur={handleBlur}
                   required
-                  placeholder="jane.doe@hospital.com"
+                  placeholder="email@example.com"
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent ${
                     formErrors.email ? 'border-red-300' : 'border-gray-300'
                   }`}

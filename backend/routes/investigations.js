@@ -16,6 +16,13 @@ import {
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
 import { xssProtection } from '../middleware/sanitizer.js';
+import { validateFilePathMiddleware } from '../utils/ssrfProtection.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const router = express.Router();
 router.use(xssProtection);
@@ -122,10 +129,12 @@ router.options('/files/:filePath(*)', (req, res) => {
 
 // Serve investigation files
 // Use /investigations/files to avoid conflicts with other routes
+// SSRF Protection: validateFilePathMiddleware prevents path traversal attacks
 router.get('/investigations/files/:filePath(*)',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
+  validateFilePathMiddleware('filePath', path.join(process.cwd(), 'uploads')),
   serveFile
 );
 
@@ -134,6 +143,7 @@ router.get('/files/:filePath(*)',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
+  validateFilePathMiddleware('filePath', path.join(process.cwd(), 'uploads')),
   serveFile
 );
 

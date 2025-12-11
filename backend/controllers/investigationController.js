@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { validateFilePath } from '../utils/ssrfProtection.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -1376,44 +1377,40 @@ export const serveFile = async (req, res) => {
     console.log('📁 [serveFile] Path:', req.path);
     console.log('📁 [serveFile] Params:', req.params);
     
-    let filePath = req.params.filePath; // Get the file path from the parameter
+    const filePath = req.params.filePath; // Get the file path from the parameter
     
-    // Decode the file path (it might be URL encoded)
-    try {
-      filePath = decodeURIComponent(filePath);
-    } catch (e) {
-      console.log('File path is not URL encoded or decode failed, using as-is');
+    if (!filePath) {
+      setCorsHeaders(req, res);
+      return res.status(400).json({
+        success: false,
+        message: 'File path is required'
+      });
     }
     
     console.log('📁 [serveFile] Requested file path (raw):', req.params.filePath);
-    console.log('📁 [serveFile] Requested file path (decoded):', filePath);
     
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
     
-    // The filePath should already be the full path from the database
-    // But let's handle both cases - relative and absolute paths
-    let fullPath;
-    if (path.isAbsolute(filePath)) {
-      fullPath = filePath;
-    } else {
-      fullPath = path.join(process.cwd(), filePath);
-    }
-    
-    console.log('Full file path:', fullPath);
-    console.log('File exists:', fs.existsSync(fullPath));
-    
-    // Security check - ensure the file is within the uploads directory
+    // SSRF Protection: Validate and normalize the file path
+    // This prevents path traversal attacks (e.g., ../../../etc/passwd)
     const uploadsDir = path.join(process.cwd(), 'uploads');
-    if (!fullPath.startsWith(uploadsDir)) {
-      console.log('Security check failed - file not in uploads directory');
-      // Ensure CORS headers are set even in error responses
+    const validation = validateFilePath(filePath, uploadsDir);
+    
+    if (!validation.valid) {
+      console.warn('🚫 [SSRF Protection] Invalid file path:', filePath);
+      console.warn('🚫 [SSRF Protection] Error:', validation.error);
       setCorsHeaders(req, res);
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: 'Access denied: Invalid file path',
+        error: validation.error
       });
     }
+    
+    const fullPath = validation.normalizedPath;
+    console.log('✅ [SSRF Protection] Validated file path:', fullPath);
+    console.log('📁 [serveFile] File exists:', fs.existsSync(fullPath));
     
     // Check if file exists
     if (!fs.existsSync(fullPath)) {

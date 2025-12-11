@@ -488,7 +488,7 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
                       errors.email ? 'border-red-300 bg-red-50' : 'border-gray-300'
                     }`}
-                    placeholder="patient@email.com"
+                    placeholder="email@example.com"
                   />
                   {errors.email && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
