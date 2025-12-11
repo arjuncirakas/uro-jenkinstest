@@ -775,8 +775,9 @@ const TestStatusCell = ({
   const statusIcon = getStatusIcon(displayStatus || 'pending');
   const statusText = getStatusText(displayStatus || 'pending');
 
-  // Show plus icon for results_awaited status instead of status icon
-  const showPlusIcon = status === 'results_awaited' || (!status && !hasResult);
+  // Show plus icon for all cases except: not_required (gray X) and completed with result (green checkmark)
+  // This includes: results_awaited, pending, null/undefined, and any other status without a result
+  const showPlusIcon = !isNotRequired && !(status === 'completed' && hasResult);
 
   return (
     <div className="flex justify-center items-center relative" ref={cellRef}>
@@ -818,7 +819,7 @@ const TestStatusCell = ({
           >
             {statusIcon}
           </button>
-        ) : showPlusIcon ? (
+        ) : (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -833,21 +834,6 @@ const TestStatusCell = ({
             data-dropdown-button
           >
             <FiPlus className="w-5 h-5" />
-          </button>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isOpen) {
-                onFetchRequests();
-                onFetchResults();
-              }
-              setOpenDropdown(isOpen ? null : dropdownId);
-            }}
-            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
-            data-dropdown-button
-          >
-            {statusIcon}
           </button>
         )}
       </div>
