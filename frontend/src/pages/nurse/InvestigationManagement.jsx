@@ -781,9 +781,12 @@ const TestStatusCell = ({
   const statusIcon = getStatusIcon(displayStatus || 'pending');
   const statusText = getStatusText(displayStatus || 'pending');
 
+  // Show plus icon for results_awaited status instead of status icon
+  const showPlusIcon = status === 'results_awaited' || (!status && !hasResult);
+
   return (
     <div className="flex justify-center items-center relative" ref={cellRef}>
-      {/* Status Icon - Clickable to open dropdown or view result */}
+      {/* Status Icon or Plus Icon - Clickable to open dropdown or view result */}
       <div className="flex items-center justify-center">
         {hasResult && (status === 'completed' || displayStatus === 'completed') ? (
           <button
@@ -801,14 +804,26 @@ const TestStatusCell = ({
                 setOpenDropdown(isOpen ? null : dropdownId);
               }
             }}
-            className="p-1 hover:bg-gray-50 rounded-full transition-colors group relative cursor-pointer"
-            title={`${statusText} - Click to view result`}
+            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
             data-dropdown-button
           >
             {statusIcon}
-            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-              View Result
-            </span>
+          </button>
+        ) : showPlusIcon ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isOpen) {
+                onFetchRequests();
+                onFetchResults();
+              }
+              setOpenDropdown(isOpen ? null : dropdownId);
+            }}
+            className="p-2 text-teal-600 hover:text-teal-800 transition-colors rounded-full hover:bg-teal-50"
+            title="Add result or update status"
+            data-dropdown-button
+          >
+            <FiPlus className="w-5 h-5" />
           </button>
         ) : (
           <button
@@ -820,14 +835,10 @@ const TestStatusCell = ({
               }
               setOpenDropdown(isOpen ? null : dropdownId);
             }}
-            className="p-1 hover:bg-gray-50 rounded-full transition-colors group relative cursor-pointer"
-            title={`${statusText} - Click to manage`}
+            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
             data-dropdown-button
           >
             {statusIcon}
-            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-              {statusText}
-            </span>
           </button>
         )}
       </div>
