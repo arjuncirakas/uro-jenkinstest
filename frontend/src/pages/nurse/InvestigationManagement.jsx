@@ -753,7 +753,8 @@ const TestStatusCell = ({
 }) => {
   const dropdownId = `${investigation.id}-${testType}`;
   const isOpen = openDropdown === dropdownId;
-  const hasResult = testResult && (testResult.filePath || testResult.file_path || testResult.result);
+  // Only consider it a valid result if there's an actual file path, not just any result value
+  const hasResult = testResult && (testResult.filePath || testResult.file_path);
   const cellRef = useRef(null);
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -762,8 +763,11 @@ const TestStatusCell = ({
   const isNotRequired = status === 'not_required';
 
   // Determine what to show based on status
-  // If status is null/undefined, check if there's a result to determine status
-  const displayStatus = status || (hasResult ? 'completed' : null);
+  // Priority: Use status from investigation data first, only use hasResult as fallback if status is truly null/undefined
+  // Don't infer 'completed' from hasResult if status is explicitly set to something else
+  const displayStatus = status !== null && status !== undefined 
+    ? status 
+    : (hasResult ? 'completed' : null);
   const statusIcon = getStatusIcon(displayStatus || 'pending');
   const statusText = getStatusText(displayStatus || 'pending');
 
@@ -787,13 +791,13 @@ const TestStatusCell = ({
           >
             {getStatusIcon('not_required')}
           </button>
-        ) : hasResult ? (
-          // If result is uploaded, always show checkmark icon (completed status)
+        ) : displayStatus === 'completed' || (displayStatus === null && hasResult) ? (
+          // Show checkmark only if status is explicitly 'completed' OR if status is null and we have a valid result file
           <button
             ref={buttonRef}
             onClick={(e) => {
               e.stopPropagation();
-              const filePath = testResult.filePath || testResult.file_path;
+              const filePath = testResult?.filePath || testResult?.file_path;
               if (filePath) {
                 onViewResult(filePath);
               } else {
@@ -810,8 +814,25 @@ const TestStatusCell = ({
           >
             {getStatusIcon('completed')}
           </button>
+        ) : displayStatus === 'results_awaited' ? (
+          // Show results awaited icon
+          <button
+            ref={buttonRef}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isOpen) {
+                onFetchRequests();
+                onFetchResults();
+              }
+              setOpenDropdown(isOpen ? null : dropdownId);
+            }}
+            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
+            data-dropdown-button
+          >
+            {getStatusIcon('results_awaited')}
+          </button>
         ) : (
-          // No result uploaded - show plus icon
+          // No status set or pending - show plus icon
           <button
             ref={buttonRef}
             onClick={(e) => {
