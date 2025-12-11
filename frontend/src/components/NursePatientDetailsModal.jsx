@@ -2663,8 +2663,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                             </div>
                                           )}
                                           
-                                          {/* Status update controls for all investigation requests */}
-                                          {!request.isClinicalInvestigation && request.id && (
+                                          {/* Status update controls for all investigation requests - only show if no results exist */}
+                                          {!hasResults && !request.isClinicalInvestigation && request.id && (
                                             <div className="mt-3 flex items-center gap-2 flex-wrap">
                                               <button
                                                 onClick={() => handleStatusUpdate('results_awaited')}
