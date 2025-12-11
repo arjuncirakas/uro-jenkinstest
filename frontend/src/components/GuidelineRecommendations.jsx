@@ -136,3 +136,5 @@ const GuidelineRecommendations = ({ patientId }) => {
 
 export default GuidelineRecommendations;
 
+
+

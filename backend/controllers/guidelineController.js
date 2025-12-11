@@ -270,3 +270,5 @@ export const getGuidelinesByCategoryEndpoint = async (req, res) => {
   }
 };
 
+
+

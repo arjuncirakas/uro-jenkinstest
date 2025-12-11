@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FiEye, FiClock, FiX, FiPlus } from 'react-icons/fi';
-import { Upload, Eye, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FiEye, FiPlus } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import AddInvestigationResultModal from '../../components/AddInvestigationResultModal';
@@ -19,7 +18,6 @@ const InvestigationManagement = () => {
   const [investigationsError, setInvestigationsError] = useState(null);
 
   // State for test result management
-  const [openDropdown, setOpenDropdown] = useState(null); // Format: "patientId-testType"
   const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
   const [selectedPatientForUpload, setSelectedPatientForUpload] = useState(null);
   const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
@@ -57,24 +55,6 @@ const InvestigationManagement = () => {
     fetchInvestigations();
   }, []);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      // Check if click is outside any dropdown
-      const clickedElement = event.target;
-      const isDropdown = clickedElement.closest('[data-dropdown-menu]');
-      const isDropdownButton = clickedElement.closest('[data-dropdown-button]');
-      
-      if (!isDropdown && !isDropdownButton && openDropdown) {
-        setOpenDropdown(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openDropdown]);
 
   // Fetch investigation requests for a patient
   const fetchInvestigationRequests = async (patientId) => {
@@ -371,8 +351,6 @@ const InvestigationManagement = () => {
       if (result.success) {
         // Refresh investigations
         fetchInvestigations();
-        // Close dropdown
-        setOpenDropdown(null);
         
         // Trigger event
         window.dispatchEvent(new CustomEvent('investigationStatusUpdated', {
@@ -424,7 +402,6 @@ const InvestigationManagement = () => {
     setSelectedInvestigationRequest(investigationRequest);
     setSelectedPatientForUpload(patientForModal);
     setIsAddResultModalOpen(true);
-    setOpenDropdown(null);
   };
 
   // Handle view result
@@ -643,8 +620,6 @@ const InvestigationManagement = () => {
                           onUploadResult={() => handleUploadResult(investigation.id, 'mri')}
                           onViewResult={(filePath) => handleViewResult(filePath)}
                           testResult={testResults[investigation.id]?.mri}
-                          openDropdown={openDropdown}
-                          setOpenDropdown={setOpenDropdown}
                           getStatusIcon={getStatusIcon}
                           getStatusText={getStatusText}
                         />
@@ -660,8 +635,6 @@ const InvestigationManagement = () => {
                           onUploadResult={() => handleUploadResult(investigation.id, 'biopsy')}
                           onViewResult={(filePath) => handleViewResult(filePath)}
                           testResult={testResults[investigation.id]?.biopsy}
-                          openDropdown={openDropdown}
-                          setOpenDropdown={setOpenDropdown}
                           getStatusIcon={getStatusIcon}
                           getStatusText={getStatusText}
                         />
@@ -677,8 +650,6 @@ const InvestigationManagement = () => {
                           onUploadResult={() => handleUploadResult(investigation.id, 'trus')}
                           onViewResult={(filePath) => handleViewResult(filePath)}
                           testResult={testResults[investigation.id]?.trus}
-                          openDropdown={openDropdown}
-                          setOpenDropdown={setOpenDropdown}
                           getStatusIcon={getStatusIcon}
                           getStatusText={getStatusText}
                         />
@@ -746,20 +717,13 @@ const TestStatusCell = ({
   onUploadResult,
   onViewResult,
   testResult,
-  openDropdown,
-  setOpenDropdown,
   getStatusIcon,
   getStatusText
 }) => {
-  const dropdownId = `${investigation.id}-${testType}`;
-  const isOpen = openDropdown === dropdownId;
   // Only consider it a valid result if there's an actual file path, not just any result value
   const hasResult = testResult && (testResult.filePath || testResult.file_path);
-  const cellRef = useRef(null);
-  const buttonRef = useRef(null);
-  const dropdownRef = useRef(null);
 
-  // If marked as not required, show status icon (but allow dropdown to change status back)
+  // If marked as not required, show status icon (but allow clicking to change status)
   const isNotRequired = status === 'not_required';
 
   // Determine what to show based on status
@@ -771,175 +735,71 @@ const TestStatusCell = ({
   const statusIcon = getStatusIcon(displayStatus || 'pending');
   const statusText = getStatusText(displayStatus || 'pending');
 
+  const handleIconClick = (e) => {
+    e.stopPropagation();
+    
+    if (isNotRequired) {
+      // If not required, clicking opens modal to change status
+      onFetchRequests();
+      onUploadResult();
+    } else if (displayStatus === 'completed' || (displayStatus === null && hasResult)) {
+      // If completed or has result, clicking views the result file
+      const filePath = testResult?.filePath || testResult?.file_path;
+      if (filePath) {
+        onViewResult(filePath);
+      } else {
+        // If no file path but marked as completed, open modal directly
+        onFetchRequests();
+        onUploadResult();
+      }
+    } else {
+      // For results_awaited, pending, or no status - directly open modal
+      onFetchRequests();
+      onUploadResult();
+    }
+  };
+
   return (
-    <div className="flex justify-center items-center relative" ref={cellRef}>
-      {/* Status Icon or Plus Icon - Clickable to open dropdown or view result */}
+    <div className="flex justify-center items-center">
+      {/* Status Icon or Plus Icon - Clickable to open modal or view result */}
       <div className="flex items-center justify-center">
         {isNotRequired ? (
           <button
-            ref={buttonRef}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isOpen) {
-                onFetchRequests();
-                onFetchResults();
-              }
-              setOpenDropdown(isOpen ? null : dropdownId);
-            }}
+            onClick={handleIconClick}
             className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
-            data-dropdown-button
+            title="Click to change status"
           >
             {getStatusIcon('not_required')}
           </button>
         ) : displayStatus === 'completed' || (displayStatus === null && hasResult) ? (
           // Show checkmark only if status is explicitly 'completed' OR if status is null and we have a valid result file
           <button
-            ref={buttonRef}
-            onClick={(e) => {
-              e.stopPropagation();
-              const filePath = testResult?.filePath || testResult?.file_path;
-              if (filePath) {
-                onViewResult(filePath);
-              } else {
-                // If no file path, open dropdown instead
-                if (!isOpen) {
-                  onFetchRequests();
-                  onFetchResults();
-                }
-                setOpenDropdown(isOpen ? null : dropdownId);
-              }
-            }}
+            onClick={handleIconClick}
             className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
-            data-dropdown-button
+            title={hasResult ? "Click to view result" : "Click to manage result"}
           >
             {getStatusIcon('completed')}
           </button>
         ) : displayStatus === 'results_awaited' ? (
           // Show results awaited icon
           <button
-            ref={buttonRef}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isOpen) {
-                onFetchRequests();
-                onFetchResults();
-              }
-              setOpenDropdown(isOpen ? null : dropdownId);
-            }}
+            onClick={handleIconClick}
             className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
-            data-dropdown-button
+            title="Click to manage result"
           >
             {getStatusIcon('results_awaited')}
           </button>
         ) : (
           // No status set or pending - show plus icon
           <button
-            ref={buttonRef}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isOpen) {
-                onFetchRequests();
-                onFetchResults();
-              }
-              setOpenDropdown(isOpen ? null : dropdownId);
-            }}
+            onClick={handleIconClick}
             className="p-2 text-teal-600 hover:text-teal-800 transition-colors rounded-full hover:bg-teal-50"
-            title="Add result or update status"
-            data-dropdown-button
+            title="Click to upload result or set status"
           >
             <FiPlus className="w-5 h-5" />
           </button>
         )}
       </div>
-
-      {/* Dropdown Menu - Positioned to always be visible */}
-      {isOpen && buttonRef.current && (() => {
-        const buttonRect = buttonRef.current.getBoundingClientRect();
-        const dropdownHeight = 180; // Approximate height including all options
-        const spaceBelow = window.innerHeight - buttonRect.bottom;
-        const spaceAbove = buttonRect.top;
-        const showAbove = spaceBelow < dropdownHeight && spaceAbove > dropdownHeight;
-        
-        // Calculate horizontal position, ensuring it doesn't go off-screen
-        const dropdownWidth = 180;
-        const leftPosition = buttonRect.left + buttonRect.width / 2;
-        const adjustedLeft = Math.max(
-          dropdownWidth / 2 + 8, // 8px padding from screen edge
-          Math.min(
-            leftPosition,
-            window.innerWidth - dropdownWidth / 2 - 8
-          )
-        );
-        
-        return (
-          <div 
-            ref={dropdownRef}
-            data-dropdown-menu
-            className="z-[9999] bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[180px]"
-            style={{
-              position: 'fixed',
-              left: `${adjustedLeft}px`,
-              top: showAbove 
-                ? `${Math.max(8, buttonRect.top - dropdownHeight - 4)}px`
-                : `${Math.min(buttonRect.bottom + 4, window.innerHeight - dropdownHeight - 8)}px`,
-              transform: 'translateX(-50%)',
-              maxHeight: 'calc(100vh - 16px)',
-              overflowY: 'auto',
-            }}
-          >
-          {/* Only show Upload Result and Results Awaited if status is not "not_required" */}
-          {!isNotRequired && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUploadResult();
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                Upload Result
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStatusUpdate('results_awaited');
-                }}
-                disabled={status === 'results_awaited'}
-                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-                  status === 'results_awaited'
-                    ? 'text-gray-400 cursor-not-allowed bg-gray-50'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <FiClock className="w-4 h-4" />
-                Results Awaited
-              </button>
-            </>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              // If already not_required, set to pending to allow changing it back
-              // Otherwise, set to not_required
-              if (status === 'not_required') {
-                onStatusUpdate('pending');
-              } else {
-                onStatusUpdate('not_required');
-              }
-            }}
-            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-              status === 'not_required'
-                ? 'text-teal-700 hover:bg-teal-50 bg-teal-50'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <FiX className="w-4 h-4" />
-            {status === 'not_required' ? 'Remove Not Required' : 'Not Required'}
-          </button>
-          </div>
-        );
-      })()}
     </div>
   );
 };
