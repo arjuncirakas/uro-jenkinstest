@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IoClose, IoDocument, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
 import { FiX } from 'react-icons/fi';
 import { Upload } from 'lucide-react';
 import { investigationService } from '../services/investigationService';
 
-const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, patient, onSuccess, isPSATest = false, onStatusUpdate }) => {
+const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, patient, existingResult, onSuccess, isPSATest = false, onStatusUpdate }) => {
   const [result, setResult] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
@@ -12,7 +12,28 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Initialize form with existing result data when modal opens or existingResult changes
+  useEffect(() => {
+    if (existingResult) {
+      setResult(existingResult.result || '');
+      setNotes(existingResult.notes || '');
+      // Note: We don't set the file state for existing files since they're already uploaded
+      // We'll display them separately
+    } else {
+      // Reset form when no existing result
+      setResult('');
+      setNotes('');
+      setFile(null);
+      setFileName('');
+    }
+  }, [existingResult, isOpen]);
+
   if (!isOpen || !investigationRequest) return null;
+  
+  // Get existing file info
+  const existingFilePath = existingResult?.filePath || existingResult?.file_path || null;
+  const existingFileName = existingResult?.fileName || existingResult?.file_name || null;
+  const hasExistingFile = !!existingFilePath;
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -169,8 +190,42 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Upload Report
                 </label>
+                {/* Show existing file if available */}
+                {hasExistingFile && !file && (
+                  <div className="border-2 border-blue-400 bg-blue-50 rounded-md p-2.5 mb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                        <div className="flex-shrink-0">
+                          <IoDocument className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-blue-900 truncate">
+                            {existingFileName || 'Uploaded File'}
+                          </p>
+                          <p className="text-xs text-blue-700 mt-0.5">
+                            Existing uploaded file
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 flex items-center space-x-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (existingFilePath) {
+                                investigationService.viewFile(existingFilePath);
+                              }
+                            }}
+                            className="text-blue-600 hover:text-blue-800 transition-colors text-xs font-medium px-2 py-1 rounded hover:bg-blue-100"
+                            title="View file"
+                          >
+                            View
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {file ? (
-                  // Show attached file
+                  // Show newly attached file
                   <div className="border-2 border-teal-400 bg-teal-50 rounded-md p-2.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2 flex-1 min-w-0">
@@ -215,7 +270,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                     >
                       <Upload className="w-8 h-8 text-gray-400 mb-1" />
                       <p className="text-xs text-gray-600 mb-0.5">
-                        Click to upload or drag and drop
+                        {hasExistingFile ? 'Click to replace existing file or drag and drop' : 'Click to upload or drag and drop'}
                       </p>
                       <p className="text-xs text-gray-500">
                         PDF, JPG, PNG, DOC, DOCX (max 10MB)

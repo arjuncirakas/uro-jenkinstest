@@ -20,6 +20,7 @@ const InvestigationManagement = () => {
   // State for test result management
   const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
   const [selectedPatientForUpload, setSelectedPatientForUpload] = useState(null);
+  const [selectedExistingResult, setSelectedExistingResult] = useState(null);
   const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
   const [investigationRequests, setInvestigationRequests] = useState({}); // Map of patientId -> { mri: requestId, biopsy: requestId, trus: requestId }
   const [testResults, setTestResults] = useState({}); // Map of patientId -> { mri: result, biopsy: result, trus: result }
@@ -381,8 +382,16 @@ const InvestigationManagement = () => {
       await fetchInvestigationRequests(patientId);
     }
     
+    // Fetch existing test results if not already loaded
+    if (!testResults[patientId]) {
+      await fetchTestResults(patientId);
+    }
+    
     const requestMap = investigationRequests[patientId] || {};
     const requestId = requestMap[testType];
+    
+    // Get existing test result for this test type
+    const existingResult = testResults[patientId]?.[testType] || null;
     
     // Create a mock investigation request object
     const investigationRequest = {
@@ -401,6 +410,7 @@ const InvestigationManagement = () => {
     
     setSelectedInvestigationRequest(investigationRequest);
     setSelectedPatientForUpload(patientForModal);
+    setSelectedExistingResult(existingResult);
     setIsAddResultModalOpen(true);
   };
 
@@ -688,9 +698,11 @@ const InvestigationManagement = () => {
             setIsAddResultModalOpen(false);
             setSelectedInvestigationRequest(null);
             setSelectedPatientForUpload(null);
+            setSelectedExistingResult(null);
           }}
           investigationRequest={selectedInvestigationRequest}
           patient={selectedPatientForUpload}
+          existingResult={selectedExistingResult}
           onSuccess={handleResultAdded}
           onStatusUpdate={(newStatus) => {
             if (selectedInvestigationRequest.testType && selectedPatientForUpload?.id) {
@@ -699,6 +711,7 @@ const InvestigationManagement = () => {
             setIsAddResultModalOpen(false);
             setSelectedInvestigationRequest(null);
             setSelectedPatientForUpload(null);
+            setSelectedExistingResult(null);
           }}
         />
       )}
@@ -738,25 +751,11 @@ const TestStatusCell = ({
   const handleIconClick = (e) => {
     e.stopPropagation();
     
-    if (isNotRequired) {
-      // If not required, clicking opens modal to change status
-      onFetchRequests();
-      onUploadResult();
-    } else if (displayStatus === 'completed' || (displayStatus === null && hasResult)) {
-      // If completed or has result, clicking views the result file
-      const filePath = testResult?.filePath || testResult?.file_path;
-      if (filePath) {
-        onViewResult(filePath);
-      } else {
-        // If no file path but marked as completed, open modal directly
-        onFetchRequests();
-        onUploadResult();
-      }
-    } else {
-      // For results_awaited, pending, or no status - directly open modal
-      onFetchRequests();
-      onUploadResult();
-    }
+    // Always open the modal when clicking on status icon
+    // This allows viewing/editing existing results or uploading new ones
+    onFetchRequests();
+    onFetchResults();
+    onUploadResult();
   };
 
   return (
