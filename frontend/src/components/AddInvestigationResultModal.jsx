@@ -12,8 +12,23 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Get existing file info (calculate before early return)
+  const existingFilePath = existingResult?.filePath || existingResult?.file_path || null;
+  const existingFileName = existingResult?.fileName || existingResult?.file_name || null;
+  const hasExistingFile = !!existingFilePath;
+
   // Initialize form with existing result data when modal opens or existingResult changes
   useEffect(() => {
+    if (!isOpen) {
+      // Reset form when modal closes
+      setResult('');
+      setNotes('');
+      setFile(null);
+      setFileName('');
+      setError('');
+      return;
+    }
+
     if (existingResult) {
       setResult(existingResult.result || '');
       setNotes(existingResult.notes || '');
@@ -27,13 +42,19 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       setFileName('');
     }
   }, [existingResult, isOpen]);
-
-  if (!isOpen || !investigationRequest) return null;
   
-  // Get existing file info
-  const existingFilePath = existingResult?.filePath || existingResult?.file_path || null;
-  const existingFileName = existingResult?.fileName || existingResult?.file_name || null;
-  const hasExistingFile = !!existingFilePath;
+  // Debug logging
+  useEffect(() => {
+    if (isOpen && existingResult) {
+      console.log('🔍 AddInvestigationResultModal - Existing result:', existingResult);
+      console.log('🔍 AddInvestigationResultModal - File path:', existingFilePath);
+      console.log('🔍 AddInvestigationResultModal - File name:', existingFileName);
+      console.log('🔍 AddInvestigationResultModal - Has existing file:', hasExistingFile);
+    }
+  }, [existingResult, existingFilePath, existingFileName, hasExistingFile, isOpen]);
+
+  // Early return after all hooks
+  if (!isOpen || !investigationRequest) return null;
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -209,13 +230,38 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                         <div className="flex-shrink-0 flex items-center space-x-1.5">
                           <button
                             type="button"
-                            onClick={() => {
-                              if (existingFilePath) {
-                                investigationService.viewFile(existingFilePath);
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('🔍 View button clicked');
+                              console.log('🔍 Existing result:', existingResult);
+                              console.log('🔍 Existing file path:', existingFilePath);
+                              
+                              if (!existingFilePath) {
+                                console.error('❌ No file path available');
+                                alert('File path is not available. Please check if the file was uploaded correctly.');
+                                return;
+                              }
+                              
+                              if (typeof existingFilePath !== 'string' || existingFilePath.trim() === '') {
+                                console.error('❌ Invalid file path:', existingFilePath);
+                                alert('Invalid file path. Please contact support.');
+                                return;
+                              }
+                              
+                              try {
+                                console.log('📂 Attempting to view file:', existingFilePath);
+                                await investigationService.viewFile(existingFilePath);
+                                console.log('✅ File view request completed');
+                              } catch (error) {
+                                console.error('❌ Error viewing file:', error);
+                                const errorMessage = error?.response?.data?.message || error?.message || 'Unable to open file. Please check the console for details.';
+                                alert(`Error viewing file: ${errorMessage}`);
                               }
                             }}
-                            className="text-blue-600 hover:text-blue-800 transition-colors text-xs font-medium px-2 py-1 rounded hover:bg-blue-100"
-                            title="View file"
+                            className="text-blue-600 hover:text-blue-800 transition-colors text-xs font-medium px-2 py-1 rounded hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={existingFilePath ? "View file" : "No file available"}
+                            disabled={!existingFilePath}
                           >
                             View
                           </button>

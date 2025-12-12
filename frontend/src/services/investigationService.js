@@ -501,15 +501,18 @@ export const investigationService = {
         // Check if it's an authentication error
         if (error.response?.status === 401) {
           console.error('Authentication error: Session expired');
-          // Silently fail - user can see error in console
-          return;
+          throw new Error('Authentication error: Please log in again to view the file.');
         }
         
-        // Log error but don't show alert
-        console.error('Unable to open file:', error.message);
+        // Re-throw the error so the caller can handle it
+        const errorMessage = error.response?.data?.message || error.message || 'Unable to open file';
+        console.error('Unable to open file:', errorMessage);
+        throw new Error(errorMessage);
       }
     } else {
-      console.error('No file path provided');
+      const errorMsg = 'No file path provided';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
   }
 };

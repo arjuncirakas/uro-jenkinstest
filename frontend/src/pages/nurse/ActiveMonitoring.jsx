@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FiEye, FiCalendar } from 'react-icons/fi';
+import { FaPills } from 'react-icons/fa';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
@@ -253,12 +254,14 @@ const ActiveMonitoring = () => {
                               {getInitials(patient.name)}
                             </div>
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-semibold text-gray-900 text-sm">{patient.name}</span>
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
-                                  <FiCalendar className="w-3 h-3" />
-                                  Scheduled
-                                </span>
+                                {(patient.pathway && patient.pathway.toLowerCase() === 'medication') && (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 ${getPathwayStyle(patient.pathway)} rounded text-xs font-medium`}>
+                                    <FaPills className="w-3 h-3" />
+                                    Medication
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-gray-600 mt-1">
                                 UPI: {patient.upi}

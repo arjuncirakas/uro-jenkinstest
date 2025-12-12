@@ -753,12 +753,13 @@ export const getAllInvestigations = async (req, res) => {
         };
       }
       const testType = (row.test_type || row.test_name || '').toLowerCase().trim();
-      // Check if test type/name contains or matches MRI, Biopsy, or TRUS (case-insensitive)
-      if (testType === 'mri' || testType.includes('mri')) {
+      // Only match exact test names to avoid matching custom tests like "MRI PELVIS"
+      // This ensures only the standard MRI, BIOPSY, and TRUS tests from investigation booking are matched
+      if (testType === 'mri') {
         patientResults[row.patient_id].mri = true;
-      } else if (testType === 'biopsy' || testType.includes('biopsy')) {
+      } else if (testType === 'biopsy') {
         patientResults[row.patient_id].biopsy = true;
-      } else if (testType === 'trus' || testType.includes('trus')) {
+      } else if (testType === 'trus') {
         patientResults[row.patient_id].trus = true;
       }
     });
@@ -1377,9 +1378,10 @@ export const serveFile = async (req, res) => {
     console.log('📁 [serveFile] Path:', req.path);
     console.log('📁 [serveFile] Params:', req.params);
     
-    const filePath = req.params.filePath; // Get the file path from the parameter
+    // Get the validated file path from middleware (already normalized and validated)
+    const fullPath = req.validatedFilePath;
     
-    if (!filePath) {
+    if (!fullPath) {
       setCorsHeaders(req, res);
       return res.status(400).json({
         success: false,
@@ -1388,27 +1390,10 @@ export const serveFile = async (req, res) => {
     }
     
     console.log('📁 [serveFile] Requested file path (raw):', req.params.filePath);
+    console.log('✅ [serveFile] Using validated path from middleware:', fullPath);
     
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
-    
-    // SSRF Protection: Validate and normalize the file path
-    // This prevents path traversal attacks (e.g., ../../../etc/passwd)
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    const validation = validateFilePath(filePath, uploadsDir);
-    
-    if (!validation.valid) {
-      console.warn('🚫 [SSRF Protection] Invalid file path:', filePath);
-      console.warn('🚫 [SSRF Protection] Error:', validation.error);
-      setCorsHeaders(req, res);
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: Invalid file path',
-        error: validation.error
-      });
-    }
-    
-    const fullPath = validation.normalizedPath;
     console.log('✅ [SSRF Protection] Validated file path:', fullPath);
     console.log('📁 [serveFile] File exists:', fs.existsSync(fullPath));
     

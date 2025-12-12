@@ -265,13 +265,25 @@ export const sanitizeFilePath = (filePath) => {
  */
 export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory = null) => {
   return (req, res, next) => {
-    const filePath = req.params[paramName] || req.body[paramName] || req.query[paramName];
+    let filePath = req.params[paramName] || req.body[paramName] || req.query[paramName];
 
     if (!filePath) {
       return res.status(400).json({
         success: false,
         message: 'File path is required'
       });
+    }
+
+    // Normalize the file path - remove 'uploads/' prefix if present
+    // File paths stored in DB might be 'uploads/investigations/file.pdf' or 'investigations/file.pdf'
+    // We need to handle both formats
+    if (filePath.startsWith('uploads/') || filePath.startsWith('uploads\\')) {
+      // Remove 'uploads/' prefix
+      filePath = filePath.replace(/^uploads[/\\]/, '');
+      // Update the param so serveFile can use it
+      if (req.params[paramName]) {
+        req.params[paramName] = filePath;
+      }
     }
 
     // Use provided base directory or default to uploads directory

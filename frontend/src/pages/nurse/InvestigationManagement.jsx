@@ -98,16 +98,17 @@ const InvestigationManagement = () => {
           ? result.data 
           : (result.data.results || result.data.investigations || []);
         
-        // Find MRI, BIOPSY, and TRUS results
+        // Find MRI, BIOPSY, and TRUS results - only match exact test names
+        // This ensures custom tests like "MRI PELVIS" don't match the standard "MRI" column
         const resultMap = {};
         results.forEach(res => {
           const name = (res.testName || res.test_name || res.testType || res.test_type || '').toUpperCase().trim();
-          // Match exact or if name contains the test type
-          if (name === 'MRI' || name.includes('MRI')) {
+          // Only match exact test names to avoid matching custom tests like "MRI PELVIS"
+          if (name === 'MRI') {
             resultMap.mri = res;
-          } else if (name === 'BIOPSY' || name.includes('BIOPSY')) {
+          } else if (name === 'BIOPSY') {
             resultMap.biopsy = res;
-          } else if (name === 'TRUS' || name.includes('TRUS')) {
+          } else if (name === 'TRUS') {
             resultMap.trus = res;
           }
         });
@@ -275,14 +276,6 @@ const InvestigationManagement = () => {
             </svg>
           </div>
         );
-      case 'results_awaited':
-        return (
-          <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-            </svg>
-          </div>
-        );
       case 'not_required':
         return (
           <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
@@ -307,8 +300,6 @@ const InvestigationManagement = () => {
     switch (status) {
       case 'completed':
         return 'Completed';
-      case 'results_awaited':
-        return 'Results Awaited';
       case 'not_required':
         return 'Not Required';
       default:
@@ -499,14 +490,6 @@ const InvestigationManagement = () => {
                     </svg>
                   </div>
                   <span className="text-xs text-gray-600">Completed</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <svg className="w-2.5 h-2.5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <span className="text-xs text-gray-600">Results Awaited</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-gray-100 rounded-full flex items-center justify-center">
@@ -779,17 +762,8 @@ const TestStatusCell = ({
           >
             {getStatusIcon('completed')}
           </button>
-        ) : displayStatus === 'results_awaited' ? (
-          // Show results awaited icon
-          <button
-            onClick={handleIconClick}
-            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
-            title="Click to manage result"
-          >
-            {getStatusIcon('results_awaited')}
-          </button>
         ) : (
-          // No status set or pending - show plus icon
+          // No status set, pending, or results_awaited - show plus icon
           <button
             onClick={handleIconClick}
             className="p-2 text-teal-600 hover:text-teal-800 transition-colors rounded-full hover:bg-teal-50"

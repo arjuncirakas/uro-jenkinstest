@@ -1184,17 +1184,19 @@ export const getTodaysAppointments = async (req, res) => {
             testResults[row.patient_id] = { mri: false, biopsy: false, trus: false };
           }
 
-          // Check if test type or name matches our expected values
-          const testType = row.test_type ? String(row.test_type).toLowerCase() : '';
-          const testName = row.test_name ? String(row.test_name).toLowerCase() : '';
+          // Check if test type or name matches our expected values - only exact matches
+          // This ensures custom tests like "MRI PELVIS" don't match the standard "MRI" column
+          const testType = row.test_type ? String(row.test_type).toLowerCase().trim() : '';
+          const testName = row.test_name ? String(row.test_name).toLowerCase().trim() : '';
 
-          if (testType.includes('mri') || testName.includes('mri')) {
+          // Only match exact test names
+          if (testType === 'mri' || testName === 'mri') {
             testResults[row.patient_id].mri = true;
           }
-          if (testType.includes('biopsy') || testName.includes('biopsy')) {
+          if (testType === 'biopsy' || testName === 'biopsy') {
             testResults[row.patient_id].biopsy = true;
           }
-          if (testType.includes('trus') || testName.includes('trus')) {
+          if (testType === 'trus' || testName === 'trus') {
             testResults[row.patient_id].trus = true;
           }
         });

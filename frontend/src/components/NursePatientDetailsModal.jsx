@@ -2711,17 +2711,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                           {!hasResults && !request.isClinicalInvestigation && request.id && (request.status || '').toLowerCase() !== 'not_required' && (
                                             <div className="mt-3 flex items-center gap-2 flex-wrap">
                                               <button
-                                                onClick={() => handleStatusUpdate('results_awaited')}
-                                                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                                                  request.status === 'results_awaited'
-                                                    ? 'bg-amber-500 text-white cursor-not-allowed'
-                                                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-300'
-                                                }`}
-                                                disabled={request.status === 'results_awaited'}
-                                              >
-                                                Results Awaited
-                                              </button>
-                                              <button
                                                 onClick={() => handleStatusUpdate('not_required')}
                                                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                                                   request.status === 'not_required'
