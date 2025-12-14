@@ -173,6 +173,20 @@ const PatientList = () => {
     };
   }, []);
 
+  // Listen for patient updated event to refresh patient list
+  useEffect(() => {
+    const handlePatientUpdated = (event) => {
+      console.log('Patient updated event received, refreshing patient list:', event.detail);
+      fetchPatients(currentPage);
+    };
+
+    window.addEventListener('patient:updated', handlePatientUpdated);
+    
+    return () => {
+      window.removeEventListener('patient:updated', handlePatientUpdated);
+    };
+  }, [currentPage]);
+
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -590,6 +604,10 @@ const PatientList = () => {
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
+        onPatientUpdated={(updatedPatient) => {
+          // Refresh the patient list to show updated information
+          fetchPatients(currentPage);
+        }}
       />
 
       {/* Update Appointment Modal */}

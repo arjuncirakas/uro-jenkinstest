@@ -195,6 +195,21 @@ const InvestigationManagement = () => {
     };
   }, []);
 
+  // Listen for patient updated events to refresh investigations data
+  useEffect(() => {
+    const handlePatientUpdated = (event) => {
+      console.log('Patient updated event received, refreshing investigations:', event.detail);
+      // Refresh investigations to show updated patient information (e.g., name changes)
+      fetchInvestigations();
+    };
+
+    window.addEventListener('patient:updated', handlePatientUpdated);
+    
+    return () => {
+      window.removeEventListener('patient:updated', handlePatientUpdated);
+    };
+  }, []);
+
   // Get initials from name
   const getInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -671,6 +686,10 @@ const InvestigationManagement = () => {
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
+        onPatientUpdated={(updatedPatient) => {
+          // Refresh the investigations list to show updated patient information
+          fetchInvestigations();
+        }}
       />
 
       {/* Add Investigation Result Modal */}

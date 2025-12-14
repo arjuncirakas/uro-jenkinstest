@@ -299,14 +299,17 @@ export const validatePatientForm = (formData) => {
     errors.initialPSADate = 'PSA test date cannot be in the future';
   }
   
-  // Emergency Contact (if provided)
-  if (formData.emergencyContactName || formData.emergencyContactPhone) {
-    const emergencyNameError = validateNameFormat(formData.emergencyContactName, 'Emergency contact name');
-    if (emergencyNameError) errors.emergencyContactName = emergencyNameError;
-    
-    const emergencyPhoneError = validatePhoneFormat(formData.emergencyContactPhone);
-    if (emergencyPhoneError) errors.emergencyContactPhone = emergencyPhoneError;
-  }
+  // Emergency Contact - Required fields
+  const emergencyNameError = validateRequired(formData.emergencyContactName, 'Emergency contact name') || 
+                             validateNameFormat(formData.emergencyContactName, 'Emergency contact name');
+  if (emergencyNameError) errors.emergencyContactName = emergencyNameError;
+  
+  const emergencyPhoneError = validateRequired(formData.emergencyContactPhone, 'Emergency contact phone') || 
+                             validatePhoneFormat(formData.emergencyContactPhone);
+  if (emergencyPhoneError) errors.emergencyContactPhone = emergencyPhoneError;
+  
+  const emergencyRelationshipError = validateRequired(formData.emergencyContactRelationship, 'Emergency contact relationship');
+  if (emergencyRelationshipError) errors.emergencyContactRelationship = emergencyRelationshipError;
   
   return errors;
 };

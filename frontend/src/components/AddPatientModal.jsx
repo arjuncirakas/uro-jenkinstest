@@ -1189,7 +1189,9 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.emergencyContactName}
                       onChange={handleInputChange}
                       className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        formData.emergencyContactName
+                        errors.emergencyContactName
+                          ? 'border-red-500 focus:border-red-500 bg-red-50'
+                          : formData.emergencyContactName
                           ? 'border-teal-500 focus:border-teal-500 bg-white'
                           : 'border-gray-300 focus:border-teal-500 bg-white'
                       } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
@@ -1202,8 +1204,13 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                           : 'text-gray-500'
                       } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
-                      Contact Name
+                      Contact Name <span className="text-red-500">*</span>
                     </label>
+                    {errors.emergencyContactName && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.emergencyContactName}
+                      </p>
+                    )}
                   </div>
 
                   <div className="relative mb-3">
@@ -1228,7 +1235,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                           : 'text-gray-500'
                       } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.emergencyContactPhone ? '!text-red-500' : ''}`}
                     >
-                      Contact Phone
+                      Contact Phone <span className="text-red-500">*</span>
                     </label>
                     {errors.emergencyContactPhone && (
                       <p className="mt-1 text-sm text-red-600">
@@ -1244,7 +1251,9 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.emergencyContactRelationship}
                       onChange={handleInputChange}
                       className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        formData.emergencyContactRelationship
+                        errors.emergencyContactRelationship
+                          ? 'border-red-500 focus:border-red-500 bg-red-50'
+                          : formData.emergencyContactRelationship
                           ? 'border-teal-500 focus:border-teal-500 bg-white'
                           : 'border-gray-300 focus:border-teal-500 bg-white'
                       } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
@@ -1255,10 +1264,15 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                         formData.emergencyContactRelationship
                           ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
                           : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.emergencyContactRelationship ? '!text-red-500' : ''}`}
                     >
-                      Relationship
+                      Relationship <span className="text-red-500">*</span>
                     </label>
+                    {errors.emergencyContactRelationship && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.emergencyContactRelationship}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
