@@ -3196,7 +3196,306 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               </div>
             )}
 
-            {/* General Info Tab - always visible */}
+            {/* Discharge Summary Tab - visible for post-op-followup patients and discharged patients */}
+            {activeTab === 'dischargeSummary' && (patient.category === 'post-op-followup' ||
+              (patient.carePathway && patient.carePathway.toLowerCase() === 'discharge') ||
+              (patient.pathway && patient.pathway.toLowerCase() === 'discharge') ||
+              patient.status === 'Discharged') && (
+                <div className="flex w-full h-full overflow-y-auto p-6">
+                  <div className="w-full mx-auto space-y-6">
+                    {/* Header Section */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold text-gray-900">Discharge Summary</h2>
+                        <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                          Discharged
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">Patient Name</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{patient.patientName || patient.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">Admission Date</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.admissionDate}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.dischargeDate}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">Length of Stay</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.lengthOfStay}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">Consultant</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.consultantName}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">Ward</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.ward}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase">Discharge Time</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.dischargeTime}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Diagnosis Section */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <IoMedical className="mr-2 text-teal-600" />
+                        Diagnosis
+                      </h3>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Primary Diagnosis:</p>
+                          <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">
+                            {dischargeSummary.diagnosis?.primary || 'Not specified'}
+                          </p>
+                        </div>
+                        {dischargeSummary.diagnosis?.secondary &&
+                          Array.isArray(dischargeSummary.diagnosis.secondary) &&
+                          dischargeSummary.diagnosis.secondary.length > 0 && (
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Secondary Diagnosis:</p>
+                              <ul className="mt-1 space-y-1">
+                                {dischargeSummary.diagnosis.secondary.map((diag, idx) => (
+                                  <li key={idx} className="text-sm text-gray-900 bg-gray-50 p-2 rounded">• {diag}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                      </div>
+                    </div>
+
+                    {/* Procedure Section */}
+                    {dischargeSummary.procedure && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <FaStethoscope className="mr-2 text-teal-600" />
+                          Procedure Details
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Procedure:</p>
+                              <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.name || 'Not specified'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Date:</p>
+                              <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.date || 'Not specified'}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-sm font-medium text-gray-700">Surgeon:</p>
+                              <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.surgeon || 'Not specified'}</p>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">Operative Findings:</p>
+                            <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">
+                              {dischargeSummary.procedure?.findings || 'Not specified'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Clinical Summary */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <IoDocumentText className="mr-2 text-teal-600" />
+                        Clinical Summary
+                      </h3>
+                      <p className="text-sm text-gray-900 leading-relaxed bg-gray-50 p-4 rounded">
+                        {dischargeSummary.clinicalSummary || 'No clinical summary available'}
+                      </p>
+                    </div>
+
+                    {/* Investigations */}
+                    {dischargeSummary.investigations && Array.isArray(dischargeSummary.investigations) && dischargeSummary.investigations.length > 0 && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <IoAnalytics className="mr-2 text-teal-600" />
+                          Investigations
+                        </h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Test</th>
+                                <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Result</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {dischargeSummary.investigations.map((inv, idx) => (
+                                <tr key={idx}>
+                                  <td className="py-2 px-4 text-sm text-gray-900">{inv.test}</td>
+                                  <td className="py-2 px-4 text-sm text-gray-500">{inv.date}</td>
+                                  <td className="py-2 px-4 text-sm text-gray-900">{inv.result}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Medications */}
+                    {dischargeSummary.medications && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <FaPills className="mr-2 text-teal-600" />
+                          Medications
+                        </h3>
+
+                        {dischargeSummary.medications.discharged && dischargeSummary.medications.discharged.length > 0 && (
+                          <div className="mb-6">
+                            <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Discharge Medications</h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full">
+                                <thead>
+                                  <tr className="border-b border-gray-200 bg-gray-50">
+                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Drug</th>
+                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dose</th>
+                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Frequency</th>
+                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Instructions</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {dischargeSummary.medications.discharged.map((med, idx) => (
+                                    <tr key={idx}>
+                                      <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name}</td>
+                                      <td className="py-2 px-4 text-sm text-gray-500">{med.dose}</td>
+                                      <td className="py-2 px-4 text-sm text-gray-500">{med.frequency}</td>
+                                      <td className="py-2 px-4 text-sm text-gray-500">{med.duration}</td>
+                                      <td className="py-2 px-4 text-sm text-gray-500">{med.instructions}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {dischargeSummary.medications.stopped && dischargeSummary.medications.stopped.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Stopped Medications</h4>
+                            <ul className="space-y-2">
+                              {dischargeSummary.medications.stopped.map((med, idx) => (
+                                <li key={idx} className="text-sm text-gray-900 bg-red-50 p-3 rounded border border-red-100 flex justify-between">
+                                  <span className="font-medium">{med.name}</span>
+                                  <span className="text-red-600">{med.reason}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Follow Up & GP Actions */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Follow Up */}
+                      {dischargeSummary.followUp && (
+                        <div className="bg-white rounded-lg border border-gray-200 p-6">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <IoCalendar className="mr-2 text-teal-600" />
+                            Follow Up Plan
+                          </h3>
+                          <div className="space-y-4">
+                            {dischargeSummary.followUp.catheterRemoval && (
+                              <div className="bg-blue-50 p-3 rounded border border-blue-100">
+                                <p className="text-xs font-bold text-blue-800 uppercase mb-1">Catheter Removal</p>
+                                <p className="text-sm font-medium text-blue-900">{dischargeSummary.followUp.catheterRemoval.date}</p>
+                                <p className="text-xs text-blue-700 mt-1">{dischargeSummary.followUp.catheterRemoval.location}</p>
+                                <p className="text-xs text-blue-700 mt-1 italic">{dischargeSummary.followUp.catheterRemoval.instructions}</p>
+                              </div>
+                            )}
+
+                            {dischargeSummary.followUp.postOpReview && (
+                              <div className="bg-teal-50 p-3 rounded border border-teal-100">
+                                <p className="text-xs font-bold text-teal-800 uppercase mb-1">Post-Op Review</p>
+                                <p className="text-sm font-medium text-teal-900">{dischargeSummary.followUp.postOpReview.date}</p>
+                                <p className="text-xs text-teal-700 mt-1">{dischargeSummary.followUp.postOpReview.location}</p>
+                                <p className="text-xs text-teal-700 mt-1 italic">{dischargeSummary.followUp.postOpReview.instructions}</p>
+                              </div>
+                            )}
+
+                            {dischargeSummary.followUp.additionalInstructions && (
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Instructions</p>
+                                <ul className="list-disc list-inside space-y-1">
+                                  {dischargeSummary.followUp.additionalInstructions.map((inst, idx) => (
+                                    <li key={idx} className="text-sm text-gray-700">{inst}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* GP Actions */}
+                      {dischargeSummary.gpActions && (
+                        <div className="bg-white rounded-lg border border-gray-200 p-6">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <FaUserMd className="mr-2 text-teal-600" />
+                            GP Actions
+                          </h3>
+                          <ul className="space-y-2">
+                            {dischargeSummary.gpActions.map((action, idx) => (
+                              <li key={idx} className="flex items-start space-x-2 text-sm text-gray-700 bg-yellow-50 p-3 rounded border border-yellow-100">
+                                <IoCheckmarkCircle className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                                <span>{action}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Documents */}
+                    {dischargeSummary.documents && dischargeSummary.documents.length > 0 && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <IoDocument className="mr-2 text-teal-600" />
+                          Discharge Documents
+                        </h3>
+                        <div className="space-y-2">
+                          {dischargeSummary.documents.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-200 hover:border-teal-300 transition-colors">
+                              <div className="flex items-center space-x-3">
+                                <div className="text-2xl text-red-500">
+                                  <IoDocumentText />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                                  <p className="text-xs text-gray-500">{doc.size} • {doc.type.toUpperCase()}</p>
+                                </div>
+                              </div>
+                              <button className="px-3 py-1 bg-teal-600 text-white text-xs rounded hover:bg-teal-700 transition-colors">
+                                Download
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+
             {activeTab === 'generalInfo' && (
               <div className="flex w-full h-full overflow-y-auto p-6">
                 <div className="w-full mx-auto space-y-6">
