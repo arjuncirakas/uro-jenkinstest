@@ -5810,7 +5810,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       if (res.success) {
                         transferSucceeded = true;
                         // If backend auto-booked an appointment and we didn't manually book, create recurring appointments
-                        if (!appointmentBooked && res.data?.autoBookedAppointment && 
+                        // hasSelectedDate means we manually booked an appointment, so we don't need to create recurring ones
+                        if (!hasSelectedDate && res.data?.autoBookedAppointment && 
                             (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance')) {
                           console.log('🔍 Backend auto-booked appointment detected, creating recurring appointments');
                           console.log('📋 Auto-booked appointment:', res.data.autoBookedAppointment);
@@ -6069,7 +6070,21 @@ ${transferDetails.additionalNotes}` : ''}
                         await fetchMDTMeetings();
                         
                         // Refresh clinical notes to show the new transfer note
-                        // Fetch notes from database
+                        // If note was created, add it to state first to ensure it's visible immediately
+                        if (noteCreated && createdNoteData) {
+                          console.log('✅ Adding created note to state before fetchNotes');
+                          setClinicalNotes(prev => {
+                            // Check if note already exists (shouldn't, but just in case)
+                            const noteExists = prev.some(note => note.id === createdNoteData.id);
+                            if (!noteExists) {
+                              console.log('✅ Adding created note to beginning of list');
+                              return [createdNoteData, ...prev];
+                            }
+                            return prev;
+                          });
+                        }
+                        
+                        // Fetch notes from database (this will replace the state, but we'll add our note back if needed)
                         await fetchNotes();
                         
                         // After fetchNotes, ensure our created note is still in the list
@@ -6088,6 +6103,7 @@ ${transferDetails.additionalNotes}` : ''}
                             if (!noteExists) {
                               console.log('⚠️ Created note not found after fetchNotes, adding it back to state');
                               console.log('⚠️ Created note data:', createdNoteData);
+                              console.log('⚠️ Current notes count:', prev.length);
                               // Add the created note back to the beginning of the list
                               return [createdNoteData, ...prev];
                             } else {
