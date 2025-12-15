@@ -1058,6 +1058,7 @@ export const getTodaysAppointments = async (req, res) => {
             ib.scheduled_date as appointment_date,
             ib.scheduled_time as appointment_time,
             ib.investigation_name as urologist,
+            NULL as urologist_id,
             ib.status,
             ib.notes,
             'investigation' as type
@@ -1166,21 +1167,37 @@ export const getTodaysAppointments = async (req, res) => {
       
       // Additional validation: For doctors, verify all returned appointments belong to them
       if ((userRole === 'urologist' || userRole === 'doctor') && doctorId && result.rows.length > 0) {
-        const invalidAppointments = result.rows.filter(row => {
-          // Investigation bookings don't have urologist_id, so skip them
-          if (row.type === 'investigation') return false;
-          // Check if appointment has urologist_id and it matches doctorId
-          return row.urologist_id && row.urologist_id !== doctorId;
-        });
-        if (invalidAppointments.length > 0) {
-          console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY ISSUE: Found ${invalidAppointments.length} appointments not belonging to doctor ${doctorId}`);
-          console.error(`❌ [getTodaysAppointments ${requestId}] Invalid appointments:`, invalidAppointments.map(a => ({ id: a.id, urologist_id: a.urologist_id })));
-          // Filter out invalid appointments for security
-          result.rows = result.rows.filter(row => {
-            if (row.type === 'investigation') return true;
-            return !row.urologist_id || row.urologist_id === doctorId;
+        try {
+          const invalidAppointments = result.rows.filter(row => {
+            // Investigation bookings don't have urologist_id, so skip them
+            if (row.type === 'investigation' || !row.type) return false;
+            // Check if appointment has urologist_id and it matches doctorId
+            // Handle both string and number comparison
+            const rowUrologistId = row.urologist_id;
+            if (!rowUrologistId) return false; // Skip if no urologist_id
+            // Compare as numbers if both are numbers, otherwise as strings
+            const rowId = typeof rowUrologistId === 'number' ? rowUrologistId : parseInt(rowUrologistId, 10);
+            const docId = typeof doctorId === 'number' ? doctorId : parseInt(doctorId, 10);
+            return !isNaN(rowId) && !isNaN(docId) && rowId !== docId;
           });
-          console.log(`✅ [getTodaysAppointments ${requestId}] Filtered to ${result.rows.length} valid appointments`);
+          if (invalidAppointments.length > 0) {
+            console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY ISSUE: Found ${invalidAppointments.length} appointments not belonging to doctor ${doctorId}`);
+            console.error(`❌ [getTodaysAppointments ${requestId}] Invalid appointments:`, invalidAppointments.map(a => ({ id: a.id, urologist_id: a.urologist_id, type: a.type })));
+            // Filter out invalid appointments for security
+            result.rows = result.rows.filter(row => {
+              if (row.type === 'investigation' || !row.type) return true;
+              const rowUrologistId = row.urologist_id;
+              if (!rowUrologistId) return false; // Exclude appointments without urologist_id (except investigations)
+              const rowId = typeof rowUrologistId === 'number' ? rowUrologistId : parseInt(rowUrologistId, 10);
+              const docId = typeof doctorId === 'number' ? doctorId : parseInt(doctorId, 10);
+              return !isNaN(rowId) && !isNaN(docId) && rowId === docId;
+            });
+            console.log(`✅ [getTodaysAppointments ${requestId}] Filtered to ${result.rows.length} valid appointments`);
+          }
+        } catch (validationError) {
+          console.error(`❌ [getTodaysAppointments ${requestId}] Error during validation (non-fatal):`, validationError.message);
+          console.error(`❌ [getTodaysAppointments ${requestId}] Validation error stack:`, validationError.stack);
+          // Continue with original results if validation fails
         }
       }
       if (result.rows.length > 0) {
