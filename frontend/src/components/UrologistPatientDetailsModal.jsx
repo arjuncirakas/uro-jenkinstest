@@ -3357,48 +3357,78 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           Medications
                         </h3>
 
-                        {dischargeSummary.medications.discharged && dischargeSummary.medications.discharged.length > 0 && (
-                          <div className="mb-6">
-                            <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Discharge Medications</h4>
-                            <div className="overflow-x-auto">
-                              <table className="w-full">
-                                <thead>
-                                  <tr className="border-b border-gray-200 bg-gray-50">
-                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Drug</th>
-                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dose</th>
-                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Frequency</th>
-                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Instructions</th>
+                        {Array.isArray(dischargeSummary.medications) ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="border-b border-gray-200 bg-gray-50">
+                                  <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Drug</th>
+                                  <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dose</th>
+                                  <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Frequency</th>
+                                  <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                  <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Instructions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200">
+                                {dischargeSummary.medications.map((med, idx) => (
+                                  <tr key={idx}>
+                                    <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.dose}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.frequency}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.duration}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.instructions}</td>
                                   </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                  {dischargeSummary.medications.discharged.map((med, idx) => (
-                                    <tr key={idx}>
-                                      <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name}</td>
-                                      <td className="py-2 px-4 text-sm text-gray-500">{med.dose}</td>
-                                      <td className="py-2 px-4 text-sm text-gray-500">{med.frequency}</td>
-                                      <td className="py-2 px-4 text-sm text-gray-500">{med.duration}</td>
-                                      <td className="py-2 px-4 text-sm text-gray-500">{med.instructions}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
-                        )}
+                        ) : (
+                          // Legacy support for object structure
+                          <>
+                            {dischargeSummary.medications.discharged && dischargeSummary.medications.discharged.length > 0 && (
+                              <div className="mb-6">
+                                <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Discharge Medications</h4>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full">
+                                    <thead>
+                                      <tr className="border-b border-gray-200 bg-gray-50">
+                                        <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Drug</th>
+                                        <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dose</th>
+                                        <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Frequency</th>
+                                        <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                        <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Instructions</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                      {dischargeSummary.medications.discharged.map((med, idx) => (
+                                        <tr key={idx}>
+                                          <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name}</td>
+                                          <td className="py-2 px-4 text-sm text-gray-500">{med.dose}</td>
+                                          <td className="py-2 px-4 text-sm text-gray-500">{med.frequency}</td>
+                                          <td className="py-2 px-4 text-sm text-gray-500">{med.duration}</td>
+                                          <td className="py-2 px-4 text-sm text-gray-500">{med.instructions}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
 
-                        {dischargeSummary.medications.stopped && dischargeSummary.medications.stopped.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Stopped Medications</h4>
-                            <ul className="space-y-2">
-                              {dischargeSummary.medications.stopped.map((med, idx) => (
-                                <li key={idx} className="text-sm text-gray-900 bg-red-50 p-3 rounded border border-red-100 flex justify-between">
-                                  <span className="font-medium">{med.name}</span>
-                                  <span className="text-red-600">{med.reason}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                            {dischargeSummary.medications.stopped && dischargeSummary.medications.stopped.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Stopped Medications</h4>
+                                <ul className="space-y-2">
+                                  {dischargeSummary.medications.stopped.map((med, idx) => (
+                                    <li key={idx} className="text-sm text-gray-900 bg-red-50 p-3 rounded border border-red-100 flex justify-between">
+                                      <span className="font-medium">{med.name}</span>
+                                      <span className="text-red-600">{med.reason}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}

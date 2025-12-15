@@ -1,40 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { IoClose, IoCloudUpload, IoDocument, IoTrash } from 'react-icons/io5';
-import { FaFilePdf, FaFileWord, FaFileImage } from 'react-icons/fa';
+import { IoClose, IoCloudUpload, IoDocument, IoTrash, IoAdd, IoCalendar } from 'react-icons/io5';
+import { FaFilePdf, FaFileWord, FaFileImage, FaPills } from 'react-icons/fa';
 
 const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) => {
-  const getInitialFormData = () => ({
-    admissionDate: '',
-    dischargeDate: new Date().toISOString().split('T')[0],
-    dischargeTime: new Date().toTimeString().slice(0, 5),
-    ward: '',
-    diagnosis: {
-      primary: '',
-      secondary: '',
-      procedure: ''
-    },
-    procedure: {
-      name: '',
-      date: '',
-      surgeon: '',
-      complications: ''
-    },
-    clinicalSummary: '',
-    investigations: [],
-    medications: {
-      discharge: '',
-      changes: '',
-      instructions: ''
-    },
-    followUp: {
-      gpFollowUp: '',
-      psaMonitoring: '',
-      redFlags: '',
-      nextReview: ''
-    },
-    gpActions: [],
-    additionalNotes: ''
-  });
+  const getInitialFormData = () => {
+    // Format admission date from patient creation date
+    let admissionDate = '';
+    if (patient?.createdAt || patient?.created_at) {
+      const date = new Date(patient.createdAt || patient.created_at);
+      if (!isNaN(date.getTime())) {
+        admissionDate = date.toISOString().split('T')[0];
+      }
+    }
+
+    return {
+      admissionDate: admissionDate,
+      dischargeDate: new Date().toISOString().split('T')[0],
+      dischargeTime: new Date().toTimeString().slice(0, 5),
+      diagnosis: {
+        primary: '',
+        secondary: '',
+        procedure: ''
+      },
+      procedure: {
+        name: '',
+        date: '',
+        surgeon: '',
+        complications: ''
+      },
+      clinicalSummary: '',
+      investigations: [],
+      medications: [
+        { name: '', dose: '', frequency: '', duration: '', instructions: '' }
+      ],
+      followUp: {
+        gpFollowUp: '',
+        redFlags: ''
+      },
+      gpActions: [],
+      additionalNotes: ''
+    };
+  };
 
   const [formData, setFormData] = useState(getInitialFormData());
   const [documents, setDocuments] = useState([]);
@@ -48,7 +54,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
       setDocuments([]);
       setErrors({});
     }
-  }, [isOpen]);
+  }, [isOpen, patient]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -93,6 +99,29 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
     }));
   };
 
+  // Medication Handlers
+  const handleMedicationChange = (index, field, value) => {
+    setFormData(prev => {
+      const newMedications = [...prev.medications];
+      newMedications[index] = { ...newMedications[index], [field]: value };
+      return { ...prev, medications: newMedications };
+    });
+  };
+
+  const addMedication = () => {
+    setFormData(prev => ({
+      ...prev,
+      medications: [...prev.medications, { name: '', dose: '', frequency: '', duration: '', instructions: '' }]
+    }));
+  };
+
+  const removeMedication = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      medications: prev.medications.filter((_, i) => i !== index)
+    }));
+  };
+
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -130,12 +159,12 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.admissionDate) newErrors.admissionDate = 'Admission date is required';
     if (!formData.dischargeDate) newErrors.dischargeDate = 'Discharge date is required';
     if (!formData.clinicalSummary.trim()) newErrors.clinicalSummary = 'Clinical summary is required';
     if (!formData.diagnosis.primary.trim()) newErrors.diagnosisPrimary = 'Primary diagnosis is required';
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -166,7 +195,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col">
-        
+
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-4 flex items-center justify-between rounded-t-lg flex-shrink-0">
           <div>
@@ -188,7 +217,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
-            
+
             {/* Admission & Discharge Details */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Discharge Details</h3>
@@ -201,9 +230,8 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                     type="date"
                     value={formData.admissionDate}
                     onChange={(e) => handleInputChange('admissionDate', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                      errors.admissionDate ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.admissionDate ? 'border-red-500' : 'border-gray-300'
+                      }`}
                   />
                   {errors.admissionDate && <p className="text-red-500 text-xs mt-1">{errors.admissionDate}</p>}
                 </div>
@@ -215,9 +243,8 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                     type="date"
                     value={formData.dischargeDate}
                     onChange={(e) => handleInputChange('dischargeDate', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                      errors.dischargeDate ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.dischargeDate ? 'border-red-500' : 'border-gray-300'
+                      }`}
                   />
                   {errors.dischargeDate && <p className="text-red-500 text-xs mt-1">{errors.dischargeDate}</p>}
                 </div>
@@ -229,18 +256,6 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                     type="time"
                     value={formData.dischargeTime}
                     onChange={(e) => handleInputChange('dischargeTime', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ward
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.ward}
-                    onChange={(e) => handleInputChange('ward', e.target.value)}
-                    placeholder="e.g., Urology Ward 3B"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
@@ -259,9 +274,8 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                     type="text"
                     value={formData.diagnosis.primary}
                     onChange={(e) => handleNestedChange('diagnosis', 'primary', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                      errors.diagnosisPrimary ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.diagnosisPrimary ? 'border-red-500' : 'border-gray-300'
+                      }`}
                   />
                   {errors.diagnosisPrimary && <p className="text-red-500 text-xs mt-1">{errors.diagnosisPrimary}</p>}
                 </div>
@@ -357,57 +371,96 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                 value={formData.clinicalSummary}
                 onChange={(e) => handleInputChange('clinicalSummary', e.target.value)}
                 rows={6}
-                placeholder={pathway === 'Post-op Transfer' 
+                placeholder={pathway === 'Post-op Transfer'
                   ? "Describe the surgical procedure, post-operative recovery, patient status, and any complications..."
                   : "Provide comprehensive clinical summary including patient's condition, treatment, response, and overall status..."
                 }
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                  errors.clinicalSummary ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.clinicalSummary ? 'border-red-500' : 'border-gray-300'
+                  }`}
               />
               {errors.clinicalSummary && <p className="text-red-500 text-xs mt-1">{errors.clinicalSummary}</p>}
             </div>
 
             {/* Medications */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Discharge Medications</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <FaPills className="mr-2 text-teal-600" />
+                  Discharge Medications
+                </h3>
+                <button
+                  onClick={addMedication}
+                  className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center"
+                >
+                  <IoAdd className="mr-1" /> Add Medication
+                </button>
+              </div>
+
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Medications
-                  </label>
-                  <textarea
-                    value={formData.medications.discharge}
-                    onChange={(e) => handleNestedChange('medications', 'discharge', e.target.value)}
-                    rows={3}
-                    placeholder="List all medications patient is taking on discharge..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Medication Changes
-                  </label>
-                  <textarea
-                    value={formData.medications.changes}
-                    onChange={(e) => handleNestedChange('medications', 'changes', e.target.value)}
-                    rows={2}
-                    placeholder="Any changes to medications during admission..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Special Instructions
-                  </label>
-                  <textarea
-                    value={formData.medications.instructions}
-                    onChange={(e) => handleNestedChange('medications', 'instructions', e.target.value)}
-                    rows={2}
-                    placeholder="Special medication instructions..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
+                {formData.medications.map((med, index) => (
+                  <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200 relative">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                      <div className="lg:col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Drug Name</label>
+                        <input
+                          type="text"
+                          value={med.name}
+                          onChange={(e) => handleMedicationChange(index, 'name', e.target.value)}
+                          placeholder="e.g. Tamsulosin"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Dose</label>
+                        <input
+                          type="text"
+                          value={med.dose}
+                          onChange={(e) => handleMedicationChange(index, 'dose', e.target.value)}
+                          placeholder="e.g. 400mcg"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Frequency</label>
+                        <input
+                          type="text"
+                          value={med.frequency}
+                          onChange={(e) => handleMedicationChange(index, 'frequency', e.target.value)}
+                          placeholder="e.g. OD"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Duration</label>
+                        <input
+                          type="text"
+                          value={med.duration}
+                          onChange={(e) => handleMedicationChange(index, 'duration', e.target.value)}
+                          placeholder="e.g. 2 weeks"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500 text-sm"
+                        />
+                      </div>
+                      <div className="lg:col-span-5">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Instructions</label>
+                        <input
+                          type="text"
+                          value={med.instructions}
+                          onChange={(e) => handleMedicationChange(index, 'instructions', e.target.value)}
+                          placeholder="e.g. Take after breakfast"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500 text-sm"
+                        />
+                      </div>
+                    </div>
+                    {formData.medications.length > 1 && (
+                      <button
+                        onClick={() => removeMedication(index)}
+                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <IoClose className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -428,34 +481,12 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    PSA Monitoring Schedule
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.followUp.psaMonitoring}
-                    onChange={(e) => handleNestedChange('followUp', 'psaMonitoring', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Warning Signs / Red Flags
                   </label>
                   <textarea
                     value={formData.followUp.redFlags}
                     onChange={(e) => handleNestedChange('followUp', 'redFlags', e.target.value)}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Next Review Timeline
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.followUp.nextReview}
-                    onChange={(e) => handleNestedChange('followUp', 'nextReview', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
@@ -511,7 +542,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
             {/* Document Upload */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Discharge Documents</h3>
-              
+
               {/* Upload Button */}
               <div className="mb-4">
                 <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-teal-500 hover:bg-teal-50 transition-colors">

@@ -3174,52 +3174,80 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                               <FaPills className="mr-2 text-teal-600" />
                               Medications on Discharge
                             </h3>
-                            <div className="space-y-4">
-                              {dischargeSummary.medications.discharged &&
-                                Array.isArray(dischargeSummary.medications.discharged) &&
-                                dischargeSummary.medications.discharged.length > 0 && (
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-700 mb-2">Current Medications:</p>
-                                    <div className="space-y-2">
-                                      {dischargeSummary.medications.discharged.map((med, idx) => (
-                                        <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200">
-                                          <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                              <p className="text-sm font-semibold text-gray-900">
-                                                {med?.name || 'N/A'} - {med?.dose || 'N/A'}
-                                              </p>
-                                              <p className="text-xs text-gray-600 mt-1">
-                                                {med?.frequency || 'N/A'} for {med?.duration || 'N/A'}
-                                              </p>
-                                              {med?.instructions && (
-                                                <p className="text-xs text-gray-600 mt-1 italic">{med.instructions}</p>
-                                              )}
+
+                            {Array.isArray(dischargeSummary.medications) ? (
+                              <div className="overflow-x-auto">
+                                <table className="w-full">
+                                  <thead>
+                                    <tr className="border-b border-gray-200 bg-gray-50">
+                                      <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Drug</th>
+                                      <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dose</th>
+                                      <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Frequency</th>
+                                      <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                      <th className="text-left py-2 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Instructions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200">
+                                    {dischargeSummary.medications.map((med, idx) => (
+                                      <tr key={idx}>
+                                        <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name}</td>
+                                        <td className="py-2 px-4 text-sm text-gray-500">{med.dose}</td>
+                                        <td className="py-2 px-4 text-sm text-gray-500">{med.frequency}</td>
+                                        <td className="py-2 px-4 text-sm text-gray-500">{med.duration}</td>
+                                        <td className="py-2 px-4 text-sm text-gray-500">{med.instructions}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {dischargeSummary.medications.discharged &&
+                                  Array.isArray(dischargeSummary.medications.discharged) &&
+                                  dischargeSummary.medications.discharged.length > 0 && (
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-700 mb-2">Current Medications:</p>
+                                      <div className="space-y-2">
+                                        {dischargeSummary.medications.discharged.map((med, idx) => (
+                                          <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200">
+                                            <div className="flex items-start justify-between">
+                                              <div className="flex-1">
+                                                <p className="text-sm font-semibold text-gray-900">
+                                                  {med?.name || 'N/A'} - {med?.dose || 'N/A'}
+                                                </p>
+                                                <p className="text-xs text-gray-600 mt-1">
+                                                  {med?.frequency || 'N/A'} for {med?.duration || 'N/A'}
+                                                </p>
+                                                {med?.instructions && (
+                                                  <p className="text-xs text-gray-600 mt-1 italic">{med.instructions}</p>
+                                                )}
+                                              </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      ))}
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
 
-                              {dischargeSummary.medications.stopped &&
-                                Array.isArray(dischargeSummary.medications.stopped) &&
-                                dischargeSummary.medications.stopped.length > 0 && (
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-700 mb-2">Medications Stopped:</p>
-                                    <div className="space-y-2">
-                                      {dischargeSummary.medications.stopped.map((med, idx) => (
-                                        <div key={idx} className="bg-red-50 p-3 rounded border border-red-200">
-                                          <p className="text-sm font-semibold text-gray-900">{med?.name || 'N/A'}</p>
-                                          {med?.reason && (
-                                            <p className="text-xs text-gray-600 mt-1">Reason: {med.reason}</p>
-                                          )}
-                                        </div>
-                                      ))}
+                                {dischargeSummary.medications.stopped &&
+                                  Array.isArray(dischargeSummary.medications.stopped) &&
+                                  dischargeSummary.medications.stopped.length > 0 && (
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-700 mb-2">Medications Stopped:</p>
+                                      <div className="space-y-2">
+                                        {dischargeSummary.medications.stopped.map((med, idx) => (
+                                          <div key={idx} className="bg-red-50 p-3 rounded border border-red-200">
+                                            <p className="text-sm font-semibold text-gray-900">{med?.name || 'N/A'}</p>
+                                            {med?.reason && (
+                                              <p className="text-xs text-gray-600 mt-1">Reason: {med.reason}</p>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                            </div>
+                                  )}
+                              </div>
+                            )}
                           </div>
                         )}
 
