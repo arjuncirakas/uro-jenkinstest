@@ -93,27 +93,71 @@ const UrologistDashboard = () => {
       // Build current urologist's name in multiple formats for matching
       // Response shows urologist as "Will Smith" or "Norah Reyes" (without "Dr." prefix)
       let currentUrologistName = '';
+      
+      // Try multiple ways to get the urologist name
       if (currentUser.first_name && currentUser.last_name) {
         currentUrologistName = `${currentUser.first_name} ${currentUser.last_name}`.trim();
+      } else if (currentUser.firstName && currentUser.lastName) {
+        currentUrologistName = `${currentUser.firstName} ${currentUser.lastName}`.trim();
       } else if (currentUser.name) {
         currentUrologistName = currentUser.name.replace(/^Dr\.\s*/i, '').trim();
+      } else if (currentUser.email) {
+        // If name is not available, try to fetch from profile
+        try {
+          const profileResult = await authService.getProfile();
+          if (profileResult.success && profileResult.data?.user) {
+            const userData = profileResult.data.user;
+            if (userData.first_name && userData.last_name) {
+              currentUrologistName = `${userData.first_name} ${userData.last_name}`.trim();
+            } else if (userData.name) {
+              currentUrologistName = userData.name.replace(/^Dr\.\s*/i, '').trim();
+            }
+          }
+        } catch (profileError) {
+          console.warn('Could not fetch user profile:', profileError);
+        }
       }
       
       console.log('🔍 Current user object:', {
         id: currentUser.id,
         first_name: currentUser.first_name,
         last_name: currentUser.last_name,
+        firstName: currentUser.firstName,
+        lastName: currentUser.lastName,
         name: currentUser.name,
+        email: currentUser.email,
         computedName: currentUrologistName
       });
       
+      // If we still don't have a name, try to fetch from profile
+      if (!currentUrologistName) {
+        console.warn('⚠️ Urologist name not found in user object, fetching profile...');
+        try {
+          const profileResult = await authService.getProfile();
+          if (profileResult.success && profileResult.data?.user) {
+            const userData = profileResult.data.user;
+            if (userData.first_name && userData.last_name) {
+              currentUrologistName = `${userData.first_name} ${userData.last_name}`.trim();
+            } else if (userData.firstName && userData.lastName) {
+              currentUrologistName = `${userData.firstName} ${userData.lastName}`.trim();
+            } else if (userData.name) {
+              currentUrologistName = userData.name.replace(/^Dr\.\s*/i, '').trim();
+            }
+            console.log('✅ Got urologist name from profile:', currentUrologistName);
+          }
+        } catch (profileError) {
+          console.error('❌ Could not fetch user profile:', profileError);
+        }
+      }
+      
       // Normalize current urologist name for comparison (remove "Dr.", lowercase, trim)
-      const normalizedCurrentName = currentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
+      const normalizedCurrentName = currentUrologistName ? 
+        currentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase() : '';
       
-      console.log('🔍 Fetching appointments for urologist:', currentUrologistName);
-      console.log('🔍 Normalized name for matching:', normalizedCurrentName);
+      console.log('🔍 Fetching appointments for urologist:', currentUrologistName || 'UNKNOWN');
+      console.log('🔍 Normalized name for matching:', normalizedCurrentName || 'N/A');
       
-      // Don't pass type parameter - get all appointments and filter by urologist name
+      // Get all appointments (both urologist and investigation) and filter by urologist name
       const result = await bookingService.getTodaysAppointments();
       
       if (result.success) {
@@ -133,31 +177,39 @@ const UrologistDashboard = () => {
         
         // Filter appointments to only show those for the logged-in urologist
         // Match against the "urologist" field in the response
-        const filteredAppointments = allAppointments.filter(appointment => {
-          const appointmentUrologistName = appointment.urologist || 
-                                          appointment.urologist_name || 
-                                          appointment.urologistName || 
-                                          '';
-          
-          // If appointment has no urologist name, exclude it
-          if (!appointmentUrologistName) {
-            return false;
-          }
-          
-          // Normalize appointment urologist name (remove "Dr." prefix, trim, lowercase)
-          const normalizedAppointmentName = appointmentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
-          
-          // Check if names match (case-insensitive, ignoring "Dr." prefix)
-          const matches = normalizedCurrentName === normalizedAppointmentName;
-          
-          if (!matches) {
-            console.log(`❌ Filtered out: "${appointmentUrologistName}" (normalized: "${normalizedAppointmentName}") vs "${currentUrologistName}" (normalized: "${normalizedCurrentName}")`);
-          } else {
-            console.log(`✅ Matched: "${appointmentUrologistName}" with "${currentUrologistName}"`);
-          }
-          
-          return matches;
-        });
+        let filteredAppointments;
+        
+        if (!normalizedCurrentName) {
+          // If we don't have the urologist name, show all appointments as fallback
+          console.warn('⚠️ Cannot filter appointments: urologist name not available. Showing all appointments.');
+          filteredAppointments = allAppointments;
+        } else {
+          filteredAppointments = allAppointments.filter(appointment => {
+            const appointmentUrologistName = appointment.urologist || 
+                                            appointment.urologist_name || 
+                                            appointment.urologistName || 
+                                            '';
+            
+            // If appointment has no urologist name, exclude it
+            if (!appointmentUrologistName) {
+              return false;
+            }
+            
+            // Normalize appointment urologist name (remove "Dr." prefix, trim, lowercase)
+            const normalizedAppointmentName = appointmentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
+            
+            // Check if names match (case-insensitive, ignoring "Dr." prefix)
+            const matches = normalizedCurrentName === normalizedAppointmentName;
+            
+            if (!matches) {
+              console.log(`❌ Filtered out: "${appointmentUrologistName}" (normalized: "${normalizedAppointmentName}") vs "${currentUrologistName}" (normalized: "${normalizedCurrentName}")`);
+            } else {
+              console.log(`✅ Matched: "${appointmentUrologistName}" with "${currentUrologistName}"`);
+            }
+            
+            return matches;
+          });
+        }
         
         console.log(`✅ Final filtered appointments: ${filteredAppointments.length} out of ${allAppointments.length} for urologist "${currentUrologistName}"`);
         
