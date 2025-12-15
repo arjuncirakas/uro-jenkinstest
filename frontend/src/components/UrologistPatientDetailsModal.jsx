@@ -383,7 +383,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
           // Remove ALL pathway_transfer notes from clinical notes timeline
           // (These are duplicate/unnecessary - the main clinical note with full details is what matters)
-          /* 
           if (noteType === 'pathway_transfer') {
             console.log('🗑️ Filtering out pathway_transfer note:', {
               noteId: note.id,
@@ -391,7 +390,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
             });
             return false;
           }
-          */
 
           // Remove investigation requests that were automatically created from investigation management
           // These should only appear in "Other Test Results & Reports", not in clinical notes
@@ -1736,8 +1734,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   )}
                   {displayPatient.status && (
                     <span className={`px-2 py-1 rounded-full text-xs ${displayPatient.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
-                        displayPatient.status === 'no_show' ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-700'
+                      displayPatient.status === 'no_show' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
                       }`}>
                       {displayPatient.status}
                     </span>
@@ -1794,8 +1792,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               <button
                 onClick={() => setActiveTab('clinicalNotes')}
                 className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'clinicalNotes'
-                    ? 'text-teal-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-teal-600'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <FaNotesMedical className="mr-2" />
@@ -1807,8 +1805,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               <button
                 onClick={() => setActiveTab('testResults')}
                 className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'testResults'
-                    ? 'text-teal-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-teal-600'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <IoAnalytics className="mr-2" />
@@ -1822,8 +1820,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               <button
                 onClick={() => setActiveTab('decisionSupport')}
                 className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'decisionSupport'
-                    ? 'text-teal-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-teal-600'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <IoMedical className="mr-2" />
@@ -1838,8 +1836,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 <button
                   onClick={() => setActiveTab('mdtNotes')}
                   className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'mdtNotes'
-                      ? 'text-teal-600'
-                      : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-teal-600'
+                    : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
                   <FaUserMd className="mr-2" />
@@ -1855,8 +1853,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 <button
                   onClick={() => setActiveTab('dischargeSummary')}
                   className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'dischargeSummary'
-                      ? 'text-teal-600'
-                      : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-teal-600'
+                    : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >
                   <IoDocumentText className="mr-2" />
@@ -1871,8 +1869,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               <button
                 onClick={() => setActiveTab('generalInfo')}
                 className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'generalInfo'
-                    ? 'text-teal-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-teal-600'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <IoDocument className="mr-2" />
@@ -2921,8 +2919,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                   <button
                                                     onClick={() => handleStatusUpdate('not_required')}
                                                     className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${request.status === 'not_required'
-                                                        ? 'bg-gray-400 text-white cursor-not-allowed'
-                                                        : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300'
+                                                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                                                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300'
                                                       }`}
                                                     disabled={request.status === 'not_required'}
                                                   >
@@ -3299,10 +3297,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                         <div key={stage.id} className="flex flex-col items-center flex-1">
                                           <div
                                             className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${stage.isActive
-                                                ? `${getColorClasses(stage.color, 'bg')} text-white shadow-lg ring-4 ${getColorClasses(stage.color, 'ring')}`
-                                                : stage.isCompleted
-                                                  ? `${getColorClasses(stage.color, 'bgLight')} ${getColorClasses(stage.color, 'text')} border-2 ${getColorClasses(stage.color, 'border')}`
-                                                  : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
+                                              ? `${getColorClasses(stage.color, 'bg')} text-white shadow-lg ring-4 ${getColorClasses(stage.color, 'ring')}`
+                                              : stage.isCompleted
+                                                ? `${getColorClasses(stage.color, 'bgLight')} ${getColorClasses(stage.color, 'text')} border-2 ${getColorClasses(stage.color, 'border')}`
+                                                : 'bg-gray-100 text-gray-400 border-2 border-gray-300'
                                               }`}
                                           >
                                             {(() => {
@@ -3325,10 +3323,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                           <div className="mt-3 text-center">
                                             <p
                                               className={`text-sm font-medium ${stage.isActive
-                                                  ? getColorClasses(stage.color, 'text')
-                                                  : stage.isCompleted
-                                                    ? getColorClasses(stage.color, 'textLight')
-                                                    : 'text-gray-500'
+                                                ? getColorClasses(stage.color, 'text')
+                                                : stage.isCompleted
+                                                  ? getColorClasses(stage.color, 'textLight')
+                                                  : 'text-gray-500'
                                                 }`}
                                             >
                                               {stage.name}
@@ -3346,15 +3344,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                           <div className="flex-1 mx-2 h-0.5 relative flex items-center">
                                             <div
                                               className={`h-full flex-1 ${stage.isCompleted || stage.isActive
-                                                  ? getColorClasses(stage.color, 'bgLight')
-                                                  : 'bg-gray-300'
+                                                ? getColorClasses(stage.color, 'bgLight')
+                                                : 'bg-gray-300'
                                                 }`}
                                             />
                                             <div className="flex items-center justify-center">
                                               <svg
                                                 className={`w-5 h-5 ${stage.isCompleted || stage.isActive
-                                                    ? getColorClasses(stage.color, 'text')
-                                                    : 'text-gray-400'
+                                                  ? getColorClasses(stage.color, 'text')
+                                                  : 'text-gray-400'
                                                   }`}
                                                 fill="currentColor"
                                                 viewBox="0 0 20 20"
@@ -3539,10 +3537,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   <span className="text-gray-600">Priority:</span>
                                   <span className="ml-2">
                                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${(displayPatient.priority || 'normal').toLowerCase() === 'urgent'
-                                        ? 'bg-red-100 text-red-700'
-                                        : (displayPatient.priority || 'normal').toLowerCase() === 'high'
-                                          ? 'bg-orange-100 text-orange-700'
-                                          : 'bg-blue-100 text-blue-700'
+                                      ? 'bg-red-100 text-red-700'
+                                      : (displayPatient.priority || 'normal').toLowerCase() === 'high'
+                                        ? 'bg-orange-100 text-orange-700'
+                                        : 'bg-blue-100 text-blue-700'
                                       }`}>
                                       {displayPatient.priority || 'Normal'}
                                     </span>
@@ -3649,8 +3647,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                     {isCustom && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">(Custom)</span>}
                                                   </div>
                                                   <div className={`grid gap-3 text-sm mb-3 ${symptomName === 'LUTS'
-                                                      ? (frequency ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2')
-                                                      : (frequency ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')
+                                                    ? (frequency ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2')
+                                                    : (frequency ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')
                                                     }`}>
                                                     {symptomName === 'LUTS' && (
                                                       <div>

@@ -42,7 +42,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       setFileName('');
     }
   }, [existingResult, isOpen]);
-  
+
   // Debug logging
   useEffect(() => {
     if (isOpen && existingResult) {
@@ -99,12 +99,12 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (isSubmitting) return;
-    
+
     setError('');
     setIsSubmitting(true);
-    
+
     try {
       // Create the test result data
       const testData = {
@@ -119,13 +119,13 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         ...testData,
         testFile: file ? file.name : 'No file'
       });
-      
+
       // Call the API to add the test result
       const resultResponse = await investigationService.addOtherTestResult(patient.id, testData);
-      
+
       if (resultResponse.success) {
         console.log('✅ Investigation result added:', resultResponse.data);
-        
+
         // Dispatch event to refresh investigation management table
         window.dispatchEvent(new CustomEvent('testResultAdded', {
           detail: {
@@ -134,12 +134,12 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
             testName: investigationRequest.investigationName || investigationRequest.investigation_name
           }
         }));
-        
+
         // Call success callback
         if (onSuccess) {
           onSuccess('Investigation result added successfully!', investigationRequest.id);
         }
-        
+
         // Reset form and close
         handleClose();
       } else {
@@ -236,19 +236,19 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                               console.log('🔍 View button clicked');
                               console.log('🔍 Existing result:', existingResult);
                               console.log('🔍 Existing file path:', existingFilePath);
-                              
+
                               if (!existingFilePath) {
                                 console.error('❌ No file path available');
                                 alert('File path is not available. Please check if the file was uploaded correctly.');
                                 return;
                               }
-                              
+
                               if (typeof existingFilePath !== 'string' || existingFilePath.trim() === '') {
                                 console.error('❌ Invalid file path:', existingFilePath);
                                 alert('Invalid file path. Please contact support.');
                                 return;
                               }
-                              
+
                               try {
                                 console.log('📂 Attempting to view file:', existingFilePath);
                                 await investigationService.viewFile(existingFilePath);
@@ -346,7 +346,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
           </form>
 
           {/* Status Update Section */}
-          {onStatusUpdate && (
+          {onStatusUpdate && !hasExistingFile && (
             <div className="px-4 pb-3 border-t border-gray-200 pt-3">
               <h3 className="text-xs font-semibold text-gray-700 mb-2">Or Update Status</h3>
               <div className="flex gap-2">
@@ -375,7 +375,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
               <p className="text-xs text-red-700">{error}</p>
             </div>
           )}
-          
+
           <div className="flex gap-2">
             <button
               type="button"
