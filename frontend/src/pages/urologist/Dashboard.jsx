@@ -472,11 +472,27 @@ const UrologistDashboard = () => {
               ? `${surgery.first_name} ${surgery.last_name}`
               : 'Unknown Patient');
           
-          // Handle urologist name - prefer appointment data, fallback to current user
-          const urologistName = surgery.urologistName ||
-            (surgery.urologist_first_name && surgery.urologist_last_name
-              ? `Dr. ${surgery.urologist_first_name} ${surgery.urologist_last_name}`
-              : currentUrologistName);
+          // Handle urologist name - this is the doctor who transferred the patient to surgery pathway
+          // Check multiple possible field names from the API response
+          let urologistName = surgery.urologist_name ||  // snake_case from database
+                             surgery.urologistName ||    // camelCase from formatted response
+                             surgery.urologist ||        // formatted field from getAllAppointments
+                             null;
+          
+          // If we have a name but it doesn't start with "Dr.", add it
+          if (urologistName && !urologistName.startsWith('Dr.')) {
+            urologistName = `Dr. ${urologistName}`;
+          }
+          
+          // Fallback to constructed name from first_name/last_name if available
+          if (!urologistName && surgery.urologist_first_name && surgery.urologist_last_name) {
+            urologistName = `Dr. ${surgery.urologist_first_name} ${surgery.urologist_last_name}`;
+          }
+          
+          // Final fallback to current user (shouldn't happen if appointment was created properly)
+          if (!urologistName) {
+            urologistName = currentUrologistName;
+          }
 
           // Extract time - backend returns 'time' field (formatted) or 'appointmentTime'/'appointment_time'
           const appointmentTime = surgery.time || surgery.appointmentTime || surgery.appointment_time || '';
