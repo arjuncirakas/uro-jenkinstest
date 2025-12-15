@@ -81,7 +81,7 @@ const UrologistDashboard = () => {
     setAppointmentsError(null);
     
     try {
-      // Get current urologist ID to filter appointments
+      // Get current urologist info to filter appointments
       const currentUser = authService.getCurrentUser();
       if (!currentUser || !currentUser.id) {
         setAppointmentsError('User not found');
@@ -90,58 +90,61 @@ const UrologistDashboard = () => {
         return;
       }
 
-      const urologistId = currentUser.id;
+      // Build current urologist's name in the format used by appointments
+      // Backend stores urologist name in format: "Dr. FirstName LastName" or "FirstName LastName"
+      const currentUrologistName = currentUser.first_name && currentUser.last_name
+        ? `${currentUser.first_name} ${currentUser.last_name}`.trim()
+        : currentUser.name || '';
       
-      const result = await bookingService.getTodaysAppointments();
+      // Also try with "Dr." prefix
+      const currentUrologistNameWithDr = currentUrologistName ? `Dr. ${currentUrologistName}` : '';
+      
+      console.log('Fetching appointments for urologist:', currentUrologistName);
+      
+      // Pass 'urologist' type to ensure backend filters correctly by doctorId
+      // Backend automatically filters by the logged-in urologist's doctorId
+      const result = await bookingService.getTodaysAppointments('urologist');
       
       if (result.success) {
         console.log('Raw appointments data:', result.data.appointments);
-        const allAppointments = result.data.appointments || [];
+        const appointments = result.data.appointments || [];
         
-        // Filter appointments to only show those for the logged-in urologist
-        // Check multiple possible field names for urologist ID
-        const filteredAppointments = allAppointments.filter(appointment => {
-          const appointmentUrologistId = appointment.urologistId || 
-                                         appointment.urologist_id || 
-                                         appointment.doctorId || 
-                                         appointment.doctor_id;
-          
-          // If appointment has a urologist ID field, match it with current user
-          if (appointmentUrologistId) {
-            return appointmentUrologistId === urologistId || 
-                   appointmentUrologistId.toString() === urologistId.toString();
-          }
-          
-          // If no urologist ID field, check urologist name against current user's name
-          // This is a fallback in case the ID field is missing
-          const currentUserName = currentUser.first_name && currentUser.last_name
-            ? `${currentUser.first_name} ${currentUser.last_name}`
-            : currentUser.name || '';
-          
+        // Backend should already filter by doctorId, but add frontend safety filter by name
+        // This ensures we only show appointments for the logged-in urologist
+        const filteredAppointments = appointments.filter(appointment => {
           const appointmentUrologistName = appointment.urologist || 
                                           appointment.urologist_name || 
                                           appointment.urologistName || 
-                                          appointment.doctorName || 
                                           '';
           
-          // If we have both names, try to match them
-          if (currentUserName && appointmentUrologistName) {
-            // Normalize names for comparison (remove "Dr." prefix, trim whitespace)
-            const normalizedCurrent = currentUserName.replace(/^Dr\.\s*/i, '').trim();
-            const normalizedAppointment = appointmentUrologistName.replace(/^Dr\.\s*/i, '').trim();
-            return normalizedCurrent === normalizedAppointment || 
-                   normalizedCurrent.toLowerCase() === normalizedAppointment.toLowerCase();
+          // If appointment has no urologist name, exclude it (shouldn't happen)
+          if (!appointmentUrologistName) {
+            return false;
           }
           
-          // If we can't determine ownership, exclude it to be safe
-          return false;
+          // Normalize names for comparison (remove "Dr." prefix, trim whitespace, case insensitive)
+          const normalizedCurrent = currentUrologistName.toLowerCase().trim();
+          const normalizedAppointment = appointmentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
+          
+          // Match by name (with or without "Dr." prefix)
+          const matches = normalizedCurrent === normalizedAppointment ||
+                         (currentUrologistNameWithDr && 
+                          currentUrologistNameWithDr.toLowerCase().trim() === appointmentUrologistName.toLowerCase().trim());
+          
+          return matches;
         });
         
-        console.log(`Filtered appointments: ${filteredAppointments.length} out of ${allAppointments.length} for urologist ${urologistId}`);
+        console.log(`Appointments for urologist "${currentUrologistName}": ${filteredAppointments.length} out of ${appointments.length} total`);
+        
+        // Debug: Log if filtering removed appointments
+        if (filteredAppointments.length < appointments.length) {
+          console.log('Frontend filter removed some appointments. Sample removed:', 
+            appointments.find(apt => !filteredAppointments.includes(apt)));
+        }
         
         // Debug: Log first appointment to see structure
         if (filteredAppointments.length > 0) {
-          console.log('First filtered appointment structure:', filteredAppointments[0]);
+          console.log('First appointment structure:', filteredAppointments[0]);
         }
         
         setAppointments(filteredAppointments);
