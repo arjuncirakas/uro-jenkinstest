@@ -825,32 +825,40 @@ export const getTodaysAppointments = async (req, res) => {
     console.log(`[getTodaysAppointments] User ID: ${userId}, Role: ${userRole}, Type: ${type}`);
 
     // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
+    // Note: doctors table doesn't have user_id column, so we use email lookup only
     let doctorId = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
       console.log(`📅 [getTodaysAppointments ${requestId}] Looking up doctor record for userId: ${userId}, email: ${userEmail}`);
       try {
-        // First try to find by user_id (more reliable)
-        let doctorCheck = await client.query(
-          'SELECT id FROM doctors WHERE user_id = $1 AND is_active = true',
-          [userId]
-        );
-        
-        // If not found, try by email
-        if (doctorCheck.rows.length === 0 && userEmail) {
-          console.log(`📅 [getTodaysAppointments ${requestId}] Doctor not found by user_id, trying email lookup`);
-          doctorCheck = await client.query(
+        // Find doctor record by email (since doctors and users are linked by email)
+        if (userEmail) {
+          const doctorCheck = await client.query(
             'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
             [userEmail]
           );
-        }
-        
-        console.log(`📅 [getTodaysAppointments ${requestId}] Doctor lookup query executed, found ${doctorCheck.rows.length} records`);
-        if (doctorCheck.rows.length > 0) {
-          doctorId = doctorCheck.rows[0].id;
-          console.log(`📅 [getTodaysAppointments ${requestId}] ✅ Found doctor record with id: ${doctorId} for user ${userId} (email: ${userEmail})`);
+          
+          console.log(`📅 [getTodaysAppointments ${requestId}] Doctor lookup query executed, found ${doctorCheck.rows.length} records`);
+          if (doctorCheck.rows.length > 0) {
+            doctorId = doctorCheck.rows[0].id;
+            console.log(`📅 [getTodaysAppointments ${requestId}] ✅ Found doctor record with id: ${doctorId} for user ${userId} (email: ${userEmail})`);
+          } else {
+            console.log(`📅 [getTodaysAppointments ${requestId}] ⚠️ No doctor record found for user ${userId} (email: ${userEmail}) - returning empty results`);
+            // Return empty results if no doctor record exists
+            client.release();
+            return res.json({
+              success: true,
+              message: 'Appointments retrieved successfully',
+              data: {
+                appointments: [],
+                count: 0,
+                date: new Date().getFullYear() + '-' +
+                  String(new Date().getMonth() + 1).padStart(2, '0') + '-' +
+                  String(new Date().getDate()).padStart(2, '0')
+              }
+            });
+          }
         } else {
-          console.log(`📅 [getTodaysAppointments ${requestId}] ⚠️ No doctor record found for user ${userId} (email: ${userEmail}) - returning empty results`);
-          // Return empty results if no doctor record exists
+          console.log(`📅 [getTodaysAppointments ${requestId}] ⚠️ No email found for user ${userId} - returning empty results`);
           client.release();
           return res.json({
             success: true,
@@ -1469,31 +1477,29 @@ export const getUpcomingAppointments = async (req, res) => {
     const userEmail = req.user?.email;
 
     // For urologists/doctors, get their doctor ID
+    // Note: doctors table doesn't have user_id column, so we use email lookup only
     let doctorId = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
       try {
-        // First try to find by user_id
-        let doctorCheck = await client.query(
-          `SELECT id FROM doctors WHERE user_id = $1 AND is_active = true`,
-          [userId]
-        );
-        
-        // If not found, try by email
-        if (doctorCheck.rows.length === 0 && userEmail) {
-          doctorCheck = await client.query(
+        // Find doctor record by email (since doctors and users are linked by email)
+        if (userEmail) {
+          const doctorCheck = await client.query(
             `SELECT id FROM doctors WHERE email = $1 AND is_active = true`,
             [userEmail]
           );
-        }
-        
-        if (doctorCheck.rows.length > 0) {
-          doctorId = doctorCheck.rows[0].id;
-          console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
+          
+          if (doctorCheck.rows.length > 0) {
+            doctorId = doctorCheck.rows[0].id;
+            console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId} for user ${userId} (email: ${userEmail})`);
+          } else {
+            console.log(`📅 [getUpcomingAppointments ${requestId}] No doctor record found for user ${userId} (email: ${userEmail})`);
+          }
         } else {
-          console.log(`📅 [getUpcomingAppointments ${requestId}] No doctor record found for user ${userId}`);
+          console.log(`📅 [getUpcomingAppointments ${requestId}] No email found for user ${userId}, cannot lookup doctor`);
         }
       } catch (doctorIdError) {
         console.error(`📅 [getUpcomingAppointments ${requestId}] Error getting doctor ID:`, doctorIdError);
+        console.error(`📅 [getUpcomingAppointments ${requestId}] Error details:`, doctorIdError.message);
       }
     }
 
