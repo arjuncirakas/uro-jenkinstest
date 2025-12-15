@@ -79,7 +79,7 @@ const UrologistDashboard = () => {
   const fetchTodaysAppointments = async () => {
     setLoadingAppointments(true);
     setAppointmentsError(null);
-    
+
     try {
       // Get current urologist info to filter appointments
       const currentUser = authService.getCurrentUser();
@@ -93,7 +93,7 @@ const UrologistDashboard = () => {
       // Build current urologist's name in multiple formats for matching
       // Response shows urologist as "Will Smith" or "Norah Reyes" (without "Dr." prefix)
       let currentUrologistName = '';
-      
+
       // Try multiple ways to get the urologist name
       if (currentUser.first_name && currentUser.last_name) {
         currentUrologistName = `${currentUser.first_name} ${currentUser.last_name}`.trim();
@@ -117,7 +117,7 @@ const UrologistDashboard = () => {
           console.warn('Could not fetch user profile:', profileError);
         }
       }
-      
+
       console.log('🔍 Current user object:', {
         id: currentUser.id,
         first_name: currentUser.first_name,
@@ -128,7 +128,7 @@ const UrologistDashboard = () => {
         email: currentUser.email,
         computedName: currentUrologistName
       });
-      
+
       // If we still don't have a name, try to fetch from profile
       if (!currentUrologistName) {
         console.warn('⚠️ Urologist name not found in user object, fetching profile...');
@@ -149,23 +149,23 @@ const UrologistDashboard = () => {
           console.error('❌ Could not fetch user profile:', profileError);
         }
       }
-      
+
       // Normalize current urologist name for comparison (remove "Dr.", lowercase, trim)
-      const normalizedCurrentName = currentUrologistName ? 
+      const normalizedCurrentName = currentUrologistName ?
         currentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase() : '';
-      
+
       console.log('🔍 Fetching appointments for urologist:', currentUrologistName || 'UNKNOWN');
       console.log('🔍 Normalized name for matching:', normalizedCurrentName || 'N/A');
-      
+
       // Get all appointments (both urologist and investigation) and filter by urologist name
       const result = await bookingService.getTodaysAppointments();
-      
+
       if (result.success) {
         console.log('✅ Raw appointments data:', result.data.appointments);
         const allAppointments = result.data.appointments || [];
-        
+
         console.log(`📊 Total appointments received: ${allAppointments.length}`);
-        
+
         if (allAppointments.length > 0) {
           console.log('📋 Sample appointment structure:', {
             patientName: allAppointments[0].patientName,
@@ -174,50 +174,50 @@ const UrologistDashboard = () => {
             type: allAppointments[0].type
           });
         }
-        
+
         // Filter appointments to only show those for the logged-in urologist
         // Match against the "urologist" field in the response
         let filteredAppointments;
-        
+
         if (!normalizedCurrentName) {
           // If we don't have the urologist name, show all appointments as fallback
           console.warn('⚠️ Cannot filter appointments: urologist name not available. Showing all appointments.');
           filteredAppointments = allAppointments;
         } else {
           filteredAppointments = allAppointments.filter(appointment => {
-            const appointmentUrologistName = appointment.urologist || 
-                                            appointment.urologist_name || 
-                                            appointment.urologistName || 
-                                            '';
-            
+            const appointmentUrologistName = appointment.urologist ||
+              appointment.urologist_name ||
+              appointment.urologistName ||
+              '';
+
             // If appointment has no urologist name, exclude it
             if (!appointmentUrologistName) {
               return false;
             }
-            
+
             // Normalize appointment urologist name (remove "Dr." prefix, trim, lowercase)
             const normalizedAppointmentName = appointmentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
-            
+
             // Check if names match (case-insensitive, ignoring "Dr." prefix)
             const matches = normalizedCurrentName === normalizedAppointmentName;
-            
+
             if (!matches) {
               console.log(`❌ Filtered out: "${appointmentUrologistName}" (normalized: "${normalizedAppointmentName}") vs "${currentUrologistName}" (normalized: "${normalizedCurrentName}")`);
             } else {
               console.log(`✅ Matched: "${appointmentUrologistName}" with "${currentUrologistName}"`);
             }
-            
+
             return matches;
           });
         }
-        
+
         console.log(`✅ Final filtered appointments: ${filteredAppointments.length} out of ${allAppointments.length} for urologist "${currentUrologistName}"`);
-        
+
         if (filteredAppointments.length === 0 && allAppointments.length > 0) {
           console.warn('⚠️ No appointments matched! Check name matching logic.');
           console.log('Available urologists in appointments:', [...new Set(allAppointments.map(apt => apt.urologist))]);
         }
-        
+
         setAppointments(filteredAppointments);
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
@@ -235,7 +235,7 @@ const UrologistDashboard = () => {
   const fetchSurgicalQueue = async () => {
     setLoadingSurgicalQueue(true);
     setSurgicalQueueError(null);
-    
+
     try {
       // Get current urologist ID
       const currentUser = authService.getCurrentUser();
@@ -251,20 +251,20 @@ const UrologistDashboard = () => {
       const result = await bookingService.getAllAppointments({
         urologistId: urologistId
       });
-      
+
       console.log('Surgical Queue: Fetched appointments for urologist', urologistId, result);
-      
+
       if (result.success) {
         // Handle different response structures
         const appointments = result.data?.appointments || result.data || [];
-        
+
         if (!Array.isArray(appointments)) {
           console.error('Invalid appointments data structure:', result.data);
           setSurgicalQueueError('Invalid data format received from server');
           setSurgicalQueue([]);
           return;
         }
-        
+
         // Filter for surgery appointments that are scheduled or confirmed
         const surgicalAppointments = appointments
           .filter(apt => {
@@ -272,43 +272,43 @@ const UrologistDashboard = () => {
             const aptStatus = (apt.status || '').toLowerCase();
             const aptNotes = (apt.notes || '').toLowerCase();
             const aptSurgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
-            
+
             // Check for surgery in type field
             const isSurgeryType = aptType.includes('surgery') || aptType.includes('surgical');
-            
+
             // Check for surgery keywords in notes
             const hasSurgeryInNotes = aptNotes.includes('surgery scheduled') ||
-                                     aptNotes.includes('surgery appointment scheduled') ||
-                                     aptNotes.includes('surgical') ||
-                                     aptNotes.includes('surgery type:');
-            
+              aptNotes.includes('surgery appointment scheduled') ||
+              aptNotes.includes('surgical') ||
+              aptNotes.includes('surgery type:');
+
             // Check for surgeryType field
             const hasSurgeryType = aptSurgeryType && aptSurgeryType.length > 0;
-            
+
             // Include surgery appointments that are scheduled or confirmed
-            return (isSurgeryType || hasSurgeryInNotes || hasSurgeryType) && 
-                   (aptStatus === 'scheduled' || aptStatus === 'confirmed');
+            return (isSurgeryType || hasSurgeryInNotes || hasSurgeryType) &&
+              (aptStatus === 'scheduled' || aptStatus === 'confirmed');
           })
           .map(apt => {
             // Handle patient name
-            const patientName = apt.patientName || 
-              (apt.first_name && apt.last_name 
+            const patientName = apt.patientName ||
+              (apt.first_name && apt.last_name
                 ? `${apt.first_name} ${apt.last_name}`
                 : 'Unknown Patient');
-            
+
             // Extract date and time
             const appointmentDate = apt.date || apt.appointmentDate || apt.appointment_date || '';
             const appointmentTime = apt.time || apt.appointmentTime || apt.appointment_time || '';
-            
+
             // Determine priority based on patient or appointment priority
             let priority = apt.priority || 'Medium';
             if (typeof priority === 'string') {
               priority = priority.charAt(0).toUpperCase() + priority.slice(1).toLowerCase();
             }
-            
-            const priorityColor = priority === 'High' || priority === 'Urgent' ? 'red' : 
-                                 priority === 'Low' ? 'green' : 'yellow';
-            
+
+            const priorityColor = priority === 'High' || priority === 'Urgent' ? 'red' :
+              priority === 'Low' ? 'green' : 'yellow';
+
             return {
               id: apt.id,
               patient: patientName,
@@ -318,8 +318,8 @@ const UrologistDashboard = () => {
               procedure: apt.notes ? apt.notes.split('\n')[0].substring(0, 50) : 'Surgery Procedure',
               priority: priority,
               priorityColor: priorityColor,
-              status: apt.status === 'scheduled' ? 'Scheduled' : 
-                     apt.status === 'confirmed' ? 'Confirmed' : 'Scheduled'
+              status: apt.status === 'scheduled' ? 'Scheduled' :
+                apt.status === 'confirmed' ? 'Confirmed' : 'Scheduled'
             };
           })
           // Sort by date and time (most recent first)
@@ -328,7 +328,7 @@ const UrologistDashboard = () => {
             const dateB = new Date(`${b.scheduledDate} ${b.scheduledTime}`);
             return dateA - dateB;
           });
-        
+
         console.log('Surgical Queue: Filtered surgery appointments:', surgicalAppointments);
         setSurgicalQueue(surgicalAppointments);
       } else {
@@ -348,26 +348,26 @@ const UrologistDashboard = () => {
   const fetchRecentPatients = async () => {
     setLoadingRecentPatients(true);
     setRecentPatientsError(null);
-    
+
     try {
       const result = await patientService.getNewPatients({ limit: 15 });
-      
+
       if (result.success) {
         console.log('Raw recent patients data:', result.data);
-        
+
         // Handle the data - it might be in result.data.patients or result.data directly
         const patientsData = result.data?.patients || result.data || [];
-        
+
         if (patientsData.length > 0) {
           console.log('First patient structure:', patientsData[0]);
         }
-        
+
         const recent = patientsData.map(patient => {
           // Handle different possible field names
           const firstName = patient.first_name || patient.firstName || '';
           const lastName = patient.last_name || patient.lastName || '';
           const fullName = patient.name || patient.patientName || `${firstName} ${lastName}`.trim() || 'Unknown Patient';
-          
+
           // Format the visit date/time
           let timeDisplay = 'Recently';
           if (patient.last_appointment_date) {
@@ -376,10 +376,10 @@ const UrologistDashboard = () => {
             today.setHours(0, 0, 0, 0);
             const visitDateOnly = new Date(visitDate);
             visitDateOnly.setHours(0, 0, 0, 0);
-            
+
             const diffTime = today - visitDateOnly;
             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            
+
             if (diffDays === 0) {
               timeDisplay = 'Today';
             } else if (diffDays === 1) {
@@ -390,16 +390,16 @@ const UrologistDashboard = () => {
               // Format as date
               timeDisplay = visitDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: visitDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
             }
-            
+
             // Add time if available
             if (patient.last_appointment_time) {
-              const timeStr = typeof patient.last_appointment_time === 'string' 
-                ? patient.last_appointment_time.substring(0, 5) 
+              const timeStr = typeof patient.last_appointment_time === 'string'
+                ? patient.last_appointment_time.substring(0, 5)
                 : patient.last_appointment_time;
               timeDisplay += ` ${formatTime(timeStr)}`;
             }
           }
-          
+
           // Determine status based on appointment status
           let status = 'Visited';
           let statusColor = 'green';
@@ -415,7 +415,7 @@ const UrologistDashboard = () => {
               statusColor = 'blue';
             }
           }
-          
+
           return {
             id: patient.id || patient.patient_id,
             time: timeDisplay,
@@ -425,7 +425,7 @@ const UrologistDashboard = () => {
             statusColor: statusColor
           };
         });
-        
+
         console.log('Mapped recent patients:', recent);
         setRecentPatients(recent);
       } else {
@@ -459,7 +459,7 @@ const UrologistDashboard = () => {
             try {
               const parsed = m.notes ? (typeof m.notes === 'string' ? JSON.parse(m.notes) : m.notes) : {};
               outcome = parsed.mdtOutcome || '';
-            } catch {}
+            } catch { }
           }
           return outcome ? {
             patient: m.patient?.name || 'Patient',
@@ -472,7 +472,7 @@ const UrologistDashboard = () => {
         })
         .filter(Boolean)
         // Keep most recent first
-        .sort((a,b) => new Date(b.date) - new Date(a.date))
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 6);
       setMdtOutcomes(outcomes);
     } catch (error) {
@@ -487,7 +487,7 @@ const UrologistDashboard = () => {
   const fetchSurgeries = async () => {
     setLoadingSurgeries(true);
     setSurgeriesError(null);
-    
+
     try {
       // Get current urologist ID
       const currentUser = authService.getCurrentUser();
@@ -498,7 +498,7 @@ const UrologistDashboard = () => {
       }
 
       const urologistId = currentUser.id;
-      
+
       // Get current urologist's name for surgeon field
       const currentUrologistName = currentUser.first_name && currentUser.last_name
         ? `Dr. ${currentUser.first_name} ${currentUser.last_name}`
@@ -507,10 +507,10 @@ const UrologistDashboard = () => {
       // Calculate date range based on surgeryView
       // Use local timezone instead of UTC to match backend behavior
       const now = new Date();
-      const today = now.getFullYear() + '-' + 
-                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
-      
+      const today = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0'); // YYYY-MM-DD format in local timezone
+
       let startDate, endDate;
 
       if (surgeryView === 'today') {
@@ -520,15 +520,15 @@ const UrologistDashboard = () => {
         startDate = today;
         const weekEnd = new Date(now);
         weekEnd.setDate(weekEnd.getDate() + 6);
-        endDate = weekEnd.getFullYear() + '-' + 
-                  String(weekEnd.getMonth() + 1).padStart(2, '0') + '-' + 
-                  String(weekEnd.getDate()).padStart(2, '0');
+        endDate = weekEnd.getFullYear() + '-' +
+          String(weekEnd.getMonth() + 1).padStart(2, '0') + '-' +
+          String(weekEnd.getDate()).padStart(2, '0');
       } else { // month
         startDate = today;
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
-        endDate = monthEnd.getFullYear() + '-' + 
-                  String(monthEnd.getMonth() + 1).padStart(2, '0') + '-' + 
-                  String(monthEnd.getDate()).padStart(2, '0');
+        endDate = monthEnd.getFullYear() + '-' +
+          String(monthEnd.getMonth() + 1).padStart(2, '0') + '-' +
+          String(monthEnd.getDate()).padStart(2, '0');
       }
 
       console.log('Fetching surgeries for urologist:', urologistId, 'Date range:', startDate, 'to', endDate);
@@ -546,60 +546,60 @@ const UrologistDashboard = () => {
       if (result.success) {
         // Handle different response structures
         const appointments = result.data?.appointments || result.data || [];
-        
+
         console.log('Raw appointments data:', appointments);
-        
+
         if (!Array.isArray(appointments)) {
           console.error('Invalid appointments data structure:', result.data);
           setSurgeriesError('Invalid data format received from server');
           setSurgeries([]);
           return;
         }
-        
+
         // Filter for surgery appointments (check type, notes, and surgeryType field)
         const surgeryAppointments = appointments.filter(apt => {
           const aptType = (apt.type || apt.appointmentType || '').toLowerCase();
           const aptNotes = (apt.notes || '').toLowerCase();
           const aptSurgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
-          
+
           console.log('Checking appointment:', apt.patientName, 'Type:', apt.type, 'aptType:', aptType);
-          
+
           // Check for surgery in type field
-          const isSurgeryType = aptType === 'surgery' || 
-                               aptType === 'surgical' || 
-                               apt.type === 'Surgery Appointment';
-          
+          const isSurgeryType = aptType === 'surgery' ||
+            aptType === 'surgical' ||
+            apt.type === 'Surgery Appointment';
+
           // Check for surgery keywords in notes
           const hasSurgeryInNotes = aptNotes.includes('surgery scheduled') ||
-                                   aptNotes.includes('surgery appointment scheduled') ||
-                                   aptNotes.includes('surgical') ||
-                                   aptNotes.includes('surgery type:');
-          
+            aptNotes.includes('surgery appointment scheduled') ||
+            aptNotes.includes('surgical') ||
+            aptNotes.includes('surgery type:');
+
           // Check for surgeryType field
           const hasSurgeryType = aptSurgeryType && aptSurgeryType.length > 0;
-          
+
           const isSurgery = isSurgeryType || hasSurgeryInNotes || hasSurgeryType;
-          
+
           console.log('Is surgery?:', isSurgery, {
             isSurgeryType,
             hasSurgeryInNotes,
             hasSurgeryType,
             notesPreview: apt.notes?.substring(0, 100)
           });
-          
+
           return isSurgery;
         });
-        
+
         console.log('Filtered surgery appointments:', surgeryAppointments);
 
         // Transform to match the expected format
         const transformedSurgeries = surgeryAppointments.map(surgery => {
           // Handle patient name - backend returns patientName or first_name/last_name
-          const patientName = surgery.patientName || 
-            (surgery.first_name && surgery.last_name 
+          const patientName = surgery.patientName ||
+            (surgery.first_name && surgery.last_name
               ? `${surgery.first_name} ${surgery.last_name}`
               : 'Unknown Patient');
-          
+
           // Handle urologist name - prefer appointment data, fallback to current user
           const urologistName = surgery.urologistName ||
             (surgery.urologist_first_name && surgery.urologist_last_name
@@ -622,12 +622,12 @@ const UrologistDashboard = () => {
             procedure: surgery.notes ? surgery.notes.split('\n')[0].substring(0, 50) : 'Surgery',
             priority: 'Medium', // Default priority, can be enhanced later
             priorityColor: 'yellow',
-            status: surgery.status === 'scheduled' ? 'Scheduled' : 
-                   surgery.status === 'completed' ? 'Completed' :
-                   surgery.status === 'cancelled' ? 'Cancelled' : 'Scheduled',
+            status: surgery.status === 'scheduled' ? 'Scheduled' :
+              surgery.status === 'completed' ? 'Completed' :
+                surgery.status === 'cancelled' ? 'Cancelled' : 'Scheduled',
             statusColor: surgery.status === 'scheduled' ? 'blue' :
-                        surgery.status === 'completed' ? 'green' :
-                        surgery.status === 'cancelled' ? 'red' : 'blue',
+              surgery.status === 'completed' ? 'green' :
+                surgery.status === 'cancelled' ? 'red' : 'blue',
             surgeon: urologistName,
             duration: 60 // Default 60 minutes, can be enhanced later
           };
@@ -664,13 +664,13 @@ const UrologistDashboard = () => {
   const fetchMdtSchedules = async () => {
     setLoadingMdtSchedules(true);
     setMdtSchedulesError(null);
-    
+
     try {
       const result = await mdtService.getMyMDTMeetings();
       if (result.success) {
         const meetings = result.data?.meetings || [];
         // Map API meetings to dashboard card structure
-        const palette = ['teal','blue','purple','orange'];
+        const palette = ['teal', 'blue', 'purple', 'orange'];
         const mapped = meetings.map(m => ({
           id: m.id,
           date: m.meetingDate,
@@ -681,7 +681,7 @@ const UrologistDashboard = () => {
           patientName: m.patient?.name,
           attendees: (m.teamMembers || []).slice(0, 5).map((tm, idx) => ({
             name: tm.name,
-            initials: (tm.name || '').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase(),
+            initials: (tm.name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
             color: palette[idx % palette.length]
           })),
           patientsCount: 1,
@@ -697,7 +697,7 @@ const UrologistDashboard = () => {
             0
           )
         }));
-        withSortKey.sort((a,b) => a._dt - b._dt);
+        withSortKey.sort((a, b) => a._dt - b._dt);
         setMdtSchedules(withSortKey.map(({ _dt, ...rest }) => rest));
       } else {
         setMdtSchedulesError(result.error || 'Failed to fetch MDT schedules');
@@ -715,7 +715,7 @@ const UrologistDashboard = () => {
   const fetchPatientsDueForReview = async () => {
     setLoadingPatientsDueForReview(true);
     setPatientsDueForReviewError(null);
-    
+
     try {
       // Fetch upcoming appointments (next 7 days by default)
       const result = await bookingService.getUpcomingAppointments({
@@ -723,7 +723,7 @@ const UrologistDashboard = () => {
         limit: 50,
         offset: 0
       });
-      
+
       if (result.success) {
         console.log('Upcoming appointments result:', result);
         const appointments = result.data?.appointments || [];
@@ -733,7 +733,7 @@ const UrologistDashboard = () => {
           investigation: 0,
           surgical: 0
         };
-        
+
         // Transform appointments to match the modal's expected format
         const patients = appointments.map(apt => {
           // Determine type based on appointment type or care pathway
@@ -747,21 +747,21 @@ const UrologistDashboard = () => {
           } else if (apt.carePathway === 'Investigation Pathway') {
             type = 'Investigation';
           }
-          
+
           // Determine priority based on date proximity and type
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const appointmentDate = new Date(apt.appointmentDate);
           appointmentDate.setHours(0, 0, 0, 0);
           const daysUntil = Math.floor((appointmentDate - today) / (24 * 60 * 60 * 1000));
-          
+
           let priority = 'Medium';
           if (daysUntil <= 7 || type === 'Post-Op Follow-up') {
             priority = 'High';
           } else if (daysUntil > 10) {
             priority = 'Low';
           }
-          
+
           return {
             id: apt.patientId,
             name: apt.patientName, // Modal expects 'name'
@@ -775,7 +775,7 @@ const UrologistDashboard = () => {
             appointmentId: apt.id
           };
         });
-        
+
         setPatientsDueForReview(patients);
         setPatientsDueForReviewSummary(summary);
       } else {
@@ -849,17 +849,17 @@ const UrologistDashboard = () => {
     today.setHours(0, 0, 0, 0);
     const scheduleDate = new Date(date);
     scheduleDate.setHours(0, 0, 0, 0);
-    
+
     if (scheduleDate.getTime() === today.getTime()) {
       return 'Today';
     }
-    
+
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     if (scheduleDate.getTime() === tomorrow.getTime()) {
       return 'Tomorrow';
     }
-    
+
     const options = { weekday: 'short', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('en-US', options);
   };
@@ -889,26 +889,26 @@ const UrologistDashboard = () => {
         // Check if user and token are available
         let currentUser = authService.getCurrentUser();
         let isAuthenticated = authService.isAuthenticated();
-        
+
         console.log('[Dashboard] Initial auth check:', {
           hasUser: !!currentUser,
           isAuthenticated,
           userRole: currentUser?.role
         });
-        
+
         // If not authenticated, wait and retry (handles page refresh case)
         if (!currentUser || !isAuthenticated) {
           console.warn('[Dashboard] User or token not ready, waiting...');
-          
+
           // Wait a bit and check again (token might be setting or needs refresh)
           await new Promise(resolve => setTimeout(resolve, 200));
-          
+
           currentUser = authService.getCurrentUser();
           isAuthenticated = authService.isAuthenticated();
-          
+
           if (!currentUser || !isAuthenticated) {
             console.error('[Dashboard] Authentication not ready after retry');
-            
+
             // Try to refresh token if it exists but is expired
             const tokenService = (await import('../../services/tokenService.js')).default;
             if (tokenService.getAccessToken() || tokenService.getRefreshToken()) {
@@ -920,7 +920,7 @@ const UrologistDashboard = () => {
                 console.log('[Dashboard] Token refreshed, auth status:', isAuthenticated);
               }
             }
-            
+
             if (!currentUser || !isAuthenticated) {
               console.error('[Dashboard] Authentication not ready after refresh attempt, skipping data fetch');
               return;
@@ -934,14 +934,14 @@ const UrologistDashboard = () => {
             await tokenService.refreshIfNeeded();
           }
         }
-        
+
         console.log('[Dashboard] Authentication ready, fetching data...');
         console.log('[Dashboard] User:', currentUser);
         console.log('[Dashboard] Is authenticated:', isAuthenticated);
-        
+
         // Small delay to ensure axios interceptor has the token
         await new Promise(resolve => setTimeout(resolve, 50));
-        
+
         // Fetch all data
         fetchTodaysAppointments();
         fetchSurgicalQueue();
@@ -954,7 +954,7 @@ const UrologistDashboard = () => {
         console.error('[Dashboard] Error initializing data:', error);
       }
     };
-    
+
     initializeData();
   }, []);
 
@@ -977,7 +977,7 @@ const UrologistDashboard = () => {
       red: 'bg-red-100 text-red-700',
       blue: 'bg-blue-100 text-blue-700',
     };
-    
+
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-medium ${colorClasses[color]}`} aria-label={`Status: ${status}`}>
         {status}
@@ -1010,17 +1010,17 @@ const UrologistDashboard = () => {
     today.setHours(0, 0, 0, 0);
     const surgeryDate = new Date(date);
     surgeryDate.setHours(0, 0, 0, 0);
-    
+
     if (surgeryDate.getTime() === today.getTime()) {
       return 'Today';
     }
-    
+
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     if (surgeryDate.getTime() === tomorrow.getTime()) {
       return 'Tomorrow';
     }
-    
+
     const options = { weekday: 'short', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('en-US', options);
   };
@@ -1047,17 +1047,17 @@ const UrologistDashboard = () => {
         const ampm = hour24 >= 12 ? 'PM' : 'AM';
         return `${hour12}:${minutes} ${ampm}`;
       }
-      
+
       // If it's a full datetime string, extract time part
       const date = new Date(timeString);
       if (!isNaN(date.getTime())) {
-        return date.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
+        return date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
           minute: '2-digit',
-          hour12: true 
+          hour12: true
         });
       }
-      
+
       return timeString;
     } catch (error) {
       console.error('Error formatting time:', error, 'Input:', timeString);
@@ -1076,7 +1076,7 @@ const UrologistDashboard = () => {
           </div>
           {/* Search Bar and Notification */}
           <div className="w-full lg:w-96 flex items-center gap-3">
-            <GlobalPatientSearch 
+            <GlobalPatientSearch
               placeholder="Search by name"
               onPatientSelect={(patient) => {
                 console.log('Urologist Dashboard: Patient selected:', patient);
@@ -1092,7 +1092,7 @@ const UrologistDashboard = () => {
             />
             {/* Notification Icon */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsNotificationOpen(true)}
                 className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               >
@@ -1123,31 +1123,28 @@ const UrologistDashboard = () => {
                   <div className="flex bg-gray-100 rounded-lg p-1">
                     <button
                       onClick={() => setActiveTab('appointments')}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'appointments'
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'appointments'
                           ? 'bg-teal-600 text-white'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       Appointments
                     </button>
                     <button
                       onClick={() => setActiveTab('surgicalQueue')}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'surgicalQueue'
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'surgicalQueue'
                           ? 'bg-teal-600 text-white'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       Surgical Queue
                     </button>
                     <button
                       onClick={() => setActiveTab('recentPatients')}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'recentPatients'
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'recentPatients'
                           ? 'bg-teal-600 text-white'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       Recent Patients
                     </button>
@@ -1238,10 +1235,10 @@ const UrologistDashboard = () => {
                                     console.log('🔍 Dashboard: View button clicked for appointment:', appointment);
                                     if (appointment.status === 'MDT Discussion') {
                                       // Open MDT Notes modal for MDT Discussion appointments
-                                      setSelectedMdtOutcome({ 
-                                        patient: appointment.patientName, 
+                                      setSelectedMdtOutcome({
+                                        patient: appointment.patientName,
                                         outcome: 'MDT Discussion Scheduled',
-                                        patientName: appointment.patientName 
+                                        patientName: appointment.patientName
                                       });
                                       setIsMdtNotesOpen(true);
                                     } else {
@@ -1292,11 +1289,10 @@ const UrologistDashboard = () => {
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.procedure}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{formatDate(patient.scheduledDate)}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                  patient.priorityColor === 'red' ? 'bg-red-100 text-red-700' :
-                                  patient.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
-                                  'bg-green-100 text-green-700'
-                                }`} aria-label={`Priority: ${patient.priority}`}>
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${patient.priorityColor === 'red' ? 'bg-red-100 text-red-700' :
+                                    patient.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                                      'bg-green-100 text-green-700'
+                                  }`} aria-label={`Priority: ${patient.priority}`}>
                                   {patient.priority}
                                 </span>
                               </td>
@@ -1388,7 +1384,7 @@ const UrologistDashboard = () => {
                       Error: {patientsDueForReviewError}
                     </div>
                   ) : (
-                    <div 
+                    <div
                       className="bg-white rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow cursor-pointer w-full"
                       onClick={() => setIsPatientsReviewOpen(true)}
                     >
@@ -1439,11 +1435,11 @@ const UrologistDashboard = () => {
                     </div>
                   ) : (
                     mdtOutcomes.map((outcome, index) => (
-                      <div 
-                        key={index} 
+                      <div
+                        key={index}
                         onClick={() => {
-                          setSelectedMdtOutcome({ 
-                            patient: outcome.patient, 
+                          setSelectedMdtOutcome({
+                            patient: outcome.patient,
                             outcome: outcome.outcome,
                             patientName: outcome.patientName,
                             meetingId: outcome.id
@@ -1478,9 +1474,9 @@ const UrologistDashboard = () => {
                 <div className="p-4 sm:p-6">
                   {/* Next MDT Discussion Card */}
                   {mdtSchedules.length > 0 && (
-                    <div 
+                    <div
                       onClick={() => {
-                        setSelectedMdtOutcome({ 
+                        setSelectedMdtOutcome({
                           meetingId: mdtSchedules[0].id,
                           outcome: 'MDT Discussion Scheduled',
                           patientName: mdtSchedules[0].patientName
@@ -1506,8 +1502,8 @@ const UrologistDashboard = () => {
                       </div>
                       <div className="flex items-center space-x-1 mb-2">
                         {mdtSchedules[0].attendees.slice(0, 3).map((attendee, idx) => (
-                          <div 
-                            key={idx} 
+                          <div
+                            key={idx}
                             className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${getAvatarColorClass(attendee.color)}`}
                           >
                             {attendee.initials}
@@ -1520,40 +1516,37 @@ const UrologistDashboard = () => {
                         )}
                       </div>
                       <div className="text-xs text-gray-600">
-                        {mdtSchedules[0].patientsCount} {mdtSchedules[0].patientsCount === 1 ? 'patient' : 'patients'} • Chair: {mdtSchedules[0].chair}
+                        Chair: {mdtSchedules[0].chair}
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Day/Week/Month Toggle */}
                   <div className="flex space-x-2 border-b border-gray-200 pb-3 mb-4">
-                    <button 
+                    <button
                       onClick={() => setMdtView('day')}
-                      className={`px-4 py-2 text-sm transition-colors ${
-                        mdtView === 'day' 
-                          ? 'text-teal-600 font-medium border-b-2 border-teal-600' 
+                      className={`px-4 py-2 text-sm transition-colors ${mdtView === 'day'
+                          ? 'text-teal-600 font-medium border-b-2 border-teal-600'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       Day
                     </button>
-                    <button 
+                    <button
                       onClick={() => setMdtView('week')}
-                      className={`px-4 py-2 text-sm transition-colors ${
-                        mdtView === 'week' 
-                          ? 'text-teal-600 font-medium border-b-2 border-teal-600' 
+                      className={`px-4 py-2 text-sm transition-colors ${mdtView === 'week'
+                          ? 'text-teal-600 font-medium border-b-2 border-teal-600'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       Week
                     </button>
-                    <button 
+                    <button
                       onClick={() => setMdtView('month')}
-                      className={`px-4 py-2 text-sm transition-colors ${
-                        mdtView === 'month' 
-                          ? 'text-teal-600 font-medium border-b-2 border-teal-600' 
+                      className={`px-4 py-2 text-sm transition-colors ${mdtView === 'month'
+                          ? 'text-teal-600 font-medium border-b-2 border-teal-600'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       Month
                     </button>
@@ -1575,14 +1568,14 @@ const UrologistDashboard = () => {
                       </div>
                     ) : (
                       mdtSchedules.map((schedule) => (
-                        <div 
+                        <div
                           key={schedule.id}
                           onClick={() => {
-                          setSelectedMdtOutcome({ 
-                            meetingId: schedule.id,
-                            outcome: 'MDT Discussion Scheduled',
-                            patientName: schedule.patientName
-                          });
+                            setSelectedMdtOutcome({
+                              meetingId: schedule.id,
+                              outcome: 'MDT Discussion Scheduled',
+                              patientName: schedule.patientName
+                            });
                             setIsMdtNotesOpen(true);
                           }}
                           className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md hover:border-teal-300 transition-all cursor-pointer"
@@ -1608,11 +1601,11 @@ const UrologistDashboard = () => {
                             </div>
                             <IoChevronForward className="text-gray-400 text-sm flex-shrink-0" />
                           </div>
-                          
+
                           <div className="flex items-center justify-between mt-2">
                             <div className="flex items-center space-x-1">
                               {schedule.attendees.slice(0, 4).map((attendee, idx) => (
-                                <div 
+                                <div
                                   key={idx}
                                   className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${getAvatarColorClass(attendee.color)}`}
                                   title={attendee.name}
@@ -1626,9 +1619,7 @@ const UrologistDashboard = () => {
                                 </div>
                               )}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {schedule.patientsCount} {schedule.patientsCount === 1 ? 'patient' : 'patients'}
-                            </div>
+
                           </div>
                         </div>
                       ))
@@ -1646,33 +1637,30 @@ const UrologistDashboard = () => {
               <div className="p-4 sm:p-6 flex-1 flex flex-col overflow-hidden">
                 {/* Today/Week/Month Toggle */}
                 <div className="flex space-x-2 border-b border-gray-200 pb-3 mb-4 flex-shrink-0">
-                  <button 
+                  <button
                     onClick={() => setSurgeryView('today')}
-                    className={`px-4 py-2 text-sm transition-colors ${
-                      surgeryView === 'today' 
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600' 
+                    className={`px-4 py-2 text-sm transition-colors ${surgeryView === 'today'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     Today
                   </button>
-                  <button 
+                  <button
                     onClick={() => setSurgeryView('week')}
-                    className={`px-4 py-2 text-sm transition-colors ${
-                      surgeryView === 'week' 
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600' 
+                    className={`px-4 py-2 text-sm transition-colors ${surgeryView === 'week'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     This Week
                   </button>
-                  <button 
+                  <button
                     onClick={() => setSurgeryView('month')}
-                    className={`px-4 py-2 text-sm transition-colors ${
-                      surgeryView === 'month' 
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600' 
+                    className={`px-4 py-2 text-sm transition-colors ${surgeryView === 'month'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     This Month
                   </button>
@@ -1694,7 +1682,7 @@ const UrologistDashboard = () => {
                     </div>
                   ) : (
                     surgeries.map((surgery) => (
-                      <div 
+                      <div
                         key={surgery.id}
                         onClick={() => patientModalRef.current?.openPatientDetails(surgery.patientName, { age: surgery.age }, 'surgery-pathway')}
                         className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md hover:border-teal-300 transition-all cursor-pointer"
@@ -1708,11 +1696,10 @@ const UrologistDashboard = () => {
                               <span className="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full font-medium">
                                 {surgery.scheduledTime}
                               </span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                surgery.priorityColor === 'red' ? 'bg-red-100 text-red-700' :
-                                surgery.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-green-100 text-green-700'
-                              }`}>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${surgery.priorityColor === 'red' ? 'bg-red-100 text-red-700' :
+                                  surgery.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-green-100 text-green-700'
+                                }`}>
                                 {surgery.priority}
                               </span>
                             </div>
@@ -1722,7 +1709,7 @@ const UrologistDashboard = () => {
                           </div>
                           <IoChevronForward className="text-gray-400 text-sm flex-shrink-0" />
                         </div>
-                        
+
                         <div className="space-y-1">
                           <div className="font-medium text-gray-900 text-sm">
                             {surgery.patientName}
@@ -1734,11 +1721,10 @@ const UrologistDashboard = () => {
                             <div className="text-xs text-gray-500">
                               Age: {surgery.age}
                             </div>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              surgery.statusColor === 'blue' ? 'bg-blue-100 text-blue-700' :
-                              surgery.statusColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${surgery.statusColor === 'blue' ? 'bg-blue-100 text-blue-700' :
+                                surgery.statusColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-green-100 text-green-700'
+                              }`}>
                               {surgery.status}
                             </span>
                           </div>
@@ -1755,7 +1741,7 @@ const UrologistDashboard = () => {
       </div>
 
       {/* Notification Modal */}
-      <NotificationModal 
+      <NotificationModal
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}
         onPatientClick={(patientName, patientId, metadata) => {
@@ -1777,7 +1763,7 @@ const UrologistDashboard = () => {
 
 
       {/* Patients Due for Review Modal */}
-      <PatientsDueForReviewModal 
+      <PatientsDueForReviewModal
         isOpen={isPatientsReviewOpen}
         onClose={() => setIsPatientsReviewOpen(false)}
         patients={patientsDueForReview}
@@ -1790,14 +1776,14 @@ const UrologistDashboard = () => {
       <PatientDetailsModalWrapper ref={patientModalRef} />
 
       {/* MDT Schedule Details Modal */}
-      <MDTScheduleDetailsModal 
+      <MDTScheduleDetailsModal
         isOpen={isMdtDetailsOpen}
         onClose={() => setIsMdtDetailsOpen(false)}
         schedule={selectedMdtSchedule}
       />
 
       {/* MDT Notes Modal */}
-      <MDTNotesModal 
+      <MDTNotesModal
         isOpen={isMdtNotesOpen}
         onClose={() => setIsMdtNotesOpen(false)}
         patientName={selectedMdtOutcome?.patientName}

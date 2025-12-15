@@ -2890,6 +2890,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                             <div className="flex-1 min-w-0">
                                               <div className="flex items-center gap-2 mb-3">
                                                 <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
+                                                {(request.status || '').toLowerCase() === 'not_required' && (
+                                                  <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full border border-gray-200">
+                                                    Not Required
+                                                  </span>
+                                                )}
                                               </div>
 
                                               {uploadedResult && uploadedResult.result && (
