@@ -827,13 +827,23 @@ export const getTodaysAppointments = async (req, res) => {
     // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
     let doctorId = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
-      console.log(`📅 [getTodaysAppointments ${requestId}] Looking up doctor record for email: ${userEmail}`);
-      // Find doctor record by email (since doctors and users are linked by email)
+      console.log(`📅 [getTodaysAppointments ${requestId}] Looking up doctor record for userId: ${userId}, email: ${userEmail}`);
       try {
-        const doctorCheck = await client.query(
-          'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
-          [userEmail]
+        // First try to find by user_id (more reliable)
+        let doctorCheck = await client.query(
+          'SELECT id FROM doctors WHERE user_id = $1 AND is_active = true',
+          [userId]
         );
+        
+        // If not found, try by email
+        if (doctorCheck.rows.length === 0 && userEmail) {
+          console.log(`📅 [getTodaysAppointments ${requestId}] Doctor not found by user_id, trying email lookup`);
+          doctorCheck = await client.query(
+            'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+            [userEmail]
+          );
+        }
+        
         console.log(`📅 [getTodaysAppointments ${requestId}] Doctor lookup query executed, found ${doctorCheck.rows.length} records`);
         if (doctorCheck.rows.length > 0) {
           doctorId = doctorCheck.rows[0].id;
@@ -941,6 +951,7 @@ export const getTodaysAppointments = async (req, res) => {
             a.appointment_date,
             a.appointment_time,
             a.urologist_name as urologist,
+            a.urologist_id,
             a.status,
             a.notes,
             'urologist' as type
@@ -1015,6 +1026,7 @@ export const getTodaysAppointments = async (req, res) => {
             a.appointment_date,
             a.appointment_time,
             a.urologist_name as urologist,
+            a.urologist_id,
             a.status,
             a.notes,
             a.appointment_type as type
@@ -1127,6 +1139,22 @@ export const getTodaysAppointments = async (req, res) => {
     console.log(`📅 [getTodaysAppointments ${requestId}] Query params:`, JSON.stringify(queryParams));
     console.log(`📅 [getTodaysAppointments ${requestId}] Query type: ${type || 'all'}`);
     console.log(`📅 [getTodaysAppointments ${requestId}] Query length: ${query.length} characters`);
+    console.log(`📅 [getTodaysAppointments ${requestId}] Filtering by doctorId: ${doctorId || 'NONE (showing all)'}`);
+
+    // Safety check: For doctors/urologists, ensure we have a doctorId before executing query
+    if ((userRole === 'urologist' || userRole === 'doctor') && !doctorId) {
+      console.warn(`⚠️ [getTodaysAppointments ${requestId}] WARNING: Doctor/urologist user but no doctorId found - returning empty results`);
+      client.release();
+      return res.json({
+        success: true,
+        message: 'Appointments retrieved successfully',
+        data: {
+          appointments: [],
+          count: 0,
+          date: today
+        }
+      });
+    }
 
     let result;
     try {
@@ -1135,6 +1163,26 @@ export const getTodaysAppointments = async (req, res) => {
       result = await client.query(query, queryParams);
       const queryTime = Date.now() - queryStart;
       console.log(`✅ [getTodaysAppointments ${requestId}] Query executed successfully in ${queryTime}ms, returned ${result.rows.length} rows`);
+      
+      // Additional validation: For doctors, verify all returned appointments belong to them
+      if ((userRole === 'urologist' || userRole === 'doctor') && doctorId && result.rows.length > 0) {
+        const invalidAppointments = result.rows.filter(row => {
+          // Investigation bookings don't have urologist_id, so skip them
+          if (row.type === 'investigation') return false;
+          // Check if appointment has urologist_id and it matches doctorId
+          return row.urologist_id && row.urologist_id !== doctorId;
+        });
+        if (invalidAppointments.length > 0) {
+          console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY ISSUE: Found ${invalidAppointments.length} appointments not belonging to doctor ${doctorId}`);
+          console.error(`❌ [getTodaysAppointments ${requestId}] Invalid appointments:`, invalidAppointments.map(a => ({ id: a.id, urologist_id: a.urologist_id })));
+          // Filter out invalid appointments for security
+          result.rows = result.rows.filter(row => {
+            if (row.type === 'investigation') return true;
+            return !row.urologist_id || row.urologist_id === doctorId;
+          });
+          console.log(`✅ [getTodaysAppointments ${requestId}] Filtered to ${result.rows.length} valid appointments`);
+        }
+      }
       if (result.rows.length > 0) {
         console.log(`📅 [getTodaysAppointments ${requestId}] Sample appointment data:`, {
           id: result.rows[0].id,
