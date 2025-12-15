@@ -115,7 +115,7 @@ const Patients = () => {
     window.addEventListener('appointment:booked', handleAppointmentUpdated);
     window.addEventListener('surgery:updated', handleAppointmentUpdated);
     window.addEventListener('investigationBooked', handleAppointmentUpdated);
-    
+
     return () => {
       window.removeEventListener('appointment:updated', handleAppointmentUpdated);
       window.removeEventListener('appointment:booked', handleAppointmentUpdated);
@@ -130,13 +130,13 @@ const Patients = () => {
 
   const handleTransferSuccess = (patientId, newPathway) => {
     console.log('🔄 handleTransferSuccess called:', { patientId, newPathway, currentCategory: category });
-    
+
     // Immediately remove patient from current list if they don't belong in this category anymore
-    const shouldRemoveFromList = 
+    const shouldRemoveFromList =
       (category === 'new') ||
       (category === 'surgery-pathway' && newPathway !== 'Surgery Pathway') ||
       (category === 'post-op-followup' && !['Post-op Transfer', 'Post-op Followup'].includes(newPathway));
-    
+
     if (shouldRemoveFromList) {
       console.log('✅ Removing patient from current list immediately');
       setPatients(prevPatients => prevPatients.filter(p => {
@@ -177,7 +177,7 @@ const Patients = () => {
           </div>
           {/* Search Bar and Notification */}
           <div className="w-full lg:w-96 flex items-center gap-3">
-            <GlobalPatientSearch 
+            <GlobalPatientSearch
               placeholder="Search by name"
               onPatientSelect={(patient) => {
                 console.log('Patients page: Patient selected:', patient);
@@ -193,7 +193,7 @@ const Patients = () => {
             />
             {/* Notification Icon */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsNotificationOpen(true)}
                 className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="View notifications"
@@ -218,7 +218,9 @@ const Patients = () => {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT NAME</th>
                   <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT ID / MRN</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">CARE PATHWAY</th>
+                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">
+                    {category === 'new' ? 'AGE' : 'CARE PATHWAY'}
+                  </th>
                   <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">ACTION</th>
                 </tr>
               </thead>
@@ -250,12 +252,18 @@ const Patients = () => {
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
-                        {patient.carePathway || 'Not Assigned'}
-                      </span>
+                      {category === 'new' ? (
+                        <div className="text-sm text-gray-600">
+                          {patient.age || 'N/A'}
+                        </div>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                          {patient.carePathway || 'Not Assigned'}
+                        </span>
+                      )}
                     </td>
                     <td className="py-4 px-6">
-                      <button 
+                      <button
                         onClick={() => handleViewPatient(patient)}
                         className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm"
                         aria-label={`View details for ${patient.name}`}
@@ -272,13 +280,13 @@ const Patients = () => {
       </div>
 
       {/* Patient Details Modal Wrapper */}
-      <PatientDetailsModalWrapper 
-        ref={patientDetailsModalRef} 
+      <PatientDetailsModalWrapper
+        ref={patientDetailsModalRef}
         onTransferSuccess={handleTransferSuccess}
       />
 
       {/* Notification Modal */}
-      <NotificationModal 
+      <NotificationModal
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}
         onPatientClick={(patientName, patientId, metadata) => {
