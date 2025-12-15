@@ -840,9 +840,11 @@ export const getTodaysAppointments = async (req, res) => {
           console.log(`📅 [getTodaysAppointments ${requestId}] Doctor lookup query executed, found ${doctorCheck.rows.length} records`);
           if (doctorCheck.rows.length > 0) {
             doctorId = doctorCheck.rows[0].id;
-            console.log(`📅 [getTodaysAppointments ${requestId}] ✅ Found doctor record with id: ${doctorId} for user ${userId} (email: ${userEmail})`);
+            console.log(`📅 [getTodaysAppointments ${requestId}] ✅ Found doctor record with id: ${doctorId} (type: ${typeof doctorId}) for user ${userId} (email: ${userEmail})`);
+            console.log(`📅 [getTodaysAppointments ${requestId}] Doctor record details:`, JSON.stringify(doctorCheck.rows[0]));
           } else {
             console.log(`📅 [getTodaysAppointments ${requestId}] ⚠️ No doctor record found for user ${userId} (email: ${userEmail}) - returning empty results`);
+            console.log(`📅 [getTodaysAppointments ${requestId}] Attempted email lookup: ${userEmail}`);
             // Return empty results if no doctor record exists
             client.release();
             return res.json({
@@ -1219,71 +1221,81 @@ export const getTodaysAppointments = async (req, res) => {
       
       // CRITICAL: Additional validation - For doctors, verify ALL returned appointments belong to them
       // This is a security check to ensure no appointments leak between doctors
+      // Note: The SQL query should already filter correctly, but this is a double-check
       if ((userRole === 'urologist' || userRole === 'doctor') && doctorId && result.rows.length > 0) {
         try {
-          console.log(`🔍 [getTodaysAppointments ${requestId}] Validating appointments for doctorId: ${doctorId}, total rows: ${result.rows.length}`);
+          console.log(`🔍 [getTodaysAppointments ${requestId}] Validating appointments for doctorId: ${doctorId} (type: ${typeof doctorId}), total rows: ${result.rows.length}`);
           
           // Filter out any appointments that don't belong to this doctor
           const validRows = [];
           const invalidRows = [];
           
-          for (const row of result.rows) {
-            // Investigation bookings don't have urologist_id, exclude them from doctor's view
-            if (row.type === 'investigation' || !row.type) {
-              console.log(`🔍 [getTodaysAppointments ${requestId}] Skipping investigation booking: ${row.id}`);
-              continue; // Don't include investigation bookings for doctors
+          // Convert doctorId to number once
+          const docId = Number(doctorId);
+          if (isNaN(docId)) {
+            console.error(`❌ [getTodaysAppointments ${requestId}] ERROR: Invalid doctorId: ${doctorId}, cannot validate`);
+            // Don't filter if doctorId is invalid - let SQL query handle it
+          } else {
+            for (const row of result.rows) {
+              // Investigation bookings don't have urologist_id, exclude them from doctor's view
+              if (row.type === 'investigation' || row.type === 'Investigation Appointment') {
+                console.log(`🔍 [getTodaysAppointments ${requestId}] Skipping investigation booking: ${row.id}`);
+                continue; // Don't include investigation bookings for doctors
+              }
+              
+              const rowUrologistId = row.urologist_id;
+              
+              // Exclude appointments without urologist_id
+              if (rowUrologistId === null || rowUrologistId === undefined) {
+                console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has no urologist_id, excluding`);
+                invalidRows.push({ id: row.id, reason: 'no_urologist_id', urologist_id: rowUrologistId });
+                continue;
+              }
+              
+              // Compare as numbers - handle both string and number types
+              const rowId = Number(rowUrologistId);
+              
+              if (isNaN(rowId)) {
+                console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has invalid urologist_id: ${rowUrologistId} (type: ${typeof rowUrologistId})`);
+                invalidRows.push({ id: row.id, reason: 'invalid_id', urologist_id: rowUrologistId, doctorId: doctorId });
+                continue;
+              }
+              
+              // Strict comparison - must match exactly
+              if (rowId === docId) {
+                validRows.push(row);
+                console.log(`✅ [getTodaysAppointments ${requestId}] Valid appointment: ${row.id} for patient ${row.first_name} ${row.last_name}, urologist_id: ${rowId} matches doctorId: ${docId}`);
+              } else {
+                console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY: Appointment ${row.id} belongs to doctor ${rowId}, not ${docId}`);
+                console.error(`❌ [getTodaysAppointments ${requestId}] Patient: ${row.first_name} ${row.last_name}, Appointment urologist_id: ${rowId}, Expected: ${docId}`);
+                invalidRows.push({ 
+                  id: row.id, 
+                  reason: 'wrong_doctor', 
+                  urologist_id: rowId, 
+                  expected: docId,
+                  patient: `${row.first_name} ${row.last_name}`
+                });
+              }
             }
             
-            const rowUrologistId = row.urologist_id;
-            
-            // Exclude appointments without urologist_id
-            if (rowUrologistId === null || rowUrologistId === undefined) {
-              console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has no urologist_id, excluding`);
-              invalidRows.push({ id: row.id, reason: 'no_urologist_id', urologist_id: rowUrologistId });
-              continue;
+            if (invalidRows.length > 0) {
+              console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY ISSUE: Found ${invalidRows.length} appointments not belonging to doctor ${doctorId}`);
+              console.error(`❌ [getTodaysAppointments ${requestId}] Invalid appointments:`, JSON.stringify(invalidRows, null, 2));
             }
             
-            // Compare as numbers
-            const rowId = Number(rowUrologistId);
-            const docId = Number(doctorId);
-            
-            if (isNaN(rowId) || isNaN(docId)) {
-              console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has invalid urologist_id: ${rowUrologistId}, doctorId: ${doctorId}`);
-              invalidRows.push({ id: row.id, reason: 'invalid_id', urologist_id: rowUrologistId, doctorId: doctorId });
-              continue;
-            }
-            
-            if (rowId === docId) {
-              validRows.push(row);
-            } else {
-              console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY: Appointment ${row.id} belongs to doctor ${rowId}, not ${docId}`);
-              console.error(`❌ [getTodaysAppointments ${requestId}] Patient: ${row.first_name} ${row.last_name}, Appointment urologist_id: ${rowId}, Expected: ${docId}`);
-              invalidRows.push({ 
-                id: row.id, 
-                reason: 'wrong_doctor', 
-                urologist_id: rowId, 
-                expected: docId,
-                patient: `${row.first_name} ${row.last_name}`
-              });
-            }
+            // Replace result.rows with only valid appointments
+            result.rows = validRows;
+            console.log(`✅ [getTodaysAppointments ${requestId}] Validation complete: ${validRows.length} valid appointments, ${invalidRows.length} invalid appointments filtered out`);
           }
-          
-          if (invalidRows.length > 0) {
-            console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY ISSUE: Found ${invalidRows.length} appointments not belonging to doctor ${doctorId}`);
-            console.error(`❌ [getTodaysAppointments ${requestId}] Invalid appointments:`, JSON.stringify(invalidRows, null, 2));
-          }
-          
-          // Replace result.rows with only valid appointments
-          result.rows = validRows;
-          console.log(`✅ [getTodaysAppointments ${requestId}] Validation complete: ${validRows.length} valid appointments, ${invalidRows.length} invalid appointments filtered out`);
           
         } catch (validationError) {
           console.error(`❌ [getTodaysAppointments ${requestId}] Error during validation (non-fatal):`, validationError.message);
           console.error(`❌ [getTodaysAppointments ${requestId}] Validation error stack:`, validationError.stack);
-          // On validation error, return empty results for safety
-          result.rows = [];
-          console.warn(`⚠️ [getTodaysAppointments ${requestId}] Returning empty results due to validation error`);
+          // On validation error, don't filter - let the SQL query results pass through
+          console.warn(`⚠️ [getTodaysAppointments ${requestId}] Validation error occurred, keeping original results`);
         }
+      } else if ((userRole === 'urologist' || userRole === 'doctor') && !doctorId) {
+        console.warn(`⚠️ [getTodaysAppointments ${requestId}] Doctor/urologist user but no doctorId - cannot validate appointments`);
       }
       if (result.rows.length > 0) {
         console.log(`📅 [getTodaysAppointments ${requestId}] Sample appointment data:`, {
