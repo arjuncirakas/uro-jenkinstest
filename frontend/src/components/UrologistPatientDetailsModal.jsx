@@ -1852,7 +1852,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               {/* Discharge Summary tab - visible for post-op-followup patients and discharged patients */}
               {(patient.category === 'post-op-followup' ||
                 (patient.carePathway && patient.carePathway.toLowerCase() === 'discharge') ||
-                (patient.pathway && patient.pathway.toLowerCase() === 'discharge')) && (
+                (patient.pathway && patient.pathway.toLowerCase() === 'discharge') ||
+                patient.status === 'Discharged') && (
                   <button
                     onClick={() => setActiveTab('dischargeSummary')}
                     className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'dischargeSummary'

@@ -1897,7 +1897,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
               {/* Discharge Summary tab - visible for post-op-followup patients and discharged patients */}
               {(isPostOpFollowupPatient() ||
                 (patient?.pathway && patient.pathway.toLowerCase() === 'discharge') ||
-                (patient?.carePathway && patient.carePathway.toLowerCase() === 'discharge')) && (
+                (patient?.carePathway && patient.carePathway.toLowerCase() === 'discharge') ||
+                patient?.status === 'Discharged') && (
                   <button
                     onClick={() => setActiveTab('dischargeSummary')}
                     className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'dischargeSummary'
