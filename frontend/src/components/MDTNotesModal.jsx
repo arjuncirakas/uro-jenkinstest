@@ -142,12 +142,42 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
               if (Array.isArray(parsed.attendees) && parsed.attendees.length > 0) {
                 loadedAttendees = parsed.attendees;
               } else if (Array.isArray(m.teamMembers) && m.teamMembers.length > 0) {
-                loadedAttendees = m.teamMembers.map(tm => `${tm.name}${tm.role ? ` (${tm.role})` : ''}`);
+                // Deduplicate by name and prioritize "urology" role
+                const nameMap = new Map();
+                m.teamMembers.forEach(tm => {
+                  const name = tm.name || '';
+                  const role = (tm.role || '').toLowerCase();
+                  const existing = nameMap.get(name);
+                  
+                  // If person not seen yet, or if current entry has "urology" role and existing doesn't
+                  if (!existing || (role === 'urology' && existing.role.toLowerCase() !== 'urology')) {
+                    nameMap.set(name, { name, role: tm.role || '' });
+                  }
+                });
+                
+                loadedAttendees = Array.from(nameMap.values()).map(item => 
+                  `${item.name}${item.role ? ` (${item.role})` : ''}`
+                );
               }
             } catch {
               // If parsing fails, try teamMembers
               if (Array.isArray(m.teamMembers) && m.teamMembers.length > 0) {
-                loadedAttendees = m.teamMembers.map(tm => `${tm.name}${tm.role ? ` (${tm.role})` : ''}`);
+                // Deduplicate by name and prioritize "urology" role
+                const nameMap = new Map();
+                m.teamMembers.forEach(tm => {
+                  const name = tm.name || '';
+                  const role = (tm.role || '').toLowerCase();
+                  const existing = nameMap.get(name);
+                  
+                  // If person not seen yet, or if current entry has "urology" role and existing doesn't
+                  if (!existing || (role === 'urology' && existing.role.toLowerCase() !== 'urology')) {
+                    nameMap.set(name, { name, role: tm.role || '' });
+                  }
+                });
+                
+                loadedAttendees = Array.from(nameMap.values()).map(item => 
+                  `${item.name}${item.role ? ` (${item.role})` : ''}`
+                );
               }
             }
           }

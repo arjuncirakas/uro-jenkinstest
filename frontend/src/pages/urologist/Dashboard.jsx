@@ -1604,7 +1604,7 @@ const UrologistDashboard = () => {
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="text-xs text-gray-500">
-                              Age: {surgery.age} • {surgery.surgeon}
+                              Age: {surgery.age}
                             </div>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                               surgery.statusColor === 'blue' ? 'bg-blue-100 text-blue-700' :
