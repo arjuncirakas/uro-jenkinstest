@@ -3036,8 +3036,8 @@ export const getAllAppointments = async (req, res) => {
         typeColor: typeColor,
         urologist: row.type === 'investigation'
           ? row.urologist_first_name || 'Unassigned'
-          : (row.urologist_name 
-            ? (row.urologist_name.startsWith('Dr.') ? row.urologist_name : `Dr. ${row.urologist_name}`)
+          : (row.urologist_name && String(row.urologist_name).trim()
+            ? (String(row.urologist_name).startsWith('Dr.') ? String(row.urologist_name) : `Dr. ${String(row.urologist_name)}`)
             : (row.urologist_first_name && row.urologist_last_name
               ? `Dr. ${row.urologist_first_name} ${row.urologist_last_name}`
               : 'Unassigned')),
