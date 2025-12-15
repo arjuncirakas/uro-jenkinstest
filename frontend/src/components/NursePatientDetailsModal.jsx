@@ -3039,10 +3039,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                               <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
                               <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi}</p>
                             </div>
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase">Admission Date</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.admissionDate}</p>
-                            </div>
+
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
                               <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.dischargeDate}</p>

@@ -53,6 +53,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isPathwayModalOpen, setIsPathwayModalOpen] = useState(false);
   const [selectedPathway, setSelectedPathway] = useState('');
   const [isDischargeSummaryModalOpen, setIsDischargeSummaryModalOpen] = useState(false);
+  const [dischargeSummaryCreated, setDischargeSummaryCreated] = useState(false);
   const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
   const [selectedSurgeryAppointment, setSelectedSurgeryAppointment] = useState(null);
   const [hasSurgeryAppointment, setHasSurgeryAppointment] = useState(false);
@@ -1630,7 +1631,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   // Handle transfer actions
   const handleTransfer = (transferType) => {
     setSelectedPathway(transferType);
-    setIsPathwayModalOpen(true);
+    if (transferType === 'Discharge') {
+      setDischargeSummaryCreated(false);
+      setIsDischargeSummaryModalOpen(true);
+    } else {
+      setIsPathwayModalOpen(true);
+    }
   };
 
   // Handle discharge summary submission
@@ -1644,33 +1650,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       if (result.success) {
         console.log('✅ Discharge summary created successfully');
 
-        // Now proceed with pathway transfer
-        const pathwayPayload = {
-          pathway: selectedPathway,
-          reason: transferDetails.reason || 'Patient discharged',
-          notes: dischargeSummaryData.clinicalSummary || ''
-        };
+        setDischargeSummaryCreated(true);
+        setIsDischargeSummaryModalOpen(false);
 
-        const pathwayRes = await patientService.updatePatientPathway(patient.id, pathwayPayload);
+        // Pre-fill transfer details with summary info
+        setTransferDetails(prev => ({
+          ...prev,
+          reason: 'Patient discharged',
+          clinicalRationale: dischargeSummaryData.clinicalSummary || ''
+        }));
 
-        if (pathwayRes.success) {
-          setSuccessModalTitle('Patient Discharged Successfully');
-          setSuccessModalMessage(`Discharge summary created and patient transferred to ${selectedPathway}.`);
-          setIsSuccessModalOpen(true);
-          setIsDischargeSummaryModalOpen(false);
-
-          // Refresh patient data
-          if (onTransferSuccess) {
-            onTransferSuccess();
-          }
-
-          // Close the main modal after a delay
-          setTimeout(() => {
-            onClose();
-          }, 1500);
-        } else {
-          showErrorModal('Transfer Failed', 'Failed to transfer patient pathway: ' + (pathwayRes.error || 'Unknown error'));
-        }
+        // Open pathway transfer modal for final confirmation
+        setIsPathwayModalOpen(true);
       } else {
         showErrorModal('Discharge Summary Failed', 'Failed to create discharge summary: ' + (result.error || 'Unknown error'));
       }
@@ -3221,10 +3212,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
                           <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi}</p>
                         </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">Admission Date</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.admissionDate}</p>
-                        </div>
+
                         <div>
                           <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
                           <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.dischargeDate}</p>
@@ -6017,15 +6005,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           return;
                         }
                       } else if (selectedPathway === 'Discharge') {
-                        // Validate Discharge fields before opening discharge summary modal
+                        // If discharge summary hasn't been created yet, redirect to it
+                        if (!dischargeSummaryCreated) {
+                          setIsPathwayModalOpen(false);
+                          setIsDischargeSummaryModalOpen(true);
+                          return;
+                        }
+
+                        // Validate Discharge fields
                         if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {
                           showErrorModal('Validation Error', 'Please provide discharge reason and clinical summary');
                           return;
                         }
-                        // Close pathway modal and open discharge summary modal
-                        setIsPathwayModalOpen(false);
-                        setIsDischargeSummaryModalOpen(true);
-                        return;
                       } else {
                         // Default validation for other pathways
                         if (!transferDetails.reason || !transferDetails.clinicalRationale.trim()) {

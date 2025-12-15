@@ -4,17 +4,9 @@ import { FaFilePdf, FaFileWord, FaFileImage, FaPills } from 'react-icons/fa';
 
 const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) => {
   const getInitialFormData = () => {
-    // Format admission date from patient creation date
-    let admissionDate = '';
-    if (patient?.createdAt || patient?.created_at) {
-      const date = new Date(patient.createdAt || patient.created_at);
-      if (!isNaN(date.getTime())) {
-        admissionDate = date.toISOString().split('T')[0];
-      }
-    }
-
     return {
-      admissionDate: admissionDate,
+      // admissionDate removed
+
       dischargeDate: new Date().toISOString().split('T')[0],
       dischargeTime: new Date().toTimeString().slice(0, 5),
       diagnosis: {
@@ -160,7 +152,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.admissionDate) newErrors.admissionDate = 'Admission date is required';
+
     if (!formData.dischargeDate) newErrors.dischargeDate = 'Discharge date is required';
     if (!formData.clinicalSummary.trim()) newErrors.clinicalSummary = 'Clinical summary is required';
     if (!formData.diagnosis.primary.trim()) newErrors.diagnosisPrimary = 'Primary diagnosis is required';
@@ -222,19 +214,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Discharge Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Admission Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.admissionDate}
-                    onChange={(e) => handleInputChange('admissionDate', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors.admissionDate ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                  />
-                  {errors.admissionDate && <p className="text-red-500 text-xs mt-1">{errors.admissionDate}</p>}
-                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Discharge Date <span className="text-red-500">*</span>
