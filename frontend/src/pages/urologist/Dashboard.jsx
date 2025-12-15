@@ -81,16 +81,70 @@ const UrologistDashboard = () => {
     setAppointmentsError(null);
     
     try {
+      // Get current urologist ID to filter appointments
+      const currentUser = authService.getCurrentUser();
+      if (!currentUser || !currentUser.id) {
+        setAppointmentsError('User not found');
+        setAppointments([]);
+        setLoadingAppointments(false);
+        return;
+      }
+
+      const urologistId = currentUser.id;
+      
       const result = await bookingService.getTodaysAppointments();
       
       if (result.success) {
         console.log('Raw appointments data:', result.data.appointments);
-        const appointments = result.data.appointments || [];
+        const allAppointments = result.data.appointments || [];
+        
+        // Filter appointments to only show those for the logged-in urologist
+        // Check multiple possible field names for urologist ID
+        const filteredAppointments = allAppointments.filter(appointment => {
+          const appointmentUrologistId = appointment.urologistId || 
+                                         appointment.urologist_id || 
+                                         appointment.doctorId || 
+                                         appointment.doctor_id;
+          
+          // If appointment has a urologist ID field, match it with current user
+          if (appointmentUrologistId) {
+            return appointmentUrologistId === urologistId || 
+                   appointmentUrologistId.toString() === urologistId.toString();
+          }
+          
+          // If no urologist ID field, check urologist name against current user's name
+          // This is a fallback in case the ID field is missing
+          const currentUserName = currentUser.first_name && currentUser.last_name
+            ? `${currentUser.first_name} ${currentUser.last_name}`
+            : currentUser.name || '';
+          
+          const appointmentUrologistName = appointment.urologist || 
+                                          appointment.urologist_name || 
+                                          appointment.urologistName || 
+                                          appointment.doctorName || 
+                                          '';
+          
+          // If we have both names, try to match them
+          if (currentUserName && appointmentUrologistName) {
+            // Normalize names for comparison (remove "Dr." prefix, trim whitespace)
+            const normalizedCurrent = currentUserName.replace(/^Dr\.\s*/i, '').trim();
+            const normalizedAppointment = appointmentUrologistName.replace(/^Dr\.\s*/i, '').trim();
+            return normalizedCurrent === normalizedAppointment || 
+                   normalizedCurrent.toLowerCase() === normalizedAppointment.toLowerCase();
+          }
+          
+          // If we can't determine ownership, exclude it to be safe
+          return false;
+        });
+        
+        console.log(`Filtered appointments: ${filteredAppointments.length} out of ${allAppointments.length} for urologist ${urologistId}`);
+        
         // Debug: Log first appointment to see structure
-        if (appointments.length > 0) {
-          console.log('First appointment structure:', appointments[0]);
+        if (filteredAppointments.length > 0) {
+          console.log('First filtered appointment structure:', filteredAppointments[0]);
         }
-        setAppointments(appointments);
+        
+        setAppointments(filteredAppointments);
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
         console.error('Error fetching appointments:', result.error);

@@ -6094,10 +6094,7 @@ ${transferDetails.additionalNotes}` : ''}
                             // Check if the created note is already in the fetched list
                             const noteExists = prev.some(note => 
                               note.id === createdNoteData.id || 
-                              (note.content && (
-                                note.content.includes('PATHWAY TRANSFER - MEDICATION PRESCRIBED') ||
-                                (note.content.includes('PATHWAY TRANSFER') && selectedPathway === 'Medication')
-                              ))
+                              (note.content && note.content.includes('PATHWAY TRANSFER'))
                             );
                             
                             if (!noteExists) {
