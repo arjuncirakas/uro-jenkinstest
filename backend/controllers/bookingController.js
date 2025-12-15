@@ -2865,7 +2865,6 @@ export const getAllAppointments = async (req, res) => {
         a.notes,
         a.appointment_type as type,
         a.urologist_id,
-        a.urologist_name,
         d.first_name as urologist_first_name,
         d.last_name as urologist_last_name,
         COALESCE(a.reminder_sent, false) as reminder_sent,
@@ -3036,11 +3035,9 @@ export const getAllAppointments = async (req, res) => {
         typeColor: typeColor,
         urologist: row.type === 'investigation'
           ? row.urologist_first_name || 'Unassigned'
-          : (row.urologist_name && String(row.urologist_name).trim()
-            ? (String(row.urologist_name).startsWith('Dr.') ? String(row.urologist_name) : `Dr. ${String(row.urologist_name)}`)
-            : (row.urologist_first_name && row.urologist_last_name
-              ? `Dr. ${row.urologist_first_name} ${row.urologist_last_name}`
-              : 'Unassigned')),
+          : (row.urologist_first_name && row.urologist_last_name
+            ? `Dr. ${row.urologist_first_name} ${row.urologist_last_name}`
+            : 'Unassigned'),
         reminderSent: row.reminder_sent || false,
         reminderSentAt: row.reminder_sent_at || null,
         createdAt: row.created_at,
