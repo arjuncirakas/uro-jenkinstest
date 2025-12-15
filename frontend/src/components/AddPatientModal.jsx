@@ -311,14 +311,14 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       }
     }
 
-    // Validate symptoms - IPSS score is required for LUTS
+    // Validate symptoms - IPSS score is required for LUTS and Nocturia
     triageSymptoms.forEach((symptom, index) => {
-      if (symptom.checked && symptom.name === 'LUTS' && !symptom.ipssScore) {
+      if (symptom.checked && (symptom.name === 'LUTS' || symptom.name === 'Nocturia') && !symptom.ipssScore) {
         // Store error using symptom index
         if (!newErrors.symptoms) {
           newErrors.symptoms = {};
         }
-        newErrors.symptoms[`${index}_ipss`] = 'IPSS score is required for LUTS';
+        newErrors.symptoms[`${index}_ipss`] = `IPSS score is required for ${symptom.name}`;
       }
     });
 
@@ -370,8 +370,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       const triageData = triageSymptoms
         .filter(symptom => {
           if (!symptom.checked || !symptom.duration) return false;
-          // IPSS score is required only for LUTS
-          if (symptom.name === 'LUTS') {
+          // IPSS score is required for LUTS and Nocturia
+          if (symptom.name === 'LUTS' || symptom.name === 'Nocturia') {
             return symptom.ipssScore;
           }
           return true;
@@ -649,7 +649,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       return updated;
     });
     
-    // Clear error when IPSS score is selected for LUTS
+    // Clear error when IPSS score is selected for LUTS or Nocturia
     if (field === 'ipssScore' && value) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -677,8 +677,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       ).join(' ');
     };
 
+    const capitalizedName = capitalizeFirstLetter(customSymptomName);
+    
+    // Validate IPSS score for LUTS and Nocturia
+    if ((capitalizedName === 'LUTS' || capitalizedName === 'Nocturia') && !customSymptomIpssScore) {
+      // Show error - you could add a state for custom symptom errors here
+      alert(`IPSS score is required for ${capitalizedName}`);
+      return;
+    }
+
     const newSymptom = {
-      name: capitalizeFirstLetter(customSymptomName),
+      name: capitalizedName,
       checked: true,
       ipssScore: customSymptomIpssScore,
       duration: customSymptomDuration,
@@ -1407,11 +1416,11 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                         <div className="px-4 pb-4 pt-3 border-t border-gray-200" onClick={(e) => e.stopPropagation()}>
                           <div className="space-y-4">
                             <div className={`grid gap-4 ${
-                              symptom.name === 'LUTS'
+                              symptom.name === 'LUTS' || symptom.name === 'Nocturia'
                                 ? 'grid-cols-1 md:grid-cols-2' 
                                 : 'grid-cols-1'
                             }`}>
-                              {symptom.name === 'LUTS' && (
+                              {(symptom.name === 'LUTS' || symptom.name === 'Nocturia') && (
                                 <div className="relative mb-3">
                                   <select
                                     value={symptom.ipssScore}
@@ -2310,7 +2319,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                 </label>
               </div>
 
-              {customSymptomName === 'LUTS' && (
+              {(customSymptomName === 'LUTS' || customSymptomName === 'Nocturia') && (
                 <div className="relative mb-6">
                   <select
                     value={customSymptomIpssScore}

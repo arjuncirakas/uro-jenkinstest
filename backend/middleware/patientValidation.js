@@ -286,9 +286,9 @@ export const validatePatientInput = [
         if (!symptom.durationUnit || typeof symptom.durationUnit !== 'string') {
           throw new Error('Each symptom must have a durationUnit');
         }
-        // IPSS score is required only for LUTS
-        if (symptom.name === 'LUTS' && !symptom.ipssScore) {
-          throw new Error('IPSS score is required for LUTS');
+        // IPSS score is required for LUTS and Nocturia
+        if ((symptom.name === 'LUTS' || symptom.name === 'Nocturia') && !symptom.ipssScore) {
+          throw new Error(`IPSS score is required for ${symptom.name}`);
         }
         // Frequency is optional but can be included for Nocturia
         if (symptom.frequency !== undefined && symptom.frequency !== null && typeof symptom.frequency !== 'string') {
@@ -681,9 +681,9 @@ export const validatePatientUpdateInput = [
         if (!symptom.durationUnit || typeof symptom.durationUnit !== 'string') {
           throw new Error('Each symptom must have a durationUnit');
         }
-        // IPSS score is required only for LUTS
-        if (symptom.name === 'LUTS' && !symptom.ipssScore) {
-          throw new Error('IPSS score is required for LUTS');
+        // IPSS score is required for LUTS and Nocturia
+        if ((symptom.name === 'LUTS' || symptom.name === 'Nocturia') && !symptom.ipssScore) {
+          throw new Error(`IPSS score is required for ${symptom.name}`);
         }
         // Frequency is optional but can be included for Nocturia
         if (symptom.frequency !== undefined && symptom.frequency !== null && typeof symptom.frequency !== 'string') {

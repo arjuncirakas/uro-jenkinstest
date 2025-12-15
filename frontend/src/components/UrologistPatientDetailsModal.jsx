@@ -1270,80 +1270,99 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
   if (!isOpen || !patient) return null;
 
+  // Transform MDT meetings data to match the UI format
+  const transformedMdtNotes = useMemo(() => {
+    if (!mdtMeetings || mdtMeetings.length === 0) return [];
+    
+    return mdtMeetings.map((meeting) => {
+      // Parse notes JSON if it's a string
+      let notesData = {};
+      if (meeting.notes) {
+        try {
+          notesData = typeof meeting.notes === 'string' ? JSON.parse(meeting.notes) : meeting.notes;
+        } catch (e) {
+          // If parsing fails, treat as plain text
+          notesData = { discussion: meeting.notes };
+        }
+      }
 
-  // Sample MDT notes data
-  const mdtNotes = [
-    {
-      date: '2024-09-15',
-      time: '02:00 PM',
-      author: 'Dr. Thompson',
-      designation: 'Urologist',
-      meetingDate: '2024-09-15',
-      attendees: ['Dr. Thompson (Urologist)', 'Dr. Miller (Oncologist)', 'Dr. Peterson (Radiologist)', 'Dr. Williams (Pathologist)'],
-      content: 'MDT reviewed case of 62-year-old male with elevated PSA (4.5 ng/mL) and positive biopsy showing Gleason 7 (3+4) prostate cancer. Imaging shows localized disease with no evidence of metastasis.',
-      recommendations: [
-        'Recommend active surveillance with PSA monitoring every 3 months',
-        'Consider MRI in 6 months to assess disease progression',
-        'Patient suitable for radical prostatectomy if progression noted'
-      ],
-      actionItems: [
-        'Schedule follow-up PSA in 3 months',
-        'Arrange patient consultation to discuss surveillance plan',
-        'Book MRI for 6 months time'
-      ],
-      documents: [
-        { id: 1, name: 'Biopsy Report - Sept 2024.pdf', type: 'pdf', uploadDate: '2024-09-14', size: '2.4 MB' },
-        { id: 2, name: 'MRI Scan Results.pdf', type: 'pdf', uploadDate: '2024-09-12', size: '5.1 MB' },
-        { id: 3, name: 'PSA Trend Analysis.xlsx', type: 'excel', uploadDate: '2024-09-14', size: '156 KB' }
-      ]
-    },
-    {
-      date: '2024-07-22',
-      time: '02:00 PM',
-      author: 'Dr. Sarah Wilson',
-      designation: 'Urologist',
-      meetingDate: '2024-07-22',
-      attendees: ['Dr. Wilson (Urologist)', 'Dr. Chen (Oncologist)', 'Dr. Anderson (Radiologist)'],
-      content: 'Initial MDT discussion following biopsy results. Histopathology confirms adenocarcinoma with clear margins. No evidence of lymph node involvement on CT.',
-      recommendations: [
-        'Patient is a good candidate for robotic-assisted radical prostatectomy',
-        'Alternative option: External beam radiotherapy with hormone therapy',
-        'Discuss fertility preservation if relevant'
-      ],
-      actionItems: [
-        'Schedule surgical consultation',
-        'Provide patient information leaflets',
-        'Arrange pre-operative assessment'
-      ],
-      documents: [
-        { id: 4, name: 'Histopathology Report.pdf', type: 'pdf', uploadDate: '2024-07-20', size: '1.8 MB' },
-        { id: 5, name: 'CT Scan - Abdomen & Pelvis.pdf', type: 'pdf', uploadDate: '2024-07-18', size: '8.2 MB' }
-      ]
-    },
-    {
-      date: '2024-06-10',
-      time: '02:00 PM',
-      author: 'Dr. Michael Chen',
-      designation: 'Urologist',
-      meetingDate: '2024-06-10',
-      attendees: ['Dr. Chen (Urologist)', 'Dr. Rodriguez (Oncologist)', 'Dr. Kim (Pathologist)'],
-      content: 'Pre-biopsy MDT discussion. Patient presents with persistently elevated PSA (6.8 ng/mL) and abnormal DRE findings. Family history of prostate cancer noted.',
-      recommendations: [
-        'Proceed with TRUS-guided biopsy',
-        'Consider mpMRI before biopsy to target suspicious areas',
-        'Counsel patient on biopsy risks and benefits'
-      ],
-      actionItems: [
-        'Book mpMRI scan',
-        'Schedule biopsy procedure',
-        'Provide patient information about biopsy'
-      ],
-      documents: [
-        { id: 6, name: 'PSA History Report.pdf', type: 'pdf', uploadDate: '2024-06-08', size: '892 KB' },
-        { id: 7, name: 'Family History Assessment.docx', type: 'word', uploadDate: '2024-06-09', size: '245 KB' }
-      ]
-    }
-  ];
+      // Format time
+      const formatTime = (timeStr) => {
+        if (!timeStr) return '';
+        if (timeStr.match(/^\d{2}:\d{2}$/)) {
+          const [hours, minutes] = timeStr.split(':');
+          const hour24 = parseInt(hours, 10);
+          const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+          const ampm = hour24 >= 12 ? 'PM' : 'AM';
+          return `${hour12}:${minutes} ${ampm}`;
+        }
+        return timeStr;
+      };
+
+      // Format date
+      const formatDate = (dateStr) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      };
+
+      // Get author name - handle both API response formats
+      let authorName = 'Unknown';
+      if (meeting.createdBy && meeting.createdBy.name) {
+        authorName = meeting.createdBy.name.startsWith('Dr.') 
+          ? meeting.createdBy.name 
+          : `Dr. ${meeting.createdBy.name}`;
+      } else if (meeting.created_by_first_name && meeting.created_by_last_name) {
+        authorName = `Dr. ${meeting.created_by_first_name} ${meeting.created_by_last_name}`;
+      } else if (meeting.created_by_first_name) {
+        authorName = `Dr. ${meeting.created_by_first_name}`;
+      } else if (meeting.created_by) {
+        authorName = meeting.created_by;
+      }
+
+      // Get designation/role
+      const designation = meeting.createdBy?.role || meeting.created_by_role || 'Urologist';
+
+      // Format attendees - handle both API response formats
+      const attendees = (meeting.teamMembers || []).map((member) => {
+        const role = member.role || member.userRole || '';
+        const name = member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Unknown';
+        return `${name}${role ? ` (${role})` : ''}`;
+      });
+
+      // Extract content from notes - handle both parsed and raw formats
+      const content = meeting.content || 
+                     meeting.clinicalSummary || 
+                     notesData.discussion || 
+                     notesData.caseSummary || 
+                     notesData.content || 
+                     (typeof meeting.notes === 'string' && meeting.notes.trim() ? meeting.notes : '') || 
+                     '';
+
+      // Extract recommendations - check both parsed fields and notes JSON
+      const recommendations = meeting.recommendations || notesData.recommendations || [];
+
+      // Extract action items - check both parsed fields and notes JSON
+      const actionItems = meeting.actionItems || notesData.actionItems || [];
+
+      // Extract documents (if any)
+      const documents = notesData.documents || [];
+
+      return {
+        id: meeting.id,
+        date: formatDate(meeting.meeting_date || meeting.meetingDate),
+        time: formatTime(meeting.meeting_time || meeting.meetingTime),
+        author: authorName,
+        designation: designation,
+        meetingDate: formatDate(meeting.meeting_date || meeting.meetingDate),
+        attendees: attendees,
+        content: content,
+        recommendations: recommendations,
+        actionItems: actionItems,
+        documents: documents
+      };
+    });
+  }, [mdtMeetings]);
 
   // Sample discharge summary data
   const dischargeSummary = {
@@ -3044,9 +3063,25 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   </div>
                   
                   <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
-                    {mdtNotes.length > 0 ? (
-                      mdtNotes.map((note, index) => (
-                        <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    {loadingMdtMeetings ? (
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                        </div>
+                        <h4 className="text-base font-medium text-gray-900 mb-1">Loading MDT Notes</h4>
+                        <p className="text-gray-500 text-sm">Please wait while we fetch the MDT discussion history...</p>
+                      </div>
+                    ) : mdtMeetingsError ? (
+                      <div className="text-center py-8">
+                        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-red-100 flex items-center justify-center">
+                          <IoAlertCircle className="text-xl text-red-600" />
+                        </div>
+                        <h4 className="text-base font-medium text-gray-900 mb-1">Error Loading MDT Notes</h4>
+                        <p className="text-gray-500 text-sm">{mdtMeetingsError}</p>
+                      </div>
+                    ) : transformedMdtNotes.length > 0 ? (
+                      transformedMdtNotes.map((note, index) => (
+                        <div key={note.id || index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center space-x-2">
                               <div className={`p-2 rounded-full ${getDesignationColor(note.designation)}`}>
