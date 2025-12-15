@@ -12,7 +12,7 @@ const ActiveMonitoring = () => {
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [isUpdateAppointmentModalOpen, setIsUpdateAppointmentModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
-  
+
   // API state
   const [monitoringPatients, setMonitoringPatients] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ const ActiveMonitoring = () => {
   const fetchMonitoringPatients = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       // Use the new backend parameter to fetch all active monitoring pathways
       // This includes: Active Monitoring, Medication, and Discharge
@@ -34,11 +34,11 @@ const ActiveMonitoring = () => {
         activeMonitoring: 'true',
         monitoringType: monitoringTypeFilter === 'all' ? '' : monitoringTypeFilter
       });
-      
+
       if (result.success) {
         // Patients are already filtered by the backend
         const activeMonitoringPatients = result.data || [];
-        
+
         // Transform to match expected format
         const transformedPatients = activeMonitoringPatients.map(patient => {
           // Format the next appointment date for display
@@ -46,16 +46,16 @@ const ActiveMonitoring = () => {
             if (!dateStr) return 'TBD';
             try {
               const date = new Date(dateStr);
-              return date.toLocaleDateString('en-GB', { 
-                day: '2-digit', 
-                month: 'short', 
-                year: 'numeric' 
+              return date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
               });
             } catch {
               return 'TBD';
             }
           };
-          
+
           return {
             id: patient.id,
             name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
@@ -71,7 +71,7 @@ const ActiveMonitoring = () => {
             appointmentTime: patient.nextAppointmentTime || patient.appointment_time || '-'
           };
         });
-        
+
         setMonitoringPatients(transformedPatients);
       } else {
         setError(result.error || 'Failed to fetch monitoring patients');
@@ -135,7 +135,7 @@ const ActiveMonitoring = () => {
     if (isNaN(psaValue)) {
       return { textColor: 'text-gray-900', dotColor: 'bg-gray-400' };
     }
-    
+
     if (psaValue > 4.0) {
       return { textColor: 'text-gray-900', dotColor: 'bg-red-500' };
     } else {
@@ -185,7 +185,7 @@ const ActiveMonitoring = () => {
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-4 sm:p-6 lg:p-8">
-        <NurseHeader 
+        <NurseHeader
           title="Active Monitoring"
           subtitle="Patients under active surveillance, medication, and discharge monitoring"
           onSearch={setSearchQuery}
@@ -262,6 +262,11 @@ const ActiveMonitoring = () => {
                                     Medication
                                   </span>
                                 )}
+                                {(patient.pathway && patient.pathway.toLowerCase() === 'discharge') && (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 ${getPathwayStyle(patient.pathway)} rounded text-xs font-medium`}>
+                                    Discharged
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-gray-600 mt-1">
                                 UPI: {patient.upi}
@@ -288,7 +293,7 @@ const ActiveMonitoring = () => {
                           {patient.currentDoctor}
                         </td>
                         <td className="py-4 px-4 text-center">
-                          <button 
+                          <button
                             onClick={() => handleUpdateAppointment(patient)}
                             className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1 mx-auto"
                           >
@@ -297,7 +302,7 @@ const ActiveMonitoring = () => {
                           </button>
                         </td>
                         <td className="py-4 px-4 text-center">
-                          <button 
+                          <button
                             onClick={() => handleViewDetails(patient)}
                             className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center space-x-1 mx-auto"
                           >
@@ -316,7 +321,7 @@ const ActiveMonitoring = () => {
       </div>
 
       {/* Nurse Patient Details Modal */}
-      <NursePatientDetailsModal 
+      <NursePatientDetailsModal
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
@@ -327,7 +332,7 @@ const ActiveMonitoring = () => {
       />
 
       {/* Update Appointment Modal */}
-      <UpdateAppointmentModal 
+      <UpdateAppointmentModal
         isOpen={isUpdateAppointmentModalOpen}
         onClose={() => setIsUpdateAppointmentModalOpen(false)}
         patient={selectedPatient}
