@@ -37,7 +37,7 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
   let stageIndex = 0;
 
   // Determine current stage based on care pathway and status
-  // Priority order: Discharge > Post-op > Surgery > MDT > Monitoring/Medication > OPD > Referral
+  // Priority order: Discharge > Post-op > Surgery > Monitoring/Medication > MDT > OPD > Referral
   
   if (status === 'Discharged' || carePathway === 'Discharge') {
     // Discharged patients
@@ -51,21 +51,16 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
     // Patients scheduled for or in surgery pathway
     currentStage = 'surgery';
     stageIndex = 3;
+  } else if (carePathway === 'Active Monitoring' || carePathway === 'Medication' || carePathway === 'Radiotherapy') {
+    // Ongoing care pathways - these come after MDT has been completed
+    // Show MDT as completed (not active) to indicate they've progressed past MDT to ongoing care
+    // We'll mark MDT as completed in the return logic below
+    currentStage = 'mdt';
+    stageIndex = 2; // Show up to MDT stage, but mark it as completed (not active)
   } else if (hasMDTMeeting || hasUpcomingMDT || carePathway === 'Active Surveillance') {
     // Patients with MDT meetings or in active surveillance
     currentStage = 'mdt';
     stageIndex = 2;
-  } else if (carePathway === 'Active Monitoring' || carePathway === 'Medication' || carePathway === 'Radiotherapy') {
-    // Ongoing care pathways - these typically come after MDT or OPD
-    // If they have MDT history, show MDT stage; otherwise show OPD (they've progressed past referral)
-    if (hasMDTMeeting) {
-      currentStage = 'mdt';
-      stageIndex = 2;
-    } else {
-      // They're on ongoing care, so they've at least reached OPD
-      currentStage = 'opd';
-      stageIndex = 1;
-    }
   } else if (carePathway === 'Investigation Pathway') {
     // Investigation pathway - typically after OPD, could be before or after MDT
     // If they have MDT, show MDT; otherwise show OPD
@@ -89,15 +84,38 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
   // Only return stages that have been reached (completed + current)
   const reachedStages = stages.slice(0, stageIndex + 1);
   
+  // Special handling for ongoing care pathways (Medication, Active Monitoring, Radiotherapy)
+  // These patients have progressed past MDT, so MDT should be shown as completed, not active
+  const isOngoingCarePathway = carePathway === 'Active Monitoring' || 
+                                carePathway === 'Medication' || 
+                                carePathway === 'Radiotherapy';
+  
   return {
     currentStage,
     stageIndex,
-    stages: reachedStages.map((stage, index) => ({
-      ...stage,
-      isActive: index === reachedStages.length - 1, // Last stage is always active
-      isCompleted: index < reachedStages.length - 1,
-      isPending: false // Never show pending stages
-    }))
+    stages: reachedStages.map((stage, index) => {
+      // For ongoing care pathways, mark MDT as completed (not active) if it's the last stage
+      const isLastStage = index === reachedStages.length - 1;
+      const isMDTStage = stage.id === 'mdt';
+      
+      if (isOngoingCarePathway && isLastStage && isMDTStage) {
+        // Mark MDT as completed for ongoing care patients (they've progressed past MDT)
+        return {
+          ...stage,
+          isActive: false,
+          isCompleted: true,
+          isPending: false
+        };
+      }
+      
+      // Default logic: last stage is active, others are completed
+      return {
+        ...stage,
+        isActive: isLastStage,
+        isCompleted: !isLastStage,
+        isPending: false
+      };
+    })
   };
 };
 
