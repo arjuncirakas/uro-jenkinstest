@@ -458,10 +458,7 @@ const PatientList = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-center">
-                          {patientPathway.toLowerCase() === 'medications' || 
-                           patientPathway.toLowerCase() === 'medication' ? (
-                            <span className="text-gray-400 text-xs">—</span>
-                          ) : (() => {
+                          {(() => {
                             // Check if patient has an appointment booked
                             // Backend now provides hasAppointment boolean, with fallback to date/time check
                             const hasAppointment = patient.hasAppointment !== undefined 

@@ -2490,7 +2490,7 @@ export const updatePatientPathway = async (req, res) => {
                 ${reason ? `<p style="margin: 5px 0;"><strong>Reason:</strong> ${reason}</p>` : ''}
               </div>`;
         
-        if (pathway === 'Active Monitoring' && autoBookedAppointment) {
+        if ((pathway === 'Active Monitoring' || pathway === 'Medication') && autoBookedAppointment) {
           const aptDate = new Date(autoBookedAppointment.date).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
@@ -2500,7 +2500,7 @@ export const updatePatientPathway = async (req, res) => {
               <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0;">
                 <h3 style="color: #10b981; margin-top: 0;">Follow-up Appointment Scheduled</h3>
                 <p style="margin: 5px 0;"><strong>Date:</strong> ${aptDate}</p>
-                <p style="margin: 5px 0;"><strong>Time:</strong> ${autoBookedAppointment.time}</p>
+                <p style="margin: 5px 0;"><strong>Time:</strong> ${autoBookedAppointment.time || 'Flexible (no time slot - additional appointment)'}</p>
                 <p style="margin: 5px 0;"><strong>Urologist:</strong> ${autoBookedAppointment.urologistName}</p>
               </div>`;
         }
