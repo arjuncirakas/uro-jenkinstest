@@ -5880,6 +5880,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         }
                         
                         // Create a clinical note with the pathway transfer details
+                        let noteCreated = false;
                         try {
                           let transferNoteContent = '';
                           
@@ -5966,7 +5967,8 @@ ${transferDetails.additionalNotes}` : ''}
                           
                           if (noteResult.success) {
                             console.log('✅ Clinical note created successfully for pathway transfer');
-                            // Update the clinical notes list in the UI
+                            noteCreated = true;
+                            // Update the clinical notes list in the UI immediately
                             setClinicalNotes(prev => [noteResult.data, ...prev]);
                           } else {
                             console.error('❌ Failed to create clinical note for pathway transfer:', noteResult.error);
@@ -5974,6 +5976,11 @@ ${transferDetails.additionalNotes}` : ''}
                         } catch (noteError) {
                           console.error('❌ Error creating clinical note for pathway transfer:', noteError);
                           // Don't fail the transfer if note creation fails
+                        }
+                        
+                        // Small delay to ensure note is committed to database before fetching
+                        if (noteCreated) {
+                          await new Promise(resolve => setTimeout(resolve, 500));
                         }
 
                         let message = `Patient successfully transferred to ${selectedPathway}`;
@@ -6034,11 +6041,18 @@ ${transferDetails.additionalNotes}` : ''}
                         setSuccessModalAppointmentDetails(appointmentDetails);
                         setIsSuccessModalOpen(true);
                         
+                        // Refresh patient data to update pipeline with new care pathway
+                        await fetchFullPatientData();
+                        
                         // Refresh appointment check, especially important for Surgery Pathway
                         checkSurgeryAppointment();
                         
+                        // Refresh appointments and MDT meetings for pipeline
+                        await fetchAppointments();
+                        await fetchMDTMeetings();
+                        
                         // Refresh clinical notes to show the new transfer note
-                        fetchNotes();
+                        await fetchNotes();
                         
                         // Dispatch event if transferred to Surgery Pathway
                         if (selectedPathway === 'Surgery Pathway') {
