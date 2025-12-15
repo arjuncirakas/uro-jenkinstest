@@ -1215,32 +1215,19 @@ export const getTodaysAppointments = async (req, res) => {
         );
       }
       
-      // Security check: For doctors, verify returned appointments belong to them
-      // Only filter out investigation bookings and appointments with wrong urologist_id
+      // Security check: For doctors, only filter out investigation bookings
+      // SQL query already filters by urologist_id, so we trust those results
       if ((userRole === 'urologist' || userRole === 'doctor') && doctorId && result.rows.length > 0) {
         try {
-          const validRows = [];
+          const originalCount = result.rows.length;
+          // Only exclude investigation bookings - SQL query already filtered by urologist_id
+          result.rows = result.rows.filter(row => {
+            return row.type !== 'investigation' && row.type !== 'Investigation Appointment';
+          });
           
-          for (const row of result.rows) {
-            // Skip investigation bookings for doctors (they don't have urologist_id)
-            if (row.type === 'investigation' || row.type === 'Investigation Appointment') {
-              continue;
-            }
-            
-            // Only include appointments that match this doctor's ID
-            // SQL query should already filter, but this is a safety check
-            if (row.urologist_id != null && Number(row.urologist_id) === Number(doctorId)) {
-              validRows.push(row);
-            } else if (row.urologist_id != null && Number(row.urologist_id) !== Number(doctorId)) {
-              // Log security issue but don't break - SQL should have filtered this
-              console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has urologist_id ${row.urologist_id}, expected ${doctorId}`);
-            }
-          }
-          
-          result.rows = validRows;
-          console.log(`✅ [getTodaysAppointments ${requestId}] Filtered to ${validRows.length} appointments for doctor ${doctorId}`);
-        } catch (validationError) {
-          console.error(`❌ [getTodaysAppointments ${requestId}] Validation error (keeping all results):`, validationError.message);
+          console.log(`✅ [getTodaysAppointments ${requestId}] Filtered investigation bookings: ${result.rows.length} appointments remaining (from ${originalCount} total) for doctor ${doctorId}`);
+        } catch (filterError) {
+          console.error(`❌ [getTodaysAppointments ${requestId}] Filter error (keeping all results):`, filterError.message);
           // Keep original results on error
         }
       }
