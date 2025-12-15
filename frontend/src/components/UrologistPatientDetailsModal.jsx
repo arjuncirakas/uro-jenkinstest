@@ -1849,21 +1849,24 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               )}
 
               {/* Discharge Summary tab - only visible for post-op-followup patients */}
-              {patient.category === 'post-op-followup' && (
-                <button
-                  onClick={() => setActiveTab('dischargeSummary')}
-                  className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'dischargeSummary'
-                    ? 'text-teal-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                  <IoDocumentText className="mr-2" />
-                  Discharge Summary
-                  {activeTab === 'dischargeSummary' && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600"></div>
-                  )}
-                </button>
-              )}
+              {/* Discharge Summary tab - visible for post-op-followup patients and discharged patients */}
+              {(patient.category === 'post-op-followup' ||
+                (patient.carePathway && patient.carePathway.toLowerCase() === 'discharge') ||
+                (patient.pathway && patient.pathway.toLowerCase() === 'discharge')) && (
+                  <button
+                    onClick={() => setActiveTab('dischargeSummary')}
+                    className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'dischargeSummary'
+                      ? 'text-teal-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                  >
+                    <IoDocumentText className="mr-2" />
+                    Discharge Summary
+                    {activeTab === 'dischargeSummary' && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600"></div>
+                    )}
+                  </button>
+                )}
 
               {/* General Info tab - always last */}
               <button
