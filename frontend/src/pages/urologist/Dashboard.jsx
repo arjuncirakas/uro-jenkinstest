@@ -370,6 +370,11 @@ const UrologistDashboard = () => {
       }
 
       const urologistId = currentUser.id;
+      
+      // Get current urologist's name for surgeon field
+      const currentUrologistName = currentUser.first_name && currentUser.last_name
+        ? `Dr. ${currentUser.first_name} ${currentUser.last_name}`
+        : currentUser.name || 'Dr. ' + (currentUser.first_name || currentUser.last_name || 'Unknown');
 
       // Calculate date range based on surgeryView
       // Use local timezone instead of UTC to match backend behavior
@@ -467,11 +472,11 @@ const UrologistDashboard = () => {
               ? `${surgery.first_name} ${surgery.last_name}`
               : 'Unknown Patient');
           
-          // Handle urologist name
+          // Handle urologist name - prefer appointment data, fallback to current user
           const urologistName = surgery.urologistName ||
             (surgery.urologist_first_name && surgery.urologist_last_name
-              ? `${surgery.urologist_first_name} ${surgery.urologist_last_name}`
-              : 'Unknown Surgeon');
+              ? `Dr. ${surgery.urologist_first_name} ${surgery.urologist_last_name}`
+              : currentUrologistName);
 
           // Extract time - backend returns 'time' field (formatted) or 'appointmentTime'/'appointment_time'
           const appointmentTime = surgery.time || surgery.appointmentTime || surgery.appointment_time || '';
@@ -496,7 +501,6 @@ const UrologistDashboard = () => {
                         surgery.status === 'completed' ? 'green' :
                         surgery.status === 'cancelled' ? 'red' : 'blue',
             surgeon: urologistName,
-            operatingRoom: 'OR 1', // Default, can be enhanced later
             duration: 60 // Default 60 minutes, can be enhanced later
           };
         });
@@ -1585,7 +1589,7 @@ const UrologistDashboard = () => {
                               </span>
                             </div>
                             <div className="text-xs text-gray-600 mb-2">
-                              {surgery.operatingRoom} • {formatDuration(surgery.duration)}
+                              {formatDuration(surgery.duration)}
                             </div>
                           </div>
                           <IoChevronForward className="text-gray-400 text-sm flex-shrink-0" />
