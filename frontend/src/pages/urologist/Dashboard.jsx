@@ -99,16 +99,19 @@ const UrologistDashboard = () => {
         currentUrologistName = currentUser.name.replace(/^Dr\.\s*/i, '').trim();
       }
       
-      // Create variations of the name for matching
-      const nameVariations = [
-        currentUrologistName,
-        `Dr. ${currentUrologistName}`,
-        currentUrologistName.toLowerCase(),
-        `Dr. ${currentUrologistName.toLowerCase()}`
-      ].filter(Boolean);
+      console.log('🔍 Current user object:', {
+        id: currentUser.id,
+        first_name: currentUser.first_name,
+        last_name: currentUser.last_name,
+        name: currentUser.name,
+        computedName: currentUrologistName
+      });
+      
+      // Normalize current urologist name for comparison (remove "Dr.", lowercase, trim)
+      const normalizedCurrentName = currentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
       
       console.log('🔍 Fetching appointments for urologist:', currentUrologistName);
-      console.log('🔍 Name variations for matching:', nameVariations);
+      console.log('🔍 Normalized name for matching:', normalizedCurrentName);
       
       // Don't pass type parameter - get all appointments and filter by urologist name
       const result = await bookingService.getTodaysAppointments();
@@ -118,6 +121,15 @@ const UrologistDashboard = () => {
         const allAppointments = result.data.appointments || [];
         
         console.log(`📊 Total appointments received: ${allAppointments.length}`);
+        
+        if (allAppointments.length > 0) {
+          console.log('📋 Sample appointment structure:', {
+            patientName: allAppointments[0].patientName,
+            urologist: allAppointments[0].urologist,
+            time: allAppointments[0].time,
+            type: allAppointments[0].type
+          });
+        }
         
         // Filter appointments to only show those for the logged-in urologist
         // Match against the "urologist" field in the response
@@ -129,46 +141,29 @@ const UrologistDashboard = () => {
           
           // If appointment has no urologist name, exclude it
           if (!appointmentUrologistName) {
-            console.log('⚠️ Appointment has no urologist name:', appointment);
             return false;
           }
           
           // Normalize appointment urologist name (remove "Dr." prefix, trim, lowercase)
           const normalizedAppointmentName = appointmentUrologistName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
           
-          // Check if any name variation matches
-          const matches = nameVariations.some(variation => {
-            const normalizedVariation = variation.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
-            return normalizedVariation === normalizedAppointmentName;
-          });
+          // Check if names match (case-insensitive, ignoring "Dr." prefix)
+          const matches = normalizedCurrentName === normalizedAppointmentName;
           
           if (!matches) {
-            console.log(`❌ Appointment filtered out - Urologist: "${appointmentUrologistName}" doesn't match "${currentUrologistName}"`);
+            console.log(`❌ Filtered out: "${appointmentUrologistName}" (normalized: "${normalizedAppointmentName}") vs "${currentUrologistName}" (normalized: "${normalizedCurrentName}")`);
+          } else {
+            console.log(`✅ Matched: "${appointmentUrologistName}" with "${currentUrologistName}"`);
           }
           
           return matches;
         });
         
-        console.log(`✅ Filtered appointments: ${filteredAppointments.length} out of ${allAppointments.length} for urologist "${currentUrologistName}"`);
+        console.log(`✅ Final filtered appointments: ${filteredAppointments.length} out of ${allAppointments.length} for urologist "${currentUrologistName}"`);
         
-        // Debug: Show which appointments were kept
-        if (filteredAppointments.length > 0) {
-          console.log('✅ Kept appointments:', filteredAppointments.map(apt => ({
-            patient: apt.patientName,
-            urologist: apt.urologist,
-            time: apt.time
-          })));
-        }
-        
-        // Debug: Show which appointments were filtered out
-        const filteredOutIds = new Set(filteredAppointments.map(apt => apt.id));
-        const filteredOut = allAppointments.filter(apt => !filteredOutIds.has(apt.id));
-        if (filteredOut.length > 0) {
-          console.log('❌ Filtered out appointments:', filteredOut.map(apt => ({
-            patient: apt.patientName,
-            urologist: apt.urologist,
-            time: apt.time
-          })));
+        if (filteredAppointments.length === 0 && allAppointments.length > 0) {
+          console.warn('⚠️ No appointments matched! Check name matching logic.');
+          console.log('Available urologists in appointments:', [...new Set(allAppointments.map(apt => apt.urologist))]);
         }
         
         setAppointments(filteredAppointments);
