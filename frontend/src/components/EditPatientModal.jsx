@@ -256,6 +256,20 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         triageSymptoms: updatedSymptoms
       };
     });
+    
+    // Clear error when IPSS score is selected for LUTS or Nocturia
+    if (field === 'ipssScore' && value) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        if (newErrors.triageSymptoms && newErrors.triageSymptoms[`${index}_ipss`]) {
+          delete newErrors.triageSymptoms[`${index}_ipss`];
+          if (Object.keys(newErrors.triageSymptoms).length === 0) {
+            delete newErrors.triageSymptoms;
+          }
+        }
+        return newErrors;
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -263,6 +277,26 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
     
     setIsSubmitting(true);
     setErrors({});
+    
+    // Client-side validation for IPSS score
+    const validationErrors = {};
+    if (formData.triageSymptoms && formData.triageSymptoms.length > 0) {
+      const symptomErrors = {};
+      formData.triageSymptoms.forEach((symptom, index) => {
+        if ((symptom.name === 'LUTS' || symptom.name === 'Nocturia') && !symptom.ipssScore) {
+          symptomErrors[`${index}_ipss`] = `IPSS score is required for ${symptom.name}`;
+        }
+      });
+      if (Object.keys(symptomErrors).length > 0) {
+        validationErrors.triageSymptoms = symptomErrors;
+      }
+    }
+    
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setIsSubmitting(false);
+      return;
+    }
     
     try {
       // Helper function to convert date to ISO format
@@ -330,7 +364,29 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         if (result.details) {
           const apiErrors = {};
           result.details.forEach(error => {
-            apiErrors[error.field] = error.message;
+            // Handle triageSymptoms errors specially
+            if (error.field === 'triageSymptoms') {
+              // Try to parse which symptom needs IPSS score from the error message
+              const message = error.message || '';
+              if (message.includes('IPSS score is required')) {
+                // Find the symptom that needs IPSS score
+                if (formData.triageSymptoms && formData.triageSymptoms.length > 0) {
+                  if (!apiErrors.triageSymptoms) {
+                    apiErrors.triageSymptoms = {};
+                  }
+                  formData.triageSymptoms.forEach((symptom, index) => {
+                    if ((symptom.name === 'LUTS' || symptom.name === 'Nocturia') && !symptom.ipssScore) {
+                      apiErrors.triageSymptoms[`${index}_ipss`] = message;
+                    }
+                  });
+                }
+              } else {
+                // Generic triageSymptoms error
+                apiErrors[error.field] = error.message;
+              }
+            } else {
+              apiErrors[error.field] = error.message;
+            }
           });
           setErrors(apiErrors);
         } else {
@@ -1104,17 +1160,19 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                         
                         <div className="space-y-4">
                           <div className={`grid gap-4 ${
-                            symptomName === 'LUTS'
+                            symptomName === 'LUTS' || symptomName === 'Nocturia'
                               ? 'grid-cols-1 md:grid-cols-2' 
                               : 'grid-cols-1'
                           }`}>
-                            {symptomName === 'LUTS' && (
+                            {(symptomName === 'LUTS' || symptomName === 'Nocturia') && (
                               <div className="relative mb-3">
                                 <select
                                   value={ipssScore}
                                   onChange={(e) => handleTriageSymptomFieldChange(index, 'ipssScore', e.target.value)}
                                   className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                                    ipssScore
+                                    errors.triageSymptoms && errors.triageSymptoms[`${index}_ipss`]
+                                      ? 'border-red-500 focus:border-red-500 bg-red-50'
+                                      : ipssScore
                                       ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
                                       : 'border-gray-300 focus:border-teal-500 bg-teal-50'
                                   } motion-reduce:transition-none`}
@@ -1131,11 +1189,14 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                                       : 'text-gray-500'
                                   } peer-focus:text-teal-600 motion-reduce:transition-none`}
                                 >
-                                  IPSS Score
+                                  IPSS Score <span className="text-red-500">*</span>
                                 </label>
                                 <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${
                                   ipssScore ? 'text-teal-500' : 'text-gray-400'
                                 }`} />
+                                {errors.triageSymptoms && errors.triageSymptoms[`${index}_ipss`] && (
+                                  <p className="text-xs text-red-500 mt-1">{errors.triageSymptoms[`${index}_ipss`]}</p>
+                                )}
                               </div>
                             )}
 

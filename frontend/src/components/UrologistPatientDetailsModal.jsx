@@ -1268,9 +1268,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   // Handle Escape key with unsaved changes check
   const [showConfirmModal, closeConfirmModal] = useEscapeKey(onClose, isOpen, hasUnsavedChanges, handleSaveChanges);
 
-  if (!isOpen || !patient) return null;
-
   // Transform MDT meetings data to match the UI format
+  // This must be before the early return to follow Rules of Hooks
   const transformedMdtNotes = useMemo(() => {
     if (!mdtMeetings || mdtMeetings.length === 0) return [];
     
@@ -1363,6 +1362,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       };
     });
   }, [mdtMeetings]);
+
+  if (!isOpen || !patient) return null;
 
   // Sample discharge summary data
   const dischargeSummary = {
