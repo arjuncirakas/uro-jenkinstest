@@ -969,14 +969,12 @@ export const getTodaysAppointments = async (req, res) => {
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date = $1 
           AND a.appointment_type = 'urologist'
-          AND a.urologist_id = $2::integer
-          AND a.urologist_id IS NOT NULL
+          AND a.urologist_id = $2
           AND a.status != 'cancelled'
           ORDER BY a.appointment_time
         `;
-        // Ensure doctorId is an integer for proper comparison
-        queryParams.push(parseInt(doctorId, 10));
-        console.log(`📅 [getTodaysAppointments ${requestId}] Added doctorId to query params: ${parseInt(doctorId, 10)} (original: ${doctorId}, type: ${typeof doctorId})`);
+        queryParams.push(doctorId);
+        console.log(`📅 [getTodaysAppointments ${requestId}] Added doctorId to query params: ${doctorId} (type: ${typeof doctorId})`);
       } else {
         console.log(`📅 [getTodaysAppointments ${requestId}] Using unfiltered urologist query (nurse or no doctorId)`);
         query = `
@@ -1046,9 +1044,8 @@ export const getTodaysAppointments = async (req, res) => {
           FROM appointments a
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date = $1
-          AND a.urologist_id = $2::integer
+          AND a.urologist_id = $2
           AND a.status != 'cancelled'
-          AND a.urologist_id IS NOT NULL
           
           UNION ALL
           
@@ -1083,9 +1080,8 @@ export const getTodaysAppointments = async (req, res) => {
           
           ORDER BY appointment_time
         `;
-        // Ensure doctorId is an integer for proper comparison
-        queryParams.push(parseInt(doctorId, 10));
-        console.log(`📅 [getTodaysAppointments ${requestId}] Added doctorId to query params: ${parseInt(doctorId, 10)} (original: ${doctorId}, type: ${typeof doctorId})`);
+        queryParams.push(doctorId);
+        console.log(`📅 [getTodaysAppointments ${requestId}] Added doctorId to query params: ${doctorId} (type: ${typeof doctorId})`);
       } else {
         console.log(`📅 [getTodaysAppointments ${requestId}] Using unfiltered 'all' query (nurse or no doctorId)`);
         query = `
@@ -1219,83 +1215,34 @@ export const getTodaysAppointments = async (req, res) => {
         );
       }
       
-      // CRITICAL: Additional validation - For doctors, verify ALL returned appointments belong to them
-      // This is a security check to ensure no appointments leak between doctors
-      // Note: The SQL query should already filter correctly, but this is a double-check
+      // Security check: For doctors, verify returned appointments belong to them
+      // Only filter out investigation bookings and appointments with wrong urologist_id
       if ((userRole === 'urologist' || userRole === 'doctor') && doctorId && result.rows.length > 0) {
         try {
-          console.log(`🔍 [getTodaysAppointments ${requestId}] Validating appointments for doctorId: ${doctorId} (type: ${typeof doctorId}), total rows: ${result.rows.length}`);
-          
-          // Filter out any appointments that don't belong to this doctor
           const validRows = [];
-          const invalidRows = [];
           
-          // Convert doctorId to number once
-          const docId = Number(doctorId);
-          if (isNaN(docId)) {
-            console.error(`❌ [getTodaysAppointments ${requestId}] ERROR: Invalid doctorId: ${doctorId}, cannot validate`);
-            // Don't filter if doctorId is invalid - let SQL query handle it
-          } else {
-            for (const row of result.rows) {
-              // Investigation bookings don't have urologist_id, exclude them from doctor's view
-              if (row.type === 'investigation' || row.type === 'Investigation Appointment') {
-                console.log(`🔍 [getTodaysAppointments ${requestId}] Skipping investigation booking: ${row.id}`);
-                continue; // Don't include investigation bookings for doctors
-              }
-              
-              const rowUrologistId = row.urologist_id;
-              
-              // Exclude appointments without urologist_id
-              if (rowUrologistId === null || rowUrologistId === undefined) {
-                console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has no urologist_id, excluding`);
-                invalidRows.push({ id: row.id, reason: 'no_urologist_id', urologist_id: rowUrologistId });
-                continue;
-              }
-              
-              // Compare as numbers - handle both string and number types
-              const rowId = Number(rowUrologistId);
-              
-              if (isNaN(rowId)) {
-                console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has invalid urologist_id: ${rowUrologistId} (type: ${typeof rowUrologistId})`);
-                invalidRows.push({ id: row.id, reason: 'invalid_id', urologist_id: rowUrologistId, doctorId: doctorId });
-                continue;
-              }
-              
-              // Strict comparison - must match exactly
-              if (rowId === docId) {
-                validRows.push(row);
-                console.log(`✅ [getTodaysAppointments ${requestId}] Valid appointment: ${row.id} for patient ${row.first_name} ${row.last_name}, urologist_id: ${rowId} matches doctorId: ${docId}`);
-              } else {
-                console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY: Appointment ${row.id} belongs to doctor ${rowId}, not ${docId}`);
-                console.error(`❌ [getTodaysAppointments ${requestId}] Patient: ${row.first_name} ${row.last_name}, Appointment urologist_id: ${rowId}, Expected: ${docId}`);
-                invalidRows.push({ 
-                  id: row.id, 
-                  reason: 'wrong_doctor', 
-                  urologist_id: rowId, 
-                  expected: docId,
-                  patient: `${row.first_name} ${row.last_name}`
-                });
-              }
+          for (const row of result.rows) {
+            // Skip investigation bookings for doctors (they don't have urologist_id)
+            if (row.type === 'investigation' || row.type === 'Investigation Appointment') {
+              continue;
             }
             
-            if (invalidRows.length > 0) {
-              console.error(`❌ [getTodaysAppointments ${requestId}] SECURITY ISSUE: Found ${invalidRows.length} appointments not belonging to doctor ${doctorId}`);
-              console.error(`❌ [getTodaysAppointments ${requestId}] Invalid appointments:`, JSON.stringify(invalidRows, null, 2));
+            // Only include appointments that match this doctor's ID
+            // SQL query should already filter, but this is a safety check
+            if (row.urologist_id != null && Number(row.urologist_id) === Number(doctorId)) {
+              validRows.push(row);
+            } else if (row.urologist_id != null && Number(row.urologist_id) !== Number(doctorId)) {
+              // Log security issue but don't break - SQL should have filtered this
+              console.warn(`⚠️ [getTodaysAppointments ${requestId}] Appointment ${row.id} has urologist_id ${row.urologist_id}, expected ${doctorId}`);
             }
-            
-            // Replace result.rows with only valid appointments
-            result.rows = validRows;
-            console.log(`✅ [getTodaysAppointments ${requestId}] Validation complete: ${validRows.length} valid appointments, ${invalidRows.length} invalid appointments filtered out`);
           }
           
+          result.rows = validRows;
+          console.log(`✅ [getTodaysAppointments ${requestId}] Filtered to ${validRows.length} appointments for doctor ${doctorId}`);
         } catch (validationError) {
-          console.error(`❌ [getTodaysAppointments ${requestId}] Error during validation (non-fatal):`, validationError.message);
-          console.error(`❌ [getTodaysAppointments ${requestId}] Validation error stack:`, validationError.stack);
-          // On validation error, don't filter - let the SQL query results pass through
-          console.warn(`⚠️ [getTodaysAppointments ${requestId}] Validation error occurred, keeping original results`);
+          console.error(`❌ [getTodaysAppointments ${requestId}] Validation error (keeping all results):`, validationError.message);
+          // Keep original results on error
         }
-      } else if ((userRole === 'urologist' || userRole === 'doctor') && !doctorId) {
-        console.warn(`⚠️ [getTodaysAppointments ${requestId}] Doctor/urologist user but no doctorId - cannot validate appointments`);
       }
       if (result.rows.length > 0) {
         console.log(`📅 [getTodaysAppointments ${requestId}] Sample appointment data:`, {
@@ -3430,4 +3377,5 @@ export const sendBulkAppointmentReminders = async (req, res) => {
     });
   }
 };
+
 
