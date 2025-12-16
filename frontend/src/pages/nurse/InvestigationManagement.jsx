@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FiEye, FiPlus } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
@@ -161,10 +161,76 @@ const InvestigationManagement = () => {
     };
   }, []);
 
+  // Ensure main test requests (MRI, TRUS, Biopsy) exist for a patient
+  const ensureMainTestRequests = useCallback(async (patientId) => {
+    if (!patientId) return;
+
+    try {
+      // Fetch existing investigation requests for this patient
+      const requestsResult = await investigationService.getInvestigationRequests(patientId);
+      const existingRequests = requestsResult.success 
+        ? (Array.isArray(requestsResult.data) 
+            ? requestsResult.data 
+            : (requestsResult.data?.requests || []))
+        : [];
+
+      const mainTests = ['MRI', 'TRUS', 'Biopsy'];
+      const testsToCreate = [];
+
+      // Check which tests need to be created
+      for (const testName of mainTests) {
+        const testNameUpper = testName.toUpperCase();
+        const existingRequest = existingRequests.find(req => {
+          const reqName = (req.investigationName || req.investigation_name || '').toUpperCase();
+          return reqName === testNameUpper || reqName.includes(testNameUpper) || testNameUpper.includes(reqName);
+        });
+
+        if (!existingRequest) {
+          testsToCreate.push(testName);
+        }
+      }
+
+      // Create missing investigation requests
+      if (testsToCreate.length > 0) {
+        console.log('🔍 InvestigationManagement: Auto-creating investigation requests for:', testsToCreate, 'for patient:', patientId);
+
+        for (const testName of testsToCreate) {
+          try {
+            const result = await investigationService.createInvestigationRequest(patientId, {
+              investigationType: 'clinical_investigation',
+              testNames: [testName],
+              priority: 'routine',
+              notes: 'Automatically created when investigation appointment was booked',
+              scheduledDate: null, // Don't set a date - this makes it a request, not an appointment
+              scheduledTime: null
+            });
+
+            if (result.success) {
+              console.log(`✅ Auto-created investigation request for ${testName}`);
+            } else {
+              console.error(`❌ Failed to auto-create investigation request for ${testName}:`, result.error);
+            }
+          } catch (error) {
+            console.error(`❌ Exception auto-creating investigation request for ${testName}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring main test requests:', error);
+    }
+  }, []);
+
   // Listen for investigation booked events to refresh data
   useEffect(() => {
-    const handleInvestigationBooked = (event) => {
+    const handleInvestigationBooked = async (event) => {
       console.log('Investigation booked event received:', event.detail);
+      const { patientId } = event.detail || {};
+      
+      // Automatically create investigation requests for MRI, TRUS, and Biopsy if they don't exist
+      if (patientId) {
+        await ensureMainTestRequests(patientId);
+      }
+      
       // Show brief loading indicator and refresh investigations data
       setLoadingInvestigations(true);
       fetchInvestigations();
@@ -175,7 +241,7 @@ const InvestigationManagement = () => {
     return () => {
       window.removeEventListener('investigationBooked', handleInvestigationBooked);
     };
-  }, []);
+  }, [ensureMainTestRequests]);
 
   // Listen for PSA update events to refresh investigations data
   useEffect(() => {
