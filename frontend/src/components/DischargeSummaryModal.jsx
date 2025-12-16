@@ -174,8 +174,22 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
       type: doc.type
     }));
 
+    // Calculate admission date (hidden from user but required by backend)
+    let admissionDate = '';
+    if (patient?.createdAt || patient?.created_at) {
+      const date = new Date(patient.createdAt || patient.created_at);
+      if (!isNaN(date.getTime())) {
+        admissionDate = date.toISOString().split('T')[0];
+      }
+    }
+    // Fallback to today if no creation date
+    if (!admissionDate) {
+      admissionDate = new Date().toISOString().split('T')[0];
+    }
+
     onSubmit({
       ...formData,
+      admissionDate: admissionDate,
       documents: documentMetadata,
       additionalNotes: formData.additionalNotes
     });
