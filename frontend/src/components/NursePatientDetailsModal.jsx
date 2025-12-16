@@ -858,18 +858,20 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
   // Fetch investigation results
   const fetchInvestigations = useCallback(async () => {
-    if (!patient?.id) {
+    // Get patient ID from various possible field names
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) {
       console.log('❌ NursePatientDetailsModal: fetchInvestigations - No patient ID');
       return;
     }
 
-    console.log('🔍 NursePatientDetailsModal: Fetching investigations for patient ID:', patient.id);
+    console.log('🔍 NursePatientDetailsModal: Fetching investigations for patient ID:', patientId);
     setLoadingInvestigations(true);
     setInvestigationsError(null);
 
     try {
       // Fetch all investigation results
-      const allResults = await investigationService.getInvestigationResults(patient.id);
+      const allResults = await investigationService.getInvestigationResults(patientId);
       console.log('🔍 NursePatientDetailsModal: Investigation results response:', allResults);
 
       if (allResults.success) {
@@ -922,58 +924,50 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     } finally {
       setLoadingInvestigations(false);
     }
-  }, [patient?.id]);
-
-  const fetchInvestigationRequests = useCallback(async () => {
-    if (!patient?.id) {
-      console.log('❌ NursePatientDetailsModal: fetchInvestigationRequests - No patient ID');
-      return;
-    }
-
-    console.log('🔍 NursePatientDetailsModal: Fetching investigation requests for patient ID:', patient.id);
-    setLoadingRequests(true);
-    setRequestsError(null);
-
-    try {
-      const result = await investigationService.getInvestigationRequests(patient.id);
-      console.log('🔍 NursePatientDetailsModal: Investigation requests response:', result);
-
-      if (result.success) {
-        const requests = Array.isArray(result.data)
-          ? result.data
-          : (result.data?.requests || []);
-
-        console.log('✅ NursePatientDetailsModal: Parsed investigation requests:', requests);
-        console.log('✅ Number of requests:', requests.length);
-        setInvestigationRequests(requests);
-
-        // Automatically create investigation requests for MRI, TRUS, and Biopsy if patient has investigations
-        // Call this after setting requests to avoid race conditions
-        ensureMainTestRequests(requests).catch(error => {
-          console.error('Error ensuring main test requests:', error);
-        });
-      } else {
-        setRequestsError(result.error || 'Failed to fetch investigation requests');
-        console.error('❌ NursePatientDetailsModal: Error fetching investigation requests:', result.error);
-      }
-    } catch (error) {
-      setRequestsError('Failed to fetch investigation requests');
-      console.error('❌ NursePatientDetailsModal: Exception fetching investigation requests:', error);
-    } finally {
-      setLoadingRequests(false);
-    }
-  }, [patient?.id]);
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
 
   // Ensure main test requests (MRI, TRUS, Biopsy) exist for patients with investigations
   const ensureMainTestRequests = useCallback(async (existingRequests) => {
-    if (!patient?.id) return;
+    // Get patient ID from various possible field names
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) return;
 
     // Check if patient has investigation data (mri, trus, biopsy status)
-    // These come from the investigation management page
+    // These come from the investigation management page or PatientList
+    // Also check if investigation requests already exist for these tests
     const hasInvestigationData = patient.mri || patient.trus || patient.biopsy ||
       patient.mriStatus || patient.trusStatus || patient.biopsyStatus;
+    
+    // Check if MRI, TRUS, or Biopsy requests already exist
+    const hasExistingRequests = existingRequests && existingRequests.some(req => {
+      const name = (req.investigationName || req.investigation_name || '').toUpperCase();
+      return name === 'MRI' || name === 'TRUS' || name === 'BIOPSY';
+    });
 
-    if (!hasInvestigationData) return;
+    console.log('🔍 ensureMainTestRequests: Checking investigation data', {
+      patientId,
+      hasInvestigationData,
+      hasExistingRequests,
+      mri: patient.mri,
+      trus: patient.trus,
+      biopsy: patient.biopsy,
+      mriStatus: patient.mriStatus,
+      trusStatus: patient.trusStatus,
+      biopsyStatus: patient.biopsyStatus,
+      existingRequestsCount: existingRequests?.length || 0
+    });
+
+    // If requests already exist, no need to create them
+    if (hasExistingRequests) {
+      console.log('✅ ensureMainTestRequests: Investigation requests already exist, skipping creation');
+      return;
+    }
+
+    // If no investigation data and no existing requests, skip
+    if (!hasInvestigationData) {
+      console.log('❌ ensureMainTestRequests: No investigation data found and no existing requests, skipping');
+      return;
+    }
 
     const mainTests = [
       { name: 'MRI', key: 'mri' },
@@ -1010,7 +1004,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
       for (const testName of testsToCreate) {
         try {
-          const result = await investigationService.createInvestigationRequest(patient.id, {
+          const result = await investigationService.createInvestigationRequest(patientId, {
             investigationType: 'clinical_investigation',
             testNames: [testName],
             priority: 'routine',
@@ -1032,7 +1026,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       // Refresh investigation requests after creating
       if (testsToCreate.length > 0) {
         setTimeout(async () => {
-          const refreshResult = await investigationService.getInvestigationRequests(patient.id);
+          const refreshResult = await investigationService.getInvestigationRequests(patientId);
           if (refreshResult.success) {
             const requests = Array.isArray(refreshResult.data)
               ? refreshResult.data
@@ -1042,7 +1036,49 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         }, 500);
       }
     }
-  }, [patient?.id, patient?.mri, patient?.trus, patient?.biopsy, patient?.mriStatus, patient?.trusStatus, patient?.biopsyStatus]);
+  }, [patient?.id, patient?.patientId, patient?.patient_id, patient?.mri, patient?.trus, patient?.biopsy, patient?.mriStatus, patient?.trusStatus, patient?.biopsyStatus]);
+
+  const fetchInvestigationRequests = useCallback(async () => {
+    // Get patient ID from various possible field names
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) {
+      console.log('❌ NursePatientDetailsModal: fetchInvestigationRequests - No patient ID');
+      return;
+    }
+
+    console.log('🔍 NursePatientDetailsModal: Fetching investigation requests for patient ID:', patientId);
+    setLoadingRequests(true);
+    setRequestsError(null);
+
+    try {
+      const result = await investigationService.getInvestigationRequests(patientId);
+      console.log('🔍 NursePatientDetailsModal: Investigation requests response:', result);
+
+      if (result.success) {
+        const requests = Array.isArray(result.data)
+          ? result.data
+          : (result.data?.requests || []);
+
+        console.log('✅ NursePatientDetailsModal: Parsed investigation requests:', requests);
+        console.log('✅ Number of requests:', requests.length);
+        setInvestigationRequests(requests);
+
+        // Automatically create investigation requests for MRI, TRUS, and Biopsy if patient has investigations
+        // Call this after setting requests to avoid race conditions
+        ensureMainTestRequests(requests).catch(error => {
+          console.error('Error ensuring main test requests:', error);
+        });
+      } else {
+        setRequestsError(result.error || 'Failed to fetch investigation requests');
+        console.error('❌ NursePatientDetailsModal: Error fetching investigation requests:', result.error);
+      }
+    } catch (error) {
+      setRequestsError('Failed to fetch investigation requests');
+      console.error('❌ NursePatientDetailsModal: Exception fetching investigation requests:', error);
+    } finally {
+      setLoadingRequests(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id, ensureMainTestRequests]);
 
   // Handle investigation success
   const handleInvestigationSuccess = async (message, skipModal = false) => {
@@ -1560,8 +1596,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   // Load notes and investigations when patient changes - MUST be before early return
   useEffect(() => {
     console.log('🔍 NursePatientDetailsModal: useEffect triggered, isOpen:', isOpen, 'patient:', patient);
-    if (isOpen && patient?.id) {
-      console.log('✅ NursePatientDetailsModal: Fetching notes and investigations for patient ID:', patient.id);
+    // Get patient ID from various possible field names
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    console.log('🔍 NursePatientDetailsModal: Patient ID extracted:', patientId, 'from patient object:', patient);
+    
+    if (isOpen && patientId) {
+      console.log('✅ NursePatientDetailsModal: Fetching notes and investigations for patient ID:', patientId);
       fetchFullPatientData();
       fetchNotes();
       fetchInvestigations();
@@ -1573,9 +1613,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         fetchDischargeSummary();
       }
     } else {
-      console.log('❌ NursePatientDetailsModal: Cannot fetch data - isOpen:', isOpen, 'patient?.id:', patient?.id);
+      console.log('❌ NursePatientDetailsModal: Cannot fetch data - isOpen:', isOpen, 'patientId:', patientId);
     }
-  }, [isOpen, patient?.id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchAppointments, fetchDischargeSummary, isPostOpFollowupPatient]);
+  }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchAppointments, fetchDischargeSummary, isPostOpFollowupPatient]);
 
   // Listen for image viewer events
   useEffect(() => {

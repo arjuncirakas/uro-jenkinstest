@@ -7,6 +7,8 @@ import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import SuccessModal from '../../components/modals/SuccessModal';
 import ErrorModal from '../../components/modals/ErrorModal';
 import { patientService } from '../../services/patientService';
+import { investigationService } from '../../services/investigationService';
+import { bookingService } from '../../services/bookingService';
 
 const PatientList = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -270,20 +272,112 @@ const PatientList = () => {
     // Fetch full patient details to ensure all fields are available
     if (patient.id) {
       try {
-        const result = await patientService.getPatientById(patient.id);
-        if (result.success && result.data) {
-          setSelectedPatient({
-            ...result.data,
-            fullName: result.data.fullName || `${result.data.firstName || result.data.first_name || ''} ${result.data.lastName || result.data.last_name || ''}`.trim()
-          });
+        const [patientResult, investigationRequestsResult, investigationBookingsResult] = await Promise.all([
+          patientService.getPatientById(patient.id),
+          investigationService.getInvestigationRequests(patient.id),
+          bookingService.getPatientInvestigationBookings(patient.id).catch(() => ({ success: false, data: { bookings: [] } }))
+        ]);
+        
+        let patientData = null;
+        if (patientResult.success && patientResult.data) {
+          patientData = {
+            ...patientResult.data,
+            id: patientResult.data.id || patient.id, // Ensure id is set
+            fullName: patientResult.data.fullName || `${patientResult.data.firstName || patientResult.data.first_name || ''} ${patientResult.data.lastName || patientResult.data.last_name || ''}`.trim()
+          };
         } else {
           // Fallback to patient data from list
-          setSelectedPatient(patient);
+          patientData = {
+            ...patient,
+            id: patient.id // Ensure id is set
+          };
         }
+        
+        // Check investigation requests to determine MRI, TRUS, Biopsy statuses
+        if (investigationRequestsResult.success && investigationRequestsResult.data) {
+          const requests = Array.isArray(investigationRequestsResult.data) 
+            ? investigationRequestsResult.data 
+            : (investigationRequestsResult.data.requests || []);
+          
+          console.log('🔍 PatientList: Investigation requests found:', requests.length);
+          console.log('🔍 PatientList: Request names:', requests.map(r => r.investigationName || r.investigation_name));
+          
+          // Find MRI, TRUS, and Biopsy requests and get their statuses
+          const mriRequest = requests.find(req => {
+            const name = (req.investigationName || req.investigation_name || '').toUpperCase();
+            return name === 'MRI';
+          });
+          const trusRequest = requests.find(req => {
+            const name = (req.investigationName || req.investigation_name || '').toUpperCase();
+            return name === 'TRUS';
+          });
+          const biopsyRequest = requests.find(req => {
+            const name = (req.investigationName || req.investigation_name || '').toUpperCase();
+            return name === 'BIOPSY';
+          });
+          
+          console.log('🔍 PatientList: Found requests - MRI:', !!mriRequest, 'TRUS:', !!trusRequest, 'Biopsy:', !!biopsyRequest);
+          
+          // Set investigation statuses if requests exist, using actual status from request
+          // Always set to 'pending' if request exists but no status, so modal knows to show them
+          if (mriRequest || trusRequest || biopsyRequest) {
+            patientData.mri = mriRequest ? (mriRequest.status || 'pending') : 'pending';
+            patientData.trus = trusRequest ? (trusRequest.status || 'pending') : 'pending';
+            patientData.biopsy = biopsyRequest ? (biopsyRequest.status || 'pending') : 'pending';
+            patientData.mriStatus = mriRequest ? (mriRequest.status || 'pending') : 'pending';
+            patientData.trusStatus = trusRequest ? (trusRequest.status || 'pending') : 'pending';
+            patientData.biopsyStatus = biopsyRequest ? (biopsyRequest.status || 'pending') : 'pending';
+            console.log('✅ PatientList: Set investigation statuses:', {
+              mri: patientData.mri,
+              trus: patientData.trus,
+              biopsy: patientData.biopsy
+            });
+          } else {
+            // Check if patient has investigation bookings (appointments) - these might have doctor names
+            // If they have any investigation bookings, we should show MRI/TRUS/Biopsy
+            const bookings = investigationBookingsResult.success && investigationBookingsResult.data?.bookings
+              ? investigationBookingsResult.data.bookings
+              : [];
+            
+            console.log('🔍 PatientList: Checking investigation bookings:', bookings.length);
+            
+            if (bookings.length > 0 || requests.length > 0) {
+              // Patient has investigation bookings or requests, so they should have MRI/TRUS/Biopsy tests
+              // Set statuses to 'pending' so the modal will create the requests if they don't exist
+              console.log('⚠️ PatientList: Patient has investigation bookings/requests. Setting MRI/TRUS/Biopsy statuses to pending.');
+              patientData.mri = 'pending';
+              patientData.trus = 'pending';
+              patientData.biopsy = 'pending';
+              patientData.mriStatus = 'pending';
+              patientData.trusStatus = 'pending';
+              patientData.biopsyStatus = 'pending';
+            }
+          }
+        } else {
+          console.log('❌ PatientList: Failed to fetch investigation requests or no data');
+          // Still check investigation bookings as fallback
+          const bookings = investigationBookingsResult.success && investigationBookingsResult.data?.bookings
+            ? investigationBookingsResult.data.bookings
+            : [];
+          if (bookings.length > 0) {
+            console.log('⚠️ PatientList: No requests but has bookings. Setting MRI/TRUS/Biopsy statuses to pending.');
+            patientData.mri = 'pending';
+            patientData.trus = 'pending';
+            patientData.biopsy = 'pending';
+            patientData.mriStatus = 'pending';
+            patientData.trusStatus = 'pending';
+            patientData.biopsyStatus = 'pending';
+          }
+        }
+        
+        setSelectedPatient(patientData);
       } catch (error) {
         console.error('Error fetching patient details:', error);
         // Fallback to patient data from list
-        setSelectedPatient(patient);
+        setSelectedPatient({
+          ...patient,
+          id: patient.id // Ensure id is set
+        });
       }
     } else {
       setSelectedPatient(patient);
