@@ -7,20 +7,21 @@
  * @param {Array} mdtMeetings - Array of MDT meetings for patient
  * @returns {Object} - { currentStage: string, stageIndex: number, stages: Array }
  */
+/**
+ * Determine patient's current stage in the clinical pathway
+ * Stages: Referrals → OPD → MDT → Surgery/Medication/Monitoring → Discharge
+ * 
+ * @param {Object} patient - Patient object with pathway and status information
+ * @param {Array} appointments - Array of patient appointments
+ * @param {Array} mdtMeetings - Array of MDT meetings for patient
+ * @returns {Object} - { currentStage: string, stageIndex: number, stages: Array }
+ */
 export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings = []) => {
-  const stages = [
-    { id: 'referral', name: 'Referral', icon: 'referral', color: 'blue' },
-    { id: 'opd', name: 'OPD Queue', icon: 'opd', color: 'indigo' },
-    { id: 'mdt', name: 'MDT', icon: 'mdt', color: 'purple' },
-    { id: 'surgery', name: 'Surgery', icon: 'surgery', color: 'orange' },
-    { id: 'discharge', name: 'Discharge', icon: 'discharge', color: 'green' }
-  ];
-
   // Ensure appointments and mdtMeetings are always arrays
   const appointmentsArray = Array.isArray(appointments) ? appointments : [];
   const mdtMeetingsArray = Array.isArray(mdtMeetings) ? mdtMeetings : [];
 
-  const carePathway = patient?.carePathway || patient?.care_pathway || '';
+  const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
   const status = patient?.status || '';
   const hasSurgeryAppointment = appointmentsArray.some(apt => {
     const aptType = (apt.appointmentType || apt.type || apt.appointment_type || '').toLowerCase();
@@ -33,12 +34,34 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
     return meetingDate >= new Date();
   });
 
+  // Define base stages
+  const baseStages = [
+    { id: 'referral', name: 'Referral', icon: 'referral', color: 'blue' },
+    { id: 'opd', name: 'OPD Queue', icon: 'opd', color: 'indigo' },
+    { id: 'mdt', name: 'MDT', icon: 'mdt', color: 'purple' },
+  ];
+
+  // Determine the treatment stage (4th stage) based on pathway
+  let treatmentStage = { id: 'surgery', name: 'Surgery', icon: 'surgery', color: 'orange' };
+
+  if (carePathway === 'Medication') {
+    treatmentStage = { id: 'medication', name: 'Medication', icon: 'medication', color: 'orange' };
+  } else if (carePathway === 'Active Monitoring' || carePathway === 'Active Surveillance') {
+    treatmentStage = { id: 'monitoring', name: 'Active Monitoring', icon: 'monitoring', color: 'teal' };
+  }
+
+  const stages = [
+    ...baseStages,
+    treatmentStage,
+    { id: 'discharge', name: 'Discharge', icon: 'discharge', color: 'green' }
+  ];
+
   let currentStage = 'referral';
   let stageIndex = 0;
 
   // Determine current stage based on care pathway and status
-  // Priority order: Discharge > Post-op > Surgery > Monitoring/Medication > MDT > OPD > Referral
-  
+  // Priority order: Discharge > Post-op > Surgery/Medication/Monitoring > MDT > OPD > Referral
+
   if (status === 'Discharged' || carePathway === 'Discharge') {
     // Discharged patients
     currentStage = 'discharge';
@@ -51,14 +74,21 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
     // Patients scheduled for or in surgery pathway
     currentStage = 'surgery';
     stageIndex = 3;
-  } else if (carePathway === 'Active Monitoring' || carePathway === 'Medication' || carePathway === 'Radiotherapy') {
-    // Ongoing care pathways - these come after MDT has been completed
-    // Show MDT as completed (not active) to indicate they've progressed past MDT to ongoing care
-    // We'll mark MDT as completed in the return logic below
-    currentStage = 'mdt';
-    stageIndex = 2; // Show up to MDT stage, but mark it as completed (not active)
-  } else if (hasMDTMeeting || hasUpcomingMDT || carePathway === 'Active Surveillance') {
-    // Patients with MDT meetings or in active surveillance
+  } else if (carePathway === 'Medication') {
+    // Medication pathway
+    currentStage = 'medication';
+    stageIndex = 3;
+  } else if (carePathway === 'Active Monitoring' || carePathway === 'Active Surveillance') {
+    // Active Monitoring pathway
+    currentStage = 'monitoring';
+    stageIndex = 3;
+  } else if (carePathway === 'Radiotherapy') {
+    // Radiotherapy - treat as treatment stage (using surgery slot for now or could add specific)
+    // For now mapping to surgery/treatment slot but keeping MDT logic if needed
+    currentStage = 'surgery';
+    stageIndex = 3;
+  } else if (hasMDTMeeting || hasUpcomingMDT) {
+    // Patients with MDT meetings
     currentStage = 'mdt';
     stageIndex = 2;
   } else if (carePathway === 'Investigation Pathway') {
@@ -82,38 +112,25 @@ export const getPatientPipelineStage = (patient, appointments = [], mdtMeetings 
   }
 
   // Only return stages that have been reached (completed + current)
-  const reachedStages = stages.slice(0, stageIndex + 1);
-  
-  // Special handling for ongoing care pathways (Medication, Active Monitoring, Radiotherapy)
-  // These patients have progressed past MDT, so MDT should be shown as completed, not active
-  const isOngoingCarePathway = carePathway === 'Active Monitoring' || 
-                                carePathway === 'Medication' || 
-                                carePathway === 'Radiotherapy';
-  
+  // For discharge, we show the full pipeline
+  // For others, we show up to the current stage + 1 (next step) if possible, or just current
+  // Actually, usually pipelines show the full potential path or at least the path taken.
+  // Let's show the full path constructed above.
+
   return {
     currentStage,
     stageIndex,
-    stages: reachedStages.map((stage, index) => {
-      // For ongoing care pathways, mark MDT as completed (not active) if it's the last stage
-      const isLastStage = index === reachedStages.length - 1;
-      const isMDTStage = stage.id === 'mdt';
-      
-      if (isOngoingCarePathway && isLastStage && isMDTStage) {
-        // Mark MDT as completed for ongoing care patients (they've progressed past MDT)
-        return {
-          ...stage,
-          isActive: false,
-          isCompleted: true,
-          isPending: false
-        };
-      }
-      
-      // Default logic: last stage is active, others are completed
+    stages: stages.map((stage, index) => {
+      // Determine status of each stage
+      const isCurrent = index === stageIndex;
+      const isCompleted = index < stageIndex;
+      const isPending = index > stageIndex;
+
       return {
         ...stage,
-        isActive: isLastStage,
-        isCompleted: !isLastStage,
-        isPending: false
+        isActive: isCurrent,
+        isCompleted: isCompleted,
+        isPending: isPending
       };
     })
   };
