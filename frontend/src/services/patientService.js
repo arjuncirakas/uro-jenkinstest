@@ -55,7 +55,22 @@ export const patientService = {
   getPatients: async (params = {}) => {
     console.log('🔍 patientService: getPatients called with params:', params);
     try {
-      const response = await apiClient.get('/patients/list', { params });
+      // Extract cache-busting parameter if present
+      const { _t, ...queryParams } = params;
+      const config = {
+        params: queryParams
+      };
+      
+      // If cache-busting timestamp is present, add cache-control headers to force fresh data
+      if (_t) {
+        config.headers = {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        };
+      }
+      
+      const response = await apiClient.get('/patients/list', config);
       console.log('🔍 patientService: getPatients response:', response);
       console.log('🔍 patientService: response.data:', response.data);
       console.log('🔍 patientService: response.data.data:', response.data.data);

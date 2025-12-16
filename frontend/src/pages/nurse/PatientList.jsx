@@ -41,7 +41,7 @@ const PatientList = () => {
   }, [currentPage]);
 
   // Fetch patients from API
-  const fetchPatients = async (page = currentPage) => {
+  const fetchPatients = async (page = currentPage, forceRefresh = false) => {
     setLoading(true);
     setError(null);
     
@@ -56,6 +56,11 @@ const PatientList = () => {
       // Add urologist filter if not 'all'
       if (selectedUrologist !== 'all') {
         params.assignedUrologist = selectedUrologist;
+      }
+      
+      // Add cache-busting parameter when forcing refresh (e.g., after PSA updates)
+      if (forceRefresh) {
+        params._t = Date.now(); // Timestamp to bypass cache
       }
       
       const result = await patientService.getPatients(params);
@@ -139,10 +144,13 @@ const PatientList = () => {
 
   // Listen for PSA update events to refresh patient list
   useEffect(() => {
-    const handlePSAUpdated = (event) => {
+    const handlePSAUpdated = async (event) => {
       console.log('PSA updated event received, refreshing patient list:', event.detail);
+      // Add a small delay to ensure database update is complete (especially important in production)
+      await new Promise(resolve => setTimeout(resolve, 500));
       // Use ref to get the latest currentPage value (avoids stale closure)
-      fetchPatients(currentPageRef.current);
+      // Force refresh with cache-busting to ensure fresh data
+      fetchPatients(currentPageRef.current, true);
     };
 
     window.addEventListener('psaResultAdded', handlePSAUpdated);
@@ -191,10 +199,13 @@ const PatientList = () => {
 
   // Listen for patient updated event to refresh patient list
   useEffect(() => {
-    const handlePatientUpdated = (event) => {
+    const handlePatientUpdated = async (event) => {
       console.log('Patient updated event received, refreshing patient list:', event.detail);
+      // Add a small delay to ensure database update is complete (especially important in production)
+      await new Promise(resolve => setTimeout(resolve, 500));
       // Use ref to get the latest currentPage value (avoids stale closure)
-      fetchPatients(currentPageRef.current);
+      // Force refresh with cache-busting to ensure fresh data
+      fetchPatients(currentPageRef.current, true);
     };
 
     window.addEventListener('patient:updated', handlePatientUpdated);
@@ -473,12 +484,16 @@ const PatientList = () => {
                             {(() => {
                               // Use normalized PSA value (prefer latestPSA, fallback to initialPSA)
                               // Handle both camelCase and snake_case formats from different API endpoints
-                              const psaValue = patient.displayPSA || patient.latestPSA || patient.latest_psa || patient.initialPSA || patient.initial_psa || 0;
-                              const psaColor = getPSAColor(psaValue);
+                              // Only use fallback to 0 if we actually have a PSA value, otherwise use null/undefined to indicate "no data"
+                              const psaValue = patient.displayPSA || patient.latestPSA || patient.latest_psa || patient.initialPSA || patient.initial_psa || null;
+                              const hasPSAData = psaValue !== null && psaValue !== undefined && psaValue !== '';
+                              const psaColor = getPSAColor(hasPSAData ? psaValue : null);
                               return (
                                 <>
                                   <div className={`w-2 h-2 ${psaColor.dotColor} rounded-full mr-2`}></div>
-                                  <span className={psaColor.textColor}>{psaValue} ng/mL</span>
+                                  <span className={psaColor.textColor}>
+                                    {hasPSAData ? `${psaValue} ng/mL` : 'N/A'}
+                                  </span>
                                 </>
                               );
                             })()}
@@ -628,10 +643,13 @@ const PatientList = () => {
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
-        onPatientUpdated={(updatedPatient) => {
+        onPatientUpdated={async (updatedPatient) => {
           // Refresh the patient list to show updated information
+          // Add a small delay to ensure database update is complete (especially important in production)
+          await new Promise(resolve => setTimeout(resolve, 500));
           // Use ref to get the latest currentPage value (avoids stale closure)
-          fetchPatients(currentPageRef.current);
+          // Force refresh with cache-busting to ensure fresh data
+          fetchPatients(currentPageRef.current, true);
         }}
       />
 
