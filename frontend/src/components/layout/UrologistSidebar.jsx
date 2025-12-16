@@ -33,8 +33,8 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
       active: location.pathname.startsWith('/urologist/patients'),
       hasSubItems: true,
       subItems: [
-        { name: 'My Patients', icon: FaUsers, path: '/urologist/patients/my-patients', active: location.pathname === '/urologist/patients/my-patients' },
-        { name: 'New Patients', icon: FaClipboardList, path: '/urologist/patients/new', active: location.pathname === '/urologist/patients/new' },
+        { name: 'My Patients', icon: FaUsers, path: '/urologist/patients/my-patients', active: location.pathname === '/urologist/patients/my-patients', tooltip: 'Patients added by you to the system' },
+        { name: 'New Patients', icon: FaClipboardList, path: '/urologist/patients/new', active: location.pathname === '/urologist/patients/new', tooltip: 'Patients referred to you' },
         { name: 'Surgery Pathway', icon: FaProcedures, path: '/urologist/patients/surgery-pathway', active: location.pathname === '/urologist/patients/surgery-pathway' },
         { name: 'Post-op Followup', icon: FaHeartbeat, path: '/urologist/patients/post-op-followup', active: location.pathname === '/urologist/patients/post-op-followup' },
         { name: 'All Patients', icon: FaUsers, path: '/urologist/patients/all', active: location.pathname === '/urologist/patients/all' },
@@ -67,7 +67,7 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
       ${isCollapsed ? 'w-[80px]' : 'w-[280px]'} bg-white flex flex-col h-screen border-r border-gray-200
       fixed lg:static z-40 transition-all duration-300 ease-in-out
       ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-    `}>
+    `} style={{ overflow: 'visible' }}>
       {/* Logo Section */}
       <div className="p-6">
         <div className="flex items-center justify-between">
@@ -94,8 +94,13 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-4 py-2 overflow-y-auto">
-        <ul className="space-y-1">
+      <nav className="flex-1 px-4 py-2 relative" style={{ overflowY: 'auto', overflowX: 'visible', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <style>{`
+          nav::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+        <ul className="space-y-1" style={{ overflow: 'visible' }}>
           {navigationItems.map((item) => {
             const IconComponent = item.icon;
             return (
@@ -153,11 +158,12 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                                 <Link
                                   to={subItem.path}
                                   onClick={handleLinkClick}
-                                  className={`flex items-center pl-8 py-2.5 rounded-lg transition-all relative ${
+                                  className={`flex items-center pl-8 py-2.5 rounded-lg transition-all ${
                                     subItem.active
                                       ? 'bg-teal-50 text-teal-700 shadow-sm'
                                       : 'text-gray-600 hover:bg-gray-50'
                                   }`}
+                                  title={subItem.tooltip || ''}
                                 >
                                   <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
                                     subItem.active 
