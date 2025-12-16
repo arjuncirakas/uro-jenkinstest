@@ -20,17 +20,25 @@ export const exportPatientsToCSV = async (req, res) => {
     const whereConditions = [];
     const params = [];
     let paramIndex = 1;
+    let needsAppointmentJoin = false;
     
-    if (startDate) {
-      whereConditions.push(`p.created_at >= $${paramIndex}`);
-      params.push(startDate);
-      paramIndex++;
-    }
-    
-    if (endDate) {
-      whereConditions.push(`p.created_at <= $${paramIndex}`);
-      params.push(endDate);
-      paramIndex++;
+    // For OPD Queue, filter by appointment dates instead of created_at
+    if (carePathway === 'OPD Queue' && (startDate || endDate)) {
+      needsAppointmentJoin = true;
+      // Date filtering will be done in the subquery join
+    } else {
+      // For other care pathways or when no dates provided, use created_at
+      if (startDate) {
+        whereConditions.push(`p.created_at >= $${paramIndex}`);
+        params.push(startDate);
+        paramIndex++;
+      }
+      
+      if (endDate) {
+        whereConditions.push(`p.created_at <= $${paramIndex}`);
+        params.push(endDate);
+        paramIndex++;
+      }
     }
     
     if (carePathway) {
@@ -88,12 +96,87 @@ export const exportPatientsToCSV = async (req, res) => {
       });
     }
     
-    const query = `
-      SELECT ${selectFields.join(', ')}
-      FROM patients p
-      ${whereClause}
-      ORDER BY p.created_at DESC
-    `;
+    // Build query with appropriate joins for OPD Queue
+    let query;
+    if (needsAppointmentJoin) {
+      // For OPD Queue with date filters, use EXISTS to find patients with appointments in date range
+      const appointmentExistsConditions = [];
+      
+      if (startDate && endDate) {
+        appointmentExistsConditions.push(`(
+          EXISTS (
+            SELECT 1 FROM appointments a 
+            WHERE a.patient_id = p.id 
+            AND a.appointment_date IS NOT NULL 
+            AND a.appointment_date >= $${paramIndex} 
+            AND a.appointment_date <= $${paramIndex + 1}
+          ) OR EXISTS (
+            SELECT 1 FROM investigation_bookings ib 
+            WHERE ib.patient_id = p.id 
+            AND ib.scheduled_date IS NOT NULL 
+            AND ib.scheduled_date >= $${paramIndex} 
+            AND ib.scheduled_date <= $${paramIndex + 1}
+          )
+        )`);
+        params.push(startDate, endDate);
+        paramIndex += 2;
+      } else if (startDate) {
+        appointmentExistsConditions.push(`(
+          EXISTS (
+            SELECT 1 FROM appointments a 
+            WHERE a.patient_id = p.id 
+            AND a.appointment_date IS NOT NULL 
+            AND a.appointment_date >= $${paramIndex}
+          ) OR EXISTS (
+            SELECT 1 FROM investigation_bookings ib 
+            WHERE ib.patient_id = p.id 
+            AND ib.scheduled_date IS NOT NULL 
+            AND ib.scheduled_date >= $${paramIndex}
+          )
+        )`);
+        params.push(startDate);
+        paramIndex++;
+      } else if (endDate) {
+        appointmentExistsConditions.push(`(
+          EXISTS (
+            SELECT 1 FROM appointments a 
+            WHERE a.patient_id = p.id 
+            AND a.appointment_date IS NOT NULL 
+            AND a.appointment_date <= $${paramIndex}
+          ) OR EXISTS (
+            SELECT 1 FROM investigation_bookings ib 
+            WHERE ib.patient_id = p.id 
+            AND ib.scheduled_date IS NOT NULL 
+            AND ib.scheduled_date <= $${paramIndex}
+          )
+        )`);
+        params.push(endDate);
+        paramIndex++;
+      }
+      
+      if (appointmentExistsConditions.length > 0) {
+        whereConditions.push(appointmentExistsConditions.join(' AND '));
+      }
+      
+      const finalWhereClause = whereConditions.length > 0 
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+      
+      query = `
+        SELECT ${selectFields.join(', ')}
+        FROM patients p
+        ${finalWhereClause}
+        ORDER BY p.created_at DESC
+      `;
+    } else {
+      // Standard query without appointment joins
+      query = `
+        SELECT ${selectFields.join(', ')}
+        FROM patients p
+        ${whereClause}
+        ORDER BY p.created_at DESC
+      `;
+    }
     
     const result = await client.query(query, params);
     
@@ -162,17 +245,25 @@ export const exportPatientsToExcel = async (req, res) => {
     const whereConditions = [];
     const params = [];
     let paramIndex = 1;
+    let needsAppointmentJoin = false;
     
-    if (startDate) {
-      whereConditions.push(`p.created_at >= $${paramIndex}`);
-      params.push(startDate);
-      paramIndex++;
-    }
-    
-    if (endDate) {
-      whereConditions.push(`p.created_at <= $${paramIndex}`);
-      params.push(endDate);
-      paramIndex++;
+    // For OPD Queue, filter by appointment dates instead of created_at
+    if (carePathway === 'OPD Queue' && (startDate || endDate)) {
+      needsAppointmentJoin = true;
+      // Date filtering will be done in the subquery join
+    } else {
+      // For other care pathways or when no dates provided, use created_at
+      if (startDate) {
+        whereConditions.push(`p.created_at >= $${paramIndex}`);
+        params.push(startDate);
+        paramIndex++;
+      }
+      
+      if (endDate) {
+        whereConditions.push(`p.created_at <= $${paramIndex}`);
+        params.push(endDate);
+        paramIndex++;
+      }
     }
     
     if (carePathway) {
@@ -230,12 +321,87 @@ export const exportPatientsToExcel = async (req, res) => {
       });
     }
     
-    const query = `
-      SELECT ${selectFields.join(', ')}
-      FROM patients p
-      ${whereClause}
-      ORDER BY p.created_at DESC
-    `;
+    // Build query with appropriate joins for OPD Queue
+    let query;
+    if (needsAppointmentJoin) {
+      // For OPD Queue with date filters, use EXISTS to find patients with appointments in date range
+      const appointmentExistsConditions = [];
+      
+      if (startDate && endDate) {
+        appointmentExistsConditions.push(`(
+          EXISTS (
+            SELECT 1 FROM appointments a 
+            WHERE a.patient_id = p.id 
+            AND a.appointment_date IS NOT NULL 
+            AND a.appointment_date >= $${paramIndex} 
+            AND a.appointment_date <= $${paramIndex + 1}
+          ) OR EXISTS (
+            SELECT 1 FROM investigation_bookings ib 
+            WHERE ib.patient_id = p.id 
+            AND ib.scheduled_date IS NOT NULL 
+            AND ib.scheduled_date >= $${paramIndex} 
+            AND ib.scheduled_date <= $${paramIndex + 1}
+          )
+        )`);
+        params.push(startDate, endDate);
+        paramIndex += 2;
+      } else if (startDate) {
+        appointmentExistsConditions.push(`(
+          EXISTS (
+            SELECT 1 FROM appointments a 
+            WHERE a.patient_id = p.id 
+            AND a.appointment_date IS NOT NULL 
+            AND a.appointment_date >= $${paramIndex}
+          ) OR EXISTS (
+            SELECT 1 FROM investigation_bookings ib 
+            WHERE ib.patient_id = p.id 
+            AND ib.scheduled_date IS NOT NULL 
+            AND ib.scheduled_date >= $${paramIndex}
+          )
+        )`);
+        params.push(startDate);
+        paramIndex++;
+      } else if (endDate) {
+        appointmentExistsConditions.push(`(
+          EXISTS (
+            SELECT 1 FROM appointments a 
+            WHERE a.patient_id = p.id 
+            AND a.appointment_date IS NOT NULL 
+            AND a.appointment_date <= $${paramIndex}
+          ) OR EXISTS (
+            SELECT 1 FROM investigation_bookings ib 
+            WHERE ib.patient_id = p.id 
+            AND ib.scheduled_date IS NOT NULL 
+            AND ib.scheduled_date <= $${paramIndex}
+          )
+        )`);
+        params.push(endDate);
+        paramIndex++;
+      }
+      
+      if (appointmentExistsConditions.length > 0) {
+        whereConditions.push(appointmentExistsConditions.join(' AND '));
+      }
+      
+      const finalWhereClause = whereConditions.length > 0 
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+      
+      query = `
+        SELECT ${selectFields.join(', ')}
+        FROM patients p
+        ${finalWhereClause}
+        ORDER BY p.created_at DESC
+      `;
+    } else {
+      // Standard query without appointment joins
+      query = `
+        SELECT ${selectFields.join(', ')}
+        FROM patients p
+        ${whereClause}
+        ORDER BY p.created_at DESC
+      `;
+    }
     
     const result = await client.query(query, params);
     
