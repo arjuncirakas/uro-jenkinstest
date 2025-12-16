@@ -2790,13 +2790,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 const bName = (b.investigationName || b.investigation_name || '').trim().toUpperCase();
 
                                 // Use exact match only to prevent false matches (e.g., "MRI" matching "MRI SUB TEST")
-                                const aHasResults = latestOtherTests.some(result => {
-                                  const resultName = (result.testName || '').trim().toUpperCase();
+                                const aHasResults = otherTestResults.some(result => {
+                                  const resultName = (result.testName || result.test_name || '').trim().toUpperCase();
                                   return resultName === aName;
                                 });
 
-                                const bHasResults = latestOtherTests.some(result => {
-                                  const resultName = (result.testName || '').trim().toUpperCase();
+                                const bHasResults = otherTestResults.some(result => {
+                                  const resultName = (result.testName || result.test_name || '').trim().toUpperCase();
                                   return resultName === bName;
                                 });
 

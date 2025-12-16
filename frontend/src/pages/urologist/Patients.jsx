@@ -1,16 +1,24 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { IoNotificationsOutline, IoPeopleOutline } from 'react-icons/io5';
+import { IoNotificationsOutline, IoPeopleOutline, IoPersonCircleOutline } from 'react-icons/io5';
 import PatientDetailsModalWrapper from '../../components/PatientDetailsModalWrapper';
 import NotificationModal from '../../components/NotificationModal';
+import ProfileDropdown from '../../components/ProfileDropdown';
 import GlobalPatientSearch from '../../components/GlobalPatientSearch';
 import { patientService } from '../../services/patientService';
 
 const Patients = () => {
   const location = useLocation();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileButtonRef = useRef(null);
   const patientDetailsModalRef = useRef();
   const [notificationCount, setNotificationCount] = useState(0);
+  
+  // Memoized callback to close profile dropdown
+  const handleProfileClose = useCallback(() => {
+    setIsProfileOpen(false);
+  }, []);
 
   // Determine the category from the URL path
   const category = useMemo(() => {
@@ -206,6 +214,24 @@ const Patients = () => {
                   </span>
                 )}
               </button>
+            </div>
+            {/* Profile Icon */}
+            <div className="relative">
+              <button
+                ref={profileButtonRef}
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Profile"
+              >
+                <IoPersonCircleOutline className="text-2xl" />
+              </button>
+              {isProfileOpen && (
+                <ProfileDropdown
+                  isOpen={isProfileOpen}
+                  onClose={handleProfileClose}
+                  buttonRef={profileButtonRef}
+                />
+              )}
             </div>
           </div>
         </div>

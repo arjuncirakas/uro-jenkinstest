@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { FiSearch, FiCalendar, FiList, FiArrowLeft } from 'react-icons/fi';
-import { IoNotificationsOutline } from 'react-icons/io5';
+import { IoNotificationsOutline, IoPersonCircleOutline } from 'react-icons/io5';
 import NotificationModal from '../../components/NotificationModal';
+import ProfileDropdown from '../../components/ProfileDropdown';
 import Calendar from '../../components/Calendar';
 import MissedAppointmentsList from '../../components/MissedAppointmentsList';
 import DailyAppointmentsList from '../../components/DailyAppointmentsList';
@@ -11,6 +12,8 @@ import tokenService from '../../services/tokenService';
 
 const Appointments = () => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileButtonRef = useRef(null);
   const [showAllPatients, setShowAllPatients] = useState(false);
   const [currentView, setCurrentView] = useState('calendar'); // 'calendar', 'daily', or 'missed'
   const [selectedDate, setSelectedDate] = useState(null);
@@ -23,6 +26,11 @@ const Appointments = () => {
   
   // Get current urologist ID from authentication
   const currentUrologistId = tokenService.getUserId();
+  
+  // Memoized callback to close profile dropdown
+  const handleProfileClose = useCallback(() => {
+    setIsProfileOpen(false);
+  }, []);
   
   // Fetch appointments from API
   const fetchAppointments = useCallback(async () => {
@@ -211,6 +219,24 @@ const Appointments = () => {
                       </span>
                     )}
                   </button>
+                </div>
+                {/* Profile Icon */}
+                <div className="relative">
+                  <button
+                    ref={profileButtonRef}
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                    className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                    aria-label="Profile"
+                  >
+                    <IoPersonCircleOutline className="text-2xl" />
+                  </button>
+                  {isProfileOpen && (
+                    <ProfileDropdown
+                      isOpen={isProfileOpen}
+                      onClose={handleProfileClose}
+                      buttonRef={profileButtonRef}
+                    />
+                  )}
                 </div>
               </div>
             </div>
