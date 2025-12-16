@@ -218,28 +218,30 @@ export const investigationService = {
       console.log('Attempting to view file:', filePath);
       
       try {
-        // Encode the file path properly - preserve slashes but encode special characters
-        // The backend route uses :filePath(*) which matches everything after /files/
-        // We need to encode special characters but preserve path structure
-        let encodedPath = filePath;
-        if (filePath.includes('/')) {
-          // Split by '/' and encode each segment separately, then join with '/'
-          // This preserves the path structure while encoding special characters in filenames
-          const pathSegments = filePath.split('/');
+        // Normalize the file path - remove 'uploads/' prefix if present
+        // The backend middleware expects paths relative to uploads directory
+        let normalizedPath = filePath;
+        if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('uploads\\')) {
+          normalizedPath = normalizedPath.replace(/^uploads[/\\]/, '');
+        }
+        
+        // Encode the file path properly for URL
+        // Split by '/' and encode each segment separately to preserve path structure
+        // This ensures special characters in filenames are encoded while slashes remain
+        let encodedPath = normalizedPath;
+        if (normalizedPath.includes('/')) {
+          const pathSegments = normalizedPath.split('/');
           encodedPath = pathSegments
-            .map(segment => {
-              // Only encode if segment is not empty
-              return segment ? encodeURIComponent(segment) : '';
-            })
+            .map(segment => segment ? encodeURIComponent(segment) : '')
             .filter(segment => segment !== '')
             .join('/');
         } else {
-          // Single filename, encode it
-          encodedPath = encodeURIComponent(filePath);
+          encodedPath = encodeURIComponent(normalizedPath);
         }
         
         // Log for debugging
         console.log('Original file path:', filePath);
+        console.log('Normalized file path:', normalizedPath);
         console.log('Encoded file path:', encodedPath);
         
         // Construct full URL for testing
@@ -250,9 +252,23 @@ export const investigationService = {
         
         // Fetch the file with proper authentication and MIME type
         // Use /investigations/files to match the backend route
-        const response = await apiClient.get(`/investigations/files/${encodedPath}`, {
-          responseType: 'blob'
-        });
+        // The router is mounted at /api, so this becomes /api/investigations/files/:filePath(*)
+        let response;
+        try {
+          response = await apiClient.get(`/investigations/files/${encodedPath}`, {
+            responseType: 'blob'
+          });
+        } catch (error) {
+          // If the main route fails, try the backward compatibility route
+          if (error.response?.status === 404) {
+            console.log('Main route failed, trying backward compatibility route /files/...');
+            response = await apiClient.get(`/files/${encodedPath}`, {
+              responseType: 'blob'
+            });
+          } else {
+            throw error;
+          }
+        }
         
         console.log('File fetched successfully');
         console.log('Response status:', response.status);
@@ -497,11 +513,23 @@ export const investigationService = {
         
       } catch (error) {
         console.error('Error fetching file:', error);
+        console.error('Error response:', error.response);
+        console.error('Requested path:', normalizedPath);
+        console.error('Encoded path:', encodedPath);
         
         // Check if it's an authentication error
         if (error.response?.status === 401) {
           console.error('Authentication error: Session expired');
           throw new Error('Authentication error: Please log in again to view the file.');
+        }
+        
+        // Check if it's a 404 error
+        if (error.response?.status === 404) {
+          const errorMessage = error.response?.data?.message || 'File not found';
+          console.error('File not found (404):', errorMessage);
+          console.error('File path:', filePath);
+          console.error('Normalized path:', normalizedPath);
+          throw new Error(`File not found: ${errorMessage}. Please check if the file exists.`);
         }
         
         // Re-throw the error so the caller can handle it
