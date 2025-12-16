@@ -141,6 +141,26 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   });
 
   // Helper functions for timeline icons and colors
+  // Helper function to format discharge date
+  const formatDischargeDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      // Handle ISO date strings (e.g., "2025-12-16T00:00:00.000Z")
+      const dateStr = dateString.split('T')[0];
+      const date = new Date(dateStr);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        });
+      }
+      return dateString;
+    } catch {
+      return dateString;
+    }
+  };
+
   const getNoteIcon = (type) => {
     if (!type) return <IoDocumentText className="text-teal-600" />;
 
@@ -3043,7 +3063,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.dischargeDate}</p>
+                              <p className="text-sm font-semibold text-gray-900 mt-1">
+                                {formatDischargeDate(dischargeSummary.dischargeDate)}
+                              </p>
                             </div>
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Length of Stay</p>
@@ -3362,7 +3384,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                             <span className="font-medium">Discharged by:</span> {dischargeSummary.dischargedBy}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
-                            Document generated on {dischargeSummary.dischargeDate} at {dischargeSummary.dischargeTime}
+                            Document generated on {formatDischargeDate(dischargeSummary.dischargeDate)} at {dischargeSummary.dischargeTime || 'N/A'}
                           </p>
                         </div>
                       </>
