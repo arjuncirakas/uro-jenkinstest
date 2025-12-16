@@ -234,7 +234,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       if (result.success && result.data) {
         console.log('✅ UrologistPatientDetailsModal: Fetched full patient details:', result.data);
         console.log('📋 Care Pathway from API:', result.data.carePathway || result.data.care_pathway);
-        setFullPatientData(result.data);
+
+        // Merge with original patient data to preserve carePathway if API doesn't return it
+        const mergedData = {
+          ...result.data,
+          // Preserve carePathway from original patient if not in API response
+          carePathway: result.data.carePathway || result.data.care_pathway || patient.carePathway || patient.care_pathway,
+          care_pathway: result.data.care_pathway || result.data.carePathway || patient.care_pathway || patient.carePathway
+        };
+
+        console.log('📋 Merged Care Pathway:', mergedData.carePathway);
+        setFullPatientData(mergedData);
       } else {
         console.error('❌ UrologistPatientDetailsModal: Failed to fetch patient details:', result.error);
       }
@@ -243,7 +253,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     } finally {
       setLoadingPatientData(false);
     }
-  }, [patient?.id]);
+  }, [patient?.id, patient?.carePathway, patient?.care_pathway]);
 
   // Fetch appointments for patient (for pipeline)
   const fetchAppointments = useCallback(async () => {
