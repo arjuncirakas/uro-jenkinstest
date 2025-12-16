@@ -1654,6 +1654,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         setDischargeSummaryCreated(true);
         setIsDischargeSummaryModalOpen(false);
 
+        // Ensure selectedPathway is set to 'Discharge' before opening pathway modal
+        setSelectedPathway('Discharge');
+
         // Pre-fill transfer details with summary info
         setTransferDetails(prev => ({
           ...prev,
@@ -6136,6 +6139,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       // Persist pathway (only if appointment booking succeeded or wasn't needed)
                       let transferSucceeded = false;
                       try {
+                        // Validate that selectedPathway is set
+                        if (!selectedPathway || selectedPathway.trim() === '') {
+                          showErrorModal('Validation Error', 'Pathway selection is missing. Please try transferring again.');
+                          return;
+                        }
+
                         const payload = {
                           pathway: selectedPathway,
                           reason: transferDetails.reason,
