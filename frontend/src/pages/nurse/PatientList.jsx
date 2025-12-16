@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FiEye, FiCalendar, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
@@ -33,6 +33,12 @@ const PatientList = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [pageSize] = useState(20); // Patients per page
+  
+  // Ref to track current page for event listeners (avoids stale closure)
+  const currentPageRef = useRef(currentPage);
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   // Fetch patients from API
   const fetchPatients = async (page = currentPage) => {
@@ -127,7 +133,8 @@ const PatientList = () => {
   useEffect(() => {
     const handlePSAUpdated = (event) => {
       console.log('PSA updated event received, refreshing patient list:', event.detail);
-      fetchPatients(currentPage);
+      // Use ref to get the latest currentPage value (avoids stale closure)
+      fetchPatients(currentPageRef.current);
     };
 
     window.addEventListener('psaResultAdded', handlePSAUpdated);
@@ -137,13 +144,14 @@ const PatientList = () => {
       window.removeEventListener('psaResultAdded', handlePSAUpdated);
       window.removeEventListener('psaResultUpdated', handlePSAUpdated);
     };
-  }, [currentPage]);
+  }, []); // Empty dependency array - event handler doesn't need to recreate
 
   // Listen for appointment update events to refresh patient list
   useEffect(() => {
     const handleAppointmentUpdated = (event) => {
       console.log('Appointment updated event received, refreshing patient list:', event.detail);
-      fetchPatients(currentPage);
+      // Use ref to get the latest currentPage value (avoids stale closure)
+      fetchPatients(currentPageRef.current);
     };
 
     window.addEventListener('investigationBooked', handleAppointmentUpdated);
@@ -155,7 +163,7 @@ const PatientList = () => {
       window.removeEventListener('surgery:updated', handleAppointmentUpdated);
       window.removeEventListener('appointment:updated', handleAppointmentUpdated);
     };
-  }, [currentPage]);
+  }, []); // Empty dependency array - event handler doesn't need to recreate
 
   // Listen for patient added event to refresh patient list
   useEffect(() => {
@@ -177,7 +185,8 @@ const PatientList = () => {
   useEffect(() => {
     const handlePatientUpdated = (event) => {
       console.log('Patient updated event received, refreshing patient list:', event.detail);
-      fetchPatients(currentPage);
+      // Use ref to get the latest currentPage value (avoids stale closure)
+      fetchPatients(currentPageRef.current);
     };
 
     window.addEventListener('patient:updated', handlePatientUpdated);
@@ -185,7 +194,7 @@ const PatientList = () => {
     return () => {
       window.removeEventListener('patient:updated', handlePatientUpdated);
     };
-  }, [currentPage]);
+  }, []); // Empty dependency array - event handler doesn't need to recreate
 
   // Get initials from name
   const getInitials = (name) => {

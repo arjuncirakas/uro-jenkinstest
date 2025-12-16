@@ -147,6 +147,32 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     try {
       // Handle ISO date strings (e.g., "2025-12-16T00:00:00.000Z")
       const dateStr = dateString.split('T')[0];
+      
+      // Parse date components to avoid timezone conversion issues
+      // Split "YYYY-MM-DD" and create Date in local timezone
+      const dateParts = dateStr.split('-');
+      if (dateParts.length === 3) {
+        const year = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1; // Month is 0-indexed
+        const day = parseInt(dateParts[2], 10);
+        
+        // Create date in local timezone (no UTC conversion)
+        const date = new Date(year, month, day);
+        
+        // Validate the date
+        if (!isNaN(date.getTime()) && 
+            date.getFullYear() === year && 
+            date.getMonth() === month && 
+            date.getDate() === day) {
+          return date.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          });
+        }
+      }
+      
+      // Fallback: try standard Date parsing if format doesn't match expected pattern
       const date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString('en-GB', {
@@ -155,6 +181,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
           year: 'numeric'
         });
       }
+      
       return dateString;
     } catch {
       return dateString;
