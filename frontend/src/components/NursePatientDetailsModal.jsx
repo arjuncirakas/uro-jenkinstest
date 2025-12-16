@@ -3469,16 +3469,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                           border: 'border-green-300',
                                           borderLight: 'border-green-200',
                                           ring: 'ring-green-200'
-                                        },
-                                        teal: {
-                                          bg: 'bg-teal-500',
-                                          bgLight: 'bg-teal-100',
-                                          bgLighter: 'bg-teal-50',
-                                          text: 'text-teal-700',
-                                          textLight: 'text-teal-600',
-                                          border: 'border-teal-300',
-                                          borderLight: 'border-teal-200',
-                                          ring: 'ring-teal-200'
                                         }
                                       };
                                       return colorMap[color]?.[type] || '';
@@ -3506,10 +3496,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                   return <IoPeople className="w-7 h-7" />;
                                                 case 'surgery':
                                                   return <IoMedical className="w-7 h-7" />;
-                                                case 'medication':
-                                                  return <FaPills className="w-7 h-7" />;
-                                                case 'monitoring':
-                                                  return <Eye className="w-7 h-7" />;
                                                 case 'discharge':
                                                   return <IoCheckmarkDone className="w-7 h-7" />;
                                                 default:
@@ -3577,8 +3563,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                       indigo: { bgLighter: 'bg-indigo-50', borderLight: 'border-indigo-200', text: 'text-indigo-700' },
                                       purple: { bgLighter: 'bg-purple-50', borderLight: 'border-purple-200', text: 'text-purple-700' },
                                       orange: { bgLighter: 'bg-orange-50', borderLight: 'border-orange-200', text: 'text-orange-700' },
-                                      green: { bgLighter: 'bg-green-50', borderLight: 'border-green-200', text: 'text-green-700' },
-                                      teal: { bgLighter: 'bg-teal-50', borderLight: 'border-teal-200', text: 'text-teal-700' }
+                                      green: { bgLighter: 'bg-green-50', borderLight: 'border-green-200', text: 'text-green-700' }
                                     };
                                     return colorMap[color]?.[type] || '';
                                   };
