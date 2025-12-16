@@ -19,19 +19,19 @@ const hasThreeConsecutiveNoShows = async (client, patientId) => {
       ORDER BY appointment_date DESC, appointment_time DESC
       LIMIT 3
     `;
-    
+
     const appointmentsResult = await client.query(appointmentsQuery, [patientId]);
-    
+
     // Need exactly 3 no-shows
     if (appointmentsResult.rows.length < 3) {
       return false;
     }
-    
+
     // Check if these are consecutive (no completed/scheduled appointments between them)
     const noShowDates = appointmentsResult.rows.map(apt => apt.appointment_date).sort();
     const firstNoShow = noShowDates[0];
     const lastNoShow = noShowDates[noShowDates.length - 1];
-    
+
     // Check if there are any completed or scheduled appointments between first and last no-show
     const betweenAppointmentsQuery = `
       SELECT COUNT(*) as count
@@ -40,35 +40,35 @@ const hasThreeConsecutiveNoShows = async (client, patientId) => {
       AND appointment_date BETWEEN $2 AND $3
       AND status IN ('scheduled', 'confirmed', 'completed')
     `;
-    
+
     const betweenResult = await client.query(betweenAppointmentsQuery, [
       patientId,
       firstNoShow,
       lastNoShow
     ]);
-    
+
     // If there are completed appointments between, they're not consecutive
     if (parseInt(betweenResult.rows[0].count) > 0) {
       return false;
     }
-    
+
     // Check if patient profile was updated after the first no-show
     const firstNoShowDateTime = new Date(`${appointmentsResult.rows[0].appointment_date} ${appointmentsResult.rows[0].appointment_time}`);
-    
+
     const profileUpdateQuery = `
       SELECT updated_at
       FROM patients
       WHERE id = $1
       AND updated_at > $2
     `;
-    
+
     const profileResult = await client.query(profileUpdateQuery, [patientId, firstNoShowDateTime]);
-    
+
     // If profile was updated, don't consider as consecutive no-shows
     if (profileResult.rows.length > 0) {
       return false;
     }
-    
+
     return true;
   } catch (error) {
     console.error('[hasThreeConsecutiveNoShows] Error:', error);
@@ -113,7 +113,7 @@ const bookAutomaticAppointment = async (client, {
         'scheduled'
       ]
     );
-    
+
     return {
       id: appointment.rows[0].id,
       date: appointmentDate,
@@ -137,12 +137,12 @@ const generateUPI = () => {
 // Helper function to format date as YYYY-MM-DD without timezone conversion
 const formatDateOnly = (dateString) => {
   if (!dateString) return null;
-  
+
   // If already in YYYY-MM-DD format, return as is
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     return dateString;
   }
-  
+
   // Handle Date objects from PostgreSQL
   if (dateString instanceof Date) {
     const year = dateString.getUTCFullYear();
@@ -150,7 +150,7 @@ const formatDateOnly = (dateString) => {
     const day = String(dateString.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
-  
+
   // Handle ISO string with timezone (from PostgreSQL TIMESTAMP)
   if (typeof dateString === 'string' && dateString.includes('T')) {
     // Use UTC methods to avoid timezone conversion
@@ -160,7 +160,7 @@ const formatDateOnly = (dateString) => {
     const day = String(date.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
-  
+
   // Fallback for other formats
   const date = new Date(dateString);
   const year = date.getFullYear();
@@ -172,7 +172,7 @@ const formatDateOnly = (dateString) => {
 // Add new patient
 export const addPatient = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const {
       firstName,
@@ -252,7 +252,7 @@ export const addPatient = async (req, res) => {
         'SELECT id FROM patients WHERE email = $1',
         [email]
       );
-      
+
       if (existingEmail.rows.length > 0) {
         return res.status(409).json({
           success: false,
@@ -267,7 +267,7 @@ export const addPatient = async (req, res) => {
         'SELECT id FROM patients WHERE phone = $1',
         [phone]
       );
-      
+
       if (existingPhone.rows.length > 0) {
         return res.status(409).json({
           success: false,
@@ -288,7 +288,7 @@ export const addPatient = async (req, res) => {
         'SELECT id FROM patients WHERE upi = $1',
         [upi]
       );
-      
+
       if (existingUPI.rows.length === 0) {
         isUnique = true;
       }
@@ -335,10 +335,10 @@ export const addPatient = async (req, res) => {
 
     // Format prior biopsy date if provided
     const formattedPriorBiopsyDate = priorBiopsyDate ? formatDateOnly(priorBiopsyDate) : null;
-    
+
     // Convert comorbidities array to JSON string if provided
-    const comorbiditiesJson = Array.isArray(comorbidities) && comorbidities.length > 0 
-      ? JSON.stringify(comorbidities) 
+    const comorbiditiesJson = Array.isArray(comorbidities) && comorbidities.length > 0
+      ? JSON.stringify(comorbidities)
       : null;
 
     // Insert new patient
@@ -374,8 +374,8 @@ export const addPatient = async (req, res) => {
           'SELECT first_name, last_name FROM users WHERE id = $1',
           [req.user.id]
         );
-        
-        const authorName = userQuery.rows.length > 0 
+
+        const authorName = userQuery.rows.length > 0
           ? `${userQuery.rows[0].first_name} ${userQuery.rows[0].last_name}`
           : 'System';
 
@@ -408,7 +408,7 @@ export const addPatient = async (req, res) => {
             req.user.role
           ]
         );
-        
+
         console.log(`[addPatient] Created initial PSA result entry for patient ${newPatient.id} with PSA value ${initialPSA}`);
       } catch (psaError) {
         // Log error but don't fail patient creation if PSA result creation fails
@@ -429,7 +429,7 @@ export const addPatient = async (req, res) => {
     }
 
     // Format prior biopsy date from database result for response
-    const responsePriorBiopsyDate = newPatient.prior_biopsy_date 
+    const responsePriorBiopsyDate = newPatient.prior_biopsy_date
       ? new Date(newPatient.prior_biopsy_date).toISOString().split('T')[0]
       : null;
 
@@ -497,7 +497,7 @@ export const addPatient = async (req, res) => {
 
   } catch (error) {
     console.error('Add patient error:', error);
-    
+
     // Handle unique constraint violations
     if (error.code === '23505') {
       if (error.constraint === 'patients_email_key') {
@@ -532,7 +532,7 @@ export const addPatient = async (req, res) => {
 // Get all patients (with filtering and pagination)
 export const getPatients = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const {
       page = 1,
@@ -549,7 +549,7 @@ export const getPatients = async (req, res) => {
     } = req.query;
 
     const offset = (page - 1) * limit;
-    
+
     // Determine pathways to filter
     let pathwaysToFilter = [];
     if (activeMonitoring === 'true' || activeMonitoring === true) {
@@ -583,7 +583,7 @@ export const getPatients = async (req, res) => {
     } else {
       statusesToFilter = [status];
     }
-    
+
     // Build WHERE clause
     let whereConditions = [];
     let queryParams = [];
@@ -714,7 +714,7 @@ export const getPatients = async (req, res) => {
       ORDER BY p.${sortBy} ${sortOrder}
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `;
-    
+
     queryParams.push(limit, offset);
     const patientsResult = await client.query(patientsQuery, queryParams);
 
@@ -743,36 +743,36 @@ export const getPatients = async (req, res) => {
     // Format patient data
     const patients = patientsResult.rows.map(patient => {
       const age = new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear();
-      
+
       // Get latest PSA or fallback to initial PSA
       const latestPSA = latestPSAMap[patient.id];
       const displayPSA = latestPSA ? latestPSA.result : (patient.initial_psa || null);
-      
+
       // Debug logging for PSA values
       if (patient.id <= 10) { // Only log for first few patients to avoid spam
         console.log(`[getPatients] Patient ${patient.id}: initialPSA=${patient.initial_psa}, latestPSA=${latestPSA?.result || 'none'}, displayPSA=${displayPSA}`);
       }
-      
+
       // Format next appointment data
-      const nextAppointmentDate = patient.next_appointment_date 
+      const nextAppointmentDate = patient.next_appointment_date
         ? new Date(patient.next_appointment_date).toISOString().split('T')[0]
         : null;
-      const nextAppointmentTime = patient.next_appointment_time 
+      const nextAppointmentTime = patient.next_appointment_time
         ? patient.next_appointment_time.substring(0, 5) // Format HH:MM
         : null;
-      
+
       // Check if patient has any appointment (for easier frontend checking)
       const hasAppointment = !!(nextAppointmentDate || nextAppointmentTime);
-      
+
       // Calculate next review date (appointment date formatted for display)
-      const nextReview = nextAppointmentDate 
-        ? new Date(nextAppointmentDate).toLocaleDateString('en-GB', { 
-            day: '2-digit', 
-            month: 'short', 
-            year: 'numeric' 
-          })
+      const nextReview = nextAppointmentDate
+        ? new Date(nextAppointmentDate).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        })
         : 'Not Scheduled';
-      
+
       // Calculate monitoring status based on PSA level and care pathway
       let monitoringStatus = 'Stable';
       if (patient.care_pathway === 'Active Monitoring' || patient.care_pathway === 'Medication') {
@@ -785,7 +785,7 @@ export const getPatients = async (req, res) => {
           monitoringStatus = 'Stable';
         }
       }
-      
+
       return {
         id: patient.id,
         upi: patient.upi,
@@ -818,8 +818,8 @@ export const getPatients = async (req, res) => {
         status: patient.status,
         carePathway: patient.care_pathway,
         createdBy: patient.created_by,
-        createdByName: patient.created_by_first_name && patient.created_by_last_name 
-          ? `${patient.created_by_first_name} ${patient.created_by_last_name}` 
+        createdByName: patient.created_by_first_name && patient.created_by_last_name
+          ? `${patient.created_by_first_name} ${patient.created_by_last_name}`
           : 'Unknown',
         referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
         createdAt: patient.created_at,
@@ -887,7 +887,7 @@ export const getNewPatients = async (req, res) => {
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   console.log(`\n👥 [getNewPatients ${requestId}] Starting`);
   console.log(`👥 [getNewPatients ${requestId}] User:`, req.user?.id, req.user?.role);
-  
+
   let client;
   try {
     console.log(`👥 [getNewPatients ${requestId}] Connecting to database...`);
@@ -907,11 +907,11 @@ export const getNewPatients = async (req, res) => {
       error: 'Service temporarily unavailable'
     });
   }
-  
+
   try {
     const { limit = 15 } = req.query;
     console.log(`👥 [getNewPatients ${requestId}] Processing with limit: ${limit}`);
-    
+
     const userRole = req.user?.role;
     const userId = req.user?.id;
     let doctorId = null;
@@ -921,13 +921,13 @@ export const getNewPatients = async (req, res) => {
       try {
         const userEmail = req.user?.email;
         console.log(`👥 [getNewPatients ${requestId}] Looking up doctor ID for user ${userId} (email: ${userEmail})`);
-        
+
         // First try to find by user_id
         let doctorCheck = await client.query(
           `SELECT id FROM doctors WHERE user_id = $1`,
           [userId]
         );
-        
+
         // If not found, try by email
         if (doctorCheck.rows.length === 0 && userEmail) {
           doctorCheck = await client.query(
@@ -935,7 +935,7 @@ export const getNewPatients = async (req, res) => {
             [userEmail]
           );
         }
-        
+
         if (doctorCheck.rows.length > 0) {
           doctorId = doctorCheck.rows[0].id;
           console.log(`👥 [getNewPatients ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
@@ -954,7 +954,7 @@ export const getNewPatients = async (req, res) => {
     // For urologists/doctors: Get patients who visited this doctor, ordered by most recent appointment
     if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
       console.log(`👥 [getNewPatients ${requestId}] Fetching recent patients for doctor ${doctorId}`);
-      
+
       query = `
         WITH recent_appointments AS (
           SELECT DISTINCT ON (a.patient_id)
@@ -1006,13 +1006,13 @@ export const getNewPatients = async (req, res) => {
           ra.appointment_time DESC
         LIMIT $3
       `;
-      
+
       queryParams = ['Active', doctorId, parseInt(limit)];
-      
+
     } else if (userRole === 'gp') {
       // For GPs: Keep existing logic - filter by referred_by_gp_id
       console.log(`👥 [getNewPatients ${requestId}] Fetching patients for GP ${userId}`);
-      
+
       query = `
         SELECT 
           p.id,
@@ -1047,15 +1047,15 @@ export const getNewPatients = async (req, res) => {
         ORDER BY p.created_at DESC
         LIMIT $3
       `;
-      
+
       queryParams = ['Active', userId, parseInt(limit)];
-      
+
     } else {
       // For nurses or other roles: Get only patients WITHOUT appointments (newly added patients)
       // Exclude patients who have any non-cancelled appointments OR investigation bookings
       // This includes both urologist appointments (in appointments table) and investigation bookings (in investigation_bookings table)
       console.log(`👥 [getNewPatients ${requestId}] Fetching new patients without appointments (nurse/other role)`);
-      
+
       query = `
         WITH patients_with_appointments AS (
           -- Get patients with urologist appointments
@@ -1107,7 +1107,7 @@ export const getNewPatients = async (req, res) => {
         ORDER BY p.created_at DESC
         LIMIT $2
       `;
-      
+
       queryParams = ['Active', parseInt(limit)];
     }
 
@@ -1121,49 +1121,49 @@ export const getNewPatients = async (req, res) => {
         created_by: p.created_by_name
       })));
     }
-    
+
     // Transform the data to match frontend expectations
     const transformedPatients = result.rows.map((patient, index) => {
       try {
-      // Safely format the date
-      let dateOfEntry = '';
-      if (patient.created_at) {
-        if (typeof patient.created_at === 'string') {
-          dateOfEntry = patient.created_at.split('T')[0];
-        } else if (patient.created_at instanceof Date) {
-          dateOfEntry = patient.created_at.toISOString().split('T')[0];
-        } else {
-          // Fallback for other date formats
-          dateOfEntry = new Date(patient.created_at).toISOString().split('T')[0];
+        // Safely format the date
+        let dateOfEntry = '';
+        if (patient.created_at) {
+          if (typeof patient.created_at === 'string') {
+            dateOfEntry = patient.created_at.split('T')[0];
+          } else if (patient.created_at instanceof Date) {
+            dateOfEntry = patient.created_at.toISOString().split('T')[0];
+          } else {
+            // Fallback for other date formats
+            dateOfEntry = new Date(patient.created_at).toISOString().split('T')[0];
+          }
         }
-      }
 
-      return {
-        id: patient.id,
-        upi: patient.upi,
-        name: `${patient.first_name} ${patient.last_name}`,
-        firstName: patient.first_name,
-        lastName: patient.last_name,
-        age: patient.age,
-        gender: patient.gender,
-        phone: patient.phone,
-        email: patient.email,
-        psa: parseFloat(patient.initial_psa) || 0,
-        psaDate: patient.initial_psa_date,
-        priority: patient.priority,
-        status: 'newPatient', // For frontend compatibility
-        category: 'new',
-        dateOfEntry: dateOfEntry,
-        createdBy: patient.created_by_name ? `${patient.created_by_name} ${patient.created_by_last_name}` : 'System',
-        createdByRole: patient.created_by_role,
-        referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
-        assignedUrologist: patient.assigned_urologist,
-        createdAt: patient.created_at,
-        updatedAt: patient.updated_at,
-        last_appointment_date: patient.last_appointment_date || null,
-        last_appointment_time: patient.last_appointment_time || null,
-        last_appointment_status: patient.appointment_status || null
-      };
+        return {
+          id: patient.id,
+          upi: patient.upi,
+          name: `${patient.first_name} ${patient.last_name}`,
+          firstName: patient.first_name,
+          lastName: patient.last_name,
+          age: patient.age,
+          gender: patient.gender,
+          phone: patient.phone,
+          email: patient.email,
+          psa: parseFloat(patient.initial_psa) || 0,
+          psaDate: patient.initial_psa_date,
+          priority: patient.priority,
+          status: 'newPatient', // For frontend compatibility
+          category: 'new',
+          dateOfEntry: dateOfEntry,
+          createdBy: patient.created_by_name ? `${patient.created_by_name} ${patient.created_by_last_name}` : 'System',
+          createdByRole: patient.created_by_role,
+          referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
+          assignedUrologist: patient.assigned_urologist,
+          createdAt: patient.created_at,
+          updatedAt: patient.updated_at,
+          last_appointment_date: patient.last_appointment_date || null,
+          last_appointment_time: patient.last_appointment_time || null,
+          last_appointment_status: patient.appointment_status || null
+        };
       } catch (error) {
         console.error(`Error transforming patient ${index + 1}:`, error);
         console.error('Patient data:', patient);
@@ -1227,7 +1227,7 @@ export const getNewPatients = async (req, res) => {
 // Get patient by ID
 export const getPatientById = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
 
@@ -1318,9 +1318,10 @@ export const getPatientById = async (req, res) => {
           priority: patient.priority,
           notes: patient.notes || '',
           status: patient.status,
+          carePathway: patient.care_pathway,
           createdBy: patient.created_by,
-          createdByName: patient.created_by_first_name && patient.created_by_last_name 
-            ? `${patient.created_by_first_name} ${patient.created_by_last_name}` 
+          createdByName: patient.created_by_first_name && patient.created_by_last_name
+            ? `${patient.created_by_first_name} ${patient.created_by_last_name}`
             : 'Unknown',
           referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
           createdAt: patient.created_at,
@@ -1367,7 +1368,7 @@ export const getPatientById = async (req, res) => {
 // Update patient
 export const updatePatient = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -1427,11 +1428,11 @@ export const updatePatient = async (req, res) => {
         'priorBiopsyDate': 'prior_biopsy_date',
         'gleasonScore': 'gleason_score'
       };
-      
+
       if (fieldMap[str]) {
         return fieldMap[str];
       }
-      
+
       // Fallback: convert camelCase to snake_case
       // Insert underscore before capital letters (but not at the start)
       return str.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
@@ -1586,7 +1587,7 @@ export const updatePatient = async (req, res) => {
 
   } catch (error) {
     console.error('Update patient error:', error);
-    
+
     // Handle unique constraint violations
     if (error.code === '23505') {
       if (error.constraint === 'patients_email_key') {
@@ -1615,7 +1616,7 @@ export const updatePatient = async (req, res) => {
 // Delete patient (hard delete - removes patient and all related records from database)
 export const deletePatient = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
 
@@ -1637,7 +1638,7 @@ export const deletePatient = async (req, res) => {
 
     try {
       // Delete all related records in order (respecting foreign key constraints)
-      
+
       // 1. Delete patient notes
       await client.query('DELETE FROM patient_notes WHERE patient_id = $1', [id]);
       console.log(`Deleted patient notes for patient ${id}`);
@@ -1743,48 +1744,48 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     // First try to get from doctors table (since appointments use doctors.id)
     // If not found, fall back to users table
     let doctorName = null;
-    
+
     // Get user info first
     const userQ = await client.query('SELECT first_name, last_name, role, email FROM users WHERE id = $1', [userId]);
     if (userQ.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    
+
     const user = userQ.rows[0];
-    
+
     // Try to get from doctors table first (preferred, since appointments use doctors.id)
     if (user.email) {
       const doctorQ = await client.query(
         'SELECT first_name, last_name FROM doctors WHERE email = $1 AND is_active = true LIMIT 1',
         [user.email]
       );
-      
+
       if (doctorQ.rows.length > 0) {
         doctorName = `${doctorQ.rows[0].first_name} ${doctorQ.rows[0].last_name}`.trim();
         console.log(`[getAssignedPatientsForDoctor] Doctor Name from doctors table: "${doctorName}"`);
       }
     }
-    
+
     // Fall back to users table if not found in doctors table
     if (!doctorName) {
       doctorName = `${user.first_name} ${user.last_name}`.trim();
       console.log(`[getAssignedPatientsForDoctor] Doctor Name from users table: "${doctorName}"`);
     }
-    
+
     // Ensure doctorName is not null or undefined
     if (!doctorName || doctorName.trim() === '') {
       console.error(`[getAssignedPatientsForDoctor] Doctor name is empty or null`);
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Unable to determine doctor name. Please contact support.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Unable to determine doctor name. Please contact support.'
       });
     }
-    
+
     // Normalize doctor name - remove "Dr." prefix if present for consistent matching
     const normalizedDoctorName = doctorName.replace(/^Dr\.\s*/i, '').trim();
     console.log(`[getAssignedPatientsForDoctor] Final Doctor Name: "${doctorName}"`);
     console.log(`[getAssignedPatientsForDoctor] Normalized Doctor Name: "${normalizedDoctorName}"`);
-    
+
     // Debug: Check all patients with assignments
     const debugQ = await client.query(
       `SELECT id, upi, first_name, last_name, assigned_urologist, care_pathway, status 
@@ -1792,9 +1793,9 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
        WHERE status = 'Active' AND assigned_urologist IS NOT NULL 
        ORDER BY created_at DESC LIMIT 5`
     );
-    console.log(`[getAssignedPatientsForDoctor] Recent assigned patients in DB:`, 
-      debugQ.rows.map(r => ({ 
-        upi: r.upi, 
+    console.log(`[getAssignedPatientsForDoctor] Recent assigned patients in DB:`,
+      debugQ.rows.map(r => ({
+        upi: r.upi,
         name: `${r.first_name} ${r.last_name}`,
         assigned_to: `"${r.assigned_urologist}"`,
         care_pathway: r.care_pathway || 'null'
@@ -1808,13 +1809,13 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     // Validate query parameters first
     const queryLimit = parseInt(limit) || 100;
     const queryName = normalizedDoctorName || doctorName;
-    
+
     // For my-patients category, we need a different WHERE clause that doesn't require assigned_urologist
     let whereBase = '';
     let additionalWhere = '';
     let queryParams = [];
     let limitParamIndex = 2; // Default limit parameter index
-    
+
     if (category === 'my-patients') {
       // My Patients = patients created by the current urologist (regardless of assigned_urologist)
       whereBase = `p.status = 'Active' AND p.created_by = $1`;
@@ -1824,7 +1825,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       // For other categories, use the standard assigned_urologist matching
       whereBase = `p.status = 'Active' AND p.assigned_urologist IS NOT NULL AND TRIM(LOWER(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($1))`;
       queryParams = [queryName, queryLimit]; // name, limit
-      
+
       // Category filters
       if (category === 'new') {
         // New = assigned patients with no completed urologist appointments and no care pathway set
@@ -1848,15 +1849,15 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
         )`;
       }
     }
-    
+
     if (!queryName || queryName.trim() === '') {
       console.error(`[getAssignedPatientsForDoctor] Invalid doctor name for query`);
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid doctor name. Please contact support.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid doctor name. Please contact support.'
       });
     }
-    
+
     // Build the complete query string
     const query = `
       SELECT 
@@ -1875,19 +1876,19 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       ORDER BY p.created_at DESC
       LIMIT $${limitParamIndex}
     `.trim();
-    
+
     console.log(`[getAssignedPatientsForDoctor] Executing query with name: "${queryName}", limit: ${queryLimit}, category: ${category}`);
     console.log(`[getAssignedPatientsForDoctor] Query:`, query.replace(/\s+/g, ' ').trim());
     console.log(`[getAssignedPatientsForDoctor] Query params:`, queryParams);
-    
+
     // Use normalized name for query, but also try original name
     let finalResult = { rows: [] }; // Initialize with empty result
-    
+
     try {
       const result = await client.query(query, queryParams);
       console.log(`[getAssignedPatientsForDoctor] Query returned ${result.rows.length} results`);
       finalResult = result;
-      
+
       // If no results with normalized name, try with original name (only for non-my-patients categories)
       if (finalResult.rows.length === 0 && normalizedDoctorName !== doctorName && doctorName && category !== 'my-patients') {
         console.log(`[getAssignedPatientsForDoctor] No results with normalized name, trying original name...`);
@@ -1912,12 +1913,12 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     }
 
     console.log(`[getAssignedPatientsForDoctor] Found ${finalResult.rows.length} patients for category "${category}" via direct assignment`);
-    
+
     // ALWAYS also check appointments table to find patients with appointments
     // This ensures patients with appointments show up even if assigned_urologist wasn't set correctly
     // This is CRITICAL for patients added by nurses who then book appointments
     console.log(`[getAssignedPatientsForDoctor] Checking appointments table for additional patients...`);
-    
+
     // Get doctor ID from doctors table
     let doctorId = null;
     if (user.email) {
@@ -1934,20 +1935,20 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
         console.error(`[getAssignedPatientsForDoctor] Error getting doctor ID:`, doctorIdError);
       }
     }
-    
+
     // Query patients who have appointments with this doctor
     // Try by doctor ID first, then fall back to name matching if ID not found
     // ALWAYS run this query to find patients even if assigned_urologist is null
     let appointmentWhere = '';
     let appointmentParams = [];
     let paramIndex = 1;
-    
+
     // For 'all' category, include all appointment statuses (scheduled, confirmed, completed)
     // For other categories, only include scheduled/confirmed to show active patients
-    const appointmentStatusFilter = category === 'all' 
-      ? `a.status NOT IN ('cancelled')` 
+    const appointmentStatusFilter = category === 'all'
+      ? `a.status NOT IN ('cancelled')`
       : `a.status IN ('scheduled', 'confirmed')`;
-    
+
     if (doctorId) {
       // Use doctor ID for matching (most reliable)
       appointmentWhere = `a.urologist_id = $${paramIndex} AND ${appointmentStatusFilter}`;
@@ -1962,7 +1963,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       paramIndex++;
       console.log(`[getAssignedPatientsForDoctor] Using doctor name "${normalizedDoctorName || doctorName}" for appointments query (ID not found)`);
     }
-    
+
     // For my-patients category, skip appointments table check since we only want patients created by the urologist
     if (category === 'my-patients') {
       console.log(`[getAssignedPatientsForDoctor] Skipping appointments table check for my-patients category`);
@@ -1975,17 +1976,17 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
         AND a2.appointment_type ILIKE 'urologist' 
         AND a2.status = 'completed'
       ) AND (COALESCE(p.care_pathway,'') = '' OR COALESCE(p.care_pathway,'') IS NULL)`;
-    } else if (category === 'surgery-pathway') {
-      appointmentWhere += ` AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
-    } else if (category === 'post-op-followup') {
-      appointmentWhere += ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
-    }
-    
-    // Use a higher limit for appointments query to ensure we get all patients with appointments
-    // We'll apply the final limit after combining results
-    const appointmentQueryLimit = queryLimit * 2; // Get more to ensure we don't miss any
-    
-    const appointmentQuery = `
+      } else if (category === 'surgery-pathway') {
+        appointmentWhere += ` AND COALESCE(p.care_pathway,'') = 'Surgery Pathway'`;
+      } else if (category === 'post-op-followup') {
+        appointmentWhere += ` AND (COALESCE(p.care_pathway,'') = 'Post-op Transfer' OR COALESCE(p.care_pathway,'') = 'Post-op Followup')`;
+      }
+
+      // Use a higher limit for appointments query to ensure we get all patients with appointments
+      // We'll apply the final limit after combining results
+      const appointmentQueryLimit = queryLimit * 2; // Get more to ensure we don't miss any
+
+      const appointmentQuery = `
       SELECT DISTINCT
         p.id,
         p.upi,
@@ -2003,29 +2004,29 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       ORDER BY p.created_at DESC
       LIMIT $${paramIndex}
     `;
-    appointmentParams.push(appointmentQueryLimit);
-    
-    try {
-      const appointmentResult = await client.query(appointmentQuery, appointmentParams);
-      console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
-      
-      // Combine results from both queries, removing duplicates by patient ID
-      const existingIds = new Set(finalResult.rows.map(r => r.id));
-      const newPatients = appointmentResult.rows.filter(r => !existingIds.has(r.id));
-      
-      if (newPatients.length > 0) {
-        console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
-        finalResult.rows = [...finalResult.rows, ...newPatients];
-      }
-      
-      // Apply final limit after combining (in case we exceeded it)
-      if (finalResult.rows.length > queryLimit) {
-        finalResult.rows = finalResult.rows.slice(0, queryLimit);
-        console.log(`[getAssignedPatientsForDoctor] Limited combined results to ${queryLimit} patients`);
-      }
-      
-      // Re-sort by created_at DESC (we need to get created_at for proper sorting)
-      // For now, keep the order as is since both queries order by created_at DESC
+      appointmentParams.push(appointmentQueryLimit);
+
+      try {
+        const appointmentResult = await client.query(appointmentQuery, appointmentParams);
+        console.log(`[getAssignedPatientsForDoctor] Found ${appointmentResult.rows.length} patients via appointments table`);
+
+        // Combine results from both queries, removing duplicates by patient ID
+        const existingIds = new Set(finalResult.rows.map(r => r.id));
+        const newPatients = appointmentResult.rows.filter(r => !existingIds.has(r.id));
+
+        if (newPatients.length > 0) {
+          console.log(`[getAssignedPatientsForDoctor] Adding ${newPatients.length} additional patients from appointments`);
+          finalResult.rows = [...finalResult.rows, ...newPatients];
+        }
+
+        // Apply final limit after combining (in case we exceeded it)
+        if (finalResult.rows.length > queryLimit) {
+          finalResult.rows = finalResult.rows.slice(0, queryLimit);
+          console.log(`[getAssignedPatientsForDoctor] Limited combined results to ${queryLimit} patients`);
+        }
+
+        // Re-sort by created_at DESC (we need to get created_at for proper sorting)
+        // For now, keep the order as is since both queries order by created_at DESC
       } catch (appointmentQueryError) {
         console.error(`[getAssignedPatientsForDoctor] Error querying appointments table:`, appointmentQueryError);
         console.error(`[getAssignedPatientsForDoctor] Appointment query error:`, appointmentQueryError.message);
@@ -2033,13 +2034,13 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
         // Continue with existing result - don't fail the entire request
       }
     }
-    
+
     // Ensure finalResult is always initialized
     if (!finalResult || !finalResult.rows) {
       console.warn(`[getAssignedPatientsForDoctor] finalResult not properly initialized, using empty result`);
       finalResult = { rows: [] };
     }
-    
+
     if (finalResult.rows.length > 0) {
       console.log(`[getAssignedPatientsForDoctor] Sample patient:`, {
         id: finalResult.rows[0].id,
@@ -2066,8 +2067,8 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
   } catch (error) {
     console.error('Get assigned patients error:', error);
     console.error('Error stack:', error.stack);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -2084,7 +2085,7 @@ export const updatePatientPathway = async (req, res) => {
     const { pathway, reason, notes, skipAutoBooking, appointmentStartDate, appointmentInterval } = req.body;
     const userId = req.user.id;
 
-    const allowed = ['Active Monitoring','Surgery Pathway','Medication','Radiotherapy','Post-op Transfer','Post-op Followup','Discharge'];
+    const allowed = ['Active Monitoring', 'Surgery Pathway', 'Medication', 'Radiotherapy', 'Post-op Transfer', 'Post-op Followup', 'Discharge'];
     if (!pathway || !allowed.includes(pathway)) {
       return res.status(400).json({ success: false, message: 'Invalid pathway' });
     }
@@ -2095,7 +2096,7 @@ export const updatePatientPathway = async (req, res) => {
               gp.email as gp_email, gp.first_name as gp_first_name, gp.last_name as gp_last_name
        FROM patients p
        LEFT JOIN users gp ON p.referred_by_gp_id = gp.id
-       WHERE p.id = $1`, 
+       WHERE p.id = $1`,
       [id]
     );
     if (existing.rows.length === 0) {
@@ -2122,20 +2123,20 @@ export const updatePatientPathway = async (req, res) => {
     let userInfo = null;
     let userName = null;
     let userRole = null;
-    
+
     try {
       const userQuery = await client.query(
         'SELECT first_name, last_name, role FROM users WHERE id = $1',
         [userId]
       );
-      
+
       if (userQuery.rows.length > 0) {
         userInfo = userQuery.rows[0];
         userName = `${userInfo.first_name} ${userInfo.last_name}`;
-        userRole = (userInfo.role === 'urologist' || userInfo.role === 'doctor') ? 'Urologist' : 
-                   userInfo.role === 'urology_nurse' ? 'Nurse' : 
-                   userInfo.role === 'gp' ? 'GP' : 
-                   userInfo.role === 'admin' ? 'Admin' : 'User';
+        userRole = (userInfo.role === 'urologist' || userInfo.role === 'doctor') ? 'Urologist' :
+          userInfo.role === 'urology_nurse' ? 'Nurse' :
+            userInfo.role === 'gp' ? 'GP' :
+              userInfo.role === 'admin' ? 'Admin' : 'User';
       }
     } catch (e) {
       console.error('[updatePatientPathway] Failed to get user info:', e.message);
@@ -2146,7 +2147,7 @@ export const updatePatientPathway = async (req, res) => {
     let autoBookedAppointment = null; // For backward compatibility
     let autoBookedAppointments = [];
     const pathwaysForAutomaticBooking = ['Active Monitoring', 'Medication', 'Discharge'];
-    
+
     if (pathwaysForAutomaticBooking.includes(pathway)) {
       try {
         // Skip auto-booking if manual appointment was already created (skipAutoBooking flag is set)
@@ -2155,93 +2156,93 @@ export const updatePatientPathway = async (req, res) => {
         } else {
           // Check for 3 consecutive no-shows - if yes, don't auto-book
           const hasConsecutiveNoShows = await hasThreeConsecutiveNoShows(client, id);
-          
+
           if (hasConsecutiveNoShows) {
             console.log(`[updatePatientPathway] ⚠️ Patient ${patientData.upi} has 3 consecutive no-shows - skipping automatic appointment booking`);
           } else {
-          console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking automatic follow-up appointments (1 year)...`);
-          
-          // Get the urologist who is transferring the patient (logged-in user)
-          // IMPORTANT: Use doctors.id for appointments, not users.id
-          const userInfo = await client.query(
-            'SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role = $2',
-            [userId, 'urologist']
-          );
+            console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking automatic follow-up appointments (1 year)...`);
 
-          if (userInfo.rows.length > 0) {
-            const user = userInfo.rows[0];
-            const urologistName = `${user.first_name} ${user.last_name}`;
-            
-            // Get the corresponding doctors.id
-            let urologistDoctorId = null;
-            const doctorCheck = await client.query(
-              'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
-              [user.email]
+            // Get the urologist who is transferring the patient (logged-in user)
+            // IMPORTANT: Use doctors.id for appointments, not users.id
+            const userInfo = await client.query(
+              'SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role = $2',
+              [userId, 'urologist']
             );
-            
-            if (doctorCheck.rows.length > 0) {
-              urologistDoctorId = doctorCheck.rows[0].id;
-            } else {
-              console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Urologist ${urologistName} does not have a doctors table record`);
-              throw new Error('Urologist does not have a doctors table record');
-            }
-            
-            // Determine appointment intervals and start date
-            let appointmentIntervals;
-            let startDate;
-            
-            // If a specific date and interval are provided, use those
-            if (appointmentStartDate && appointmentInterval) {
-              startDate = new Date(appointmentStartDate);
-              // Calculate intervals based on the provided interval (e.g., if 3 months, create appointments at 0, 3, 6, 9 months from start date)
-              const numberOfAppointments = 12 / appointmentInterval; // Create appointments for 1 year
-              appointmentIntervals = [];
-              for (let i = 0; i < numberOfAppointments; i++) {
-                appointmentIntervals.push(appointmentInterval * i);
+
+            if (userInfo.rows.length > 0) {
+              const user = userInfo.rows[0];
+              const urologistName = `${user.first_name} ${user.last_name}`;
+
+              // Get the corresponding doctors.id
+              let urologistDoctorId = null;
+              const doctorCheck = await client.query(
+                'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
+                [user.email]
+              );
+
+              if (doctorCheck.rows.length > 0) {
+                urologistDoctorId = doctorCheck.rows[0].id;
+              } else {
+                console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Urologist ${urologistName} does not have a doctors table record`);
+                throw new Error('Urologist does not have a doctors table record');
+              }
+
+              // Determine appointment intervals and start date
+              let appointmentIntervals;
+              let startDate;
+
+              // If a specific date and interval are provided, use those
+              if (appointmentStartDate && appointmentInterval) {
+                startDate = new Date(appointmentStartDate);
+                // Calculate intervals based on the provided interval (e.g., if 3 months, create appointments at 0, 3, 6, 9 months from start date)
+                const numberOfAppointments = 12 / appointmentInterval; // Create appointments for 1 year
+                appointmentIntervals = [];
+                for (let i = 0; i < numberOfAppointments; i++) {
+                  appointmentIntervals.push(appointmentInterval * i);
+                }
+              } else {
+                // Default: Book appointments for 1 year: 3, 6, 9, 12 months starting from today
+                appointmentIntervals = [3, 6, 9, 12];
+                startDate = new Date();
+              }
+
+              for (let i = 0; i < appointmentIntervals.length; i++) {
+                const monthsAhead = appointmentIntervals[i];
+                const followUpDate = new Date(startDate);
+                followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
+                const appointmentDate = followUpDate.toISOString().split('T')[0];
+
+                // Automatic appointments don't have time slots - they are additional appointments
+                // that don't block time slots, so set appointmentTime to NULL
+                const appointmentTime = null;
+
+                // Book automatic appointment (doesn't block slots, no time slot assigned)
+                const bookedAppointment = await bookAutomaticAppointment(client, {
+                  patientId: id,
+                  urologistDoctorId,
+                  urologistName,
+                  appointmentDate,
+                  appointmentTime,
+                  pathway,
+                  monthsAhead,
+                  reason,
+                  userId
+                });
+
+                if (bookedAppointment) {
+                  autoBookedAppointments.push(bookedAppointment);
+                  console.log(`[updatePatientPathway] ✅ Auto-booked automatic appointment (${monthsAhead} months) for ${patientData.upi} on ${appointmentDate} (no time slot - additional appointment)`);
+                }
+              }
+
+              // Set the first appointment as the main auto-booked appointment (for backward compatibility)
+              if (autoBookedAppointments.length > 0) {
+                autoBookedAppointment = autoBookedAppointments[0];
               }
             } else {
-              // Default: Book appointments for 1 year: 3, 6, 9, 12 months starting from today
-              appointmentIntervals = [3, 6, 9, 12];
-              startDate = new Date();
+              console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Current user is not a urologist`);
             }
-            
-            for (let i = 0; i < appointmentIntervals.length; i++) {
-              const monthsAhead = appointmentIntervals[i];
-              const followUpDate = new Date(startDate);
-              followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
-              const appointmentDate = followUpDate.toISOString().split('T')[0];
-              
-              // Automatic appointments don't have time slots - they are additional appointments
-              // that don't block time slots, so set appointmentTime to NULL
-              const appointmentTime = null;
-              
-              // Book automatic appointment (doesn't block slots, no time slot assigned)
-              const bookedAppointment = await bookAutomaticAppointment(client, {
-                patientId: id,
-                urologistDoctorId,
-                urologistName,
-                appointmentDate,
-                appointmentTime,
-                pathway,
-                monthsAhead,
-                reason,
-                userId
-              });
-              
-              if (bookedAppointment) {
-                autoBookedAppointments.push(bookedAppointment);
-                console.log(`[updatePatientPathway] ✅ Auto-booked automatic appointment (${monthsAhead} months) for ${patientData.upi} on ${appointmentDate} (no time slot - additional appointment)`);
-              }
-            }
-            
-            // Set the first appointment as the main auto-booked appointment (for backward compatibility)
-            if (autoBookedAppointments.length > 0) {
-              autoBookedAppointment = autoBookedAppointments[0];
-            }
-          } else {
-            console.log(`[updatePatientPathway] ⚠️ Could not auto-book: Current user is not a urologist`);
           }
-        }
         }
       } catch (autoBookError) {
         console.error('[updatePatientPathway] Auto-booking failed (non-fatal):', autoBookError.message);
@@ -2253,12 +2254,12 @@ export const updatePatientPathway = async (req, res) => {
     if (pathway === 'Post-op Transfer' || pathway === 'Post-op Followup') {
       try {
         console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking 6-month follow-up appointments...`);
-        
+
         // Get the urologist (either from patient assignment or current user)
         // IMPORTANT: Use doctors.id for appointments, not users.id
         let urologistDoctorId = null;
         let urologistName = null;
-        
+
         // First, try to use the assigned urologist from patient record
         if (patientData.assigned_urologist) {
           const assignedUrologistQuery = await client.query(
@@ -2268,7 +2269,7 @@ export const updatePatientPathway = async (req, res) => {
              LIMIT 1`,
             [patientData.assigned_urologist]
           );
-          
+
           if (assignedUrologistQuery.rows.length > 0) {
             const urologist = assignedUrologistQuery.rows[0];
             // Get the corresponding doctors.id
@@ -2276,21 +2277,21 @@ export const updatePatientPathway = async (req, res) => {
               'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
               [urologist.email]
             );
-            
+
             if (doctorCheck.rows.length > 0) {
               urologistDoctorId = doctorCheck.rows[0].id;
               urologistName = `${urologist.first_name} ${urologist.last_name}`;
             }
           }
         }
-        
+
         // If no assigned urologist found, use the current user if they're a urologist
         if (!urologistDoctorId) {
           const currentUrologistQuery = await client.query(
             'SELECT id, first_name, last_name, email FROM users WHERE id = $1 AND role = $2',
             [userId, 'urologist']
           );
-          
+
           if (currentUrologistQuery.rows.length > 0) {
             const urologist = currentUrologistQuery.rows[0];
             // Get the corresponding doctors.id
@@ -2298,7 +2299,7 @@ export const updatePatientPathway = async (req, res) => {
               'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
               [urologist.email]
             );
-            
+
             if (doctorCheck.rows.length > 0) {
               urologistDoctorId = doctorCheck.rows[0].id;
               urologistName = `${urologist.first_name} ${urologist.last_name}`;
@@ -2310,15 +2311,15 @@ export const updatePatientPathway = async (req, res) => {
           // Create multiple follow-up appointments at 6-month intervals for 1 year (6 months, 12 months)
           const appointmentIntervals = [6, 12]; // months - 6-month intervals for 1 year
           const bookedAppointments = [];
-          
+
           for (const monthsAhead of appointmentIntervals) {
             const followUpDate = new Date();
             followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
             const appointmentDate = followUpDate.toISOString().split('T')[0];
-            
+
             // Default time: 10:00 AM
             let appointmentTime = '10:00';
-            
+
             // Check if time slot is available (using doctors.id)
             // EXCLUDE automatic appointments - they don't block slots
             const conflictCheck = await client.query(
@@ -2355,13 +2356,13 @@ export const updatePatientPathway = async (req, res) => {
               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
               RETURNING *`,
               [
-                id, 
-                'urologist', 
-                appointmentDate, 
-                appointmentTime, 
+                id,
+                'urologist',
+                appointmentDate,
+                appointmentTime,
                 urologistDoctorId, // Use doctors.id, not users.id
-                urologistName, 
-                `Auto-booked ${monthsAhead}-month post-operative follow-up. ${reason || ''}`.trim(), 
+                urologistName,
+                `Auto-booked ${monthsAhead}-month post-operative follow-up. ${reason || ''}`.trim(),
                 userId,
                 'scheduled'
               ]
@@ -2403,14 +2404,14 @@ export const updatePatientPathway = async (req, res) => {
     if (userName && userRole) {
       try {
         console.log(`[updatePatientPathway] Creating clinical note for pathway transfer...`);
-        
+
         // Create detailed clinical note content
         let noteContent = `🔄 PATHWAY TRANSFER\n\n` +
-                         `Patient transferred to: ${pathway}\n` +
-                         `Previous pathway: ${patientData.care_pathway || 'None'}\n` +
-                         `Reason: ${reason || 'Not specified'}\n` +
-                         `Clinical Notes: ${notes || 'None'}`;
-        
+          `Patient transferred to: ${pathway}\n` +
+          `Previous pathway: ${patientData.care_pathway || 'None'}\n` +
+          `Reason: ${reason || 'Not specified'}\n` +
+          `Clinical Notes: ${notes || 'None'}`;
+
         // Add auto-booking info if appointment was created
         if (autoBookedAppointment) {
           // Check if multiple appointments were booked (post-op pathway)
@@ -2423,9 +2424,9 @@ export const updatePatientPathway = async (req, res) => {
                 day: 'numeric'
               });
               noteContent += `\n${index + 1}. ${apt.monthsAhead}-Month Follow-up:\n` +
-                            `   Date: ${aptDate}\n` +
-                            `   Time: ${apt.time || 'Flexible (no time slot - additional appointment)'}\n` +
-                            `   Urologist: ${autoBookedAppointment.urologistName}`;
+                `   Date: ${aptDate}\n` +
+                `   Time: ${apt.time || 'Flexible (no time slot - additional appointment)'}\n` +
+                `   Urologist: ${autoBookedAppointment.urologistName}`;
             });
           } else {
             // Single appointment (Active Monitoring)
@@ -2435,14 +2436,14 @@ export const updatePatientPathway = async (req, res) => {
               day: 'numeric'
             });
             noteContent += `\n\n📅 FOLLOW-UP APPOINTMENT AUTO-BOOKED:\n` +
-                          `Date: ${aptDate}\n` +
-                          `Time: Flexible (no time slot - additional appointment)\n` +
-                          `Urologist: ${autoBookedAppointment.urologistName}`;
+              `Date: ${aptDate}\n` +
+              `Time: Flexible (no time slot - additional appointment)\n` +
+              `Urologist: ${autoBookedAppointment.urologistName}`;
           }
         }
-        
+
         noteContent += `\n\nTransferred by: ${userName} (${userRole})`;
-        
+
         // Insert into patient_notes table
         await client.query(
           `INSERT INTO patient_notes (
@@ -2450,7 +2451,7 @@ export const updatePatientPathway = async (req, res) => {
           ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
           [id, 'pathway_transfer', noteContent, userId, userName, userRole]
         );
-        
+
         console.log(`[updatePatientPathway] ✅ Created clinical note for ${patientData.upi} - Transfer to ${pathway}`);
       } catch (noteError) {
         console.error('[updatePatientPathway] Failed to create clinical note (non-fatal):', noteError.message);
@@ -2462,12 +2463,12 @@ export const updatePatientPathway = async (req, res) => {
     if ((pathway === 'Active Monitoring' || pathway === 'Medication') && patientData.referred_by_gp_id && patientData.gp_email) {
       try {
         console.log(`[updatePatientPathway] Sending notification to referring GP...`);
-        
+
         const patientName = `${patientData.first_name} ${patientData.last_name}`;
         const gpName = `Dr. ${patientData.gp_first_name} ${patientData.gp_last_name}`;
-        
+
         const emailSubject = `Patient Update: ${patientName} - Transferred to ${pathway}`;
-        
+
         let emailContent = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background-color: #0d9488; padding: 20px; text-align: center;">
@@ -2489,7 +2490,7 @@ export const updatePatientPathway = async (req, res) => {
                 <p style="margin: 5px 0;"><strong>New Care Pathway:</strong> <span style="color: #0d9488; font-weight: bold;">${pathway}</span></p>
                 ${reason ? `<p style="margin: 5px 0;"><strong>Reason:</strong> ${reason}</p>` : ''}
               </div>`;
-        
+
         if ((pathway === 'Active Monitoring' || pathway === 'Medication') && autoBookedAppointment) {
           const aptDate = new Date(autoBookedAppointment.date).toLocaleDateString('en-US', {
             year: 'numeric',
@@ -2504,7 +2505,7 @@ export const updatePatientPathway = async (req, res) => {
                 <p style="margin: 5px 0;"><strong>Urologist:</strong> ${autoBookedAppointment.urologistName}</p>
               </div>`;
         }
-        
+
         emailContent += `
               <p style="color: #374151; font-size: 16px; margin-top: 20px;">
                 You can view the patient's full details and progress in your GP portal.
@@ -2525,19 +2526,19 @@ export const updatePatientPathway = async (req, res) => {
             </div>
           </div>
         `;
-        
+
         const emailResult = await sendNotificationEmail(patientData.gp_email, emailSubject, emailContent, true);
-        
+
         if (emailResult.success) {
           console.log(`[updatePatientPathway] ✅ Notification email sent to GP: ${patientData.gp_email}`);
         } else {
           console.error(`[updatePatientPathway] ⚠️ Failed to send notification to GP: ${emailResult.error}`);
         }
-        
+
         // CREATE IN-APP NOTIFICATION FOR GP
         try {
           console.log(`[updatePatientPathway] Creating in-app notification for GP...`);
-          
+
           const notificationResult = await createPathwayTransferNotification({
             gpUserId: patientData.referred_by_gp_id,
             patientName,
@@ -2546,7 +2547,7 @@ export const updatePatientPathway = async (req, res) => {
             urologistName: userName || 'Urologist',
             reason: reason || ''
           });
-          
+
           if (notificationResult.success) {
             console.log(`[updatePatientPathway] ✅ In-app notification created for GP`);
           } else {
@@ -2581,7 +2582,7 @@ export const updatePatientPathway = async (req, res) => {
 // Expire patient - marks patient as expired, removes all future appointments, and prevents future bookings
 export const expirePatient = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
     const { reason, notes } = req.body;
@@ -2598,10 +2599,10 @@ export const expirePatient = async (req, res) => {
       if (userQuery.rows.length > 0) {
         const userInfo = userQuery.rows[0];
         userName = `${userInfo.first_name} ${userInfo.last_name}`;
-        userRole = (userInfo.role === 'urologist' || userInfo.role === 'doctor') ? 'Urologist' : 
-                   userInfo.role === 'urology_nurse' ? 'Nurse' : 
-                   userInfo.role === 'gp' ? 'GP' : 
-                   userInfo.role === 'admin' ? 'Admin' : 'User';
+        userRole = (userInfo.role === 'urologist' || userInfo.role === 'doctor') ? 'Urologist' :
+          userInfo.role === 'urology_nurse' ? 'Nurse' :
+            userInfo.role === 'gp' ? 'GP' :
+              userInfo.role === 'admin' ? 'Admin' : 'User';
       }
     } catch (e) {
       console.error('[expirePatient] Failed to get user info:', e.message);
@@ -2718,10 +2719,10 @@ export const expirePatient = async (req, res) => {
 // Search patients with autocomplete
 export const searchPatients = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { query, limit = 10 } = req.query;
-    
+
     if (!query || query.trim().length < 1) {
       return res.json({
         success: true,
@@ -2729,9 +2730,9 @@ export const searchPatients = async (req, res) => {
         data: []
       });
     }
-    
+
     const searchTerm = `%${query.trim()}%`;
-    
+
     // Search patients by name, UPI, or phone
     // Search in first name, last name, full name (both orders), UPI, and phone
     const result = await client.query(
@@ -2774,13 +2775,13 @@ export const searchPatients = async (req, res) => {
        LIMIT $3`,
       [searchTerm, `${query.trim()}%`, limit]
     );
-    
+
     // Calculate age for each patient
     const today = new Date();
     const patients = result.rows.map(row => {
       const birthDate = new Date(row.date_of_birth);
       const age = Math.floor((today - birthDate) / (365.25 * 24 * 60 * 60 * 1000));
-      
+
       return {
         id: row.id,
         upi: row.upi,
@@ -2798,9 +2799,9 @@ export const searchPatients = async (req, res) => {
         priority: row.priority
       };
     });
-    
+
     console.log(`[searchPatients] Found ${patients.length} patients for query: "${query}"`);
-    
+
     res.json({
       success: true,
       message: 'Patients found',
@@ -2823,7 +2824,7 @@ export const getPatientsDueForReview = async (req, res) => {
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   console.log(`\n👥 [getPatientsDueForReview ${requestId}] Starting`);
   console.log(`👥 [getPatientsDueForReview ${requestId}] User:`, req.user?.id, req.user?.role);
-  
+
   let client;
   try {
     console.log(`👥 [getPatientsDueForReview ${requestId}] Connecting to database...`);
@@ -2843,13 +2844,13 @@ export const getPatientsDueForReview = async (req, res) => {
       error: 'Service temporarily unavailable'
     });
   }
-  
+
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
     const userEmail = req.user.email;
     console.log(`👥 [getPatientsDueForReview ${requestId}] Processing for userId: ${userId}, role: ${userRole}, email: ${userEmail}`);
-    
+
     // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
     // Appointments have urologist_id pointing to doctors.id
     let doctorId = null;
@@ -2880,22 +2881,22 @@ export const getPatientsDueForReview = async (req, res) => {
         });
       }
     }
-    
+
     // Calculate date range for 7-14 days from now
     const today = new Date();
     const startDate = new Date(today);
     startDate.setDate(startDate.getDate() + 7);
     const endDate = new Date(today);
     endDate.setDate(endDate.getDate() + 14);
-    
+
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
-    
+
     console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for doctor ${doctorId}`);
-    
+
     // For urologists/doctors, get appointments assigned to them using doctors.id only
     // For nurses, get all appointments in the department
-    const appointmentsQuery = (userRole === 'urologist' || userRole === 'doctor') 
+    const appointmentsQuery = (userRole === 'urologist' || userRole === 'doctor')
       ? `SELECT 
           a.id,
           a.patient_id,
@@ -2939,24 +2940,24 @@ export const getPatientsDueForReview = async (req, res) => {
          WHERE a.appointment_date BETWEEN $1 AND $2
          AND a.status IN ('scheduled', 'confirmed')
          ORDER BY a.appointment_date, a.appointment_time`;
-    
+
     // Use doctors.id only (appointments use doctors.id)
     const queryParams = (userRole === 'urologist' || userRole === 'doctor')
       ? [startDateStr, endDateStr, doctorId]
       : [startDateStr, endDateStr];
-    
+
     const result = await client.query(appointmentsQuery, queryParams);
-    
+
     // Transform appointments into patients due for review
     const patientsMap = new Map();
-    
+
     for (const row of result.rows) {
       const patientId = row.patient_id;
-      
+
       // Calculate age
       const birthDate = new Date(row.date_of_birth);
       const age = Math.floor((today - birthDate) / (365.25 * 24 * 60 * 60 * 1000));
-      
+
       // Determine type based on appointment type or care pathway
       let type = 'Follow-up';
       if (row.appointment_type === 'surgery') {
@@ -2968,7 +2969,7 @@ export const getPatientsDueForReview = async (req, res) => {
       } else if (row.appointment_type === 'investigation') {
         type = 'Investigation';
       }
-      
+
       // Determine priority based on date proximity and type
       const daysUntil = Math.floor((new Date(row.appointment_date) - today) / (24 * 60 * 60 * 1000));
       let priority = 'Medium';
@@ -2977,7 +2978,7 @@ export const getPatientsDueForReview = async (req, res) => {
       } else if (daysUntil > 10) {
         priority = 'Low';
       }
-      
+
       if (!patientsMap.has(patientId)) {
         patientsMap.set(patientId, {
           id: patientId,
@@ -2993,9 +2994,9 @@ export const getPatientsDueForReview = async (req, res) => {
         });
       }
     }
-    
+
     const patients = Array.from(patientsMap.values());
-    
+
     // Calculate summary statistics
     const summary = {
       total: patients.length,
@@ -3004,10 +3005,10 @@ export const getPatientsDueForReview = async (req, res) => {
       surgical: patients.filter(p => p.type === 'Surgery').length,
       followup: patients.filter(p => p.type === 'Follow-up').length
     };
-    
+
     console.log(`[getPatientsDueForReview] Found ${patients.length} patients due for review`);
     console.log(`[getPatientsDueForReview] Summary:`, summary);
-    
+
     res.json({
       success: true,
       message: 'Patients due for review fetched successfully',
@@ -3026,8 +3027,8 @@ export const getPatientsDueForReview = async (req, res) => {
     console.error(`❌ [getPatientsDueForReview ${requestId}] User info:`, { id: userId, role: userRole, email: req.user.email });
     console.error(`❌ [getPatientsDueForReview ${requestId}] Error code:`, error.code);
     console.error(`❌ [getPatientsDueForReview ${requestId}] Error name:`, error.name);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to fetch patients due for review',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });

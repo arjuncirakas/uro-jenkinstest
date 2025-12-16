@@ -576,7 +576,18 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
       if (result.success && result.data) {
         console.log('✅ NursePatientDetailsModal: Fetched full patient details:', result.data);
-        setFullPatientData(result.data);
+        console.log('📋 Care Pathway from API:', result.data.carePathway || result.data.care_pathway);
+
+        // Merge with original patient data to preserve carePathway if API doesn't return it
+        const mergedData = {
+          ...result.data,
+          // Preserve carePathway from original patient if not in API response
+          carePathway: result.data.carePathway || result.data.care_pathway || patient.carePathway || patient.care_pathway,
+          care_pathway: result.data.care_pathway || result.data.carePathway || patient.care_pathway || patient.carePathway
+        };
+
+        console.log('📋 Merged Care Pathway:', mergedData.carePathway);
+        setFullPatientData(mergedData);
       } else {
         console.error('❌ NursePatientDetailsModal: Failed to fetch patient details:', result.error);
       }
@@ -585,7 +596,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     } finally {
       setLoadingPatientData(false);
     }
-  }, [patient?.id]);
+  }, [patient?.id, patient?.carePathway, patient?.care_pathway]);
 
   // Fetch notes for the patient
   const fetchNotes = useCallback(async () => {
@@ -3377,12 +3388,20 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                       {(() => {
                         const displayPatient = fullPatientData || patient;
 
+                        console.log('🔍 Nurse Pipeline Rendering - Using patient data:', {
+                          usingFullData: !!fullPatientData,
+                          carePathway: displayPatient?.carePathway || displayPatient?.care_pathway,
+                          patientId: displayPatient?.id
+                        });
+
                         // Get patient pipeline stage
                         const pipelineData = getPatientPipelineStage(
                           displayPatient,
                           appointments || [], // Appointments for pipeline
                           mdtMeetings || []  // MDT meetings for pipeline
                         );
+
+                        console.log('🔍 Nurse Pipeline Data:', pipelineData);
 
                         return (
                           <>
