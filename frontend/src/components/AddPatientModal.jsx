@@ -235,6 +235,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     // Handle auto-calculation between DOB and Age
     let updatedFormData = { ...formData, [name]: sanitizedValue };
 
+    // Only auto-calculate age when dateOfBirth is entered (not vice versa)
     if (name === 'dateOfBirth' && sanitizedValue) {
       const dob = new Date(sanitizedValue);
       const today = new Date();
@@ -244,23 +245,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         age--;
       }
       updatedFormData.age = age.toString();
-    } else if (name === 'age' && sanitizedValue) {
-      const age = parseInt(sanitizedValue, 10);
-      if (!isNaN(age)) {
-        const today = new Date();
-        const birthYear = today.getFullYear() - age;
-        // Set to Jan 1st of the estimated birth year
-        const dob = new Date(birthYear, 0, 1);
-        // Adjust for timezone offset to ensure the date string is correct
-        const year = dob.getFullYear();
-        const month = String(dob.getMonth() + 1).padStart(2, '0');
-        const day = String(dob.getDate()).padStart(2, '0');
-        updatedFormData.dateOfBirth = `${year}-${month}-${day}`;
-      }
-    } else if ((name === 'dateOfBirth' && !sanitizedValue) || (name === 'age' && !sanitizedValue)) {
-      if (name === 'dateOfBirth') updatedFormData.age = '';
-      if (name === 'age') updatedFormData.dateOfBirth = '';
+    } else if (name === 'dateOfBirth' && !sanitizedValue) {
+      // Only clear age if dateOfBirth is cleared (not when age is cleared)
+      updatedFormData.age = '';
     }
+    // Note: We don't auto-calculate dateOfBirth when age is entered
+    // User can enter either dateOfBirth or age, or both
 
     setFormData(updatedFormData);
 

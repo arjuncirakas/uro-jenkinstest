@@ -10,6 +10,49 @@ const DailyAppointmentsList = ({
 }) => {
   const [viewMode, setViewMode] = useState('timeline'); // 'list' or 'timeline'
 
+  // Helper function to check if an appointment is a recurring followup or auto-booked appointment
+  const isRecurringFollowup = (appointment) => {
+    // Check typeColor first (set by backend for automatic appointments)
+    if (appointment.typeColor === 'blue') {
+      return true;
+    }
+    
+    // Check appointment_type or type fields (raw database values)
+    if (appointment.appointment_type === 'automatic' || 
+        appointment.type === 'automatic' ||
+        appointment.appointmentType === 'automatic') {
+      return true;
+    }
+    
+    // Check type label (backend sets this to 'Follow-up Appointment' for automatic)
+    const typeLabel = (appointment.type || '').toLowerCase();
+    if (typeLabel === 'follow-up appointment' || 
+        typeLabel === 'followup appointment' ||
+        typeLabel.includes('follow-up')) {
+      return true;
+    }
+    
+    // Check if notes contain auto-booked or recurring followup patterns
+    const notes = appointment.notes || '';
+    const lowerNotes = notes.toLowerCase();
+    
+    // Check for auto-booked patterns
+    if (lowerNotes.includes('auto-booked') || 
+        lowerNotes.includes('auto booked') ||
+        lowerNotes.includes('automatic appointment')) {
+      return true;
+    }
+    
+    // Check for recurring followup patterns
+    if (lowerNotes.includes('recurring follow-up') || 
+        lowerNotes.includes('recurring followup') ||
+        lowerNotes.includes('recurring follow up')) {
+      return true;
+    }
+    
+    return false;
+  };
+
   // Helper function to convert 24-hour time to 12-hour format
   const convertTo12Hour = (time24) => {
     if (!time24) return '';
@@ -167,9 +210,11 @@ const DailyAppointmentsList = ({
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         appointment.status === 'missed'
                           ? 'bg-red-100 text-red-800'
-                          : appointment.typeColor === 'teal' 
-                            ? 'bg-teal-100 text-teal-800' 
-                            : 'bg-purple-100 text-purple-800'
+                          : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                            ? 'bg-blue-100 text-blue-800'
+                            : appointment.typeColor === 'teal' 
+                              ? 'bg-teal-100 text-teal-800' 
+                              : 'bg-purple-100 text-purple-800'
                       }`}>
                         {appointment.type}
                       </span>
@@ -237,15 +282,17 @@ const DailyAppointmentsList = ({
                             className={`p-3 rounded-lg cursor-pointer group hover:opacity-90 transition-opacity ${
                               appointment.status === 'missed'
                                 ? 'bg-red-500 text-white'
-                                : appointment.typeColor === 'teal' 
-                                  ? 'bg-teal-500 text-white' 
-                                  : 'bg-purple-500 text-white'
+                                : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                  ? 'bg-blue-500 text-white'
+                                  : appointment.typeColor === 'teal' 
+                                    ? 'bg-teal-500 text-white' 
+                                    : 'bg-purple-500 text-white'
                             }`}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="font-semibold text-sm">
-                                  {appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                  {isRecurringFollowup(appointment) || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
                                     ? '⚡ Flexible - '
                                     : appointment.time ? convertTo12Hour(appointment.time) + ' - ' : ''}
                                   {appointment.patientName}

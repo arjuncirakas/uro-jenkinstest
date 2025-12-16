@@ -266,14 +266,60 @@ const Calendar = ({
     return filtered;
   };
 
+  // Helper function to check if an appointment is a recurring followup or auto-booked appointment
+  const isRecurringFollowup = (appointment) => {
+    // Check typeColor first (set by backend for automatic appointments)
+    if (appointment.typeColor === 'blue') {
+      return true;
+    }
+    
+    // Check appointment_type or type fields (raw database values)
+    if (appointment.appointment_type === 'automatic' || 
+        appointment.type === 'automatic' ||
+        appointment.appointmentType === 'automatic') {
+      return true;
+    }
+    
+    // Check type label (backend sets this to 'Follow-up Appointment' for automatic)
+    const typeLabel = (appointment.type || '').toLowerCase();
+    if (typeLabel === 'follow-up appointment' || 
+        typeLabel === 'followup appointment' ||
+        typeLabel.includes('follow-up')) {
+      return true;
+    }
+    
+    // Check if notes contain auto-booked or recurring followup patterns
+    const notes = appointment.notes || '';
+    const lowerNotes = notes.toLowerCase();
+    
+    // Check for auto-booked patterns
+    if (lowerNotes.includes('auto-booked') || 
+        lowerNotes.includes('auto booked') ||
+        lowerNotes.includes('automatic appointment')) {
+      return true;
+    }
+    
+    // Check for recurring followup patterns
+    if (lowerNotes.includes('recurring follow-up') || 
+        lowerNotes.includes('recurring followup') ||
+        lowerNotes.includes('recurring follow up')) {
+      return true;
+    }
+    
+    return false;
+  };
+
   // Separate automatic appointments from regular appointments
   const separateAppointments = (appointments) => {
     const regular = [];
     const automatic = [];
     
     appointments.forEach(apt => {
-      // Check if appointment is automatic (by type or appointment_type field)
-      if (apt.appointment_type === 'automatic' || apt.type === 'automatic') {
+      // Use the isRecurringFollowup helper to catch all automatic appointments
+      // This includes appointments with typeColor='blue', type='automatic', 
+      // appointment_type='automatic', or notes containing auto-booked/recurring patterns
+      const isAutomatic = isRecurringFollowup(apt);
+      if (isAutomatic) {
         automatic.push(apt);
       } else {
         regular.push(apt);
@@ -625,7 +671,7 @@ const Calendar = ({
                             className={`p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity ${
                               appointment.status === 'missed'
                                 ? 'bg-red-500 text-white'
-                                : appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
                                   ? 'bg-blue-500 text-white'
                                   : appointment.typeColor === 'teal' 
                                     ? 'bg-teal-500 text-white' 
@@ -669,8 +715,7 @@ const Calendar = ({
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate flex items-center gap-1">
-                                  <span className="text-[10px]">⚡</span>
+                                <div className="font-medium truncate">
                                   {appointment.patientName}
                                 </div>
                               </div>
@@ -737,7 +782,7 @@ const Calendar = ({
                     {/* Day columns */}
                     {getWeekDays(currentDate).map((day, dayIndex) => {
                       const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
-                      const { regular } = separateAppointments(dayAppointments);
+                      const { regular, automatic } = separateAppointments(dayAppointments);
                       
                       // Sort regular appointments: upcoming first (confirmed, pending), then completed/missed
                       const sortedRegularAppointments = [...regular].sort((a, b) => {
@@ -755,8 +800,13 @@ const Calendar = ({
                         return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
                       });
                       
-                      // Filter regular appointments by time slot (automatic appointments don't have time slots)
+                      // Filter regular appointments by time slot
+                      // Note: Automatic appointments with time slots will be shown in their time slot AND in the automatic section below
                       const timeAppointments = sortedRegularAppointments.filter(apt => apt.time && isTimeInSlot(apt.time, time));
+                      
+                      // Also include automatic appointments that have a time slot in this time slot
+                      const automaticWithTime = automatic.filter(apt => apt.time && isTimeInSlot(apt.time, time));
+                      const allTimeAppointments = [...timeAppointments, ...automaticWithTime];
                       
                       return (
                         <div
@@ -767,7 +817,7 @@ const Calendar = ({
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, day.fullDate)}
                         >
-                          {timeAppointments.map((appointment) => (
+                          {allTimeAppointments.map((appointment) => (
                             <div
                               key={appointment.id}
                               draggable
@@ -779,9 +829,11 @@ const Calendar = ({
                               className={`p-2 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity mb-1 ${
                                 appointment.status === 'missed'
                                   ? 'bg-red-500 text-white'
-                                  : appointment.typeColor === 'teal' 
-                                    ? 'bg-teal-500 text-white' 
-                                    : 'bg-purple-500 text-white'
+                                  : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                    ? 'bg-blue-500 text-white'
+                                    : appointment.typeColor === 'teal' 
+                                      ? 'bg-teal-500 text-white' 
+                                      : 'bg-purple-500 text-white'
                               }`}
                             >
                               <div className="font-medium">{convertTo12Hour(appointment.time)}</div>
@@ -799,9 +851,8 @@ const Calendar = ({
               {/* Automatic Appointments Section (Week View) */}
               <div className="mt-4 border-t border-gray-200 pt-4">
                 <div className="mb-2 px-2">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <span>⚡</span>
-                    Automatic Appointments (No Time Slots)
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Automatic Follow-up Appointments
                   </h3>
                 </div>
                 <div className="grid grid-cols-8 gap-px bg-gray-200">
@@ -810,6 +861,7 @@ const Calendar = ({
                     const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
                     const { automatic } = separateAppointments(dayAppointments);
                     
+                    // Show ALL automatic appointments (both with and without time slots)
                     const sortedAutomaticAppointments = [...automatic].sort((a, b) => {
                       const statusPriority = (status) => {
                         if (status === 'confirmed' || status === 'pending') return 0;
@@ -836,11 +888,10 @@ const Calendar = ({
                                   handleAppointmentClick(appointment);
                                 }}
                                 className="p-1.5 rounded text-xs cursor-pointer bg-blue-500 text-white border border-blue-600 hover:opacity-90 transition-opacity"
-                                title="Automatic Appointment (No time slot)"
+                                title={appointment.time ? `Automatic Appointment at ${convertTo12Hour(appointment.time)}` : "Automatic Appointment (No time slot)"}
                               >
-                                <div className="font-medium truncate flex items-center gap-1">
-                                  <span className="text-[10px]">⚡</span>
-                                  {appointment.patientName}
+                                <div className="font-medium truncate">
+                                  {appointment.time ? `${convertTo12Hour(appointment.time)} - ` : ''}{appointment.patientName}
                                 </div>
                               </div>
                             ))}
@@ -910,7 +961,7 @@ const Calendar = ({
                             className={`p-3 rounded-lg cursor-pointer group hover:opacity-90 transition-opacity ${
                               appointment.status === 'missed'
                                 ? 'bg-red-500 text-white'
-                                : appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
                                   ? 'bg-blue-500 text-white'
                                   : appointment.typeColor === 'teal' 
                                     ? 'bg-teal-500 text-white' 
@@ -920,10 +971,7 @@ const Calendar = ({
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="font-semibold text-sm">
-                                  {appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic' 
-                                    ? '⚡ ' 
-                                    : appointment.time ? convertTo12Hour(appointment.time) + ' - ' 
-                                    : ''}
+                                  {appointment.time ? convertTo12Hour(appointment.time) + ' - ' : ''}
                                   {appointment.patientName}
                                 </div>
                                 <div className="text-xs opacity-90 mt-1">{appointment.type}</div>
@@ -956,8 +1004,7 @@ const Calendar = ({
             {/* Automatic Appointments Section (Day View) */}
             <div className="mt-6 border-t border-gray-200 pt-4">
               <div className="mb-3">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <span>⚡</span>
+                <h3 className="text-sm font-semibold text-gray-700">
                   Automatic Appointments (No Time Slots)
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">These appointments don't block time slots and can be managed separately</p>
@@ -996,8 +1043,7 @@ const Calendar = ({
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="font-semibold text-base flex items-center gap-2">
-                            <span>⚡</span>
+                          <div className="font-semibold text-base">
                             {appointment.patientName}
                           </div>
                           <div className="text-xs opacity-90 mt-1">{appointment.type || 'Automatic Appointment'}</div>

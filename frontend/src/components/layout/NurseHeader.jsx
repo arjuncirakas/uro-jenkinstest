@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { IoNotificationsOutline } from 'react-icons/io5';
+import React, { useState, useRef, useCallback } from 'react';
+import { IoNotificationsOutline, IoPersonCircleOutline } from 'react-icons/io5';
 import { FiSearch } from 'react-icons/fi';
 import NotificationModal from '../NotificationModal';
+import ProfileDropdown from '../ProfileDropdown';
 import GlobalPatientSearch from '../GlobalPatientSearch';
 import NursePatientDetailsModal from '../NursePatientDetailsModal';
 
@@ -13,9 +14,16 @@ const NurseHeader = ({
   useLocalSearch = false // Flag to indicate if this page uses local filtering
 }) => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileButtonRef = useRef(null);
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [notificationCount, setNotificationCount] = useState(0);
+
+  // Memoized callback to close profile dropdown
+  const handleProfileClose = useCallback(() => {
+    setIsProfileOpen(false);
+  }, []);
 
   const handlePatientSelect = (patient) => {
     console.log('Selected patient:', patient);
@@ -70,6 +78,7 @@ const NurseHeader = ({
             <button 
               onClick={() => setIsNotificationOpen(true)}
               className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Notifications"
             >
               <IoNotificationsOutline className="text-2xl" />
               {/* Notification Badge */}
@@ -79,6 +88,24 @@ const NurseHeader = ({
                 </span>
               )}
             </button>
+          </div>
+          {/* Profile Icon */}
+          <div className="relative">
+            <button
+              ref={profileButtonRef}
+              onClick={() => setIsProfileOpen(!isProfileOpen)}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Profile"
+            >
+              <IoPersonCircleOutline className="text-2xl" />
+            </button>
+            {isProfileOpen && (
+              <ProfileDropdown
+                isOpen={isProfileOpen}
+                onClose={handleProfileClose}
+                buttonRef={profileButtonRef}
+              />
+            )}
           </div>
         </div>
       </div>

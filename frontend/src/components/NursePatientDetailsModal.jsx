@@ -69,9 +69,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
   const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
   const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
-  const [isViewResultsModalOpen, setIsViewResultsModalOpen] = useState(false);
-  const [selectedTestResults, setSelectedTestResults] = useState([]);
-  const [selectedTestName, setSelectedTestName] = useState('');
 
   // Edit Surgery Appointment Modal state
   const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
@@ -1617,6 +1614,54 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     }
   }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchAppointments, fetchDischargeSummary, isPostOpFollowupPatient]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Save the current scroll position
+      const scrollY = window.scrollY || window.pageYOffset;
+      // Get the scrollbar width to prevent layout shift
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      
+      // Lock the html and body scroll
+      document.documentElement.style.position = 'fixed';
+      document.documentElement.style.top = `-${scrollY}px`;
+      document.documentElement.style.width = '100%';
+      document.documentElement.style.overflow = 'hidden';
+      document.documentElement.style.paddingRight = `${scrollbarWidth}px`;
+      
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+      
+      return () => {
+        // Restore scroll position when modal closes
+        const scrollYValue = document.body.style.top;
+        
+        // Restore html element
+        document.documentElement.style.position = '';
+        document.documentElement.style.top = '';
+        document.documentElement.style.width = '';
+        document.documentElement.style.overflow = '';
+        document.documentElement.style.paddingRight = '';
+        
+        // Restore body element
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+        
+        // Restore scroll position
+        if (scrollYValue) {
+          const savedScrollY = parseInt(scrollYValue.replace('px', '').replace('-', ''), 10);
+          window.scrollTo(0, savedScrollY);
+        }
+      };
+    }
+  }, [isOpen]);
+
   // Listen for image viewer events
   useEffect(() => {
     const handleOpenImageViewer = (event) => {
@@ -1941,7 +1986,23 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div 
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-hidden"
+        onWheel={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onTouchMove={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          // Prevent backdrop click from scrolling
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+          }
+        }}
+      >
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col">
           {/* Fixed Header */}
           <div className="bg-teal-50 text-teal-900 p-6 rounded-t-xl">
@@ -2771,8 +2832,27 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                       });
 
                                       const hasResults = allTestResults.length > 0;
-                                      // Get the latest result for display
-                                      const uploadedResult = allTestResults.length > 0 ? allTestResults[0] : null;
+                                      // Get all results sorted by date (most recent first) for display
+                                      const sortedResults = allTestResults.map(result => ({
+                                        id: result.id,
+                                        testName: result.testName || result.test_name || result.testType || result.test_type,
+                                        date: result.testDate || result.test_date || result.created_at,
+                                        result: result.result || result.result_value,
+                                        referenceRange: result.referenceRange || result.reference_range || 'N/A',
+                                        status: result.status || 'Completed',
+                                        notes: result.notes || result.comments || '',
+                                        filePath: result.filePath || result.file_path,
+                                        authorName: result.authorName || result.author_name,
+                                        authorRole: result.authorRole || result.author_role,
+                                        createdAt: result.createdAt || result.created_at
+                                      })).sort((a, b) => {
+                                        // Sort by date, most recent first
+                                        const dateA = new Date(a.date || a.createdAt || 0);
+                                        const dateB = new Date(b.date || b.createdAt || 0);
+                                        return dateB - dateA;
+                                      });
+                                      // Get the latest result for quick display
+                                      const uploadedResult = sortedResults.length > 0 ? sortedResults[0] : null;
 
                                       // Check if this is a main test (MRI, TRUS, Biopsy)
                                       const isMainTest = ['MRI', 'TRUS', 'BIOPSY'].includes(investigationName);
@@ -2827,10 +2907,69 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                 )}
                                               </div>
 
-                                              {uploadedResult && uploadedResult.result && (
-                                                <div className="text-sm text-gray-700 mb-2">
-                                                  <span className="font-medium text-gray-600">Result: </span>
-                                                  <span className="text-gray-900">{uploadedResult.result}</span>
+                                              {/* Show all result details inline */}
+                                              {hasResults && sortedResults.length > 0 && (
+                                                <div className="space-y-3 mt-3">
+                                                  {sortedResults.map((result, idx) => {
+                                                    const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
+                                                      day: '2-digit',
+                                                      month: '2-digit',
+                                                      year: 'numeric'
+                                                    }) : 'N/A';
+                                                    
+                                                    return (
+                                                      <div key={result.id || idx} className="bg-white rounded-md p-3 border border-gray-200">
+                                                        <div className="flex items-start justify-between mb-2">
+                                                          <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-semibold text-gray-600">Result #{sortedResults.length - idx}</span>
+                                                            {result.status && (
+                                                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
+                                                                {result.status}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                        
+                                                        <div className="space-y-1.5">
+                                                          <div className="text-xs text-gray-600">
+                                                            <span className="font-medium">Date: </span>
+                                                            <span className="text-gray-900">{resultDate}</span>
+                                                          </div>
+                                                          
+                                                          {result.authorName && (
+                                                            <div className="text-xs text-gray-600">
+                                                              <span className="font-medium">Added by: </span>
+                                                              <span className="text-gray-900">{result.authorName}</span>
+                                                              {result.authorRole && (
+                                                                <span className="text-gray-500"> ({result.authorRole})</span>
+                                                              )}
+                                                            </div>
+                                                          )}
+                                                          
+                                                          {result.result && (
+                                                            <div className="text-sm text-gray-700">
+                                                              <span className="font-medium text-gray-600">Result Value: </span>
+                                                              <span className="text-lg font-semibold text-gray-900">{result.result}</span>
+                                                            </div>
+                                                          )}
+                                                          
+                                                          {result.referenceRange && result.referenceRange !== 'N/A' && (
+                                                            <div className="text-xs text-gray-600">
+                                                              <span className="font-medium">Reference Range: </span>
+                                                              <span className="text-gray-900">{result.referenceRange}</span>
+                                                            </div>
+                                                          )}
+                                                          
+                                                          {result.notes && (
+                                                            <div className="text-xs text-gray-600 pt-1 border-t border-gray-100">
+                                                              <span className="font-medium">Notes: </span>
+                                                              <span className="text-gray-900">{result.notes}</span>
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    );
+                                                  })}
                                                 </div>
                                               )}
 
@@ -2853,37 +2992,15 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
                                             <div className="flex-shrink-0">
                                               {hasResults ? (
-                                                <button
-                                                  onClick={() => {
-                                                    // Map all results to display format
-                                                    const formattedResults = allTestResults.map(result => ({
-                                                      id: result.id,
-                                                      testName: result.testName || result.test_name || result.testType || result.test_type,
-                                                      date: result.testDate || result.test_date || result.created_at,
-                                                      result: result.result || result.result_value,
-                                                      referenceRange: result.referenceRange || result.reference_range || 'N/A',
-                                                      status: result.status || 'Completed',
-                                                      notes: result.notes || result.comments || '',
-                                                      filePath: result.filePath || result.file_path,
-                                                      authorName: result.authorName || result.author_name,
-                                                      authorRole: result.authorRole || result.author_role,
-                                                      createdAt: result.createdAt || result.created_at
-                                                    })).sort((a, b) => {
-                                                      // Sort by date, most recent first
-                                                      const dateA = new Date(a.date || a.createdAt || 0);
-                                                      const dateB = new Date(b.date || b.createdAt || 0);
-                                                      return dateB - dateA;
-                                                    });
-
-                                                    setSelectedTestResults(formattedResults);
-                                                    setSelectedTestName(investigationName);
-                                                    setIsViewResultsModalOpen(true);
-                                                  }}
-                                                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-                                                >
-                                                  <Eye className="w-4 h-4" />
-                                                  View
-                                                </button>
+                                                uploadedResult && uploadedResult.filePath ? (
+                                                  <button
+                                                    onClick={() => handleViewFile(uploadedResult.filePath)}
+                                                    className="px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                                                  >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                    View File
+                                                  </button>
+                                                ) : null
                                               ) : (
                                                 (() => {
                                                   // Don't show upload button if status is not_required
@@ -5672,127 +5789,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         }}
       />
 
-      {/* View Test Results Modal */}
-      {isViewResultsModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="flex-shrink-0 bg-gradient-to-r from-teal-600 to-gray-800 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-white">Test Results: {selectedTestName}</h2>
-                  {patient && (
-                    <p className="text-sm text-teal-100 mt-1">
-                      Patient: <span className="font-medium">{patient.name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim()}</span>
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    setIsViewResultsModalOpen(false);
-                    setSelectedTestResults([]);
-                    setSelectedTestName('');
-                  }}
-                  className="text-white hover:text-gray-200 transition-colors p-1"
-                >
-                  <IoClose className="text-2xl" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {selectedTestResults.length === 0 ? (
-                <div className="text-center py-12">
-                  <IoDocument className="text-4xl text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No results found for this test.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {selectedTestResults.map((result, index) => {
-                    const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric'
-                    }) : 'N/A';
-
-                    return (
-                      <div key={result.id || index} className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold text-gray-900">Result #{selectedTestResults.length - index}</h3>
-                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
-                                {result.status || 'Completed'}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-600">
-                              Date: <span className="font-medium">{resultDate}</span>
-                            </p>
-                            {result.authorName && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Added by: {result.authorName} {result.authorRole ? `(${result.authorRole})` : ''}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-4">
-                            <div>
-                              <span className="text-sm font-medium text-gray-600">Result Value:</span>
-                              <p className="text-lg font-semibold text-gray-900 mt-0.5">{result.result || 'N/A'}</p>
-                            </div>
-                            {result.referenceRange && result.referenceRange !== 'N/A' && (
-                              <div>
-                                <span className="text-sm font-medium text-gray-600">Reference Range:</span>
-                                <p className="text-sm text-gray-700 mt-0.5">{result.referenceRange}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {result.notes && (
-                            <div className="pt-2 border-t border-gray-200">
-                              <span className="text-sm font-medium text-gray-600">Notes:</span>
-                              <p className="text-sm text-gray-700 mt-1">{result.notes}</p>
-                            </div>
-                          )}
-
-                          {result.filePath && (
-                            <div className="pt-2 border-t border-gray-200">
-                              <button
-                                onClick={() => handleViewFile(result.filePath)}
-                                className="flex items-center gap-2 text-sm text-teal-600 hover:text-teal-700 font-medium"
-                              >
-                                <IoDocument className="w-4 h-4" />
-                                View Attached File
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex-shrink-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
-              <button
-                onClick={() => {
-                  setIsViewResultsModalOpen(false);
-                  setSelectedTestResults([]);
-                  setSelectedTestName('');
-                }}
-                className="w-full px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-teal-700 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Image Viewer Modal */}
       <ImageViewerModal
