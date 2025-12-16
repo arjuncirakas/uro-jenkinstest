@@ -42,9 +42,16 @@ export const exportPatientsToCSV = async (req, res) => {
     }
     
     if (carePathway) {
-      whereConditions.push(`p.care_pathway = $${paramIndex}`);
-      params.push(carePathway);
-      paramIndex++;
+      // For OPD Queue, include patients with NULL or empty care_pathway as well
+      if (carePathway === 'OPD Queue') {
+        whereConditions.push(`(p.care_pathway = $${paramIndex} OR p.care_pathway IS NULL OR p.care_pathway = '')`);
+        params.push(carePathway);
+        paramIndex++;
+      } else {
+        whereConditions.push(`p.care_pathway = $${paramIndex}`);
+        params.push(carePathway);
+        paramIndex++;
+      }
     }
     
     if (status) {
@@ -99,11 +106,14 @@ export const exportPatientsToCSV = async (req, res) => {
     // Build query with appropriate joins for OPD Queue
     let query;
     if (needsAppointmentJoin) {
-      // For OPD Queue with date filters, use EXISTS to find patients with appointments in date range
-      const appointmentExistsConditions = [];
+      // For OPD Queue with date filters, include BOTH:
+      // 1. Patients with appointments in the date range
+      // 2. Patients without appointments but created in the date range (new/unassigned patients)
+      const dateConditions = [];
       
       if (startDate && endDate) {
-        appointmentExistsConditions.push(`(
+        dateConditions.push(`(
+          -- Patients with appointments in date range
           EXISTS (
             SELECT 1 FROM appointments a 
             WHERE a.patient_id = p.id 
@@ -117,11 +127,18 @@ export const exportPatientsToCSV = async (req, res) => {
             AND ib.scheduled_date >= $${paramIndex} 
             AND ib.scheduled_date <= $${paramIndex + 1}
           )
+          -- OR patients without appointments but created in date range (new/unassigned)
+          OR (
+            NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = p.id)
+            AND NOT EXISTS (SELECT 1 FROM investigation_bookings WHERE patient_id = p.id AND scheduled_date IS NOT NULL)
+            AND p.created_at >= $${paramIndex} 
+            AND p.created_at <= $${paramIndex + 1}
+          )
         )`);
         params.push(startDate, endDate);
         paramIndex += 2;
       } else if (startDate) {
-        appointmentExistsConditions.push(`(
+        dateConditions.push(`(
           EXISTS (
             SELECT 1 FROM appointments a 
             WHERE a.patient_id = p.id 
@@ -133,11 +150,16 @@ export const exportPatientsToCSV = async (req, res) => {
             AND ib.scheduled_date IS NOT NULL 
             AND ib.scheduled_date >= $${paramIndex}
           )
+          OR (
+            NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = p.id)
+            AND NOT EXISTS (SELECT 1 FROM investigation_bookings WHERE patient_id = p.id AND scheduled_date IS NOT NULL)
+            AND p.created_at >= $${paramIndex}
+          )
         )`);
         params.push(startDate);
         paramIndex++;
       } else if (endDate) {
-        appointmentExistsConditions.push(`(
+        dateConditions.push(`(
           EXISTS (
             SELECT 1 FROM appointments a 
             WHERE a.patient_id = p.id 
@@ -149,13 +171,18 @@ export const exportPatientsToCSV = async (req, res) => {
             AND ib.scheduled_date IS NOT NULL 
             AND ib.scheduled_date <= $${paramIndex}
           )
+          OR (
+            NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = p.id)
+            AND NOT EXISTS (SELECT 1 FROM investigation_bookings WHERE patient_id = p.id AND scheduled_date IS NOT NULL)
+            AND p.created_at <= $${paramIndex}
+          )
         )`);
         params.push(endDate);
         paramIndex++;
       }
       
-      if (appointmentExistsConditions.length > 0) {
-        whereConditions.push(appointmentExistsConditions.join(' AND '));
+      if (dateConditions.length > 0) {
+        whereConditions.push(dateConditions.join(' AND '));
       }
       
       const finalWhereClause = whereConditions.length > 0 
@@ -267,9 +294,16 @@ export const exportPatientsToExcel = async (req, res) => {
     }
     
     if (carePathway) {
-      whereConditions.push(`p.care_pathway = $${paramIndex}`);
-      params.push(carePathway);
-      paramIndex++;
+      // For OPD Queue, include patients with NULL or empty care_pathway as well
+      if (carePathway === 'OPD Queue') {
+        whereConditions.push(`(p.care_pathway = $${paramIndex} OR p.care_pathway IS NULL OR p.care_pathway = '')`);
+        params.push(carePathway);
+        paramIndex++;
+      } else {
+        whereConditions.push(`p.care_pathway = $${paramIndex}`);
+        params.push(carePathway);
+        paramIndex++;
+      }
     }
     
     if (status) {
@@ -324,11 +358,14 @@ export const exportPatientsToExcel = async (req, res) => {
     // Build query with appropriate joins for OPD Queue
     let query;
     if (needsAppointmentJoin) {
-      // For OPD Queue with date filters, use EXISTS to find patients with appointments in date range
-      const appointmentExistsConditions = [];
+      // For OPD Queue with date filters, include BOTH:
+      // 1. Patients with appointments in the date range
+      // 2. Patients without appointments but created in the date range (new/unassigned patients)
+      const dateConditions = [];
       
       if (startDate && endDate) {
-        appointmentExistsConditions.push(`(
+        dateConditions.push(`(
+          -- Patients with appointments in date range
           EXISTS (
             SELECT 1 FROM appointments a 
             WHERE a.patient_id = p.id 
@@ -342,11 +379,18 @@ export const exportPatientsToExcel = async (req, res) => {
             AND ib.scheduled_date >= $${paramIndex} 
             AND ib.scheduled_date <= $${paramIndex + 1}
           )
+          -- OR patients without appointments but created in date range (new/unassigned)
+          OR (
+            NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = p.id)
+            AND NOT EXISTS (SELECT 1 FROM investigation_bookings WHERE patient_id = p.id AND scheduled_date IS NOT NULL)
+            AND p.created_at >= $${paramIndex} 
+            AND p.created_at <= $${paramIndex + 1}
+          )
         )`);
         params.push(startDate, endDate);
         paramIndex += 2;
       } else if (startDate) {
-        appointmentExistsConditions.push(`(
+        dateConditions.push(`(
           EXISTS (
             SELECT 1 FROM appointments a 
             WHERE a.patient_id = p.id 
@@ -358,11 +402,16 @@ export const exportPatientsToExcel = async (req, res) => {
             AND ib.scheduled_date IS NOT NULL 
             AND ib.scheduled_date >= $${paramIndex}
           )
+          OR (
+            NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = p.id)
+            AND NOT EXISTS (SELECT 1 FROM investigation_bookings WHERE patient_id = p.id AND scheduled_date IS NOT NULL)
+            AND p.created_at >= $${paramIndex}
+          )
         )`);
         params.push(startDate);
         paramIndex++;
       } else if (endDate) {
-        appointmentExistsConditions.push(`(
+        dateConditions.push(`(
           EXISTS (
             SELECT 1 FROM appointments a 
             WHERE a.patient_id = p.id 
@@ -374,13 +423,18 @@ export const exportPatientsToExcel = async (req, res) => {
             AND ib.scheduled_date IS NOT NULL 
             AND ib.scheduled_date <= $${paramIndex}
           )
+          OR (
+            NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = p.id)
+            AND NOT EXISTS (SELECT 1 FROM investigation_bookings WHERE patient_id = p.id AND scheduled_date IS NOT NULL)
+            AND p.created_at <= $${paramIndex}
+          )
         )`);
         params.push(endDate);
         paramIndex++;
       }
       
-      if (appointmentExistsConditions.length > 0) {
-        whereConditions.push(appointmentExistsConditions.join(' AND '));
+      if (dateConditions.length > 0) {
+        whereConditions.push(dateConditions.join(' AND '));
       }
       
       const finalWhereClause = whereConditions.length > 0 
