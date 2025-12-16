@@ -63,7 +63,15 @@ const PatientList = () => {
       if (result.success) {
         console.log('✅ PatientList: Patient data received:', result.data);
         console.log('✅ PatientList: Number of patients:', result.data?.length || 0);
-        const updatedPatients = result.data || [];
+        // Normalize patient data to handle both camelCase and snake_case formats
+        const updatedPatients = (result.data || []).map(patient => ({
+          ...patient,
+          // Normalize PSA fields - prefer camelCase, fallback to snake_case
+          latestPSA: patient.latestPSA || patient.latest_psa || null,
+          initialPSA: patient.initialPSA || patient.initial_psa || null,
+          // Ensure latestPSA takes precedence over initialPSA for display
+          displayPSA: patient.latestPSA || patient.latest_psa || patient.initialPSA || patient.initial_psa || null
+        }));
         setPatients(updatedPatients);
         
         // Update pagination info
@@ -462,8 +470,18 @@ const PatientList = () => {
                         </td>
                         <td className="py-4 px-4 text-gray-700 text-sm">
                           <div className="flex items-center">
-                            <div className={`w-2 h-2 ${getPSAColor(patient.latestPSA || patient.initialPSA).dotColor} rounded-full mr-2`}></div>
-                            <span className={getPSAColor(patient.latestPSA || patient.initialPSA).textColor}>{patient.latestPSA || patient.initialPSA || 0} ng/mL</span>
+                            {(() => {
+                              // Use normalized PSA value (prefer latestPSA, fallback to initialPSA)
+                              // Handle both camelCase and snake_case formats from different API endpoints
+                              const psaValue = patient.displayPSA || patient.latestPSA || patient.latest_psa || patient.initialPSA || patient.initial_psa || 0;
+                              const psaColor = getPSAColor(psaValue);
+                              return (
+                                <>
+                                  <div className={`w-2 h-2 ${psaColor.dotColor} rounded-full mr-2`}></div>
+                                  <span className={psaColor.textColor}>{psaValue} ng/mL</span>
+                                </>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="py-4 px-4 text-center">

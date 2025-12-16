@@ -1065,6 +1065,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         if (result.success && result.data) {
           updatedPatientData = {
             ...result.data,
+            // Normalize PSA fields - ensure camelCase format for consistency
+            latestPSA: result.data.latestPSA || result.data.latest_psa || null,
+            initialPSA: result.data.initialPSA || result.data.initial_psa || null,
+            // Ensure latestPSA takes precedence over initialPSA for display
+            displayPSA: result.data.latestPSA || result.data.latest_psa || result.data.initialPSA || result.data.initial_psa || null,
             carePathway: result.data.carePathway || result.data.care_pathway || patient.carePathway || patient.care_pathway,
             care_pathway: result.data.care_pathway || result.data.carePathway || patient.care_pathway || patient.carePathway
           };
