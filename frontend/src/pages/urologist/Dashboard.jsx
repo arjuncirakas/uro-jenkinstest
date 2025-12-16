@@ -6,7 +6,7 @@ import PatientsDueForReviewModal from '../../components/PatientsDueForReviewModa
 import PatientDetailsModalWrapper from '../../components/PatientDetailsModalWrapper';
 import MDTScheduleDetailsModal from '../../components/MDTScheduleDetailsModal';
 import MDTNotesModal from '../../components/MDTNotesModal';
-import ProfileModal from '../../components/ProfileModal';
+import ProfileDropdown from '../../components/ProfileDropdown';
 import GlobalPatientSearch from '../../components/GlobalPatientSearch';
 import { bookingService } from '../../services/bookingService';
 import { patientService } from '../../services/patientService';
@@ -18,8 +18,10 @@ const UrologistDashboard = () => {
   const [activeTab, setActiveTab] = useState('appointments');
   // State for notification modal
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  // State for profile modal
+  // State for profile dropdown
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  // Ref for profile button
+  const profileButtonRef = useRef(null);
   // State for patients due for review modal
   const [isPatientsReviewOpen, setIsPatientsReviewOpen] = useState(false);
   // Ref for patient details modal wrapper
@@ -1112,12 +1114,20 @@ const UrologistDashboard = () => {
             {/* Profile Icon */}
             <div className="relative">
               <button
-                onClick={() => setIsProfileOpen(true)}
+                ref={profileButtonRef}
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                 aria-label="Profile"
               >
                 <IoPersonCircleOutline className="text-2xl" />
               </button>
+              {isProfileOpen && (
+                <ProfileDropdown
+                  isOpen={isProfileOpen}
+                  onClose={() => setIsProfileOpen(false)}
+                  buttonRef={profileButtonRef}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -1803,12 +1813,6 @@ const UrologistDashboard = () => {
         patientName={selectedMdtOutcome?.patientName}
         outcome={selectedMdtOutcome?.outcome}
         meetingId={selectedMdtOutcome?.meetingId}
-      />
-
-      {/* Profile Modal */}
-      <ProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
       />
     </div>
   );
