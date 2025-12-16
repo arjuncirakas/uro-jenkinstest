@@ -3,6 +3,7 @@ import { FiEye, FiPlus } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import AddInvestigationResultModal from '../../components/AddInvestigationResultModal';
+import PDFViewerModal from '../../components/PDFViewerModal';
 import { investigationService } from '../../services/investigationService';
 import { patientService } from '../../services/patientService';
 
@@ -25,6 +26,12 @@ const InvestigationManagement = () => {
   const [investigationRequests, setInvestigationRequests] = useState({}); // Map of patientId -> { mri: requestId, biopsy: requestId, trus: requestId }
   const [testResults, setTestResults] = useState({}); // Map of patientId -> { mri: result, biopsy: result, trus: result }
   const [loadingRequests, setLoadingRequests] = useState({});
+
+  // PDF viewer modal state
+  const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
+  const [pdfViewerFileName, setPdfViewerFileName] = useState(null);
+  const [pdfViewerBlobUrl, setPdfViewerBlobUrl] = useState(null);
 
   // Fetch investigations data
   const fetchInvestigations = async () => {
@@ -55,6 +62,38 @@ const InvestigationManagement = () => {
   useEffect(() => {
     fetchInvestigations();
   }, []);
+
+  // Listen for PDF viewer events
+  useEffect(() => {
+    const handleOpenPDFViewer = (event) => {
+      const { pdfUrl, fileName, blobUrl } = event.detail;
+      setPdfViewerUrl(pdfUrl);
+      setPdfViewerFileName(fileName);
+      setPdfViewerBlobUrl(blobUrl);
+      setIsPDFViewerModalOpen(true);
+    };
+
+    window.addEventListener('openPDFViewer', handleOpenPDFViewer);
+
+    return () => {
+      window.removeEventListener('openPDFViewer', handleOpenPDFViewer);
+    };
+  }, []);
+
+  // Handle closing PDF viewer modal and cleanup
+  const handleClosePDFViewer = () => {
+    setIsPDFViewerModalOpen(false);
+    // Clean up blob URL if it exists
+    if (pdfViewerBlobUrl) {
+      URL.revokeObjectURL(pdfViewerBlobUrl);
+      setPdfViewerBlobUrl(null);
+    }
+    // Clear state after a delay to allow modal to close smoothly
+    setTimeout(() => {
+      setPdfViewerUrl(null);
+      setPdfViewerFileName(null);
+    }, 300);
+  };
 
 
   // Fetch investigation requests for a patient
@@ -783,6 +822,14 @@ const InvestigationManagement = () => {
           }}
         />
       )}
+
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={isPDFViewerModalOpen}
+        onClose={handleClosePDFViewer}
+        pdfUrl={pdfViewerUrl}
+        fileName={pdfViewerFileName}
+      />
     </div>
   );
 };

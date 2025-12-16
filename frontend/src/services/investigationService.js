@@ -457,39 +457,18 @@ export const investigationService = {
           
           reader.readAsDataURL(blob);
         } else if (contentType === 'application/pdf') {
-          // For PDFs, create an HTML page with embedded PDF viewer
-          const htmlContent = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>${fileName}</title>
-              <style>
-                body {
-                  margin: 0;
-                  padding: 0;
-                  height: 100vh;
-                  overflow: hidden;
-                }
-                iframe {
-                  width: 100%;
-                  height: 100vh;
-                  border: none;
-                }
-              </style>
-            </head>
-            <body>
-              <iframe src="${blobUrl}" type="application/pdf"></iframe>
-            </body>
-            </html>
-          `;
-          const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
-          const htmlBlobUrl = URL.createObjectURL(htmlBlob);
-          window.open(htmlBlobUrl, '_blank');
+          // For PDFs, emit event to open PDF viewer modal
+          const event = new CustomEvent('openPDFViewer', {
+            detail: {
+              pdfUrl: blobUrl,
+              fileName: fileName,
+              blobUrl: blobUrl // Keep blob URL for download and cleanup
+            }
+          });
+          window.dispatchEvent(event);
           
-          // Clean up HTML blob URL after a delay
-          setTimeout(() => {
-            URL.revokeObjectURL(htmlBlobUrl);
-          }, 1000);
+          // Don't revoke blob URL immediately - let the modal handle it
+          // The modal will revoke it when closed
         } else {
           // For other file types (DOC, DOCX, etc.), open blob URL directly or download
           const newWindow = window.open(blobUrl, '_blank');

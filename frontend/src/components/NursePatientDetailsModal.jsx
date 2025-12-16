@@ -13,6 +13,7 @@ import AddInvestigationResultModal from './AddInvestigationResultModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddClinicalInvestigationModal from './AddClinicalInvestigationModal';
 import ImageViewerModal from './ImageViewerModal';
+import PDFViewerModal from './PDFViewerModal';
 import EditSurgeryAppointmentModal from './EditSurgeryAppointmentModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
@@ -79,6 +80,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   const [imageViewerUrl, setImageViewerUrl] = useState(null);
   const [imageViewerFileName, setImageViewerFileName] = useState(null);
   const [imageViewerBlobUrl, setImageViewerBlobUrl] = useState(null);
+
+  // PDF viewer modal state
+  const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
+  const [pdfViewerFileName, setPdfViewerFileName] = useState(null);
+  const [pdfViewerBlobUrl, setPdfViewerBlobUrl] = useState(null);
 
   // Investigation data state
   const [psaResults, setPsaResults] = useState([]);
@@ -1679,6 +1686,23 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     };
   }, []);
 
+  // Listen for PDF viewer events
+  useEffect(() => {
+    const handleOpenPDFViewer = (event) => {
+      const { pdfUrl, fileName, blobUrl } = event.detail;
+      setPdfViewerUrl(pdfUrl);
+      setPdfViewerFileName(fileName);
+      setPdfViewerBlobUrl(blobUrl);
+      setIsPDFViewerModalOpen(true);
+    };
+
+    window.addEventListener('openPDFViewer', handleOpenPDFViewer);
+
+    return () => {
+      window.removeEventListener('openPDFViewer', handleOpenPDFViewer);
+    };
+  }, []);
+
   // Handle closing image viewer modal and cleanup
   const handleCloseImageViewer = () => {
     setIsImageViewerModalOpen(false);
@@ -1691,6 +1715,21 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     setTimeout(() => {
       setImageViewerUrl(null);
       setImageViewerFileName(null);
+    }, 300);
+  };
+
+  // Handle closing PDF viewer modal and cleanup
+  const handleClosePDFViewer = () => {
+    setIsPDFViewerModalOpen(false);
+    // Clean up blob URL if it exists
+    if (pdfViewerBlobUrl) {
+      URL.revokeObjectURL(pdfViewerBlobUrl);
+      setPdfViewerBlobUrl(null);
+    }
+    // Clear state after a delay to allow modal to close smoothly
+    setTimeout(() => {
+      setPdfViewerUrl(null);
+      setPdfViewerFileName(null);
     }, 300);
   };
 
@@ -5796,6 +5835,14 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         onClose={handleCloseImageViewer}
         imageUrl={imageViewerUrl}
         fileName={imageViewerFileName}
+      />
+
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={isPDFViewerModalOpen}
+        onClose={handleClosePDFViewer}
+        pdfUrl={pdfViewerUrl}
+        fileName={pdfViewerFileName}
       />
 
       {/* Edit Note Modal */}

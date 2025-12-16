@@ -25,6 +25,7 @@ import { calculatePSAVelocity } from '../utils/psaVelocity';
 import { getPatientPipelineStage } from '../utils/patientPipeline';
 import DecisionSupportPanel from './DecisionSupportPanel';
 import PathwayValidator from './PathwayValidator';
+import PDFViewerModal from './PDFViewerModal';
 
 const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error, onTransferSuccess }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -58,6 +59,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [selectedSurgeryAppointment, setSelectedSurgeryAppointment] = useState(null);
   const [hasSurgeryAppointment, setHasSurgeryAppointment] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // PDF viewer modal state
+  const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
+  const [pdfViewerFileName, setPdfViewerFileName] = useState(null);
+  const [pdfViewerBlobUrl, setPdfViewerBlobUrl] = useState(null);
 
   // Transfer form states
   const [transferDetails, setTransferDetails] = useState({
@@ -359,6 +366,38 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setFullPatientData(null);
     }
   }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData]);
+
+  // Listen for PDF viewer events
+  useEffect(() => {
+    const handleOpenPDFViewer = (event) => {
+      const { pdfUrl, fileName, blobUrl } = event.detail;
+      setPdfViewerUrl(pdfUrl);
+      setPdfViewerFileName(fileName);
+      setPdfViewerBlobUrl(blobUrl);
+      setIsPDFViewerModalOpen(true);
+    };
+
+    window.addEventListener('openPDFViewer', handleOpenPDFViewer);
+
+    return () => {
+      window.removeEventListener('openPDFViewer', handleOpenPDFViewer);
+    };
+  }, []);
+
+  // Handle closing PDF viewer modal and cleanup
+  const handleClosePDFViewer = () => {
+    setIsPDFViewerModalOpen(false);
+    // Clean up blob URL if it exists
+    if (pdfViewerBlobUrl) {
+      URL.revokeObjectURL(pdfViewerBlobUrl);
+      setPdfViewerBlobUrl(null);
+    }
+    // Clear state after a delay to allow modal to close smoothly
+    setTimeout(() => {
+      setPdfViewerUrl(null);
+      setPdfViewerFileName(null);
+    }, 300);
+  };
 
   // Reset surgery time when date changes
   useEffect(() => {
@@ -6711,6 +6750,14 @@ ${transferDetails.additionalNotes}` : ''}
           console.error('Error updating patient:', errorData);
           // You can show an error modal here if needed
         }}
+      />
+
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={isPDFViewerModalOpen}
+        onClose={handleClosePDFViewer}
+        pdfUrl={pdfViewerUrl}
+        fileName={pdfViewerFileName}
       />
     </>
   );
