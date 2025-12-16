@@ -220,7 +220,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   }, [patient]);
 
   // Fetch full patient details when modal opens
-  const fetchFullPatientData = async () => {
+  const fetchFullPatientData = useCallback(async () => {
     if (!patient?.id) {
       console.log('❌ UrologistPatientDetailsModal: No patient ID, cannot fetch full details');
       return;
@@ -233,6 +233,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
       if (result.success && result.data) {
         console.log('✅ UrologistPatientDetailsModal: Fetched full patient details:', result.data);
+        console.log('📋 Care Pathway from API:', result.data.carePathway || result.data.care_pathway);
         setFullPatientData(result.data);
       } else {
         console.error('❌ UrologistPatientDetailsModal: Failed to fetch patient details:', result.error);
@@ -242,7 +243,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     } finally {
       setLoadingPatientData(false);
     }
-  };
+  }, [patient?.id]);
 
   // Fetch appointments for patient (for pipeline)
   const fetchAppointments = useCallback(async () => {
@@ -347,7 +348,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setHasSurgeryAppointment(false);
       setFullPatientData(null);
     }
-  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings]);
+  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData]);
 
   // Reset surgery time when date changes
   useEffect(() => {
@@ -3520,12 +3521,20 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       {(() => {
                         const displayPatient = fullPatientData || patient;
 
+                        console.log('🔍 Pipeline Rendering - Using patient data:', {
+                          usingFullData: !!fullPatientData,
+                          carePathway: displayPatient?.carePathway || displayPatient?.care_pathway,
+                          patientId: displayPatient?.id
+                        });
+
                         // Get patient pipeline stage
                         const pipelineData = getPatientPipelineStage(
                           displayPatient,
                           appointments || [], // Appointments for pipeline
                           mdtMeetings || []  // MDT meetings for pipeline
                         );
+
+                        console.log('🔍 Pipeline Data:', pipelineData);
 
                         return (
                           <>
