@@ -612,7 +612,8 @@ const PatientList = () => {
         patient={selectedPatient}
         onPatientUpdated={(updatedPatient) => {
           // Refresh the patient list to show updated information
-          fetchPatients(currentPage);
+          // Use ref to get the latest currentPage value (avoids stale closure)
+          fetchPatients(currentPageRef.current);
         }}
       />
 

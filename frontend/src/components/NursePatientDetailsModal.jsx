@@ -1045,7 +1045,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   }, [patient?.id, patient?.mri, patient?.trus, patient?.biopsy, patient?.mriStatus, patient?.trusStatus, patient?.biopsyStatus]);
 
   // Handle investigation success
-  const handleInvestigationSuccess = (message, skipModal = false) => {
+  const handleInvestigationSuccess = async (message, skipModal = false) => {
     if (!skipModal) {
       setSuccessModalTitle('Success!');
       setSuccessModalMessage(message);
@@ -1053,6 +1053,36 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     }
     fetchInvestigations(); // Refresh data
     fetchInvestigationRequests(); // Also refresh investigation requests
+    
+    // Refresh full patient data to get updated PSA values
+    await fetchFullPatientData();
+    
+    // Fetch updated patient data to notify parent
+    let updatedPatientData = null;
+    if (patient?.id) {
+      try {
+        const result = await patientService.getPatientById(patient.id);
+        if (result.success && result.data) {
+          updatedPatientData = {
+            ...result.data,
+            carePathway: result.data.carePathway || result.data.care_pathway || patient.carePathway || patient.care_pathway,
+            care_pathway: result.data.care_pathway || result.data.carePathway || patient.care_pathway || patient.carePathway
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching updated patient data:', error);
+      }
+    }
+    
+    // Notify parent component to refresh patient list
+    if (onPatientUpdated) {
+      onPatientUpdated(updatedPatientData || fullPatientData || patient);
+    }
+    
+    // Dispatch event to refresh patient list (for other components that might be listening)
+    window.dispatchEvent(new CustomEvent('patient:updated', {
+      detail: { patient: updatedPatientData || fullPatientData || patient }
+    }));
   };
 
   // Handle viewing files

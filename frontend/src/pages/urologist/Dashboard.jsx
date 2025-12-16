@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { IoChevronForward, IoNotificationsOutline, IoPersonCircleOutline } from 'react-icons/io5';
 import { BsCalendar3 } from 'react-icons/bs';
 import NotificationModal from '../../components/NotificationModal';
@@ -22,6 +22,10 @@ const UrologistDashboard = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   // Ref for profile button
   const profileButtonRef = useRef(null);
+  // Memoized callback to close profile dropdown
+  const handleProfileClose = useCallback(() => {
+    setIsProfileOpen(false);
+  }, []);
   // State for patients due for review modal
   const [isPatientsReviewOpen, setIsPatientsReviewOpen] = useState(false);
   // Ref for patient details modal wrapper
@@ -1124,7 +1128,7 @@ const UrologistDashboard = () => {
               {isProfileOpen && (
                 <ProfileDropdown
                   isOpen={isProfileOpen}
-                  onClose={() => setIsProfileOpen(false)}
+                  onClose={handleProfileClose}
                   buttonRef={profileButtonRef}
                 />
               )}
