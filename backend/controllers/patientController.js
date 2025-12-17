@@ -492,6 +492,14 @@ export const addPatient = async (req, res) => {
 
   } catch (error) {
     console.error('Add patient error:', error);
+    console.error('Add patient error message:', error.message);
+    console.error('Add patient error stack:', error.stack);
+    if (error.code) {
+      console.error('Add patient error code:', error.code);
+    }
+    if (error.detail) {
+      console.error('Add patient error detail:', error.detail);
+    }
 
     // Handle unique constraint violations
     if (error.code === '23505') {
@@ -517,7 +525,9 @@ export const addPatient = async (req, res) => {
 
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      detail: process.env.NODE_ENV === 'development' ? error.detail : undefined
     });
   } finally {
     client.release();

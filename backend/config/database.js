@@ -455,6 +455,14 @@ export const initializeDatabase = async () => {
       console.log('⚠️  Ensuring social_history and family_history columns:', e.message);
     }
 
+    // Ensure referred_by_gp_id column exists on patients
+    try {
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS referred_by_gp_id INTEGER REFERENCES users(id)`);
+      console.log('✅ Ensured patients.referred_by_gp_id column');
+    } catch (e) {
+      console.log('⚠️  Ensuring referred_by_gp_id column:', e.message);
+    }
+
     // Create patient_notes table
     const notesTableExists = await client.query(`
       SELECT EXISTS (
