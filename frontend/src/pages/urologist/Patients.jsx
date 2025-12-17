@@ -78,6 +78,8 @@ const Patients = () => {
   const [errorNewPatients, setErrorNewPatients] = useState(null);
   const [errorMyPatients, setErrorMyPatients] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchQueryNewPatients, setSearchQueryNewPatients] = useState('');
+  const [searchQueryMyPatients, setSearchQueryMyPatients] = useState('');
 
   const apiCategoryMap = {
     all: 'all',
@@ -258,12 +260,58 @@ const Patients = () => {
   }, [patients, searchQuery]);
 
   const filteredNewPatients = useMemo(() => {
-    return filterPatientsList(newPatients);
-  }, [newPatients, searchQuery]);
+    if (!searchQueryNewPatients.trim()) {
+      return newPatients;
+    }
+    
+    const query = searchQueryNewPatients.toLowerCase().trim();
+    const normalizedQuery = query.replace(/\s+/g, '');
+    
+    return newPatients.filter(patient => {
+      const name = (patient.name || '').toLowerCase();
+      const firstName = (patient.firstName || '').toLowerCase();
+      const lastName = (patient.lastName || '').toLowerCase();
+      const normalizedName = name.replace(/\s+/g, '');
+      const combinedName = `${firstName}${lastName}`;
+      const upi = (patient.upi || '').toLowerCase();
+      const carePathway = (patient.carePathway || '').toLowerCase();
+      
+      return name.includes(query) || 
+             normalizedName.includes(normalizedQuery) ||
+             combinedName.includes(normalizedQuery) ||
+             firstName.includes(query) || 
+             lastName.includes(query) || 
+             upi.includes(query) || 
+             carePathway.includes(query);
+    });
+  }, [newPatients, searchQueryNewPatients]);
 
   const filteredMyPatients = useMemo(() => {
-    return filterPatientsList(myPatients);
-  }, [myPatients, searchQuery]);
+    if (!searchQueryMyPatients.trim()) {
+      return myPatients;
+    }
+    
+    const query = searchQueryMyPatients.toLowerCase().trim();
+    const normalizedQuery = query.replace(/\s+/g, '');
+    
+    return myPatients.filter(patient => {
+      const name = (patient.name || '').toLowerCase();
+      const firstName = (patient.firstName || '').toLowerCase();
+      const lastName = (patient.lastName || '').toLowerCase();
+      const normalizedName = name.replace(/\s+/g, '');
+      const combinedName = `${firstName}${lastName}`;
+      const upi = (patient.upi || '').toLowerCase();
+      const carePathway = (patient.carePathway || '').toLowerCase();
+      
+      return name.includes(query) || 
+             normalizedName.includes(normalizedQuery) ||
+             combinedName.includes(normalizedQuery) ||
+             firstName.includes(query) || 
+             lastName.includes(query) || 
+             upi.includes(query) || 
+             carePathway.includes(query);
+    });
+  }, [myPatients, searchQueryMyPatients]);
 
 
   return (
@@ -315,19 +363,21 @@ const Patients = () => {
           </div>
         </div>
 
-        {/* Search Bar - Below Title */}
-        <div className="mt-6 mb-6">
-          <div className="relative w-full sm:w-96">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-            />
+        {/* Search Bar - Below Title (only for non-patients-under-me categories) */}
+        {category !== 'patients-under-me' && (
+          <div className="mt-6 mb-6">
+            <div className="relative w-full sm:w-96">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Patients Tables */}
         {category === 'patients-under-me' ? (
@@ -335,8 +385,23 @@ const Patients = () => {
             {/* New Patients Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">New Patients</h2>
-                <p className="text-sm text-gray-500 mt-1">Recently registered patients requiring initial assessment</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">New Patients</h2>
+                    <p className="text-sm text-gray-500 mt-1">Recently registered patients requiring initial assessment</p>
+                  </div>
+                </div>
+                {/* Search Bar for New Patients */}
+                <div className="relative w-full sm:w-80">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search new patients by name"
+                    value={searchQueryNewPatients}
+                    onChange={(e) => setSearchQueryNewPatients(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                  />
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[800px]">
@@ -403,8 +468,23 @@ const Patients = () => {
             {/* My Patients Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Patients Added by You</h2>
-                <p className="text-sm text-gray-500 mt-1">Patients you have added to the system</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Patients Added by You</h2>
+                    <p className="text-sm text-gray-500 mt-1">Patients you have added to the system</p>
+                  </div>
+                </div>
+                {/* Search Bar for My Patients */}
+                <div className="relative w-full sm:w-80">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search your patients by name"
+                    value={searchQueryMyPatients}
+                    onChange={(e) => setSearchQueryMyPatients(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                  />
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[800px]">
