@@ -326,8 +326,17 @@ export const addPatient = async (req, res) => {
     const formattedReferralDate = formatDateOnly(referralDate);
     const formattedInitialPSADate = formatDateOnly(initialPSADate);
 
-    // Format prior biopsy date if provided
-    const formattedPriorBiopsyDate = priorBiopsyDate ? formatDateOnly(priorBiopsyDate) : null;
+    // Format prior biopsy date if provided and priorBiopsy is 'yes'
+    // Only format if priorBiopsy is 'yes' and priorBiopsyDate is a valid date string
+    let formattedPriorBiopsyDate = null;
+    if (priorBiopsy === 'yes' && priorBiopsyDate && priorBiopsyDate.trim() !== '' && priorBiopsyDate !== 'no') {
+      try {
+        formattedPriorBiopsyDate = formatDateOnly(priorBiopsyDate);
+      } catch (error) {
+        console.error('Error formatting prior biopsy date:', error);
+        formattedPriorBiopsyDate = null;
+      }
+    }
 
     // Convert comorbidities array to JSON string if provided
     const comorbiditiesJson = Array.isArray(comorbidities) && comorbidities.length > 0
