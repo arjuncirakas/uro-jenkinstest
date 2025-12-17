@@ -632,14 +632,6 @@ const InvestigationManagement = () => {
                   </div>
                   <span className="text-xs text-gray-600">Not Required</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-red-100 rounded-full flex items-center justify-center">
-                    <svg className="w-2.5 h-2.5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <span className="text-xs text-gray-600">Not Completed</span>
-                </div>
               </div>
             </div>
           </div>
@@ -719,7 +711,7 @@ const InvestigationManagement = () => {
                           <div className="min-w-0 flex-1">
                             <div className="font-medium text-gray-900 text-sm">{investigation.patientName}</div>
                             <div className="text-xs text-gray-600">
-                              UPI: {investigation.upi} • {investigation.age} • {investigation.gender}
+                              UPI: {investigation.upi} • {investigation.age} years old
                             </div>
                             <div className="flex items-center mt-0.5">
                               <div className={`w-1.5 h-1.5 ${getPSAColor(investigation.psa).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
@@ -889,14 +881,15 @@ const TestStatusCell = ({
   return (
     <div className="flex justify-center items-center">
       {/* Status Icon or Plus Icon - Clickable to open modal or view result */}
-      <div className="flex items-center justify-center">
+      <div className="flex flex-col items-center justify-center">
         {isNotRequired ? (
           <button
             onClick={handleIconClick}
-            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer"
+            className="p-1 hover:bg-gray-50 rounded-full transition-colors cursor-pointer flex flex-col items-center"
             title="Click to change status"
           >
             {getStatusIcon('not_required')}
+            <span className="text-xs text-gray-600 mt-1">Not Required</span>
           </button>
         ) : displayStatus === 'completed' || (displayStatus === null && hasResult) ? (
           // Show checkmark only if status is explicitly 'completed' OR if status is null and we have a valid result file
@@ -911,10 +904,11 @@ const TestStatusCell = ({
           // No status set, pending, or results_awaited - show plus icon
           <button
             onClick={handleIconClick}
-            className="p-2 text-teal-600 hover:text-teal-800 transition-colors rounded-full hover:bg-teal-50"
+            className="p-2 text-teal-600 hover:text-teal-800 transition-colors rounded-full hover:bg-teal-50 flex flex-col items-center"
             title="Click to upload result or set status"
           >
             <FiPlus className="w-5 h-5" />
+            <span className="text-xs text-teal-600 mt-1">Add</span>
           </button>
         )}
       </div>

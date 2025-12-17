@@ -157,13 +157,6 @@ export const addPatientSchema = Joi.object({
       'number.min': 'Age must be at least 0',
       'number.max': 'Age must not exceed 120'
     }),
-  gender: Joi.string()
-    .valid('Male', 'Female', 'Other')
-    .required()
-    .messages({
-      'any.only': 'Gender must be Male, Female, or Other',
-      'any.required': 'Gender is required'
-    }),
   phone: Joi.string()
     .required()
     .custom((value, helpers) => {
@@ -381,12 +374,6 @@ export const updatePatientSchema = Joi.object({
       'number.integer': 'Age must be a whole number',
       'number.min': 'Age must be at least 0',
       'number.max': 'Age must not exceed 120'
-    }),
-  gender: Joi.string()
-    .valid('Male', 'Female', 'Other')
-    .optional()
-    .messages({
-      'any.only': 'Gender must be Male, Female, or Other'
     }),
   phone: Joi.string()
     .optional()

@@ -97,7 +97,6 @@ const Surgery = () => {
                 name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
                 upi: patient.upi,
                 age: patient.age,
-                gender: patient.gender,
                 surgeryType: surgeryAppointment?.surgeryType || patient.surgeryType || patient.surgery_type || null,
                 surgeryDate: surgeryDate,
                 surgeryTime: surgeryTime,
@@ -132,7 +131,6 @@ const Surgery = () => {
                 name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
                 upi: patient.upi,
                 age: patient.age,
-                gender: patient.gender,
                 surgeryType: patient.surgeryType || patient.surgery_type || null,
                 surgeryDate: surgeryDate,
                 surgeryTime: surgeryTime,
@@ -352,7 +350,7 @@ const Surgery = () => {
                                 UPI: {patient.upi}
                               </div>
                               <div className="text-xs text-gray-600">
-                                Age: {patient.age} • {patient.gender}
+                                {patient.age} years old
                               </div>
                             </div>
                           </div>

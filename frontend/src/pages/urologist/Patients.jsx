@@ -329,7 +329,7 @@ const Patients = () => {
                     <td className="py-4 px-6">
                       {category === 'new' ? (
                         <div className="text-sm text-gray-600">
-                          {patient.age || 'N/A'}
+                          {patient.age ? `${patient.age} years old` : 'N/A'}
                         </div>
                       ) : (
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">

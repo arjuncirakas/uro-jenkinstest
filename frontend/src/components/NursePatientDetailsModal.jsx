@@ -2055,7 +2055,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                   </div>
                 </div>
                 <div className="flex items-center space-x-4 text-teal-700">
-                  <span>{displayPatient.age || '0'}, {displayPatient.gender || 'Unknown'}</span>
+                  <span>{displayPatient.age ? `${displayPatient.age} years old` : 'N/A'}</span>
                   <span>UPI: {displayPatient.upi || 'Unknown'}</span>
                   <span>Phone: {displayPatient.phone || displayPatient.phoneNumber || 'Unknown'}</span>
                 </div>
@@ -3920,7 +3920,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                 </div>
                                 <div>
                                   <span className="text-gray-600">Age:</span>
-                                  <span className="ml-2 font-medium text-gray-900">{displayPatient.age || 'N/A'}</span>
+                                  <span className="ml-2 font-medium text-gray-900">{displayPatient.age ? `${displayPatient.age} years old` : 'N/A'}</span>
                                 </div>
                                 <div>
                                   <span className="text-gray-600">Email:</span>
@@ -3937,10 +3937,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                 <div>
                                   <span className="text-gray-600">City:</span>
                                   <span className="ml-2 font-medium text-gray-900">{displayPatient.city || 'N/A'}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Gender:</span>
-                                  <span className="ml-2 font-medium text-gray-900">{displayPatient.gender || 'N/A'}</span>
                                 </div>
                                 <div>
                                   <span className="text-gray-600">State:</span>

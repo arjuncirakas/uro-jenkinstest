@@ -58,7 +58,6 @@ const PostOpFollowup = () => {
             name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
             upi: patient.upi,
             age: patient.age,
-            gender: patient.gender,
             surgeryType: patient.surgeryType || patient.surgery_type || 'N/A',
             surgeryDate: patient.surgeryDate || patient.surgery_date || '-',
             surgeon: patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
@@ -217,7 +216,7 @@ const PostOpFollowup = () => {
                                 UPI: {patient.upi}
                               </div>
                               <div className="text-xs text-gray-600">
-                                Age: {patient.age} • {patient.gender}
+                                {patient.age} years old
                               </div>
                             </div>
                           </div>

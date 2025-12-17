@@ -5,17 +5,20 @@ import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
 import { patientService } from '../../services/patientService';
+import { bookingService } from '../../services/bookingService';
 
 const ActiveMonitoring = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [monitoringTypeFilter, setMonitoringTypeFilter] = useState('all'); // 'all', 'medication', 'discharge'
+  const [selectedUrologistFilter, setSelectedUrologistFilter] = useState('all'); // 'all' or urologist name
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [isUpdateAppointmentModalOpen, setIsUpdateAppointmentModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
 
   // API state
   const [monitoringPatients, setMonitoringPatients] = useState([]);
+  const [urologists, setUrologists] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingUrologists, setLoadingUrologists] = useState(false);
   const [error, setError] = useState(null);
 
   // Fetch active monitoring patients
@@ -24,15 +27,11 @@ const ActiveMonitoring = () => {
     setError(null);
 
     try {
-      // Use the new backend parameter to fetch all active monitoring pathways
-      // This includes: Active Monitoring, Medication, and Discharge
-      // The backend will handle filtering by both Active and Discharged statuses
-      // monitoringTypeFilter can be 'all', 'activeMonitoring', 'medication', or 'discharge'
+      // Fetch all active monitoring patients (Active Monitoring, Medication, and Discharge pathways)
       const result = await patientService.getPatients({
         page: 1,
         limit: 100,
-        activeMonitoring: 'true',
-        monitoringType: monitoringTypeFilter === 'all' ? '' : monitoringTypeFilter
+        activeMonitoring: 'true'
       });
 
       if (result.success) {
@@ -56,23 +55,46 @@ const ActiveMonitoring = () => {
             }
           };
 
+          // Get raw appointment date for sorting
+          const rawAppointmentDate = patient.nextAppointmentDate || patient.next_appointment_date || null;
+          const appointmentDateForSorting = rawAppointmentDate ? new Date(rawAppointmentDate) : null;
+
           return {
             id: patient.id,
             name: patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
             upi: patient.upi,
             age: patient.age,
-            gender: patient.gender,
             pathway: patient.carePathway || patient.care_pathway || patient.pathway || 'Active Monitoring',
             latestPsa: patient.initialPSA || patient.initial_psa || '-',
             nextAppointment: patient.nextReview || formatAppointmentDate(patient.nextAppointmentDate) || 'TBD',
             monitoringStatus: patient.monitoringStatus || patient.monitoring_status || 'Stable',
             lastCheckUp: patient.lastCheckUp || patient.last_check_up || '-',
             currentDoctor: patient.nextAppointmentUrologist || patient.assignedUrologist || patient.assigned_urologist || 'Unassigned',
-            appointmentTime: patient.nextAppointmentTime || patient.appointment_time || '-'
+            appointmentTime: patient.nextAppointmentTime || patient.appointment_time || '-',
+            appointmentDateForSorting: appointmentDateForSorting // Store raw date for sorting
           };
         });
 
-        setMonitoringPatients(transformedPatients);
+        // Sort patients by upcoming appointment date (earliest first)
+        // Patients without appointment dates (TBD) go to the end
+        const sortedPatients = transformedPatients.sort((a, b) => {
+          // If both have dates, sort by date (earliest first)
+          if (a.appointmentDateForSorting && b.appointmentDateForSorting) {
+            return a.appointmentDateForSorting - b.appointmentDateForSorting;
+          }
+          // If only a has a date, a comes first
+          if (a.appointmentDateForSorting && !b.appointmentDateForSorting) {
+            return -1;
+          }
+          // If only b has a date, b comes first
+          if (!a.appointmentDateForSorting && b.appointmentDateForSorting) {
+            return 1;
+          }
+          // If neither has a date, maintain original order
+          return 0;
+        });
+
+        setMonitoringPatients(sortedPatients);
       } else {
         setError(result.error || 'Failed to fetch monitoring patients');
       }
@@ -84,9 +106,55 @@ const ActiveMonitoring = () => {
     }
   };
 
+  // Fetch urologists on component mount
+  useEffect(() => {
+    const fetchUrologists = async () => {
+      setLoadingUrologists(true);
+      try {
+        // Use the new patient service endpoint which is more inclusive
+        const result = await patientService.getAllUrologists();
+        if (result.success) {
+          const urologistsList = Array.isArray(result.data) ? result.data : [];
+          setUrologists(urologistsList);
+          console.log(`✅ Loaded ${urologistsList.length} urologists for filtering`);
+        } else {
+          console.error('Failed to fetch urologists:', result.error);
+          // Fallback to booking service if patient service fails
+          const fallbackResult = await bookingService.getAvailableUrologists();
+          if (fallbackResult.success) {
+            const urologistsList = Array.isArray(fallbackResult.data) ? fallbackResult.data : [];
+            setUrologists(urologistsList);
+            console.log(`✅ Loaded ${urologistsList.length} urologists from fallback endpoint`);
+          } else {
+            setUrologists([]);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching urologists:', err);
+        // Fallback to booking service on error
+        try {
+          const fallbackResult = await bookingService.getAvailableUrologists();
+          if (fallbackResult.success) {
+            const urologistsList = Array.isArray(fallbackResult.data) ? fallbackResult.data : [];
+            setUrologists(urologistsList);
+          } else {
+            setUrologists([]);
+          }
+        } catch (fallbackErr) {
+          console.error('Error fetching urologists from fallback:', fallbackErr);
+          setUrologists([]);
+        }
+      } finally {
+        setLoadingUrologists(false);
+      }
+    };
+
+    fetchUrologists();
+  }, []);
+
   useEffect(() => {
     fetchMonitoringPatients();
-  }, [monitoringTypeFilter]);
+  }, []);
 
   // Get initials from name
   const getInitials = (name) => {
@@ -143,15 +211,21 @@ const ActiveMonitoring = () => {
     }
   };
 
-  // Filter patients based on search query
-  // NOTE: This search filters within Active Monitoring, Active Surveillance, Medication, and Discharge pathway patients
-  // The monitoringPatients array is already pre-filtered to only include patients from these pathways
-  const filteredPatients = monitoringPatients.filter(patient =>
-    patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (patient.pathway && patient.pathway.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (patient.monitoringStatus && patient.monitoringStatus.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Filter patients based on search query and selected urologist
+  const filteredPatients = monitoringPatients.filter(patient => {
+    // Filter by urologist if one is selected
+    const matchesUrologist = selectedUrologistFilter === 'all' || 
+      patient.currentDoctor === selectedUrologistFilter ||
+      patient.currentDoctor?.toLowerCase() === selectedUrologistFilter.toLowerCase();
+    
+    // Filter by search query
+    const matchesSearch = patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (patient.pathway && patient.pathway.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (patient.monitoringStatus && patient.monitoringStatus.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    return matchesUrologist && matchesSearch;
+  });
 
   // Handle patient actions
   const handleViewDetails = async (patient) => {
@@ -207,19 +281,22 @@ const ActiveMonitoring = () => {
 
           {/* Filter Dropdown - Right side */}
           <div className="flex items-center gap-4">
-          <label htmlFor="monitoringTypeFilter" className="text-sm font-medium text-gray-700">
-            Filter by Type:
+          <label htmlFor="urologistFilter" className="text-sm font-medium text-gray-700">
+            Filter by Urologist:
           </label>
           <select
-            id="monitoringTypeFilter"
-            value={monitoringTypeFilter}
-            onChange={(e) => setMonitoringTypeFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+            id="urologistFilter"
+            value={selectedUrologistFilter}
+            onChange={(e) => setSelectedUrologistFilter(e.target.value)}
+            disabled={loadingUrologists}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
           >
-            <option value="all">All Patients</option>
-            <option value="activeMonitoring">Active Monitoring</option>
-            <option value="medication">Medication</option>
-            <option value="discharge">Discharged</option>
+            <option value="all">All Urologists</option>
+            {urologists.map((urologist) => (
+              <option key={urologist.id || urologist.name} value={urologist.name}>
+                {urologist.name}
+              </option>
+            ))}
           </select>
           </div>
         </div>
@@ -286,7 +363,7 @@ const ActiveMonitoring = () => {
                                 UPI: {patient.upi}
                               </div>
                               <div className="text-xs text-gray-600">
-                                Age: {patient.age} • {patient.gender}
+                                {patient.age} years old
                               </div>
                             </div>
                           </div>

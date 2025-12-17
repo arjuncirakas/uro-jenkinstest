@@ -10,7 +10,8 @@ import {
   updatePatientPathway,
   getPatientsDueForReview,
   searchPatients,
-  expirePatient
+  expirePatient,
+  getAllUrologists
 } from '../controllers/patientController.js';
 import {
   getDischargeSummary,
@@ -99,6 +100,14 @@ router.get('/due-for-review',
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   getPatientsDueForReview
+);
+
+// Get all urologists for filtering purposes
+router.get('/urologists',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
+  getAllUrologists
 );
 
 // Get patient by ID - accessible by urologists, doctors, nurses, and GPs

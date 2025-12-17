@@ -42,13 +42,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     lastName: '',
     dateOfBirth: '',
     age: '', // Added age field
-    gender: '',
     phone: '',
     email: '',
     address: '',
     postcode: '',
     city: '',
-    state: '',
+    state: 'QLD',
 
     // Medical Information
     referringDepartment: '',
@@ -382,7 +381,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         lastName: formData.lastName.trim(),
         dateOfBirth: convertToISODate(formData.dateOfBirth),
         age: formData.age ? parseInt(formData.age, 10) : null,
-        gender: formData.gender,
         phone: formData.phone,
         email: formData.email || '',
         address: formData.address || '',
@@ -515,13 +513,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       lastName: '',
       dateOfBirth: '',
       age: '',
-      gender: '',
       phone: '',
       email: '',
       address: '',
       postcode: '',
       city: '',
-      state: '',
+      state: 'QLD',
       referringDepartment: '',
       referralDate: '',
       initialPSA: '',
@@ -564,7 +561,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     formData.lastName.trim() !== '' ||
     formData.dateOfBirth !== '' ||
     formData.age !== '' ||
-    formData.gender !== '' ||
     formData.phone.trim() !== '' ||
     formData.email.trim() !== '' ||
     formData.address.trim() !== '' ||
@@ -947,43 +943,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     {errors.age && !formData.dateOfBirth && (
                       <p className="mt-1 text-sm text-red-600">
                         {errors.age}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="relative mb-3">
-                    <select
-                      name="gender"
-                      value={formData.gender}
-                      onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                        errors.gender
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.gender
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
-                    >
-                      <option value="" disabled hidden>Select gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.gender
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.gender ? '!text-red-500' : ''}`}
-                    >
-                      Gender <span className="text-red-500">*</span>
-                    </label>
-                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
-                      errors.gender ? 'text-red-500' : formData.gender ? 'text-teal-500' : 'text-gray-400'
-                    }`} />
-                    {errors.gender && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.gender}
                       </p>
                     )}
                   </div>

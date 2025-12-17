@@ -1261,7 +1261,7 @@ const UrologistDashboard = () => {
                                 </div>
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
-                                {appointment.age || 'N/A'}
+                                {appointment.age ? `${appointment.age} years old` : 'N/A'}
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <button
@@ -1319,7 +1319,7 @@ const UrologistDashboard = () => {
                           surgicalQueue.map((patient, index) => (
                             <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-900 text-xs sm:text-sm font-medium">{patient.patient}</td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.age}</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.age ? `${patient.age} years old` : 'N/A'}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.procedure}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{formatDate(patient.scheduledDate)}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
@@ -1370,7 +1370,7 @@ const UrologistDashboard = () => {
                                   <span>{patient.patient}</span>
                                 </div>
                               </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.age}</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.age ? `${patient.age} years old` : 'N/A'}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 {getStatusBadge(patient.status, patient.statusColor)}
                               </td>
@@ -1753,7 +1753,7 @@ const UrologistDashboard = () => {
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="text-xs text-gray-500">
-                              Age: {surgery.age}
+                              {surgery.age ? `${surgery.age} years old` : 'N/A'}
                             </div>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${surgery.statusColor === 'blue' ? 'bg-blue-100 text-blue-700' :
                                 surgery.statusColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :

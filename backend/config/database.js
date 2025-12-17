@@ -372,7 +372,7 @@ export const initializeDatabase = async () => {
           first_name VARCHAR(100) NOT NULL,
           last_name VARCHAR(100) NOT NULL,
           date_of_birth DATE NOT NULL,
-          gender VARCHAR(10) NOT NULL CHECK (gender IN ('Male', 'Female', 'Other')),
+          gender VARCHAR(10),
           phone VARCHAR(20) NOT NULL,
           email VARCHAR(255),
           address TEXT,
@@ -401,6 +401,19 @@ export const initializeDatabase = async () => {
       console.log('✅ Patients table created successfully');
     } else {
       console.log('✅ Patients table already exists');
+    }
+
+    // Make gender column nullable (remove NOT NULL constraint and CHECK constraint)
+    try {
+      await client.query(`
+        ALTER TABLE patients 
+        ALTER COLUMN gender DROP NOT NULL,
+        DROP CONSTRAINT IF EXISTS patients_gender_check
+      `);
+      console.log('✅ Made gender column nullable');
+    } catch (e) {
+      // If constraint doesn't exist or column is already nullable, that's fine
+      console.log('⚠️  Making gender nullable:', e.message);
     }
 
     // Ensure care_pathway columns exist on patients

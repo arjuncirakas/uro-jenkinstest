@@ -179,7 +179,6 @@ export const addPatient = async (req, res) => {
       lastName,
       dateOfBirth,
       age,
-      gender,
       phone,
       email,
       address,
@@ -223,18 +222,10 @@ export const addPatient = async (req, res) => {
     }
 
     // Validate required fields - either dateOfBirth or age must be provided
-    if (!firstName || !lastName || (!finalDateOfBirth && !age) || !gender || !phone || !initialPSA) {
+    if (!firstName || !lastName || (!finalDateOfBirth && !age) || !phone || !initialPSA) {
       return res.status(400).json({
         success: false,
-        message: 'First name, last name, date of birth (or age), gender, phone, and initial PSA are required'
-      });
-    }
-
-    // Validate gender
-    if (!['Male', 'Female', 'Other'].includes(gender)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Gender must be Male, Female, or Other'
+        message: 'First name, last name, date of birth (or age), phone, and initial PSA are required'
       });
     }
 
@@ -344,18 +335,18 @@ export const addPatient = async (req, res) => {
     // Insert new patient
     const result = await client.query(
       `INSERT INTO patients (
-        upi, first_name, last_name, date_of_birth, gender, phone, email, address, 
+        upi, first_name, last_name, date_of_birth, phone, email, address, 
         postcode, city, state, referring_department, referral_date, initial_psa, 
         initial_psa_date, medical_history, current_medications, allergies, 
         assigned_urologist, emergency_contact_name, emergency_contact_phone, 
         emergency_contact_relationship, priority, notes, created_by, referred_by_gp_id, triage_symptoms,
         dre_done, dre_findings, prior_biopsy, prior_biopsy_date, gleason_score, comorbidities
       ) VALUES (
-        $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12, $13::date, $14, $15::date, $16, 
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31::date, $32, $33
+        $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12::date, $13, $14::date, $15, 
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30::date, $31, $32
       ) RETURNING *`,
       [
-        upi, firstName, lastName, formattedDateOfBirth, gender, phone, email, address,
+        upi, firstName, lastName, formattedDateOfBirth, phone, email, address,
         postcode, city, state, referringDepartment, formattedReferralDate, initialPSA,
         formattedInitialPSADate, medicalHistory, currentMedications, allergies,
         finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
@@ -1388,7 +1379,7 @@ export const updatePatient = async (req, res) => {
 
     // Build dynamic update query
     const allowedFields = [
-      'first_name', 'last_name', 'date_of_birth', 'gender', 'phone', 'email',
+      'first_name', 'last_name', 'date_of_birth', 'phone', 'email',
       'address', 'postcode', 'city', 'state', 'referring_department', 'referral_date',
       'initial_psa', 'initial_psa_date', 'medical_history', 'current_medications',
       'allergies', 'assigned_urologist', 'emergency_contact_name', 'emergency_contact_phone',
@@ -1504,7 +1495,7 @@ export const updatePatient = async (req, res) => {
       UPDATE patients 
       SET ${updateFields.join(', ')}
       WHERE id = $${paramCount}
-      RETURNING id, upi, first_name, last_name, gender, phone, email,
+      RETURNING id, upi, first_name, last_name, phone, email,
                 address, postcode, city, state, referring_department,
                 initial_psa, medical_history, current_medications, allergies,
                 assigned_urologist, emergency_contact_name, emergency_contact_phone,
@@ -3037,5 +3028,130 @@ export const getPatientsDueForReview = async (req, res) => {
       console.log(`👥 [getPatientsDueForReview ${requestId}] Releasing database connection`);
       client.release();
     }
+  }
+};
+
+// Get all urologists for filtering purposes
+// This is a simpler, more inclusive endpoint than the booking endpoint
+export const getAllUrologists = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    // Get all urologists from doctors table where they are active
+    // This is more inclusive - gets all active doctors with urology specialization
+    // or role 'urologist' in users table
+    const doctorsTableResult = await client.query(
+      `SELECT DISTINCT
+        d.id, 
+        d.first_name, 
+        d.last_name, 
+        d.email, 
+        d.phone,
+        d.specialization,
+        dept.name as department_name
+       FROM doctors d
+       LEFT JOIN departments dept ON d.department_id = dept.id
+       INNER JOIN users u ON d.email = u.email
+       WHERE d.is_active = true 
+       AND u.is_active = true 
+       AND u.is_verified = true
+       AND (
+         -- Include if role is urologist
+         u.role = 'urologist'
+         OR
+         -- Include if specialization contains urology (case insensitive)
+         (d.specialization IS NOT NULL AND LOWER(d.specialization) LIKE '%urology%')
+         OR
+         -- Include if department name contains urology (case insensitive)
+         (dept.name IS NOT NULL AND LOWER(dept.name) LIKE '%urology%')
+       )
+       ORDER BY d.first_name, d.last_name`
+    );
+
+    console.log(`[getAllUrologists] Found ${doctorsTableResult.rows.length} urologists from doctors table`);
+
+    // Also get urologists from users table with role 'urologist' or 'doctor'
+    // who might not have a doctors record yet
+    const usersTableResult = await client.query(
+      `SELECT DISTINCT
+        u.id, 
+        u.first_name, 
+        u.last_name, 
+        u.email, 
+        u.phone, 
+        u.role
+       FROM users u
+       LEFT JOIN doctors d ON u.email = d.email
+       WHERE u.role IN ('urologist', 'doctor')
+       AND u.is_active = true 
+       AND u.is_verified = true
+       AND (d.id IS NULL OR d.is_active = true)
+       ORDER BY u.first_name, u.last_name`
+    );
+
+    console.log(`[getAllUrologists] Found ${usersTableResult.rows.length} urologists from users table`);
+
+    // Create urologists array from doctors table
+    const urologistsFromTable = doctorsTableResult.rows.map(row => ({
+      id: row.id,
+      name: `${row.first_name} ${row.last_name}`,
+      email: row.email,
+      phone: row.phone,
+      role: 'urologist',
+      specialization: row.specialization || row.department_name || 'Urology',
+      department: row.department_name
+    }));
+
+    // Get emails from doctors table to exclude duplicates
+    const doctorsTableEmails = new Set(
+      doctorsTableResult.rows.map(row => row.email.toLowerCase())
+    );
+
+    // Create urologists array from users table (only if not already in doctors table)
+    const urologistsFromUsers = usersTableResult.rows
+      .filter(userRow => !doctorsTableEmails.has(userRow.email.toLowerCase()))
+      .map(userRow => ({
+        id: userRow.id,
+        name: `${userRow.first_name} ${userRow.last_name}`,
+        email: userRow.email,
+        phone: userRow.phone,
+        role: userRow.role,
+        specialization: 'Urology',
+        department: null
+      }));
+
+    // Combine both lists
+    const allUrologists = [...urologistsFromTable, ...urologistsFromUsers];
+
+    // Final deduplication by email (case-insensitive)
+    const seenEmails = new Set();
+    const urologists = allUrologists.filter(urologist => {
+      const emailLower = urologist.email.toLowerCase();
+      if (seenEmails.has(emailLower)) {
+        return false;
+      }
+      seenEmails.add(emailLower);
+      return true;
+    });
+
+    console.log(`[getAllUrologists] Total urologists (after deduplication): ${urologists.length}`);
+
+    res.json({
+      success: true,
+      message: 'Urologists retrieved successfully',
+      data: {
+        urologists,
+        count: urologists.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Get all urologists error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  } finally {
+    client.release();
   }
 };

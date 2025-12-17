@@ -574,7 +574,7 @@ const PatientList = () => {
                             <div>
                               <div className="font-medium text-gray-900 text-sm">{patient.fullName || 'Unknown Patient'}</div>
                               <div className="text-xs text-gray-600">
-                                UPI: {patient.upi} • Age: {patient.age} • {patient.gender}
+                                UPI: {patient.upi} • {patient.age} years old
                               </div>
                             </div>
                           </div>

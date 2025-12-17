@@ -553,7 +553,6 @@ const OPDManagement = () => {
               name: patientOrAppointment.patientName,
               fullName: patientOrAppointment.patientName,
               age: patientOrAppointment.age,
-              gender: patientOrAppointment.gender,
               upi: patientOrAppointment.upi,
               psa: patientOrAppointment.psa,
               appointmentId: patientOrAppointment.id,
@@ -572,7 +571,6 @@ const OPDManagement = () => {
             name: patientOrAppointment.patientName,
             fullName: patientOrAppointment.patientName,
             age: patientOrAppointment.age,
-            gender: patientOrAppointment.gender,
             upi: patientOrAppointment.upi,
             psa: patientOrAppointment.psa,
             appointmentId: patientOrAppointment.id,
@@ -591,7 +589,6 @@ const OPDManagement = () => {
           name: patientOrAppointment.patientName,
           fullName: patientOrAppointment.patientName,
           age: patientOrAppointment.age,
-          gender: patientOrAppointment.gender,
           upi: patientOrAppointment.upi,
           psa: patientOrAppointment.psa,
           appointmentId: patientOrAppointment.id,
@@ -776,7 +773,7 @@ const OPDManagement = () => {
                               <div className="min-w-0 flex-1">
                                 <div className="font-medium text-gray-900 text-xs sm:text-sm truncate">{appointment.patientName}</div>
                                 <div className="text-xs text-gray-600 truncate">
-                                  {appointment.age} • {appointment.gender}
+                                  {appointment.age} years old
                                 </div>
                                 <div className="flex items-center mt-0.5">
                                   <div className={`w-1 h-1 ${getPSAColor(appointment.psa).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
@@ -998,7 +995,7 @@ const OPDManagement = () => {
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-gray-900 text-sm mb-1">{patient.name}</div>
                             <div className="text-xs text-gray-600 mb-1">
-                              UPI: {patient.upi} • Age: {patient.age} • {patient.gender}
+                              UPI: {patient.upi} • {patient.age} years old
                             </div>
                             {patient.referredByGP && (
                               <div className="text-xs text-teal-600 mb-1">
@@ -1149,7 +1146,7 @@ const OPDManagement = () => {
                                 {appointment.patientName}
                               </div>
                               <div className="text-xs text-gray-500">
-                                Age: {appointment.age || 'N/A'} • {appointment.gender || 'Unknown'}
+                                {appointment.age ? `${appointment.age} years old` : 'N/A'}
                               </div>
                             </div>
                           </div>

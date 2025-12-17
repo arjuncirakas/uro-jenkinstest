@@ -26,7 +26,6 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
     firstName: '',
     lastName: '',
     dateOfBirth: '',
-    gender: '',
     phone: '',
     email: '',
     address: '',
@@ -112,7 +111,6 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         firstName: patient.firstName || patient.first_name || '',
         lastName: patient.lastName || patient.last_name || '',
         dateOfBirth: patient.dateOfBirth || patient.date_of_birth || '',
-        gender: patient.gender || '',
         phone: patient.phone || patient.phoneNumber || '',
         email: patient.email || '',
         address: patient.address || '',
@@ -324,7 +322,6 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         firstName: formData.firstName,
         lastName: formData.lastName,
         dateOfBirth: convertToISODate(formData.dateOfBirth),
-        gender: formData.gender,
         phone: formData.phone,
         email: formData.email || '',
         address: formData.address || '',
@@ -521,31 +518,6 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <AlertCircle className="h-4 w-4 mr-1" />
                       {errors.dateOfBirth}
-                    </p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Gender *
-                  </label>
-                  <select
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                      errors.gender ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                    }`}
-                  >
-                    <option value="">Select gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  {errors.gender && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      {errors.gender}
                     </p>
                   )}
                 </div>

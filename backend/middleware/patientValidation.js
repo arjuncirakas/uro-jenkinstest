@@ -66,10 +66,6 @@ export const validatePatientInput = [
     .isInt({ min: 0, max: 120 })
     .withMessage('Age must be a whole number between 0 and 120'),
     
-  body('gender')
-    .isIn(['Male', 'Female', 'Other'])
-    .withMessage('Gender must be Male, Female, or Other'),
-    
   body('phone')
     .trim()
     .notEmpty()
@@ -455,11 +451,6 @@ export const validatePatientUpdateInput = [
       }
       return true;
     }),
-    
-  body('gender')
-    .optional()
-    .isIn(['Male', 'Female', 'Other'])
-    .withMessage('Gender must be Male, Female, or Other'),
     
   body('phone')
     .optional()

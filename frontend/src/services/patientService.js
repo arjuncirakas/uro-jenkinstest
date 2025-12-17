@@ -313,6 +313,25 @@ export const patientService = {
         details: error.response?.data?.errors || null
       };
     }
+  },
+
+  // Get all urologists for filtering purposes
+  getAllUrologists: async () => {
+    try {
+      const response = await apiClient.get('/patients/urologists');
+      console.log('Urologists API response:', response.data);
+      return { 
+        success: true, 
+        data: response.data.data?.urologists || response.data.data || [] 
+      };
+    } catch (error) {
+      console.error('Error fetching urologists:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
   }
 };
 
