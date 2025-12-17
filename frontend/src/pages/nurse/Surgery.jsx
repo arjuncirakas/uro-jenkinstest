@@ -395,7 +395,7 @@ const Surgery = () => {
                             className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1"
                           >
                             <FiCalendar className="w-3 h-3" />
-                            <span>{patient.hasSurgeryAppointment ? 'Update Surgery' : 'Schedule Surgery'}</span>
+                            <span>{patient.hasSurgeryAppointment ? 'Reschedule Surgery' : 'Schedule Surgery'}</span>
                           </button>
                         </td>
                       </tr>

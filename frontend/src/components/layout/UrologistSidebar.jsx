@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { HiHome } from 'react-icons/hi';
-import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaClipboardList, FaProcedures, FaHeartbeat } from 'react-icons/fa';
+import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaProcedures, FaHeartbeat } from 'react-icons/fa';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../../services/authService';
 
-// SubNavItem component with styled tooltip
+// SubNavItem component
 const SubNavItem = ({ subItem, onLinkClick }) => {
-  const [showTooltip, setShowTooltip] = useState(false);
   const SubIconComponent = subItem.icon;
 
   return (
@@ -18,8 +17,6 @@ const SubNavItem = ({ subItem, onLinkClick }) => {
       <Link
         to={subItem.path}
         onClick={onLinkClick}
-        onMouseEnter={() => subItem.tooltip && setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
         className={`flex items-center pl-8 py-2.5 rounded-lg transition-all ${
           subItem.active
             ? 'bg-teal-50 text-teal-700 shadow-sm'
@@ -34,18 +31,6 @@ const SubNavItem = ({ subItem, onLinkClick }) => {
           <SubIconComponent className={`text-sm ${subItem.active ? 'text-teal-600' : 'text-gray-500'}`} />
         </div>
         <span className="text-sm font-medium">{subItem.name}</span>
-        
-        {/* Custom Styled Tooltip */}
-        {subItem.tooltip && showTooltip && (
-          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-            <div className="bg-gray-50 border border-gray-300 rounded-md px-3 py-2 shadow-lg whitespace-nowrap">
-              <span className="text-xs text-gray-700 font-medium">{subItem.tooltip}</span>
-              {/* Tooltip arrow */}
-              <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-300"></div>
-              <div className="absolute right-full top-1/2 -translate-y-1/2 ml-[1px] border-4 border-transparent border-r-gray-50"></div>
-            </div>
-          </div>
-        )}
       </Link>
     </li>
   );
@@ -75,12 +60,11 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
     { 
       name: 'Patients', 
       icon: FaUsers, 
-      path: '/urologist/patients/new', 
+      path: '/urologist/patients/patients-under-me', 
       active: location.pathname.startsWith('/urologist/patients'),
       hasSubItems: true,
       subItems: [
-        { name: 'My Patients', icon: FaUsers, path: '/urologist/patients/my-patients', active: location.pathname === '/urologist/patients/my-patients', tooltip: 'Patients added by you to the system' },
-        { name: 'New Patients', icon: FaClipboardList, path: '/urologist/patients/new', active: location.pathname === '/urologist/patients/new', tooltip: 'Patients referred to you' },
+        { name: 'Patients Under Me', icon: FaUsers, path: '/urologist/patients/patients-under-me', active: location.pathname === '/urologist/patients/patients-under-me' },
         { name: 'Surgery Pathway', icon: FaProcedures, path: '/urologist/patients/surgery-pathway', active: location.pathname === '/urologist/patients/surgery-pathway' },
         { name: 'Post-op Followup', icon: FaHeartbeat, path: '/urologist/patients/post-op-followup', active: location.pathname === '/urologist/patients/post-op-followup' },
         { name: 'All Patients', icon: FaUsers, path: '/urologist/patients/all', active: location.pathname === '/urologist/patients/all' },

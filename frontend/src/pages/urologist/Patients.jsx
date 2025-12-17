@@ -23,6 +23,7 @@ const Patients = () => {
   // Determine the category from the URL path
   const category = useMemo(() => {
     const path = location.pathname;
+    if (path.includes('/patients/patients-under-me')) return 'patients-under-me';
     if (path.includes('/patients/my-patients')) return 'my-patients';
     if (path.includes('/patients/new')) return 'new';
     if (path.includes('/patients/surgery-pathway')) return 'surgery-pathway';
@@ -34,6 +35,8 @@ const Patients = () => {
   // Get page title based on category
   const pageTitle = useMemo(() => {
     switch (category) {
+      case 'patients-under-me':
+        return 'Patients Under Me';
       case 'my-patients':
         return 'My Patients';
       case 'new':
@@ -50,6 +53,8 @@ const Patients = () => {
   // Get page subtitle based on category
   const pageSubtitle = useMemo(() => {
     switch (category) {
+      case 'patients-under-me':
+        return 'All patients assigned to you';
       case 'my-patients':
         return 'Patients you have added to the system';
       case 'new':
@@ -64,8 +69,14 @@ const Patients = () => {
   }, [category]);
 
   const [patients, setPatients] = useState([]);
+  const [newPatients, setNewPatients] = useState([]);
+  const [myPatients, setMyPatients] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingNewPatients, setLoadingNewPatients] = useState(false);
+  const [loadingMyPatients, setLoadingMyPatients] = useState(false);
   const [error, setError] = useState(null);
+  const [errorNewPatients, setErrorNewPatients] = useState(null);
+  const [errorMyPatients, setErrorMyPatients] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const apiCategoryMap = {
@@ -77,17 +88,42 @@ const Patients = () => {
   };
 
   const fetchPatients = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const cat = apiCategoryMap[category] || 'all';
-    const res = await patientService.getAssignedPatients(cat);
-    if (res.success) {
-      setPatients(res.data || []);
+    if (category === 'patients-under-me') {
+      // Fetch both new patients and my patients separately
+      setLoadingNewPatients(true);
+      setErrorNewPatients(null);
+      const newRes = await patientService.getAssignedPatients('new');
+      if (newRes.success) {
+        setNewPatients(newRes.data || []);
+      } else {
+        setErrorNewPatients(newRes.error || 'Failed to fetch new patients');
+        setNewPatients([]);
+      }
+      setLoadingNewPatients(false);
+
+      setLoadingMyPatients(true);
+      setErrorMyPatients(null);
+      const myRes = await patientService.getAssignedPatients('my-patients');
+      if (myRes.success) {
+        setMyPatients(myRes.data || []);
+      } else {
+        setErrorMyPatients(myRes.error || 'Failed to fetch my patients');
+        setMyPatients([]);
+      }
+      setLoadingMyPatients(false);
     } else {
-      setError(res.error || 'Failed to fetch patients');
-      setPatients([]);
+      setLoading(true);
+      setError(null);
+      const cat = apiCategoryMap[category] || 'all';
+      const res = await patientService.getAssignedPatients(cat);
+      if (res.success) {
+        setPatients(res.data || []);
+      } else {
+        setError(res.error || 'Failed to fetch patients');
+        setPatients([]);
+      }
+      setLoading(false);
     }
-    setLoading(false);
   }, [category]);
 
   useEffect(() => {
@@ -98,8 +134,8 @@ const Patients = () => {
   useEffect(() => {
     const handlePatientAdded = () => {
       console.log('🔄 Patient added event received, refreshing patient list...');
-      // Refresh if we're on the "new" patients page or "my-patients" page
-      if (category === 'new' || category === 'my-patients') {
+      // Refresh if we're on the "new" patients page, "my-patients" page, or "patients-under-me" page
+      if (category === 'new' || category === 'my-patients' || category === 'patients-under-me') {
         fetchPatients();
       }
     };
@@ -174,16 +210,16 @@ const Patients = () => {
   };
 
   // Filter patients based on search query
-  const filteredPatients = useMemo(() => {
+  const filterPatientsList = (patientList) => {
     if (!searchQuery.trim()) {
-      return patients;
+      return patientList;
     }
     
     const query = searchQuery.toLowerCase().trim();
     // Normalize query by removing spaces for better matching
     const normalizedQuery = query.replace(/\s+/g, '');
     
-    return patients.filter(patient => {
+    return patientList.filter(patient => {
       // Get patient name components
       const name = (patient.name || '').toLowerCase();
       const firstName = (patient.firstName || '').toLowerCase();
@@ -215,7 +251,19 @@ const Patients = () => {
              upi.includes(query) || 
              carePathway.includes(query);
     });
+  };
+
+  const filteredPatients = useMemo(() => {
+    return filterPatientsList(patients);
   }, [patients, searchQuery]);
+
+  const filteredNewPatients = useMemo(() => {
+    return filterPatientsList(newPatients);
+  }, [newPatients, searchQuery]);
+
+  const filteredMyPatients = useMemo(() => {
+    return filterPatientsList(myPatients);
+  }, [myPatients, searchQuery]);
 
 
   return (
@@ -281,77 +329,217 @@ const Patients = () => {
           </div>
         </div>
 
-        {/* Patients Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px]">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT NAME</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT ID / MRN</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">
-                    {category === 'new' ? 'AGE' : 'CARE PATHWAY'}
-                  </th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan="4" className="py-6 text-center text-gray-500">Loading...</td></tr>
-                ) : error ? (
-                  <tr><td colSpan="4" className="py-6 text-center text-red-500">{error}</td></tr>
-                ) : filteredPatients.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="py-12 text-center">
-                      <div className="inline-flex flex-col items-center gap-2 text-teal-700">
-                        <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center">
-                          <IoPeopleOutline className="text-teal-500 text-2xl" />
-                        </div>
-                        <div className="text-sm font-medium">
-                          {searchQuery ? 'No patients found matching your search' : 'No patients available'}
-                        </div>
-                        <div className="text-xs text-teal-600">
-                          {searchQuery ? 'Try a different search term' : 'Assigned patients for this category will appear here'}
-                        </div>
-                      </div>
-                    </td>
+        {/* Patients Tables */}
+        {category === 'patients-under-me' ? (
+          <>
+            {/* New Patients Table */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">New Patients</h2>
+                <p className="text-sm text-gray-500 mt-1">Recently registered patients requiring initial assessment</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT NAME</th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT ID / MRN</th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">AGE</th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingNewPatients ? (
+                      <tr><td colSpan="4" className="py-6 text-center text-gray-500">Loading...</td></tr>
+                    ) : errorNewPatients ? (
+                      <tr><td colSpan="4" className="py-6 text-center text-red-500">{errorNewPatients}</td></tr>
+                    ) : filteredNewPatients.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="py-12 text-center">
+                          <div className="inline-flex flex-col items-center gap-2 text-teal-700">
+                            <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center">
+                              <IoPeopleOutline className="text-teal-500 text-2xl" />
+                            </div>
+                            <div className="text-sm font-medium">
+                              {searchQuery ? 'No new patients found matching your search' : 'No new patients available'}
+                            </div>
+                            <div className="text-xs text-teal-600">
+                              {searchQuery ? 'Try a different search term' : 'New patients will appear here'}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredNewPatients.map((patient) => (
+                      <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="py-4 px-6">
+                          <div className="font-medium text-gray-900">{patient.name}</div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-gray-600">
+                            UPI: {patient.upi}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-gray-600">
+                            {patient.age ? `${patient.age} years old` : 'N/A'}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <button
+                            onClick={() => patientDetailsModalRef.current?.openPatientDetails(patient.name, null, 'new')}
+                            className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm"
+                            aria-label={`View details for ${patient.name}`}
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* My Patients Table */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">Patients Added by You</h2>
+                <p className="text-sm text-gray-500 mt-1">Patients you have added to the system</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT NAME</th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT ID / MRN</th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">CARE PATHWAY</th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingMyPatients ? (
+                      <tr><td colSpan="4" className="py-6 text-center text-gray-500">Loading...</td></tr>
+                    ) : errorMyPatients ? (
+                      <tr><td colSpan="4" className="py-6 text-center text-red-500">{errorMyPatients}</td></tr>
+                    ) : filteredMyPatients.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="py-12 text-center">
+                          <div className="inline-flex flex-col items-center gap-2 text-teal-700">
+                            <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center">
+                              <IoPeopleOutline className="text-teal-500 text-2xl" />
+                            </div>
+                            <div className="text-sm font-medium">
+                              {searchQuery ? 'No patients found matching your search' : 'No patients added by you'}
+                            </div>
+                            <div className="text-xs text-teal-600">
+                              {searchQuery ? 'Try a different search term' : 'Patients you add will appear here'}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredMyPatients.map((patient) => (
+                      <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="py-4 px-6">
+                          <div className="font-medium text-gray-900">{patient.name}</div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-gray-600">
+                            UPI: {patient.upi}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                            {patient.carePathway || 'Not Assigned'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <button
+                            onClick={() => patientDetailsModalRef.current?.openPatientDetails(patient.name, null, 'my-patients')}
+                            className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm"
+                            aria-label={`View details for ${patient.name}`}
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px]">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT NAME</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT ID / MRN</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">
+                      {category === 'new' ? 'AGE' : 'CARE PATHWAY'}
+                    </th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">ACTION</th>
                   </tr>
-                ) : filteredPatients.map((patient) => (
-                  <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="font-medium text-gray-900">{patient.name}</div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="text-sm text-gray-600">
-                        UPI: {patient.upi}
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      {category === 'new' ? (
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan="4" className="py-6 text-center text-gray-500">Loading...</td></tr>
+                  ) : error ? (
+                    <tr><td colSpan="4" className="py-6 text-center text-red-500">{error}</td></tr>
+                  ) : filteredPatients.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="py-12 text-center">
+                        <div className="inline-flex flex-col items-center gap-2 text-teal-700">
+                          <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center">
+                            <IoPeopleOutline className="text-teal-500 text-2xl" />
+                          </div>
+                          <div className="text-sm font-medium">
+                            {searchQuery ? 'No patients found matching your search' : 'No patients available'}
+                          </div>
+                          <div className="text-xs text-teal-600">
+                            {searchQuery ? 'Try a different search term' : 'Assigned patients for this category will appear here'}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredPatients.map((patient) => (
+                    <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-4 px-6">
+                        <div className="font-medium text-gray-900">{patient.name}</div>
+                      </td>
+                      <td className="py-4 px-6">
                         <div className="text-sm text-gray-600">
-                          {patient.age ? `${patient.age} years old` : 'N/A'}
+                          UPI: {patient.upi}
                         </div>
-                      ) : (
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
-                          {patient.carePathway || 'Not Assigned'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      <button
-                        onClick={() => handleViewPatient(patient)}
-                        className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm"
-                        aria-label={`View details for ${patient.name}`}
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="py-4 px-6">
+                        {category === 'new' ? (
+                          <div className="text-sm text-gray-600">
+                            {patient.age ? `${patient.age} years old` : 'N/A'}
+                          </div>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                            {patient.carePathway || 'Not Assigned'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
+                        <button
+                          onClick={() => handleViewPatient(patient)}
+                          className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm"
+                          aria-label={`View details for ${patient.name}`}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Patient Details Modal Wrapper */}

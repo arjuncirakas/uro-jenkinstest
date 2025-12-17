@@ -71,7 +71,8 @@ const AppRoutes = () => {
       >
         <Route index element={<Navigate to="/urologist/dashboard" replace />} />
         <Route path="dashboard" element={<UrologistDashboard />} />
-        <Route path="patients" element={<Navigate to="/urologist/patients/new" replace />} />
+        <Route path="patients" element={<Navigate to="/urologist/patients/patients-under-me" replace />} />
+        <Route path="patients/patients-under-me" element={<Patients />} />
         <Route path="patients/my-patients" element={<Patients />} />
         <Route path="patients/new" element={<Patients />} />
         <Route path="patients/surgery-pathway" element={<Patients />} />
