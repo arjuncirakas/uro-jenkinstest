@@ -5,6 +5,52 @@ import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaClipboardList,
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../../services/authService';
 
+// SubNavItem component with styled tooltip
+const SubNavItem = ({ subItem, onLinkClick }) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const SubIconComponent = subItem.icon;
+
+  return (
+    <li className="relative group">
+      {/* Horizontal line connecting to vertical line */}
+      <div className="absolute left-[20px] top-[20px] w-[16px] h-[2px] bg-teal-300"></div>
+      
+      <Link
+        to={subItem.path}
+        onClick={onLinkClick}
+        onMouseEnter={() => subItem.tooltip && setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className={`flex items-center pl-8 py-2.5 rounded-lg transition-all ${
+          subItem.active
+            ? 'bg-teal-50 text-teal-700 shadow-sm'
+            : 'text-gray-600 hover:bg-gray-50'
+        }`}
+      >
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+          subItem.active 
+            ? 'bg-teal-100' 
+            : 'bg-gray-100'
+        }`}>
+          <SubIconComponent className={`text-sm ${subItem.active ? 'text-teal-600' : 'text-gray-500'}`} />
+        </div>
+        <span className="text-sm font-medium">{subItem.name}</span>
+        
+        {/* Custom Styled Tooltip */}
+        {subItem.tooltip && showTooltip && (
+          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
+            <div className="bg-gray-50 border border-gray-300 rounded-md px-3 py-2 shadow-lg whitespace-nowrap">
+              <span className="text-xs text-gray-700 font-medium">{subItem.tooltip}</span>
+              {/* Tooltip arrow */}
+              <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-300"></div>
+              <div className="absolute right-full top-1/2 -translate-y-1/2 ml-[1px] border-4 border-transparent border-r-gray-50"></div>
+            </div>
+          </div>
+        )}
+      </Link>
+    </li>
+  );
+};
+
 const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -148,35 +194,13 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                         <div className="absolute left-[20px] top-0 w-[2px] h-full bg-teal-300"></div>
                         
                         <ul className="space-y-1">
-                          {item.subItems.map((subItem, index) => {
-                            const SubIconComponent = subItem.icon;
-                            return (
-                              <li key={subItem.name} className="relative">
-                                {/* Horizontal line connecting to vertical line */}
-                                <div className="absolute left-[20px] top-[20px] w-[16px] h-[2px] bg-teal-300"></div>
-                                
-                                <Link
-                                  to={subItem.path}
-                                  onClick={handleLinkClick}
-                                  className={`flex items-center pl-8 py-2.5 rounded-lg transition-all ${
-                                    subItem.active
-                                      ? 'bg-teal-50 text-teal-700 shadow-sm'
-                                      : 'text-gray-600 hover:bg-gray-50'
-                                  }`}
-                                  title={subItem.tooltip || ''}
-                                >
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                                    subItem.active 
-                                      ? 'bg-teal-100' 
-                                      : 'bg-gray-100'
-                                  }`}>
-                                    <SubIconComponent className={`text-sm ${subItem.active ? 'text-teal-600' : 'text-gray-500'}`} />
-                                  </div>
-                                  <span className="text-sm font-medium">{subItem.name}</span>
-                                </Link>
-                              </li>
-                            );
-                          })}
+                          {item.subItems.map((subItem, index) => (
+                            <SubNavItem 
+                              key={subItem.name} 
+                              subItem={subItem} 
+                              onLinkClick={handleLinkClick}
+                            />
+                          ))}
                         </ul>
                       </div>
                     )}
