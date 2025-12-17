@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { IoNotificationsOutline, IoPeopleOutline, IoPersonCircleOutline } from 'react-icons/io5';
+import { FiSearch } from 'react-icons/fi';
 import PatientDetailsModalWrapper from '../../components/PatientDetailsModalWrapper';
 import NotificationModal from '../../components/NotificationModal';
 import ProfileDropdown from '../../components/ProfileDropdown';
-import GlobalPatientSearch from '../../components/GlobalPatientSearch';
 import { patientService } from '../../services/patientService';
 
 const Patients = () => {
@@ -66,6 +66,7 @@ const Patients = () => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const apiCategoryMap = {
     all: 'all',
@@ -172,6 +173,22 @@ const Patients = () => {
     }
   };
 
+  // Filter patients based on search query
+  const filteredPatients = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return patients;
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    return patients.filter(patient => {
+      const name = (patient.name || '').toLowerCase();
+      const upi = (patient.upi || '').toLowerCase();
+      const carePathway = (patient.carePathway || '').toLowerCase();
+      
+      return name.includes(query) || upi.includes(query) || carePathway.includes(query);
+    });
+  }, [patients, searchQuery]);
+
 
   return (
     <div className="h-full overflow-y-auto">
@@ -225,19 +242,13 @@ const Patients = () => {
         {/* Search Bar - Below Title */}
         <div className="mt-6 mb-6">
           <div className="relative w-full sm:w-96">
-            <GlobalPatientSearch
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
               placeholder="Search by name"
-              onPatientSelect={(patient) => {
-                console.log('Patients page: Patient selected:', patient);
-                // Determine category based on care pathway
-                let patientCategory = 'new';
-                if (patient.carePathway === 'Surgery Pathway') {
-                  patientCategory = 'surgery-pathway';
-                } else if (patient.carePathway === 'Post-op Transfer' || patient.carePathway === 'Post-op Followup') {
-                  patientCategory = 'post-op-followup';
-                }
-                patientDetailsModalRef.current?.openPatientDetails(patient.name, { age: patient.age }, patientCategory);
-              }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
             />
           </div>
         </div>
@@ -261,19 +272,23 @@ const Patients = () => {
                   <tr><td colSpan="4" className="py-6 text-center text-gray-500">Loading...</td></tr>
                 ) : error ? (
                   <tr><td colSpan="4" className="py-6 text-center text-red-500">{error}</td></tr>
-                ) : patients.length === 0 ? (
+                ) : filteredPatients.length === 0 ? (
                   <tr>
                     <td colSpan="4" className="py-12 text-center">
                       <div className="inline-flex flex-col items-center gap-2 text-teal-700">
                         <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center">
                           <IoPeopleOutline className="text-teal-500 text-2xl" />
                         </div>
-                        <div className="text-sm font-medium">No patients available</div>
-                        <div className="text-xs text-teal-600">Assigned patients for this category will appear here</div>
+                        <div className="text-sm font-medium">
+                          {searchQuery ? 'No patients found matching your search' : 'No patients available'}
+                        </div>
+                        <div className="text-xs text-teal-600">
+                          {searchQuery ? 'Try a different search term' : 'Assigned patients for this category will appear here'}
+                        </div>
                       </div>
                     </td>
                   </tr>
-                ) : patients.map((patient) => (
+                ) : filteredPatients.map((patient) => (
                   <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-6">
                       <div className="font-medium text-gray-900">{patient.name}</div>
