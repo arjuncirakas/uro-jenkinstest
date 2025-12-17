@@ -107,9 +107,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   });
 
   // Post-op Followup appointment scheduling state
+  // Initialize with default: 1 week from today
+  const calculateOneWeekDate = () => {
+    const today = new Date();
+    const oneWeekLater = new Date();
+    oneWeekLater.setDate(today.getDate() + 7);
+    return oneWeekLater.toISOString().split('T')[0];
+  };
+
   const [postOpFollowupScheduler, setPostOpFollowupScheduler] = useState({
-    appointmentDate: '',
-    checkupFrequency: '' // '1 week', '2 weeks', '3 weeks', '1 month'
+    appointmentDate: calculateOneWeekDate(),
+    checkupFrequency: '1 week' // Default to '1 week'
   });
 
 
@@ -1681,6 +1689,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setDischargeSummaryCreated(false);
       setIsDischargeSummaryModalOpen(true);
     } else {
+      // Initialize Post-op Followup scheduler with default values when selected
+      if (transferType === 'Post-op Followup') {
+        const today = new Date();
+        const oneWeekLater = new Date();
+        oneWeekLater.setDate(today.getDate() + 7);
+        setPostOpFollowupScheduler({
+          appointmentDate: oneWeekLater.toISOString().split('T')[0],
+          checkupFrequency: '1 week'
+        });
+      }
       setIsPathwayModalOpen(true);
     }
   };
@@ -5884,7 +5902,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Check-up Frequency
+                            Schedule After
                           </label>
                           <select
                             value={postOpFollowupScheduler.checkupFrequency}
@@ -5917,7 +5935,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
                           >
-                            <option value="">Select frequency</option>
                             <option value="1 week">1 week</option>
                             <option value="2 weeks">2 weeks</option>
                             <option value="3 weeks">3 weeks</option>
@@ -5926,26 +5943,24 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         </div>
                       </div>
 
-                      {postOpFollowupScheduler.checkupFrequency && (
-                        <div className="mt-4 bg-teal-50 border border-teal-200 rounded p-3">
-                          <div className="flex items-start space-x-3">
-                            <IoCalendar className="h-4 w-4 text-teal-600 mt-0.5" />
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 mb-1">
-                                {postOpFollowupScheduler.checkupFrequency === '1 week' && 'Next Week Follow-up'}
-                                {postOpFollowupScheduler.checkupFrequency === '2 weeks' && '2 Weeks Follow-up'}
-                                {postOpFollowupScheduler.checkupFrequency === '3 weeks' && '3 Weeks Follow-up'}
-                                {postOpFollowupScheduler.checkupFrequency === '1 month' && 'Monthly Follow-up'}
-                              </p>
-                              <p className="text-xs text-gray-600">
-                                {postOpFollowupScheduler.appointmentDate 
-                                  ? `Appointment will be automatically scheduled for ${new Date(postOpFollowupScheduler.appointmentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
-                                  : 'Follow-up appointment will be automatically scheduled'}
-                              </p>
-                            </div>
+                      <div className="mt-4 bg-teal-50 border border-teal-200 rounded p-3">
+                        <div className="flex items-start space-x-3">
+                          <IoCalendar className="h-4 w-4 text-teal-600 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 mb-1">
+                              {postOpFollowupScheduler.checkupFrequency === '1 week' && 'Next Week Follow-up'}
+                              {postOpFollowupScheduler.checkupFrequency === '2 weeks' && '2 Weeks Follow-up'}
+                              {postOpFollowupScheduler.checkupFrequency === '3 weeks' && '3 Weeks Follow-up'}
+                              {postOpFollowupScheduler.checkupFrequency === '1 month' && 'Monthly Follow-up'}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {postOpFollowupScheduler.appointmentDate 
+                                ? `Appointment will be automatically scheduled for ${new Date(postOpFollowupScheduler.appointmentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
+                                : 'Follow-up appointment will be automatically scheduled'}
+                            </p>
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -6134,9 +6149,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         notes: ''
                       });
                       setRecurringAppointments({ interval: '3' });
+                      // Reset to default values (1 week from today)
+                      const today = new Date();
+                      const oneWeekLater = new Date();
+                      oneWeekLater.setDate(today.getDate() + 7);
                       setPostOpFollowupScheduler({
-                        appointmentDate: '',
-                        checkupFrequency: ''
+                        appointmentDate: oneWeekLater.toISOString().split('T')[0],
+                        checkupFrequency: '1 week'
                       });
                       setMedicationDetails({
                         medications: [{
@@ -6205,9 +6224,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           showErrorModal('Validation Error', 'Please provide reason and clinical rationale for post-op followup');
                           return;
                         }
-                        // Validate appointment date if frequency is selected
-                        if (postOpFollowupScheduler.checkupFrequency && !postOpFollowupScheduler.appointmentDate) {
-                          showErrorModal('Validation Error', 'Please select an appointment date or check-up frequency');
+                        // Validate appointment date is set (should always be set due to default, but check anyway)
+                        if (!postOpFollowupScheduler.appointmentDate) {
+                          showErrorModal('Validation Error', 'Please select an appointment date');
                           return;
                         }
                         // Validate appointment date is not in the past
@@ -6348,8 +6367,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         if (res.success) {
                           transferSucceeded = true;
 
-                          // Book appointment for Post-op Followup if scheduler is configured
-                          if (selectedPathway === 'Post-op Followup' && postOpFollowupScheduler.appointmentDate && postOpFollowupScheduler.checkupFrequency) {
+                          // Book appointment for Post-op Followup if scheduler is configured (should always be set due to defaults)
+                          if (selectedPathway === 'Post-op Followup' && postOpFollowupScheduler.appointmentDate) {
                             try {
                               console.log('📅 Booking Post-op Followup appointment...');
                               const currentUser = authService.getCurrentUser();
@@ -6529,7 +6548,7 @@ Follow-up Appointments Scheduled:
 
 Post-operative Follow-up Appointment Scheduled:
 - Date: ${dateDisplay}
-- Frequency: ${postOpFollowupScheduler.checkupFrequency}`;
+- Schedule After: ${postOpFollowupScheduler.checkupFrequency}`;
                               }
 
                               // Add surgery appointment section if surgery was scheduled
