@@ -57,6 +57,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     medicalHistory: '',
     currentMedications: '',
     allergies: '',
+    socialHistory: '',
+    familyHistory: '',
     assignedUrologist: '',
     referringGP: '',
 
@@ -222,7 +224,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     }
 
     // Textarea fields, address field, and name fields - check if this is a field that needs whitespace preserved
-    const textareaFields = ['medicalHistory', 'currentMedications', 'allergies', 'notes', 'address'];
+    const textareaFields = ['medicalHistory', 'currentMedications', 'allergies', 'socialHistory', 'familyHistory', 'notes', 'address'];
     const nameFields = ['firstName', 'lastName', 'emergencyContactName', 'city', 'state'];
     const preserveWhitespace = textareaFields.includes(name) || nameFields.includes(name);
 
@@ -394,6 +396,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         medicalHistory: formData.medicalHistory || '',
         currentMedications: formData.currentMedications || '',
         allergies: formData.allergies || '',
+        socialHistory: formData.socialHistory || '',
+        familyHistory: formData.familyHistory || '',
         assignedUrologist: formData.assignedUrologist || '',
         emergencyContactName: formData.emergencyContactName || '',
         emergencyContactPhone: formData.emergencyContactPhone || '',
@@ -526,6 +530,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       medicalHistory: '',
       currentMedications: '',
       allergies: '',
+      socialHistory: '',
+      familyHistory: '',
       assignedUrologist: '',
       emergencyContactName: '',
       emergencyContactPhone: '',
@@ -1606,6 +1612,56 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Allergies
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="relative mb-3">
+                    <textarea
+                      name="socialHistory"
+                      value={formData.socialHistory}
+                      onChange={handleInputChange}
+                      rows={3}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
+                        formData.socialHistory
+                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      placeholder=" "
+                    />
+                    <label
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
+                        formData.socialHistory
+                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                          : 'text-gray-500'
+                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                    >
+                      Social History
+                    </label>
+                  </div>
+
+                  <div className="relative mb-3">
+                    <textarea
+                      name="familyHistory"
+                      value={formData.familyHistory}
+                      onChange={handleInputChange}
+                      rows={3}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
+                        formData.familyHistory
+                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      placeholder=" "
+                    />
+                    <label
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
+                        formData.familyHistory
+                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                          : 'text-gray-500'
+                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                    >
+                      Family History
                     </label>
                   </div>
                 </div>

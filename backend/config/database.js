@@ -446,6 +446,15 @@ export const initializeDatabase = async () => {
       console.log('⚠️  Ensuring exam & prior tests columns:', e.message);
     }
 
+    // Ensure social_history and family_history columns exist on patients
+    try {
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS social_history TEXT`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS family_history TEXT`);
+      console.log('✅ Ensured patients social_history and family_history columns');
+    } catch (e) {
+      console.log('⚠️  Ensuring social_history and family_history columns:', e.message);
+    }
+
     // Create patient_notes table
     const notesTableExists = await client.query(`
       SELECT EXISTS (

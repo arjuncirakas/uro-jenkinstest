@@ -40,6 +40,8 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
     medicalHistory: '',
     currentMedications: '',
     allergies: '',
+    socialHistory: '',
+    familyHistory: '',
     assignedUrologist: '',
     
     // Emergency Contact
@@ -123,6 +125,8 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         medicalHistory: patient.medicalHistory || patient.medical_history || '',
         currentMedications: patient.currentMedications || patient.current_medications || '',
         allergies: patient.allergies || '',
+        socialHistory: patient.socialHistory || patient.social_history || '',
+        familyHistory: patient.familyHistory || patient.family_history || '',
         assignedUrologist: patient.assignedUrologist || patient.assigned_urologist || '',
         emergencyContactName: patient.emergencyContactName || patient.emergency_contact_name || '',
         emergencyContactPhone: patient.emergencyContactPhone || patient.emergency_contact_phone || '',
@@ -195,7 +199,7 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
     }
     
     // Textarea fields
-    const textareaFields = ['medicalHistory', 'currentMedications', 'allergies', 'notes', 'address'];
+    const textareaFields = ['medicalHistory', 'currentMedications', 'allergies', 'socialHistory', 'familyHistory', 'notes', 'address'];
     const preserveWhitespace = textareaFields.includes(name);
     
     // Sanitize text inputs
@@ -334,6 +338,8 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
         medicalHistory: formData.medicalHistory || '',
         currentMedications: formData.currentMedications || '',
         allergies: formData.allergies || '',
+        socialHistory: formData.socialHistory || '',
+        familyHistory: formData.familyHistory || '',
         assignedUrologist: formData.assignedUrologist || '',
         emergencyContactName: formData.emergencyContactName || '',
         emergencyContactPhone: formData.emergencyContactPhone || '',
@@ -813,6 +819,36 @@ const EditPatientModal = ({ isOpen, onClose, patient, onPatientUpdated, onError 
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                     placeholder="Known allergies"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Social History
+                  </label>
+                  <textarea
+                    name="socialHistory"
+                    value={formData.socialHistory}
+                    onChange={handleInputChange}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                    placeholder="Social history information"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Family History
+                  </label>
+                  <textarea
+                    name="familyHistory"
+                    value={formData.familyHistory}
+                    onChange={handleInputChange}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                    placeholder="Family history information"
                   />
                 </div>
               </div>

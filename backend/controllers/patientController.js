@@ -192,6 +192,8 @@ export const addPatient = async (req, res) => {
       medicalHistory,
       currentMedications,
       allergies,
+      socialHistory,
+      familyHistory,
       assignedUrologist,
       emergencyContactName,
       emergencyContactPhone,
@@ -338,18 +340,18 @@ export const addPatient = async (req, res) => {
         upi, first_name, last_name, date_of_birth, phone, email, address, 
         postcode, city, state, referring_department, referral_date, initial_psa, 
         initial_psa_date, medical_history, current_medications, allergies, 
-        assigned_urologist, emergency_contact_name, emergency_contact_phone, 
+        social_history, family_history, assigned_urologist, emergency_contact_name, emergency_contact_phone, 
         emergency_contact_relationship, priority, notes, created_by, referred_by_gp_id, triage_symptoms,
         dre_done, dre_findings, prior_biopsy, prior_biopsy_date, gleason_score, comorbidities
       ) VALUES (
         $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12::date, $13, $14::date, $15, 
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30::date, $31, $32
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31::date, $32, $33
       ) RETURNING *`,
       [
         upi, firstName, lastName, formattedDateOfBirth, phone, email, address,
         postcode, city, state, referringDepartment, formattedReferralDate, initialPSA,
         formattedInitialPSADate, medicalHistory, currentMedications, allergies,
-        finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
+        socialHistory || '', familyHistory || '', finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
         emergencyContactRelationship, priority, notes || '', req.user.id, finalReferredByGpId, triageSymptoms || null,
         dreDone || false, dreFindings || null, priorBiopsy || 'no', formattedPriorBiopsyDate, gleasonScore || null, comorbiditiesJson
       ]
@@ -450,6 +452,8 @@ export const addPatient = async (req, res) => {
           medicalHistory: newPatient.medical_history,
           currentMedications: newPatient.current_medications,
           allergies: newPatient.allergies,
+          socialHistory: newPatient.social_history,
+          familyHistory: newPatient.family_history,
           assignedUrologist: newPatient.assigned_urologist || finalAssignedUrologist,
           emergencyContactName: newPatient.emergency_contact_name,
           emergencyContactPhone: newPatient.emergency_contact_phone,
@@ -658,7 +662,7 @@ export const getPatients = async (req, res) => {
         p.id, p.upi, p.first_name, p.last_name, p.gender, p.phone, p.email,
         p.address, p.postcode, p.city, p.state, p.referring_department,
         p.initial_psa, p.medical_history, p.current_medications, p.allergies,
-        p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
+        p.social_history, p.family_history, p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
         p.emergency_contact_relationship, p.priority, p.notes, p.status,
         p.care_pathway, p.created_by, p.created_at, p.updated_at,
         p.triage_symptoms, p.dre_done, p.dre_findings, p.prior_biopsy,
@@ -800,6 +804,8 @@ export const getPatients = async (req, res) => {
         medicalHistory: patient.medical_history,
         currentMedications: patient.current_medications,
         allergies: patient.allergies,
+        socialHistory: patient.social_history,
+        familyHistory: patient.family_history,
         assignedUrologist: patient.assigned_urologist,
         emergencyContactName: patient.emergency_contact_name,
         emergencyContactPhone: patient.emergency_contact_phone,
@@ -1227,7 +1233,7 @@ export const getPatientById = async (req, res) => {
         p.id, p.upi, p.first_name, p.last_name, p.gender, p.phone, p.email,
         p.address, p.postcode, p.city, p.state, p.referring_department,
         p.initial_psa, p.medical_history, p.current_medications, p.allergies,
-        p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
+        p.social_history, p.family_history, p.assigned_urologist, p.emergency_contact_name, p.emergency_contact_phone,
         p.emergency_contact_relationship, p.priority, p.notes, p.status,
         p.care_pathway, p.created_by, p.created_at, p.updated_at,
         p.triage_symptoms, p.dre_done, p.dre_findings, p.prior_biopsy,
@@ -1302,6 +1308,8 @@ export const getPatientById = async (req, res) => {
           medicalHistory: patient.medical_history,
           currentMedications: patient.current_medications,
           allergies: patient.allergies,
+          socialHistory: patient.social_history,
+          familyHistory: patient.family_history,
           assignedUrologist: patient.assigned_urologist,
           emergencyContactName: patient.emergency_contact_name,
           emergencyContactPhone: patient.emergency_contact_phone,
@@ -1382,7 +1390,7 @@ export const updatePatient = async (req, res) => {
       'first_name', 'last_name', 'date_of_birth', 'phone', 'email',
       'address', 'postcode', 'city', 'state', 'referring_department', 'referral_date',
       'initial_psa', 'initial_psa_date', 'medical_history', 'current_medications',
-      'allergies', 'assigned_urologist', 'emergency_contact_name', 'emergency_contact_phone',
+      'allergies', 'social_history', 'family_history', 'assigned_urologist', 'emergency_contact_name', 'emergency_contact_phone',
       'emergency_contact_relationship', 'priority', 'notes', 'status',
       // Triage and Exam & Prior Tests
       'triage_symptoms', 'dre_done', 'dre_findings', 'prior_biopsy',
@@ -1407,6 +1415,9 @@ export const updatePatient = async (req, res) => {
         'referralDate': 'referral_date',
         'medicalHistory': 'medical_history',
         'currentMedications': 'current_medications',
+        'allergies': 'allergies',
+        'socialHistory': 'social_history',
+        'familyHistory': 'family_history',
         'assignedUrologist': 'assigned_urologist',
         'emergencyContactName': 'emergency_contact_name',
         'emergencyContactPhone': 'emergency_contact_phone',
@@ -1498,7 +1509,7 @@ export const updatePatient = async (req, res) => {
       RETURNING id, upi, first_name, last_name, phone, email,
                 address, postcode, city, state, referring_department,
                 initial_psa, medical_history, current_medications, allergies,
-                assigned_urologist, emergency_contact_name, emergency_contact_phone,
+                social_history, family_history, assigned_urologist, emergency_contact_name, emergency_contact_phone,
                 emergency_contact_relationship, priority, notes, status,
                 triage_symptoms, dre_done, dre_findings, prior_biopsy,
                 prior_biopsy_date, gleason_score, comorbidities,
@@ -1540,6 +1551,8 @@ export const updatePatient = async (req, res) => {
           medicalHistory: updatedPatient.medical_history,
           currentMedications: updatedPatient.current_medications,
           allergies: updatedPatient.allergies,
+          socialHistory: updatedPatient.social_history,
+          familyHistory: updatedPatient.family_history,
           assignedUrologist: updatedPatient.assigned_urologist,
           emergencyContactName: updatedPatient.emergency_contact_name,
           emergencyContactPhone: updatedPatient.emergency_contact_phone,
@@ -2241,8 +2254,9 @@ export const updatePatientPathway = async (req, res) => {
       }
     }
 
-    // AUTO-BOOK FOLLOW-UP APPOINTMENTS FOR POST-OP TRANSFER & POST-OP FOLLOWUP (EVERY 6 MONTHS)
-    if (pathway === 'Post-op Transfer' || pathway === 'Post-op Followup') {
+    // AUTO-BOOK FOLLOW-UP APPOINTMENTS FOR POST-OP TRANSFER ONLY (NOT POST-OP FOLLOWUP)
+    // Post-op Followup appointments are now scheduled manually via the transfer modal scheduler
+    if (pathway === 'Post-op Transfer') {
       try {
         console.log(`[updatePatientPathway] Patient transferred to ${pathway} - Auto-booking 6-month follow-up appointments...`);
 

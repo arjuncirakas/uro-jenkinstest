@@ -4048,6 +4048,18 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                   </div>
                                 </div>
                                 <div>
+                                  <span className="text-gray-600">Social History:</span>
+                                  <div className={`ml-2 font-medium whitespace-pre-line ${displayPatient.socialHistory || displayPatient.social_history ? 'text-gray-900' : 'text-gray-500'}`}>
+                                    {displayPatient.socialHistory || displayPatient.social_history || 'None'}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">Family History:</span>
+                                  <div className={`ml-2 font-medium whitespace-pre-line ${displayPatient.familyHistory || displayPatient.family_history ? 'text-gray-900' : 'text-gray-500'}`}>
+                                    {displayPatient.familyHistory || displayPatient.family_history || 'None'}
+                                  </div>
+                                </div>
+                                <div>
                                   <span className="text-gray-600">Additional Notes:</span>
                                   <div className={`ml-2 font-medium whitespace-pre-line ${displayPatient.notes ? 'text-gray-900' : 'text-gray-500'}`}>
                                     {displayPatient.notes || 'None'}
