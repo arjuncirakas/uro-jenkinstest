@@ -221,8 +221,9 @@ export const addPatient = async (req, res) => {
     } = req.body;
 
     // Calculate dateOfBirth from age if dateOfBirth is not provided but age is
-    let finalDateOfBirth = dateOfBirth;
-    if (!dateOfBirth && age) {
+    // Handle empty strings, null, undefined - treat as not provided
+    let finalDateOfBirth = (dateOfBirth && dateOfBirth !== '' && dateOfBirth !== 'no' && dateOfBirth !== 'No' && dateOfBirth !== 'NO') ? dateOfBirth : null;
+    if (!finalDateOfBirth && age) {
       const ageNum = parseInt(age, 10);
       if (!isNaN(ageNum) && ageNum >= 0 && ageNum <= 120) {
         const today = new Date();
@@ -331,12 +332,12 @@ export const addPatient = async (req, res) => {
     }
 
     // Format date fields to prevent timezone conversion issues
-    // Ensure empty strings, "no", or invalid values are converted to null
+    // Ensure empty strings, "no", null, undefined, or invalid values are converted to null
     const formattedDateOfBirth = (finalDateOfBirth && finalDateOfBirth !== '' && finalDateOfBirth !== 'no' && finalDateOfBirth !== 'No' && finalDateOfBirth !== 'NO') 
       ? formatDateOnly(finalDateOfBirth) : null;
-    const formattedReferralDate = (referralDate && referralDate !== '' && referralDate !== 'no' && referralDate !== 'No' && referralDate !== 'NO') 
+    const formattedReferralDate = (referralDate && referralDate !== '' && referralDate !== 'no' && referralDate !== 'No' && referralDate !== 'NO' && referralDate !== null && referralDate !== undefined) 
       ? formatDateOnly(referralDate) : null;
-    const formattedInitialPSADate = (initialPSADate && initialPSADate !== '' && initialPSADate !== 'no' && initialPSADate !== 'No' && initialPSADate !== 'NO') 
+    const formattedInitialPSADate = (initialPSADate && initialPSADate !== '' && initialPSADate !== 'no' && initialPSADate !== 'No' && initialPSADate !== 'NO' && initialPSADate !== null && initialPSADate !== undefined) 
       ? formatDateOnly(initialPSADate) : null;
 
     // Format prior biopsy date if provided and priorBiopsy is 'yes'
@@ -566,6 +567,19 @@ export const addPatient = async (req, res) => {
     }
     if (error.detail) {
       console.error('Add patient error detail:', error.detail);
+    }
+    // Log the date values being sent to help debug (if they exist in scope)
+    try {
+      console.error('Date values from request body:', {
+        dateOfBirth: req.body?.dateOfBirth,
+        referralDate: req.body?.referralDate,
+        initialPSADate: req.body?.initialPSADate,
+        priorBiopsyDate: req.body?.priorBiopsyDate,
+        priorBiopsy: req.body?.priorBiopsy,
+        age: req.body?.age
+      });
+    } catch (logError) {
+      console.error('Error logging date values:', logError);
     }
 
     // Handle unique constraint violations

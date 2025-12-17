@@ -356,16 +356,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     try {
       // Helper function to convert date to ISO format
       const convertToISODate = (dateString) => {
-        if (!dateString) return '';
+        // Return null for empty strings, null, undefined, or invalid values
+        if (!dateString || dateString === '' || dateString === 'no' || dateString === 'No' || dateString === 'NO') {
+          return null;
+        }
         try {
           const date = new Date(dateString);
           if (isNaN(date.getTime())) {
-            throw new Error('Invalid date');
+            return null; // Return null instead of original string for invalid dates
           }
           return date.toISOString().split('T')[0];
         } catch (error) {
           console.error('Date conversion error:', error);
-          return dateString; // Return original if conversion fails
+          return null; // Return null instead of original string on error
         }
       };
 
