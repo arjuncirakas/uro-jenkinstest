@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiEye, FiCalendar, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiEye, FiCalendar, FiTrash2, FiChevronLeft, FiChevronRight, FiSearch } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
@@ -52,7 +52,9 @@ const PatientList = () => {
         page,
         limit: pageSize,
         search: searchQuery,
-        status: 'Active'
+        status: 'Active',
+        sortBy: 'created_at',
+        sortOrder: 'DESC' // Show latest added patients first
       };
       
       // Add urologist filter if not 'all'
@@ -456,12 +458,24 @@ const PatientList = () => {
         <NurseHeader 
           title="Patient List"
           subtitle="All patients under urology care"
-          onSearch={setSearchQuery}
-          searchPlaceholder="Search by name"
+          hideSearch={true}
         />
 
-        {/* Filter Controls */}
+        {/* Search Bar and Filter Controls - Horizontally Aligned */}
         <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          {/* Search Bar - Left side */}
+          <div className="relative w-full sm:w-96">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+            />
+          </div>
+
+          {/* Filter Controls - Right side */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             {selectedUrologist !== 'all' && (
               <div className="inline-flex items-center bg-teal-50 border border-teal-200 rounded-lg px-4 py-2 shadow-sm">
@@ -479,24 +493,24 @@ const PatientList = () => {
                 </button>
               </div>
             )}
-          </div>
-          <div className="flex items-center space-x-2">
-            <label htmlFor="urologist-filter" className="text-sm font-medium text-gray-700">
-              Filter by Urologist:
-            </label>
-            <select
-              id="urologist-filter"
-              value={selectedUrologist}
-              onChange={(e) => setSelectedUrologist(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            >
-              <option value="all">All Urologists</option>
-              {urologists.map((urologist) => (
-                <option key={urologist} value={urologist}>
-                  {urologist}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center space-x-2">
+              <label htmlFor="urologist-filter" className="text-sm font-medium text-gray-700">
+                Filter by Urologist:
+              </label>
+              <select
+                id="urologist-filter"
+                value={selectedUrologist}
+                onChange={(e) => setSelectedUrologist(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              >
+                <option value="all">All Urologists</option>
+                {urologists.map((urologist) => (
+                  <option key={urologist} value={urologist}>
+                    {urologist}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiEye, FiCalendar } from 'react-icons/fi';
+import { FiEye, FiCalendar, FiSearch } from 'react-icons/fi';
 import { FaPills } from 'react-icons/fa';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
@@ -188,12 +188,25 @@ const ActiveMonitoring = () => {
         <NurseHeader
           title="Active Monitoring"
           subtitle="Patients under active surveillance, medication, and discharge monitoring"
-          onSearch={setSearchQuery}
-          searchPlaceholder="Search by name"
+          hideSearch={true}
         />
 
-        {/* Filter Dropdown */}
-        <div className="mt-6 flex items-center gap-4">
+        {/* Search Bar and Filter - Horizontally Aligned */}
+        <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          {/* Search Bar - Left side */}
+          <div className="relative w-full sm:w-96">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+            />
+          </div>
+
+          {/* Filter Dropdown - Right side */}
+          <div className="flex items-center gap-4">
           <label htmlFor="monitoringTypeFilter" className="text-sm font-medium text-gray-700">
             Filter by Type:
           </label>
@@ -208,6 +221,7 @@ const ActiveMonitoring = () => {
             <option value="medication">Medication</option>
             <option value="discharge">Discharged</option>
           </select>
+          </div>
         </div>
 
         {/* Monitoring Table */}

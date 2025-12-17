@@ -11,7 +11,8 @@ const NurseHeader = ({
   subtitle, 
   searchPlaceholder = "Search patients by name, UPI, or status",
   onSearch = null, // If provided, uses local search instead of global search
-  useLocalSearch = false // Flag to indicate if this page uses local filtering
+  useLocalSearch = false, // Flag to indicate if this page uses local filtering
+  hideSearch = false // If true, hides the search bar completely
 }) => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -54,60 +55,101 @@ const NurseHeader = ({
           <p className="text-gray-500 text-sm mt-1">{subtitle}</p>
         </div>
         {/* Search Bar and Notification */}
-        <div className="w-full lg:w-96 flex items-center gap-3">
-          {shouldUseLocalSearch && onSearch ? (
-            // Local search input - filters the current page's patient list
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
+        {!hideSearch && (
+          <div className="w-full lg:w-96 flex items-center gap-3">
+            {shouldUseLocalSearch && onSearch ? (
+              // Local search input - filters the current page's patient list
+              <div className="relative flex-1">
+                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder={searchPlaceholder}
+                  onChange={(e) => onSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                />
+              </div>
+            ) : (
+              // Global search - searches all patients across all pathways
+              <GlobalPatientSearch 
                 placeholder={searchPlaceholder}
-                onChange={(e) => onSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-              />
-            </div>
-          ) : (
-            // Global search - searches all patients across all pathways
-            <GlobalPatientSearch 
-              placeholder={searchPlaceholder}
-              onPatientSelect={handlePatientSelect}
-            />
-          )}
-          {/* Notification Icon */}
-          <div className="relative">
-            <button 
-              onClick={() => setIsNotificationOpen(true)}
-              className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="Notifications"
-            >
-              <IoNotificationsOutline className="text-2xl" />
-              {/* Notification Badge */}
-              {notificationCount > 0 && (
-                <span className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {notificationCount}
-                </span>
-              )}
-            </button>
-          </div>
-          {/* Profile Icon */}
-          <div className="relative">
-            <button
-              ref={profileButtonRef}
-              onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="Profile"
-            >
-              <IoPersonCircleOutline className="text-2xl" />
-            </button>
-            {isProfileOpen && (
-              <ProfileDropdown
-                isOpen={isProfileOpen}
-                onClose={handleProfileClose}
-                buttonRef={profileButtonRef}
+                onPatientSelect={handlePatientSelect}
               />
             )}
+            {/* Notification Icon */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationOpen(true)}
+                className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Notifications"
+              >
+                <IoNotificationsOutline className="text-2xl" />
+                {/* Notification Badge */}
+                {notificationCount > 0 && (
+                  <span className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {notificationCount}
+                  </span>
+                )}
+              </button>
+            </div>
+            {/* Profile Icon */}
+            <div className="relative">
+              <button
+                ref={profileButtonRef}
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Profile"
+              >
+                <IoPersonCircleOutline className="text-2xl" />
+              </button>
+              {isProfileOpen && (
+                <ProfileDropdown
+                  isOpen={isProfileOpen}
+                  onClose={handleProfileClose}
+                  buttonRef={profileButtonRef}
+                />
+              )}
+            </div>
           </div>
-        </div>
+        )}
+        {/* Notification and Profile Icons when search is hidden */}
+        {hideSearch && (
+          <div className="flex items-center gap-3">
+            {/* Notification Icon */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationOpen(true)}
+                className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Notifications"
+              >
+                <IoNotificationsOutline className="text-2xl" />
+                {/* Notification Badge */}
+                {notificationCount > 0 && (
+                  <span className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {notificationCount}
+                  </span>
+                )}
+              </button>
+            </div>
+            {/* Profile Icon */}
+            <div className="relative">
+              <button
+                ref={profileButtonRef}
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Profile"
+              >
+                <IoPersonCircleOutline className="text-2xl" />
+              </button>
+              {isProfileOpen && (
+                <ProfileDropdown
+                  isOpen={isProfileOpen}
+                  onClose={handleProfileClose}
+                  buttonRef={profileButtonRef}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notification Modal */}

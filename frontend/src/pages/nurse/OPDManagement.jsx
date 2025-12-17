@@ -677,7 +677,7 @@ const OPDManagement = () => {
         <NurseHeader
           title="OPD Management"
           subtitle="Track patients in OPD queue and manage consultation flow"
-          searchPlaceholder="Search by name"
+          hideSearch={true}
         />
 
         {/* Main Layout Grid */}

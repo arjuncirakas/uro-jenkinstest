@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiEye, FiCalendar } from 'react-icons/fi';
+import { FiEye, FiCalendar, FiSearch } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
@@ -152,9 +152,22 @@ const PostOpFollowup = () => {
         <NurseHeader 
           title="Post-Op Follow-up"
           subtitle="Patients recovering from surgical procedures"
-          onSearch={setSearchQuery}
-          searchPlaceholder="Search by name"
+          hideSearch={true}
         />
+
+        {/* Search Bar */}
+        <div className="mt-6">
+          <div className="relative w-full sm:w-96">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+            />
+          </div>
+        </div>
 
         {/* Post-Op Follow-up Table */}
         <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">

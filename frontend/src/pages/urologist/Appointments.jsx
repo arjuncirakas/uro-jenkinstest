@@ -158,7 +158,7 @@ const Appointments = () => {
             </div>
           </div>
           
-          {/* Search Bar, Filters and Notification */}
+          {/* View Filters and Notification */}
           {currentView !== 'daily' && (
             <div className="w-full lg:w-auto flex flex-col lg:flex-row items-start lg:items-center gap-3">
               {/* View Filter */}
@@ -194,17 +194,8 @@ const Appointments = () => {
                 </div>
               </div>
 
+              {/* Notification and Profile Icons */}
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by name"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-                  />
-                </div>
                 {/* Notification Icon */}
                 <div className="relative">
                   <button 
@@ -241,7 +232,60 @@ const Appointments = () => {
               </div>
             </div>
           )}
+          {currentView === 'daily' && (
+            <div className="flex items-center gap-3">
+              {/* Notification Icon */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsNotificationOpen(true)}
+                  className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <IoNotificationsOutline className="text-2xl" />
+                  {/* Notification Badge */}
+                  {notificationCount > 0 && (
+                    <span className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {notificationCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+              {/* Profile Icon */}
+              <div className="relative">
+                <button
+                  ref={profileButtonRef}
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Profile"
+                >
+                  <IoPersonCircleOutline className="text-2xl" />
+                </button>
+                {isProfileOpen && (
+                  <ProfileDropdown
+                    isOpen={isProfileOpen}
+                    onClose={handleProfileClose}
+                    buttonRef={profileButtonRef}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Search Bar - Below Title */}
+        {currentView !== 'daily' && (
+          <div className="mt-6 mb-6">
+            <div className="relative w-full sm:w-96">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Content Section */}
         <div className="mt-6">

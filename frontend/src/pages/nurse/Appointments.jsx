@@ -42,11 +42,11 @@ const Appointments = () => {
     <div className="h-full overflow-y-auto">
       {/* Main Content Area */}
       <div className="p-4 sm:p-6 lg:p-8">
-        {/* Header with Global Search */}
+        {/* Header */}
         <NurseHeader 
           title="Appointments"
           subtitle="Schedule and manage patient appointments"
-          searchPlaceholder="Search by name"
+          hideSearch={true}
         />
 
         {/* Calendar Section */}

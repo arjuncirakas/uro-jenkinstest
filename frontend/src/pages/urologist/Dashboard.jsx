@@ -1083,22 +1083,8 @@ const UrologistDashboard = () => {
           <div className="pl-12 lg:pl-0">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Urologist Dashboard</h1>
           </div>
-          {/* Search Bar and Notification */}
-          <div className="w-full lg:w-96 flex items-center gap-3">
-            <GlobalPatientSearch
-              placeholder="Search by name"
-              onPatientSelect={(patient) => {
-                console.log('Urologist Dashboard: Patient selected:', patient);
-                // Determine category based on care pathway
-                let category = 'new';
-                if (patient.carePathway === 'Surgery Pathway') {
-                  category = 'surgery-pathway';
-                } else if (patient.carePathway === 'Post-op Transfer' || patient.carePathway === 'Post-op Followup') {
-                  category = 'post-op-followup';
-                }
-                patientModalRef.current?.openPatientDetails(patient.name, { age: patient.age }, category);
-              }}
-            />
+          {/* Notification and Profile Icons */}
+          <div className="flex items-center gap-3">
             {/* Notification Icon */}
             <div className="relative">
               <button
@@ -1133,6 +1119,26 @@ const UrologistDashboard = () => {
                 />
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Search Bar - Below Title */}
+        <div className="mt-6 mb-6">
+          <div className="relative w-full sm:w-96">
+            <GlobalPatientSearch
+              placeholder="Search by name"
+              onPatientSelect={(patient) => {
+                console.log('Urologist Dashboard: Patient selected:', patient);
+                // Determine category based on care pathway
+                let category = 'new';
+                if (patient.carePathway === 'Surgery Pathway') {
+                  category = 'surgery-pathway';
+                } else if (patient.carePathway === 'Post-op Transfer' || patient.carePathway === 'Post-op Followup') {
+                  category = 'post-op-followup';
+                }
+                patientModalRef.current?.openPatientDetails(patient.name, { age: patient.age }, category);
+              }}
+            />
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FiEye, FiPlus } from 'react-icons/fi';
+import { FiEye, FiPlus, FiSearch } from 'react-icons/fi';
 import NurseHeader from '../../components/layout/NurseHeader';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import AddInvestigationResultModal from '../../components/AddInvestigationResultModal';
@@ -591,9 +591,22 @@ const InvestigationManagement = () => {
         <NurseHeader 
           title="Investigation Management"
           subtitle="Track and manage all patient investigations and their status"
-          onSearch={setSearchQuery}
-          searchPlaceholder="Search by name"
+          hideSearch={true}
         />
+
+        {/* Search Bar */}
+        <div className="mt-6 mb-6">
+          <div className="relative w-full sm:w-96">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+            />
+          </div>
+        </div>
 
         {/* Investigations Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
