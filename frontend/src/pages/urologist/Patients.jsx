@@ -180,19 +180,36 @@ const Patients = () => {
     }
     
     const query = searchQuery.toLowerCase().trim();
+    // Normalize query by removing spaces for better matching
+    const normalizedQuery = query.replace(/\s+/g, '');
+    
     return patients.filter(patient => {
-      // Search in full name (combined)
+      // Get patient name components
       const name = (patient.name || '').toLowerCase();
-      // Search in first name separately
       const firstName = (patient.firstName || '').toLowerCase();
-      // Search in last name separately
       const lastName = (patient.lastName || '').toLowerCase();
+      
+      // Normalize name by removing spaces for matching without spaces
+      const normalizedName = name.replace(/\s+/g, '');
+      // Also create a combined name from firstName + lastName (in case name field is different)
+      const combinedName = `${firstName}${lastName}`;
+      
       // Search in UPI
       const upi = (patient.upi || '').toLowerCase();
       // Search in care pathway
       const carePathway = (patient.carePathway || '').toLowerCase();
       
+      // Check all possible matches:
+      // 1. Full name with spaces: "steve parker"
+      // 2. Full name without spaces: "steveparker"
+      // 3. Normalized query in normalized name: "stevepar" matches "steveparker"
+      // 4. Query in combined firstName+lastName: handles edge cases
+      // 5. First name separately: "steve"
+      // 6. Last name separately: "parker"
+      // 7. UPI and care pathway
       return name.includes(query) || 
+             normalizedName.includes(normalizedQuery) ||
+             combinedName.includes(normalizedQuery) ||
              firstName.includes(query) || 
              lastName.includes(query) || 
              upi.includes(query) || 
