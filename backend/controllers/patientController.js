@@ -345,7 +345,7 @@ export const addPatient = async (req, res) => {
         dre_done, dre_findings, prior_biopsy, prior_biopsy_date, gleason_score, comorbidities
       ) VALUES (
         $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12::date, $13, $14::date, $15, 
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31::date, $32, $33
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31::date, $32, $33, $34
       ) RETURNING *`,
       [
         upi, firstName, lastName, formattedDateOfBirth, phone, email, address,
