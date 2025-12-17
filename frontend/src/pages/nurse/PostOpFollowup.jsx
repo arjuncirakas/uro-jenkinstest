@@ -163,7 +163,7 @@ const PostOpFollowup = () => {
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PATIENT</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">SURGERY DETAILS</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">DOCTOR</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">LATEST PSA</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">VIEW</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">ACTIONS</th>
@@ -210,12 +210,8 @@ const PostOpFollowup = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-gray-700 text-sm">
-                          <div className="font-medium">{patient.surgeryType}</div>
-                          <div className="text-xs text-gray-600">
-                            {patient.surgeryDate}
-                          </div>
-                          <div className="text-xs text-gray-600 mt-1">
-                            Surgeon: {patient.surgeon}
+                          <div className="font-medium">
+                            {patient.surgeon}
                           </div>
                         </td>
                         <td className="py-4 px-4">
@@ -224,9 +220,6 @@ const PostOpFollowup = () => {
                             <span className={`text-sm font-medium ${psaStyle.textColor}`}>
                               {patient.latestPsa} ng/mL
                             </span>
-                          </div>
-                          <div className="text-xs text-gray-600 mt-1">
-                            Next: {patient.nextAppointment}
                           </div>
                         </td>
                         <td className="py-4 px-4">
