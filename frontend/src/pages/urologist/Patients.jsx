@@ -181,11 +181,22 @@ const Patients = () => {
     
     const query = searchQuery.toLowerCase().trim();
     return patients.filter(patient => {
+      // Search in full name (combined)
       const name = (patient.name || '').toLowerCase();
+      // Search in first name separately
+      const firstName = (patient.firstName || '').toLowerCase();
+      // Search in last name separately
+      const lastName = (patient.lastName || '').toLowerCase();
+      // Search in UPI
       const upi = (patient.upi || '').toLowerCase();
+      // Search in care pathway
       const carePathway = (patient.carePathway || '').toLowerCase();
       
-      return name.includes(query) || upi.includes(query) || carePathway.includes(query);
+      return name.includes(query) || 
+             firstName.includes(query) || 
+             lastName.includes(query) || 
+             upi.includes(query) || 
+             carePathway.includes(query);
     });
   }, [patients, searchQuery]);
 
