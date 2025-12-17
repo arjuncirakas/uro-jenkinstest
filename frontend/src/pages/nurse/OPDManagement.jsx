@@ -146,7 +146,9 @@ const OPDManagement = () => {
       
       const result = await bookingService.getUpcomingAppointments({
         limit: limit,
-        offset: currentOffset
+        offset: currentOffset,
+        // Show all appointment types (not just follow-ups) for the next 3 weeks
+        days: 21
       });
 
       if (result.success) {

@@ -1418,7 +1418,21 @@ export const getUpcomingAppointments = async (req, res) => {
       String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' +
       String(tomorrow.getDate()).padStart(2, '0');
 
-    console.log(`📅 [getUpcomingAppointments ${requestId}] Fetching appointments from tomorrow (${tomorrowStr}) onwards, limit: ${limit}, offset: ${offset}, doctorId: ${doctorId}`);
+    // Optional upper bound: limit results to a fixed number of days ahead
+    // e.g. days = 21 will return appointments from tomorrow for the next 3 weeks.
+    let endDateStr = null;
+    if (req.query.days) {
+      const daysInt = parseInt(req.query.days, 10);
+      if (!Number.isNaN(daysInt) && daysInt > 0) {
+        const endDate = new Date(tomorrow);
+        endDate.setDate(endDate.getDate() + (daysInt - 1));
+        endDateStr = endDate.getFullYear() + '-' +
+          String(endDate.getMonth() + 1).padStart(2, '0') + '-' +
+          String(endDate.getDate()).padStart(2, '0');
+      }
+    }
+
+    console.log(`📅 [getUpcomingAppointments ${requestId}] Fetching appointments from tomorrow (${tomorrowStr}) onwards${endDateStr ? ` up to ${endDateStr}` : ''}, limit: ${limit}, offset: ${offset}, doctorId: ${doctorId}`);
 
     // Build query with doctor filter for urologists/doctors
     let query;
@@ -1426,57 +1440,116 @@ export const getUpcomingAppointments = async (req, res) => {
     
     if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
       // Filter by doctor for urologists/doctors - exclude today's appointments
-      query = `
-        SELECT 
-          a.id,
-          a.patient_id,
-          p.first_name,
-          p.last_name,
-          p.upi,
-          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-          p.gender,
-          p.care_pathway,
-          a.appointment_date,
-          a.appointment_time,
-          a.urologist_name as urologist,
-          a.status,
-          a.notes,
-          a.appointment_type as type
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.id
-        WHERE a.appointment_date > $1
-        AND a.status != 'cancelled'
-        AND a.urologist_id = $2
-        ORDER BY a.appointment_date ASC, a.appointment_time ASC
-        LIMIT $3 OFFSET $4
-      `;
-      queryParams = [today, doctorId, parseInt(limit), parseInt(offset)];
+      // and optionally limit to a date range if days/endDateStr is provided.
+      if (endDateStr) {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            a.appointment_type as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date >= $1
+          AND a.appointment_date <= $2
+          AND a.status != 'cancelled'
+          AND a.urologist_id = $3
+          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+          LIMIT $4 OFFSET $5
+        `;
+        queryParams = [tomorrowStr, endDateStr, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
+      } else {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            a.appointment_type as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date > $1
+          AND a.status != 'cancelled'
+          AND a.urologist_id = $2
+          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+          LIMIT $3 OFFSET $4
+        `;
+        queryParams = [today, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
+      }
     } else {
       // For nurses, show all appointments - exclude today's appointments
-      query = `
-        SELECT 
-          a.id,
-          a.patient_id,
-          p.first_name,
-          p.last_name,
-          p.upi,
-          EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
-          p.gender,
-          p.care_pathway,
-          a.appointment_date,
-          a.appointment_time,
-          a.urologist_name as urologist,
-          a.status,
-          a.notes,
-          a.appointment_type as type
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.id
-        WHERE a.appointment_date > $1
-        AND a.status != 'cancelled'
-        ORDER BY a.appointment_date ASC, a.appointment_time ASC
-        LIMIT $2 OFFSET $3
-      `;
-      queryParams = [today, parseInt(limit), parseInt(offset)];
+      // and optionally limit to a date range if days/endDateStr is provided.
+      if (endDateStr) {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            a.appointment_type as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date >= $1
+          AND a.appointment_date <= $2
+          AND a.status != 'cancelled'
+          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+          LIMIT $3 OFFSET $4
+        `;
+        queryParams = [tomorrowStr, endDateStr, parseInt(limit, 10), parseInt(offset, 10)];
+      } else {
+        query = `
+          SELECT 
+            a.id,
+            a.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            a.appointment_date,
+            a.appointment_time,
+            a.urologist_name as urologist,
+            a.status,
+            a.notes,
+            a.appointment_type as type
+          FROM appointments a
+          JOIN patients p ON a.patient_id = p.id
+          WHERE a.appointment_date > $1
+          AND a.status != 'cancelled'
+          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+          LIMIT $2 OFFSET $3
+        `;
+        queryParams = [today, parseInt(limit, 10), parseInt(offset, 10)];
+      }
     }
 
     const result = await client.query(query, queryParams);
