@@ -494,12 +494,12 @@ const Users = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      {/* Main Content Area */}
-      <div className="p-4 sm:p-6 lg:p-8">
+    <div className="h-full overflow-y-auto w-full">
+      {/* Main Content Area - Full Width */}
+      <div className="w-full p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className="mb-6 lg:mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
-          <div className="pl-12 lg:pl-0">
+          <div>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-teal-600 to-teal-700 rounded-lg flex items-center justify-center">
                 <UserPlus className="h-5 w-5 text-white" />
