@@ -274,8 +274,7 @@ export const validatePatientForm = (formData) => {
     }
   }
   
-  const genderError = validateRequired(formData.gender, 'Gender');
-  if (genderError) errors.gender = genderError;
+  // Gender validation removed - field is optional now
   
   const phoneError = validateRequired(formData.phone, 'Phone number') || 
                     validatePhoneFormat(formData.phone);
