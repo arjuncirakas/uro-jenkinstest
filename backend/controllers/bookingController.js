@@ -1439,8 +1439,8 @@ export const getUpcomingAppointments = async (req, res) => {
     let queryParams = [];
     
     if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
-      // Filter by doctor for urologists/doctors - exclude today's appointments
-      // and optionally limit to a date range if days/endDateStr is provided.
+      // For urologists/doctors, include their urologist appointments (filtered by doctor)
+      // plus ALL investigation bookings in the date range.
       if (endDateStr) {
         query = `
           SELECT 
@@ -1461,10 +1461,34 @@ export const getUpcomingAppointments = async (req, res) => {
           FROM appointments a
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date >= $1
-          AND a.appointment_date <= $2
-          AND a.status != 'cancelled'
-          AND a.urologist_id = $3
-          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+            AND a.appointment_date <= $2
+            AND a.status != 'cancelled'
+            AND a.urologist_id = $3
+          
+          UNION ALL
+          
+          SELECT 
+            ib.id,
+            ib.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            ib.scheduled_date as appointment_date,
+            ib.scheduled_time as appointment_time,
+            ib.investigation_name as urologist,
+            ib.status,
+            ib.notes,
+            'investigation' as type
+          FROM investigation_bookings ib
+          JOIN patients p ON ib.patient_id = p.id
+          WHERE ib.scheduled_date >= $1
+            AND ib.scheduled_date <= $2
+            AND ib.status != 'cancelled'
+          
+          ORDER BY appointment_date ASC, appointment_time ASC
           LIMIT $4 OFFSET $5
         `;
         queryParams = [tomorrowStr, endDateStr, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
@@ -1488,16 +1512,39 @@ export const getUpcomingAppointments = async (req, res) => {
           FROM appointments a
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date > $1
-          AND a.status != 'cancelled'
-          AND a.urologist_id = $2
-          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+            AND a.status != 'cancelled'
+            AND a.urologist_id = $2
+          
+          UNION ALL
+          
+          SELECT 
+            ib.id,
+            ib.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            ib.scheduled_date as appointment_date,
+            ib.scheduled_time as appointment_time,
+            ib.investigation_name as urologist,
+            ib.status,
+            ib.notes,
+            'investigation' as type
+          FROM investigation_bookings ib
+          JOIN patients p ON ib.patient_id = p.id
+          WHERE ib.scheduled_date > $1
+            AND ib.status != 'cancelled'
+          
+          ORDER BY appointment_date ASC, appointment_time ASC
           LIMIT $3 OFFSET $4
         `;
         queryParams = [today, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
       }
     } else {
-      // For nurses, show all appointments - exclude today's appointments
-      // and optionally limit to a date range if days/endDateStr is provided.
+      // For nurses, show ALL appointment types (urologist, surgery, follow-up, investigation)
+      // in the requested date range (future only).
       if (endDateStr) {
         query = `
           SELECT 
@@ -1518,9 +1565,33 @@ export const getUpcomingAppointments = async (req, res) => {
           FROM appointments a
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date >= $1
-          AND a.appointment_date <= $2
-          AND a.status != 'cancelled'
-          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+            AND a.appointment_date <= $2
+            AND a.status != 'cancelled'
+          
+          UNION ALL
+          
+          SELECT 
+            ib.id,
+            ib.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            ib.scheduled_date as appointment_date,
+            ib.scheduled_time as appointment_time,
+            ib.investigation_name as urologist,
+            ib.status,
+            ib.notes,
+            'investigation' as type
+          FROM investigation_bookings ib
+          JOIN patients p ON ib.patient_id = p.id
+          WHERE ib.scheduled_date >= $1
+            AND ib.scheduled_date <= $2
+            AND ib.status != 'cancelled'
+          
+          ORDER BY appointment_date ASC, appointment_time ASC
           LIMIT $3 OFFSET $4
         `;
         queryParams = [tomorrowStr, endDateStr, parseInt(limit, 10), parseInt(offset, 10)];
@@ -1544,8 +1615,31 @@ export const getUpcomingAppointments = async (req, res) => {
           FROM appointments a
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date > $1
-          AND a.status != 'cancelled'
-          ORDER BY a.appointment_date ASC, a.appointment_time ASC
+            AND a.status != 'cancelled'
+          
+          UNION ALL
+          
+          SELECT 
+            ib.id,
+            ib.patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            p.care_pathway,
+            ib.scheduled_date as appointment_date,
+            ib.scheduled_time as appointment_time,
+            ib.investigation_name as urologist,
+            ib.status,
+            ib.notes,
+            'investigation' as type
+          FROM investigation_bookings ib
+          JOIN patients p ON ib.patient_id = p.id
+          WHERE ib.scheduled_date > $1
+            AND ib.status != 'cancelled'
+          
+          ORDER BY appointment_date ASC, appointment_time ASC
           LIMIT $2 OFFSET $3
         `;
         queryParams = [today, parseInt(limit, 10), parseInt(offset, 10)];
