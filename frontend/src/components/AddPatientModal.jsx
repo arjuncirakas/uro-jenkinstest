@@ -233,6 +233,18 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       sanitizedValue = sanitizeInput(value, { preserveWhitespace });
     }
 
+    // Handle priorBiopsy change - clear date if "no" is selected
+    if (name === 'priorBiopsy' && sanitizedValue === 'no') {
+      sanitizedValue = 'no';
+      // Clear the priorBiopsyDate when "No" is selected
+      setFormData(prev => ({
+        ...prev,
+        [name]: sanitizedValue,
+        priorBiopsyDate: ''
+      }));
+      return;
+    }
+
     // Handle auto-calculation between DOB and Age
     let updatedFormData = { ...formData, [name]: sanitizedValue };
 
@@ -410,10 +422,14 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         dreDone: formData.dreDone || false,
         dreFindings: Array.isArray(formData.dreFindings) ? formData.dreFindings.join(', ') : (formData.dreFindings || ''),
         priorBiopsy: formData.priorBiopsy || 'no',
-        priorBiopsyDate: formData.priorBiopsyDate ? convertToISODate(formData.priorBiopsyDate) : '',
         gleasonScore: formData.gleasonScore || '',
         comorbidities: formData.comorbidities || []
       };
+
+      // Only include priorBiopsyDate in payload if priorBiopsy is 'yes' and date is provided
+      if (formData.priorBiopsy === 'yes' && formData.priorBiopsyDate) {
+        patientData.priorBiopsyDate = convertToISODate(formData.priorBiopsyDate);
+      }
 
       // Call the API
       const result = await patientService.addPatient(patientData);
