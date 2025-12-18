@@ -316,21 +316,10 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       if (result.success) {
         console.log('✅ Consent form uploaded successfully:', result.data);
         
-        // Refresh consent forms - wait a bit for backend to process
-        await new Promise(resolve => setTimeout(resolve, 800));
-        await fetchConsentForms();
-        
-        // Refresh again after a longer delay to ensure backend has fully processed
+        // Wait for backend to process, then refresh once
         await new Promise(resolve => setTimeout(resolve, 1000));
         await fetchConsentForms();
         
-        // One more refresh to be absolutely sure
-        await new Promise(resolve => setTimeout(resolve, 700));
-        await fetchConsentForms();
-        
-        // Force a state update by logging and checking
-        console.log('✅ Refreshed consent forms after upload');
-        console.log('✅ Current patientConsentForms:', patientConsentForms);
         setConsentFormNotification({ type: 'success', message: `${testName} signed consent form uploaded successfully` });
         // Clear notification after 5 seconds
         setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
@@ -538,7 +527,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-lg w-full flex flex-col">
+      <div className="bg-white rounded-lg max-w-lg w-full flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
           <div>
@@ -560,8 +549,8 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
           </button>
         </div>
 
-        {/* Form Content - No scrolling */}
-        <div className="flex-1 overflow-visible">
+        {/* Form Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
           <form onSubmit={handleSubmit} className="p-4">
             {/* Result */}
             <div className="mb-3">
@@ -719,8 +708,8 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
           {/* Status Update Section */}
           {onStatusUpdate && !hasExistingFile && (
-            <div className="px-4 pb-3 border-t border-gray-200 pt-3">
-              <h3 className="text-xs font-semibold text-gray-700 mb-2">Or Update Status</h3>
+            <div className="px-4 pb-2 border-t border-gray-200 pt-2">
+              <h3 className="text-xs font-semibold text-gray-700 mb-1.5">Or Update Status</h3>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -729,7 +718,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                       await onStatusUpdate('not_required');
                     }
                   }}
-                  className="flex-1 px-3 py-2 text-xs bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 transition-colors font-medium border border-gray-300 flex items-center justify-center gap-1.5"
+                  className="flex-1 px-3 py-1.5 text-xs bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 transition-colors font-medium border border-gray-300 flex items-center justify-center gap-1.5"
                 >
                   <FiX className="w-3.5 h-3.5" />
                   Not Required
@@ -771,22 +760,24 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
             });
 
             return (
-              <div className="px-4 pb-3 mt-3">
+              <div className="px-4 pb-2 mt-2">
                 {/* Consent Form Section */}
-                <div className="border-t border-gray-200 pt-3">
+                <div className="border-t border-gray-200 pt-2">
                   {/* Section Header */}
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xs font-semibold text-gray-700">
                       Consent Form for {investigationName}
                     </h3>
                     {hasUploadedForm && (
-                      <span className="text-xs text-gray-500 font-medium">Uploaded</span>
+                      <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                        Uploaded
+                      </span>
                     )}
                   </div>
 
                   {/* Notification Message */}
                   {consentFormNotification.message && (
-                    <div className={`mb-3 p-2 rounded text-xs ${
+                    <div className={`mb-2 p-1.5 rounded text-xs ${
                       consentFormNotification.type === 'success' 
                         ? 'bg-gray-50 text-gray-700 border border-gray-200' 
                         : 'bg-gray-50 text-gray-700 border border-gray-200'
@@ -797,7 +788,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
                   {/* Uploaded File Info */}
                   {hasUploadedForm && (
-                    <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
+                    <div className="mb-2 p-1.5 bg-gray-50 rounded border border-gray-200">
                       <div className="flex items-center gap-2">
                         <IoDocument className="w-3.5 h-3.5 text-gray-500" />
                         <span className="text-xs text-gray-600 truncate">{fileName}</span>
@@ -805,80 +796,72 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                     </div>
                   )}
 
-                  {/* Loading/Uploading Status */}
-                  {loadingConsentForms && (
-                    <div className="mb-3 flex items-center gap-2 text-xs text-gray-500">
+                  {/* Loading/Uploading Status - Single Loader */}
+                  {(loadingConsentForms || uploadingConsentForm) && (
+                    <div className="mb-2 flex items-center gap-2 text-xs text-gray-500">
                       <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Loading...</span>
-                    </div>
-                  )}
-                  {uploadingConsentForm && (
-                    <div className="mb-3 flex items-center gap-2 text-xs text-gray-500">
-                      <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Uploading...</span>
+                      <span>{uploadingConsentForm ? 'Uploading...' : 'Loading...'}</span>
                     </div>
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
-                      disabled={!consentTemplate || loadingConsentForms}
-                      className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
-                        consentTemplate && !loadingConsentForms
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
+                        disabled={!consentTemplate || loadingConsentForms}
+                        className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
+                          consentTemplate && !loadingConsentForms
+                            ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                            : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                        }`}
+                        title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
+                      >
+                        <IoPrint className="w-3.5 h-3.5" />
+                        <span>Print</span>
+                      </button>
+
+                      <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                        consentTemplate && !loadingConsentForms && !uploadingConsentForm
                           ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
                           : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
                       }`}
-                      title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
-                    >
-                      <IoPrint className="w-3.5 h-3.5" />
-                      <span>Print</span>
-                    </button>
+                      title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+                      >
+                        <IoCloudUpload className="w-3.5 h-3.5" />
+                        <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file && consentTemplate) {
+                              handleConsentFormUpload(investigationName, consentTemplate, file);
+                            } else if (file && !consentTemplate) {
+                              setConsentFormNotification({ type: 'error', message: 'Consent form template not available. Please create one in the superadmin panel first.' });
+                              setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+                            }
+                            // Reset input
+                            e.target.value = '';
+                          }}
+                          className="hidden"
+                          disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm}
+                        />
+                      </label>
+                    </div>
 
-                    <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                      consentTemplate && !loadingConsentForms && !uploadingConsentForm
-                        ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-                        : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-                    }`}
-                    title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
-                    >
-                      <IoCloudUpload className="w-3.5 h-3.5" />
-                      <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
-                      <input
-                        type="file"
-                        accept=".pdf,image/*"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file && consentTemplate) {
-                            handleConsentFormUpload(investigationName, consentTemplate, file);
-                          } else if (file && !consentTemplate) {
-                            setConsentFormNotification({ type: 'error', message: 'Consent form template not available. Please create one in the superadmin panel first.' });
-                            setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
-                          }
-                          // Reset input
-                          e.target.value = '';
-                        }}
-                        className="hidden"
-                        disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm}
-                      />
-                    </label>
-
-                    {hasUploadedForm ? (
+                    {/* View Consent Form Button - Only visible when form is uploaded */}
+                    {hasUploadedForm && (
                       <button
                         type="button"
                         onClick={() => handleViewConsentForm(patientConsentForm)}
-                        className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                        className="w-full px-3 py-2 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors flex items-center justify-center gap-1.5"
                         title="View uploaded consent form"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        <span>View</span>
+                        <span>View Consent Form</span>
                       </button>
-                    ) : (
-                      <div className="flex-1 px-3 py-2 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded flex items-center justify-center gap-1.5">
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>View</span>
-                      </div>
                     )}
                   </div>
 
