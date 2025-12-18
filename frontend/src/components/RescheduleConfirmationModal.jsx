@@ -140,12 +140,31 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
     setError(null);
     
     try {
+      // Determine appointment type - preserve original type based on typeColor or type field
+      // This ensures investigation appointments (purple) stay as investigation and 
+      // urologist consultations (teal) stay as urologist when rescheduled
+      let appointmentType = 'urologist'; // default
+      
+      if (appointment.typeColor === 'purple') {
+        appointmentType = 'investigation';
+      } else if (appointment.typeColor === 'teal') {
+        appointmentType = 'urologist';
+      } else {
+        // Fallback to checking type field
+        const typeLabel = (appointment.type || '').toLowerCase();
+        if (typeLabel.includes('investigation')) {
+          appointmentType = 'investigation';
+        } else {
+          appointmentType = 'urologist';
+        }
+      }
+      
       // Call the API to reschedule the appointment
       const result = await bookingService.rescheduleNoShowAppointment(appointment.id, {
         newDate: selectedDate,
         newTime: selectedTime,
         newDoctorId: selectedDoctor.id,
-        appointmentType: appointment.type?.toLowerCase() === 'investigation' ? 'investigation' : 'urologist'
+        appointmentType: appointmentType
       });
 
       if (result.success) {
@@ -334,7 +353,21 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                 <input
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    // Validate that selected date is not in the past
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const selectedDateObj = new Date(selected);
+                    selectedDateObj.setHours(0, 0, 0, 0);
+                    
+                    if (selectedDateObj < today) {
+                      setError('Cannot reschedule appointments to a past date. Please select today or a future date.');
+                      return;
+                    }
+                    setError(null);
+                    setSelectedDate(selected);
+                  }}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   min={(() => {
                     const now = new Date();

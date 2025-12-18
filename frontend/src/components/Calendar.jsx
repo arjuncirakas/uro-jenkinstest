@@ -309,6 +309,43 @@ const Calendar = ({
     return false;
   };
 
+  // Helper function to get appointment color, preserving original typeColor
+  // This ensures that investigation appointments (purple) and urologist consultations (teal)
+  // maintain their colors when rescheduled
+  const getAppointmentColor = (appointment) => {
+    // If status is missed, always show red
+    if (appointment.status === 'missed' || appointment.status === 'no_show' || appointment.status === 'no-show') {
+      return 'red';
+    }
+    
+    // Check for automatic/follow-up appointments (blue)
+    if (isRecurringFollowup(appointment) || 
+        appointment.typeColor === 'blue' || 
+        appointment.appointment_type === 'automatic' || 
+        appointment.type === 'automatic') {
+      return 'blue';
+    }
+    
+    // Preserve original typeColor if it exists
+    // This ensures investigation (purple) and urologist consultation (teal) colors are maintained
+    if (appointment.typeColor === 'purple') {
+      return 'purple';
+    }
+    
+    if (appointment.typeColor === 'teal') {
+      return 'teal';
+    }
+    
+    // Fallback: determine color from appointment type if typeColor is not set
+    const typeLabel = (appointment.type || '').toLowerCase();
+    if (typeLabel.includes('investigation')) {
+      return 'purple';
+    }
+    
+    // Default to teal for urologist consultations
+    return 'teal';
+  };
+
   // Separate automatic appointments from regular appointments
   const separateAppointments = (appointments) => {
     const regular = [];
@@ -362,6 +399,18 @@ const Calendar = ({
     e.preventDefault();
     
     if (draggedAppointment) {
+      // Validate that target date is not in the past
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+      const targetDateOnly = new Date(targetDate);
+      targetDateOnly.setHours(0, 0, 0, 0);
+      
+      if (targetDateOnly < today) {
+        alert('Cannot reschedule appointments to a past date. Please select today or a future date.');
+        setDraggedAppointment(null);
+        return;
+      }
+      
       // Get the date components directly from the target date
       const year = targetDate.getFullYear();
       const month = targetDate.getMonth() + 1; // getMonth() returns 0-11, we need 1-12
@@ -669,12 +718,12 @@ const Calendar = ({
                               handleAppointmentClick(appointment);
                             }}
                             className={`p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity ${
-                              appointment.status === 'missed'
+                              getAppointmentColor(appointment) === 'red'
                                 ? 'bg-red-500 text-white'
-                                : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                : getAppointmentColor(appointment) === 'blue'
                                   ? 'bg-blue-500 text-white'
-                                  : appointment.typeColor === 'teal' 
-                                    ? 'bg-teal-500 text-white' 
+                                  : getAppointmentColor(appointment) === 'teal'
+                                    ? 'bg-teal-500 text-white'
                                     : 'bg-purple-500 text-white'
                             }`}
                           >
@@ -827,12 +876,12 @@ const Calendar = ({
                                 handleAppointmentClick(appointment);
                               }}
                               className={`p-2 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity mb-1 ${
-                                appointment.status === 'missed'
+                                getAppointmentColor(appointment) === 'red'
                                   ? 'bg-red-500 text-white'
-                                  : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                  : getAppointmentColor(appointment) === 'blue'
                                     ? 'bg-blue-500 text-white'
-                                    : appointment.typeColor === 'teal' 
-                                      ? 'bg-teal-500 text-white' 
+                                    : getAppointmentColor(appointment) === 'teal'
+                                      ? 'bg-teal-500 text-white'
                                       : 'bg-purple-500 text-white'
                               }`}
                             >
@@ -959,12 +1008,12 @@ const Calendar = ({
                               handleAppointmentClick(appointment);
                             }}
                             className={`p-3 rounded-lg cursor-pointer group hover:opacity-90 transition-opacity ${
-                              appointment.status === 'missed'
+                              getAppointmentColor(appointment) === 'red'
                                 ? 'bg-red-500 text-white'
-                                : isRecurringFollowup(appointment) || appointment.typeColor === 'blue' || appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                : getAppointmentColor(appointment) === 'blue'
                                   ? 'bg-blue-500 text-white'
-                                  : appointment.typeColor === 'teal' 
-                                    ? 'bg-teal-500 text-white' 
+                                  : getAppointmentColor(appointment) === 'teal'
+                                    ? 'bg-teal-500 text-white'
                                     : 'bg-purple-500 text-white'
                             }`}
                           >
