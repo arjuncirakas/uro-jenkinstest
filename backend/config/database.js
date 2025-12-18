@@ -1007,6 +1007,12 @@ export const initializeDatabase = async () => {
         CREATE TABLE consent_forms (
           id SERIAL PRIMARY KEY,
           name VARCHAR(255) NOT NULL UNIQUE,
+          procedure_name VARCHAR(255),
+          test_name VARCHAR(255),
+          is_auto_generated BOOLEAN DEFAULT FALSE,
+          template_file_path VARCHAR(500),
+          template_file_name VARCHAR(255),
+          template_file_size INTEGER,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -1014,6 +1020,22 @@ export const initializeDatabase = async () => {
       console.log('✅ Consent forms table created successfully');
     } else {
       console.log('✅ Consent forms table already exists');
+      // Add new columns if they don't exist (for existing databases)
+      try {
+        await client.query(`
+          ALTER TABLE consent_forms 
+          ADD COLUMN IF NOT EXISTS procedure_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS test_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS is_auto_generated BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS template_file_path VARCHAR(500),
+          ADD COLUMN IF NOT EXISTS template_file_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS template_file_size INTEGER
+        `);
+        console.log('✅ Consent forms table columns updated successfully');
+      } catch (alterError) {
+        // Columns might already exist, which is fine
+        console.log('ℹ️ Consent forms table columns check completed');
+      }
     }
 
     // Create patient_consent_forms table

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard } from 'react-icons/io5';
+import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Eye, Download, Trash, Edit } from 'lucide-react';
@@ -21,6 +21,7 @@ import { notesService } from '../services/notesService';
 import { investigationService } from '../services/investigationService';
 import { bookingService } from '../services/bookingService';
 import { patientService } from '../services/patientService';
+import { consentFormService } from '../services/consentFormService';
 import EditPatientModal from './EditPatientModal';
 import { calculatePSAVelocity } from '../utils/psaVelocity';
 import { getPatientPipelineStage } from '../utils/patientPipeline';
@@ -116,6 +117,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   const [appointments, setAppointments] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [appointmentsError, setAppointmentsError] = useState(null);
+
+  // Consent forms state
+  const [consentFormTemplates, setConsentFormTemplates] = useState([]);
+  const [patientConsentForms, setPatientConsentForms] = useState([]);
+  const [loadingConsentForms, setLoadingConsentForms] = useState(false);
+  const [uploadingConsentForms, setUploadingConsentForms] = useState({});
 
   // Discharge summary state
   const [dischargeSummary, setDischargeSummary] = useState(null);
@@ -1084,6 +1091,301 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     }
   }, [patient?.id, patient?.patientId, patient?.patient_id, ensureMainTestRequests]);
 
+  // Fetch consent form templates and patient consent forms
+  const fetchConsentForms = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) {
+      console.log('fetchConsentForms: No patient ID');
+      return;
+    }
+
+    setLoadingConsentForms(true);
+    try {
+      // Fetch templates
+      const templatesResponse = await consentFormService.getConsentFormTemplates();
+      console.log('Consent form templates response:', templatesResponse);
+      if (templatesResponse.success) {
+        setConsentFormTemplates(templatesResponse.data || []);
+        console.log('Set consent form templates:', templatesResponse.data);
+      }
+
+      // Fetch patient consent forms
+      const patientFormsResponse = await consentFormService.getPatientConsentForms(patientId);
+      console.log('Patient consent forms response:', patientFormsResponse);
+      if (patientFormsResponse.success) {
+        setPatientConsentForms(patientFormsResponse.data || []);
+        console.log('Set patient consent forms:', patientFormsResponse.data);
+      }
+    } catch (error) {
+      console.error('Error fetching consent forms:', error);
+    } finally {
+      setLoadingConsentForms(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
+
+  // Get consent form template for a test
+  const getConsentFormTemplate = (testName) => {
+    const normalizedTestName = testName.toUpperCase();
+    return consentFormTemplates.find(t => 
+      (t.test_name && t.test_name.toUpperCase() === normalizedTestName) ||
+      (t.procedure_name && t.procedure_name.toUpperCase() === normalizedTestName)
+    );
+  };
+
+  // Get patient consent form for a test
+  const getPatientConsentForm = (testName) => {
+    const normalizedTestName = testName.toUpperCase();
+    return patientConsentForms.find(cf => {
+      // First, try matching by consent_form_name (from API response)
+      if (cf.consent_form_name) {
+        const consentFormName = cf.consent_form_name.toUpperCase();
+        if (consentFormName === normalizedTestName) {
+          return true;
+        }
+      }
+      
+      // Second, try matching by template
+      const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
+      if (template) {
+        return (template.test_name && template.test_name.toUpperCase() === normalizedTestName) ||
+               (template.procedure_name && template.procedure_name.toUpperCase() === normalizedTestName);
+      }
+      
+      return false;
+    });
+  };
+
+  // Print consent form
+  const handlePrintConsentForm = async (template, testName) => {
+    if (!template || !patient) return;
+
+    try {
+      if (template.is_auto_generated) {
+        const printWindow = window.open('', '_blank');
+        const name = template.procedure_name || template.test_name || testName;
+        const type = template.procedure_name ? 'Procedure' : 'Test';
+        const dateOfBirth = patient.dateOfBirth || patient.date_of_birth || '';
+        const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
+        
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${name} Consent Form</title>
+            <style>
+              @media print {
+                @page { margin: 20mm; }
+                body { margin: 0; }
+              }
+              body {
+                font-family: 'Arial', sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px;
+                background: white;
+              }
+              .header {
+                text-align: center;
+                border-bottom: 3px solid #0d9488;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+              }
+              h1 {
+                color: #0d9488;
+                font-size: 28px;
+                margin: 0;
+                font-weight: 700;
+              }
+              .subtitle {
+                color: #6b7280;
+                font-size: 14px;
+                margin-top: 5px;
+              }
+              .section {
+                margin-bottom: 30px;
+              }
+              .patient-info {
+                padding: 20px;
+                background: #f9fafb;
+                border-left: 4px solid #0d9488;
+                border-radius: 4px;
+              }
+              .signature-section {
+                margin-top: 40px;
+                padding-top: 30px;
+                border-top: 2px solid #e5e7eb;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>CONSENT FORM</h1>
+              <p class="subtitle">${type} Consent</p>
+            </div>
+            <div class="section">
+              <h2 style="color: #1f2937; font-size: 20px; margin-bottom: 15px; font-weight: 600;">${name.toUpperCase()}</h2>
+              <p style="color: #4b5563; line-height: 1.6; font-size: 14px;">
+                I hereby give my consent for the ${template.procedure_name ? 'procedure' : 'test'} mentioned above to be performed on me.
+              </p>
+            </div>
+            <div class="patient-info">
+              <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Patient Information</h3>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
+                <div>
+                  <strong style="color: #374151;">Patient Name:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.name || patient.fullName || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Date of Birth:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${formattedDOB || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Hospital Number (UPI):</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.upi || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Age:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.age ? `${patient.age} years` : '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Date:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${new Date().toLocaleDateString('en-GB')}</p>
+                </div>
+              </div>
+            </div>
+            <div class="section">
+              <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Procedure/Test Details</h3>
+              <p style="color: #4b5563; line-height: 1.8; font-size: 14px; margin-bottom: 15px;">
+                I understand that the ${template.procedure_name ? 'procedure' : 'test'} involves:
+              </p>
+              <ul style="color: #4b5563; line-height: 1.8; font-size: 14px; padding-left: 20px;">
+                <li>Explanation of the ${template.procedure_name ? 'procedure' : 'test'} has been provided to me</li>
+                <li>I have been informed about the benefits and potential risks</li>
+                <li>I have had the opportunity to ask questions</li>
+                <li>I understand that I can withdraw my consent at any time</li>
+              </ul>
+            </div>
+            <div class="signature-section">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                <div>
+                  <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Patient Signature:</strong></p>
+                  <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                  <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+                </div>
+                <div>
+                  <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Witness Signature:</strong></p>
+                  <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                  <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+                </div>
+              </div>
+              <div>
+                <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Doctor/Healthcare Provider Signature:</strong></p>
+                <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+        
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      } else if (template.template_file_url) {
+        const printWindow = window.open(template.template_file_url, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error printing consent form:', error);
+      alert('Failed to print consent form. Please try again.');
+    }
+  };
+
+  // Handle consent form upload
+  const handleConsentFormUpload = async (testName, template, file) => {
+    if (!file || !template || !patient) return;
+
+    const patientId = patient.id || patient.patientId || patient.patient_id;
+    if (!patientId) return;
+
+    const testType = testName.toLowerCase();
+    setUploadingConsentForms(prev => ({ ...prev, [testType]: true }));
+
+    try {
+      const result = await consentFormService.uploadConsentForm(patientId, template.id, file);
+      if (result.success) {
+        // Refresh consent forms
+        await fetchConsentForms();
+        setSuccessModalTitle('Success');
+        setSuccessModalMessage(`${testName} signed consent form uploaded successfully`);
+        setIsSuccessModalOpen(true);
+      } else {
+        setErrorModalTitle('Upload Failed');
+        setErrorModalMessage(result.error || 'Failed to upload consent form');
+        setIsErrorModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error uploading consent form:', error);
+      setErrorModalTitle('Upload Failed');
+      setErrorModalMessage('Failed to upload consent form. Please try again.');
+      setIsErrorModalOpen(true);
+    } finally {
+      setUploadingConsentForms(prev => ({ ...prev, [testType]: false }));
+    }
+  };
+
+  // View uploaded consent form
+  const handleViewConsentForm = (consentForm) => {
+    if (!consentForm) {
+      console.error('No consent form provided to handleViewConsentForm');
+      return;
+    }
+    
+    // Try multiple field name variations
+    const filePath = consentForm.file_path || 
+                     consentForm.filePath || 
+                     consentForm.signed_file_path || 
+                     consentForm.signed_filePath;
+    
+    if (!filePath) {
+      console.error('No file path found in consent form:', consentForm);
+      return;
+    }
+    
+    // Normalize Windows paths (replace backslashes with forward slashes)
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    
+    // Build the file URL
+    const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
+    const fileUrl = normalizedPath.startsWith('http') 
+      ? normalizedPath 
+      : `${baseURL}/${normalizedPath}`;
+    
+    console.log('Viewing consent form:', { filePath, normalizedPath, fileUrl, consentForm });
+    
+    // Check if it's a PDF or image
+    const fileExtension = normalizedPath.split('.').pop().toLowerCase();
+    const fileName = consentForm.file_name || consentForm.fileName || 'Consent Form';
+    
+    if (fileExtension === 'pdf') {
+      setPdfViewerUrl(fileUrl);
+      setPdfViewerFileName(fileName);
+      setIsPDFViewerModalOpen(true);
+    } else {
+      setImageViewerUrl(fileUrl);
+      setImageViewerFileName(fileName);
+      setIsImageViewerModalOpen(true);
+    }
+  };
+
   // Handle investigation success
   const handleInvestigationSuccess = async (message, skipModal = false) => {
     if (!skipModal) {
@@ -1612,6 +1914,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       fetchInvestigationRequests();
       fetchMDTMeetings();
       fetchAppointments();
+      fetchConsentForms();
       // Fetch discharge summary for post-op followup patients
       if (isPostOpFollowupPatient()) {
         fetchDischargeSummary();
@@ -1619,7 +1922,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     } else {
       console.log('❌ NursePatientDetailsModal: Cannot fetch data - isOpen:', isOpen, 'patientId:', patientId);
     }
-  }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchAppointments, fetchDischargeSummary, isPostOpFollowupPatient]);
+  }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchAppointments, fetchConsentForms, fetchDischargeSummary, isPostOpFollowupPatient]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -3027,6 +3330,105 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                   </button>
                                                 </div>
                                               )}
+
+                                              {/* Consent Form Section - Only for MRI, TRUS, Biopsy */}
+                                              {isMainTest && (() => {
+                                                const consentTemplate = getConsentFormTemplate(investigationName);
+                                                const patientConsentForm = getPatientConsentForm(investigationName);
+                                                
+                                                if (!consentTemplate) return null;
+
+                                                // Check for uploaded form - check multiple possible field names
+                                                const hasUploadedForm = patientConsentForm && (
+                                                  patientConsentForm.file_path || 
+                                                  patientConsentForm.filePath ||
+                                                  patientConsentForm.signed_file_path ||
+                                                  patientConsentForm.signed_filePath
+                                                );
+
+                                                // Debug logging for main tests
+                                                if (investigationName === 'BIOPSY' || investigationName === 'TRUS' || investigationName === 'MRI') {
+                                                  console.log(`Consent Form Debug for ${investigationName}:`, {
+                                                    investigationName,
+                                                    consentTemplate: {
+                                                      id: consentTemplate.id,
+                                                      test_name: consentTemplate.test_name,
+                                                      procedure_name: consentTemplate.procedure_name
+                                                    },
+                                                    patientConsentForm: patientConsentForm ? {
+                                                      id: patientConsentForm.id,
+                                                      consent_form_name: patientConsentForm.consent_form_name,
+                                                      template_id: patientConsentForm.template_id,
+                                                      consent_form_id: patientConsentForm.consent_form_id,
+                                                      file_path: patientConsentForm.file_path,
+                                                      filePath: patientConsentForm.filePath
+                                                    } : null,
+                                                    hasUploadedForm,
+                                                    allPatientConsentForms: patientConsentForms.map(cf => ({
+                                                      id: cf.id,
+                                                      consent_form_name: cf.consent_form_name,
+                                                      file_path: cf.file_path,
+                                                      template_id: cf.template_id
+                                                    }))
+                                                  });
+                                                }
+
+                                                return (
+                                                  <div className="mt-4 pt-4 border-t border-gray-200">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                      <span className="text-xs font-semibold text-gray-700">Consent Form</span>
+                                                      {hasUploadedForm && (
+                                                        <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                                                          Signed
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    
+                                                    {/* Print and Upload Section */}
+                                                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handlePrintConsentForm(consentTemplate, investigationName)}
+                                                        className="px-3 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded hover:bg-teal-100 transition-colors flex items-center gap-1.5"
+                                                      >
+                                                        <IoPrint className="w-3 h-3" />
+                                                        Print
+                                                      </button>
+                                                      <label className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors cursor-pointer flex items-center gap-1.5">
+                                                        <IoCloudUpload className="w-3 h-3" />
+                                                        {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
+                                                        <input
+                                                          type="file"
+                                                          accept=".pdf,image/*"
+                                                          onChange={(e) => {
+                                                            const file = e.target.files[0];
+                                                            if (file) {
+                                                              handleConsentFormUpload(investigationName, consentTemplate, file);
+                                                            }
+                                                            e.target.value = ''; // Reset input
+                                                          }}
+                                                          className="hidden"
+                                                          disabled={uploadingConsentForms[investigationName.toLowerCase()]}
+                                                        />
+                                                      </label>
+                                                    </div>
+
+                                                    {/* View Consent Form Button - Only visible when form is uploaded */}
+                                                    {hasUploadedForm && (
+                                                      <div className="mt-2">
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleViewConsentForm(patientConsentForm)}
+                                                          className="w-full px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors flex items-center justify-center gap-1.5"
+                                                        >
+                                                          <Eye className="w-3 h-3" />
+                                                          View Consent Form
+                                                        </button>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })()}
                                             </div>
 
                                             <div className="flex-shrink-0">

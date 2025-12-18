@@ -4,7 +4,12 @@ import {
   createConsentForm,
   uploadPatientConsentForm,
   getPatientConsentForms,
-  upload
+  getConsentFormTemplates,
+  createConsentFormTemplate,
+  updateConsentFormTemplate,
+  deleteConsentFormTemplate,
+  upload,
+  uploadTemplate
 } from '../controllers/consentFormController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
@@ -46,6 +51,41 @@ router.post('/patients/:patientId',
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   upload.single('file'),
   uploadPatientConsentForm
+);
+
+// Template Management Routes
+// Get all consent form templates (accessible to superadmin, nurses, and doctors)
+router.get('/templates',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['superadmin', 'urology_nurse', 'urologist', 'doctor']),
+  getConsentFormTemplates
+);
+
+// Create a new consent form template
+router.post('/templates',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['superadmin']),
+  uploadTemplate.single('template_file'),
+  createConsentFormTemplate
+);
+
+// Update a consent form template
+router.put('/templates/:templateId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['superadmin']),
+  uploadTemplate.single('template_file'),
+  updateConsentFormTemplate
+);
+
+// Delete a consent form template
+router.delete('/templates/:templateId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['superadmin']),
+  deleteConsentFormTemplate
 );
 
 export default router;

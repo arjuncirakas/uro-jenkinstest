@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { IoClose, IoChevronDown } from 'react-icons/io5';
+import { IoClose, IoChevronDown, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import ConfirmModal from './ConfirmModal';
 import { bookingService } from '../services/bookingService';
+import { consentFormService } from '../services/consentFormService';
 
 const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const [selectedDoctor, setSelectedDoctor] = useState('');
@@ -17,6 +18,21 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const [selectedDoctorId, setSelectedDoctorId] = useState(null);
   const selectRef = useRef(null);
   const dropdownRef = useRef(null);
+  const [consentFormTemplates, setConsentFormTemplates] = useState([]);
+  const [loadingConsentForms, setLoadingConsentForms] = useState(false);
+  const [mriConsentForm, setMriConsentForm] = useState(null);
+  const [trusConsentForm, setTrusConsentForm] = useState(null);
+  const [biopsyConsentForm, setBiopsyConsentForm] = useState(null);
+  const [uploadedSignedForms, setUploadedSignedForms] = useState({
+    mri: null,
+    trus: null,
+    biopsy: null
+  });
+  const [uploadingForms, setUploadingForms] = useState({
+    mri: false,
+    trus: false,
+    biopsy: false
+  });
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -60,12 +76,48 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     }
   };
 
-  // Fetch doctors when modal opens
+  // Fetch doctors and consent forms when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchDoctors();
+      fetchConsentFormTemplates();
     }
   }, [isOpen]);
+
+  // Fetch consent form templates
+  const fetchConsentFormTemplates = async () => {
+    setLoadingConsentForms(true);
+    try {
+      const response = await consentFormService.getConsentFormTemplates();
+      if (response.success) {
+        const templates = response.data || [];
+        setConsentFormTemplates(templates);
+        
+        // Find templates for MRI, TRUS, and Biopsy
+        // Check both test_name and procedure_name since templates can be created as either type
+        const mriTemplate = templates.find(t => {
+          const name = (t.test_name || t.procedure_name || '').toLowerCase();
+          return name === 'mri';
+        });
+        const trusTemplate = templates.find(t => {
+          const name = (t.test_name || t.procedure_name || '').toLowerCase();
+          return name === 'trus';
+        });
+        const biopsyTemplate = templates.find(t => {
+          const name = (t.test_name || t.procedure_name || '').toLowerCase();
+          return name === 'biopsy';
+        });
+        
+        setMriConsentForm(mriTemplate);
+        setTrusConsentForm(trusTemplate);
+        setBiopsyConsentForm(biopsyTemplate);
+      }
+    } catch (error) {
+      console.error('Error fetching consent form templates:', error);
+    } finally {
+      setLoadingConsentForms(false);
+    }
+  };
 
   // Pre-select assigned doctor when patient data is available
   useEffect(() => {
@@ -146,6 +198,9 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       if (result.success) {
         console.log('Investigation Booked:', result.data);
         
+        // Automatically attach consent forms for MRI, TRUS, and Biopsy
+        await attachConsentFormsToPatient(patient.id);
+        
         // Dispatch event to notify other components to refresh
         window.dispatchEvent(new CustomEvent('investigationBooked', {
           detail: { patientId: patient.id, investigationData: result.data }
@@ -202,6 +257,226 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       onClose();
     }
     setShowConfirmModal(false);
+  };
+
+  // Print consent form with patient details automatically filled
+  const handlePrintConsentForm = async (template, testName) => {
+    if (!template || !patient) return;
+
+    try {
+      if (template.is_auto_generated) {
+        // For auto-generated forms, create a printable HTML version with patient details
+        const printWindow = window.open('', '_blank');
+        const name = template.procedure_name || template.test_name || testName;
+        const type = template.procedure_name ? 'Procedure' : 'Test';
+        
+        // Format date of birth if available
+        const dateOfBirth = patient.dateOfBirth || patient.date_of_birth || '';
+        const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
+        
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${name} Consent Form</title>
+            <style>
+              @media print {
+                @page { margin: 20mm; }
+                body { margin: 0; }
+              }
+              body {
+                font-family: 'Arial', sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px;
+                background: white;
+              }
+              .header {
+                text-align: center;
+                border-bottom: 3px solid #0d9488;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+              }
+              h1 {
+                color: #0d9488;
+                font-size: 28px;
+                margin: 0;
+                font-weight: 700;
+              }
+              .subtitle {
+                color: #6b7280;
+                font-size: 14px;
+                margin-top: 5px;
+              }
+              .section {
+                margin-bottom: 30px;
+              }
+              .patient-info {
+                padding: 20px;
+                background: #f9fafb;
+                border-left: 4px solid #0d9488;
+                border-radius: 4px;
+              }
+              .signature-section {
+                margin-top: 40px;
+                padding-top: 30px;
+                border-top: 2px solid #e5e7eb;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>CONSENT FORM</h1>
+              <p class="subtitle">${type} Consent</p>
+            </div>
+            <div class="section">
+              <h2 style="color: #1f2937; font-size: 20px; margin-bottom: 15px; font-weight: 600;">${name.toUpperCase()}</h2>
+              <p style="color: #4b5563; line-height: 1.6; font-size: 14px;">
+                I hereby give my consent for the ${template.procedure_name ? 'procedure' : 'test'} mentioned above to be performed on me.
+              </p>
+            </div>
+            <div class="patient-info">
+              <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Patient Information</h3>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
+                <div>
+                  <strong style="color: #374151;">Patient Name:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.name || patient.fullName || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Date of Birth:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${formattedDOB || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Hospital Number (UPI):</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.upi || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Age:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.age ? `${patient.age} years` : '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Date:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${new Date().toLocaleDateString('en-GB')}</p>
+                </div>
+              </div>
+            </div>
+            <div class="section">
+              <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Procedure/Test Details</h3>
+              <p style="color: #4b5563; line-height: 1.8; font-size: 14px; margin-bottom: 15px;">
+                I understand that the ${template.procedure_name ? 'procedure' : 'test'} involves:
+              </p>
+              <ul style="color: #4b5563; line-height: 1.8; font-size: 14px; padding-left: 20px;">
+                <li>Explanation of the ${template.procedure_name ? 'procedure' : 'test'} has been provided to me</li>
+                <li>I have been informed about the benefits and potential risks</li>
+                <li>I have had the opportunity to ask questions</li>
+                <li>I understand that I can withdraw my consent at any time</li>
+              </ul>
+            </div>
+            <div class="signature-section">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                <div>
+                  <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Patient Signature:</strong></p>
+                  <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                  <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+                </div>
+                <div>
+                  <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Witness Signature:</strong></p>
+                  <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                  <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+                </div>
+              </div>
+              <div>
+                <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Doctor/Healthcare Provider Signature:</strong></p>
+                <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+        
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      } else if (template.template_file_url) {
+        // For uploaded PDF templates, open for printing
+        const printWindow = window.open(template.template_file_url, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error printing consent form:', error);
+      alert('Failed to print consent form. Please try again.');
+    }
+  };
+
+
+  // Handle signed consent form upload
+  const handleUploadSignedForm = async (testType, template, file) => {
+    if (!file || !template || !patient) return;
+
+    // Validate file type
+    if (file.type !== 'application/pdf' && !file.type.includes('image')) {
+      alert('Please upload a PDF or image file');
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
+      return;
+    }
+
+    setUploadingForms(prev => ({ ...prev, [testType]: true }));
+
+    try {
+      // Upload the signed consent form
+      const result = await consentFormService.uploadConsentForm(patient.id, template.id, file);
+      
+      if (result.success) {
+        setUploadedSignedForms(prev => ({
+          ...prev,
+          [testType]: {
+            file: file,
+            uploaded: true,
+            name: file.name
+          }
+        }));
+        alert(`${testType.toUpperCase()} signed consent form uploaded successfully`);
+      } else {
+        alert(`Failed to upload signed form: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error uploading signed consent form:', error);
+      alert('Failed to upload signed consent form. Please try again.');
+    } finally {
+      setUploadingForms(prev => ({ ...prev, [testType]: false }));
+    }
+  };
+
+  // Handle file input change
+  const handleFileInputChange = (testType, template, event) => {
+    const file = event.target.files[0];
+    if (file) {
+      handleUploadSignedForm(testType, template, file);
+    }
+    // Reset input
+    event.target.value = '';
+  };
+
+  // Attach consent forms to patient
+  // Note: This is now handled automatically by the backend when investigation is booked
+  const attachConsentFormsToPatient = async (patientId) => {
+    // The backend automatically attaches consent forms for MRI, TRUS, and Biopsy
+    // when an investigation is booked, so we don't need to do anything here
+    console.log('Consent forms will be automatically attached by the backend');
   };
 
   // Check if there are unsaved changes
@@ -507,6 +782,192 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Consent Forms Section - Full Width */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Required Consent Forms</h4>
+              <p className="text-xs text-gray-600 mb-4">
+                The following consent forms will be automatically attached to the patient's profile:
+              </p>
+              <div className="space-y-3">
+                {/* MRI Consent Form */}
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <span className="text-purple-600 font-semibold text-xs">MRI</span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">MRI Consent Form</div>
+                        {mriConsentForm ? (
+                          <div className="text-xs text-gray-600">
+                            {mriConsentForm.is_auto_generated ? 'Auto-generated' : 'Template available'}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-yellow-600">No template found</div>
+                        )}
+                      </div>
+                    </div>
+                    {mriConsentForm && (
+                      <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {mriConsentForm && (
+                    <div className="flex items-center space-x-2 mt-3 pt-3 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintConsentForm(mriConsentForm, 'MRI')}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                      >
+                        <IoPrint className="h-4 w-4 mr-2" />
+                        Print
+                      </button>
+                      <label className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
+                        <IoCloudUpload className="h-4 w-4 mr-2" />
+                        {uploadedSignedForms.mri ? 'Re-upload' : 'Upload Signed'}
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={(e) => handleFileInputChange('mri', mriConsentForm, e)}
+                          className="hidden"
+                          disabled={uploadingForms.mri}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  {uploadedSignedForms.mri && (
+                    <div className="mt-2 text-xs text-green-600 flex items-center">
+                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Signed form uploaded: {uploadedSignedForms.mri.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* TRUS Consent Form */}
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span className="text-blue-600 font-semibold text-xs">TRUS</span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">TRUS Consent Form</div>
+                        {trusConsentForm ? (
+                          <div className="text-xs text-gray-600">
+                            {trusConsentForm.is_auto_generated ? 'Auto-generated' : 'Template available'}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-yellow-600">No template found</div>
+                        )}
+                      </div>
+                    </div>
+                    {trusConsentForm && (
+                      <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {trusConsentForm && (
+                    <div className="flex items-center space-x-2 mt-3 pt-3 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintConsentForm(trusConsentForm, 'TRUS')}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                      >
+                        <IoPrint className="h-4 w-4 mr-2" />
+                        Print
+                      </button>
+                      <label className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
+                        <IoCloudUpload className="h-4 w-4 mr-2" />
+                        {uploadedSignedForms.trus ? 'Re-upload' : 'Upload Signed'}
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={(e) => handleFileInputChange('trus', trusConsentForm, e)}
+                          className="hidden"
+                          disabled={uploadingForms.trus}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  {uploadedSignedForms.trus && (
+                    <div className="mt-2 text-xs text-green-600 flex items-center">
+                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Signed form uploaded: {uploadedSignedForms.trus.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* Biopsy Consent Form */}
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                        <span className="text-red-600 font-semibold text-xs">BIO</span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">Biopsy Consent Form</div>
+                        {biopsyConsentForm ? (
+                          <div className="text-xs text-gray-600">
+                            {biopsyConsentForm.is_auto_generated ? 'Auto-generated' : 'Template available'}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-yellow-600">No template found</div>
+                        )}
+                      </div>
+                    </div>
+                    {biopsyConsentForm && (
+                      <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {biopsyConsentForm && (
+                    <div className="flex items-center space-x-2 mt-3 pt-3 border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintConsentForm(biopsyConsentForm, 'Biopsy')}
+                        className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                      >
+                        <IoPrint className="h-4 w-4 mr-2" />
+                        Print
+                      </button>
+                      <label className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
+                        <IoCloudUpload className="h-4 w-4 mr-2" />
+                        {uploadedSignedForms.biopsy ? 'Re-upload' : 'Upload Signed'}
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={(e) => handleFileInputChange('biopsy', biopsyConsentForm, e)}
+                          className="hidden"
+                          disabled={uploadingForms.biopsy}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  {uploadedSignedForms.biopsy && (
+                    <div className="mt-2 text-xs text-green-600 flex items-center">
+                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Signed form uploaded: {uploadedSignedForms.biopsy.name}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

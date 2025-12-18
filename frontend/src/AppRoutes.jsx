@@ -44,6 +44,7 @@ import AddUser from './pages/superadmin/AddUser';
 import Departments from './pages/superadmin/Departments';
 import Doctors from './pages/superadmin/Doctors';
 import Nurses from './pages/superadmin/Nurses';
+import ConsentForms from './pages/superadmin/ConsentForms';
 
 // Department Admin Pages
 import DepartmentAdminDashboard from './pages/departmentadmin/Dashboard';
@@ -132,6 +133,7 @@ const AppRoutes = () => {
         <Route path="doctors" element={<Doctors />} />
         <Route path="nurses" element={<Nurses />} />
         <Route path="departments" element={<Departments />} />
+        <Route path="consent-forms" element={<ConsentForms />} />
       </Route>
 
       {/* Department Admin Routes - Only accessible by department admins */}

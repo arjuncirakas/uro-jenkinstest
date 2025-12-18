@@ -8,7 +8,8 @@ import {
   BarChart3,
   Building2,
   User,
-  Stethoscope
+  Stethoscope,
+  FileText
 } from 'lucide-react';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../services/authService.js';
@@ -57,6 +58,7 @@ const SuperadminLayout = () => {
 
   const navigation = [
     { name: 'All Users', href: '/superadmin/users', icon: Users },
+    { name: 'Consent Forms', href: '/superadmin/consent-forms', icon: FileText },
     // { name: 'Add User', href: '/superadmin/users/new', icon: UserPlus }, // Now handled as modal in Users page
     // { name: 'Doctors', href: '/superadmin/doctors', icon: User }, // Commented out as requested
     // { name: 'Nurses', href: '/superadmin/nurses', icon: Stethoscope }, // Commented out as requested

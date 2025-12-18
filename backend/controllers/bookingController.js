@@ -264,6 +264,79 @@ export const bookInvestigation = async (req, res) => {
 
     const newInvestigation = investigationQuery.rows[0];
 
+    // Automatically attach consent forms for MRI, TRUS, and Biopsy
+    try {
+      const testNames = ['MRI', 'TRUS', 'Biopsy'];
+      
+      for (const testName of testNames) {
+        // Find consent form template for this test
+        // Check both test_name and procedure_name since templates can be created as either type
+        const templateQuery = await client.query(
+          `SELECT id, test_name, procedure_name, is_auto_generated, template_file_path 
+           FROM consent_forms 
+           WHERE (LOWER(test_name) = LOWER($1) OR LOWER(procedure_name) = LOWER($1))
+           AND (test_name IS NOT NULL OR procedure_name IS NOT NULL)`,
+          [testName]
+        );
+
+        if (templateQuery.rows.length > 0) {
+          const template = templateQuery.rows[0];
+          
+          // Check if patient already has this consent form
+          const existingConsent = await client.query(
+            `SELECT id FROM patient_consent_forms 
+             WHERE patient_id = $1 AND consent_form_id = $2`,
+            [patientId, template.id]
+          );
+
+          if (existingConsent.rows.length === 0) {
+            // Create a reference to the template (for auto-generated) or copy the file path
+            // For now, we'll create a record that references the template
+            // In a full implementation, you'd generate a PDF from auto-generated templates
+            if (template.is_auto_generated) {
+              // For auto-generated templates, create a reference
+              // The actual PDF generation would happen when the form is needed
+              await client.query(
+                `INSERT INTO patient_consent_forms 
+                 (patient_id, consent_form_id, file_path, file_name, file_size, uploaded_at) 
+                 VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+                [
+                  patientId,
+                  template.id,
+                  `templates/${template.id}/auto-generated`,
+                  `${testName} Consent Form (Auto-generated)`,
+                  0
+                ]
+              );
+              console.log(`[bookInvestigation] Attached auto-generated consent form for ${testName}`);
+            } else if (template.template_file_path) {
+              // For uploaded templates, reference the template file
+              await client.query(
+                `INSERT INTO patient_consent_forms 
+                 (patient_id, consent_form_id, file_path, file_name, file_size, uploaded_at) 
+                 VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+                [
+                  patientId,
+                  template.id,
+                  template.template_file_path,
+                  `${testName} Consent Form`,
+                  0
+                ]
+              );
+              console.log(`[bookInvestigation] Attached template consent form for ${testName}`);
+            }
+          } else {
+            console.log(`[bookInvestigation] Patient already has consent form for ${testName}`);
+          }
+        } else {
+          console.log(`[bookInvestigation] No consent form template found for ${testName}`);
+        }
+      }
+    } catch (consentError) {
+      console.error('[bookInvestigation] Failed to attach consent forms (non-fatal):', consentError.message);
+      // Don't fail the investigation booking if consent form attachment fails
+    }
+
     // Assign patient to the doctor conducting the investigation
     // This ensures patients appear in the doctor's "New Patients" list
     // Use the investigationName which is the doctor's name

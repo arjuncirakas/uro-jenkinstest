@@ -37,6 +37,24 @@ export const consentFormService = {
     }
   },
 
+  // Get patient consent forms
+  getPatientConsentForms: async (patientId) => {
+    try {
+      const response = await apiClient.get(`/consent-forms/patients/${patientId}`);
+      return {
+        success: true,
+        data: response.data.data?.consentForms || response.data.data || []
+      };
+    } catch (error) {
+      console.error('Error fetching patient consent forms:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to fetch patient consent forms',
+        data: []
+      };
+    }
+  },
+
   // Upload consent form file for a patient
   uploadConsentForm: async (patientId, consentFormId, file) => {
     try {
@@ -58,6 +76,102 @@ export const consentFormService = {
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to upload consent form'
+      };
+    }
+  },
+
+  // Template Management Methods
+  // Get all consent form templates
+  getConsentFormTemplates: async () => {
+    try {
+      const response = await apiClient.get('/consent-forms/templates');
+      return {
+        success: true,
+        data: response.data.data?.templates || response.data.data || []
+      };
+    } catch (error) {
+      console.error('Error fetching consent form templates:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to fetch consent form templates',
+        data: []
+      };
+    }
+  },
+
+  // Create a new consent form template
+  createConsentFormTemplate: async (formData) => {
+    try {
+      const data = new FormData();
+      data.append('procedure_name', formData.procedure_name || '');
+      data.append('test_name', formData.test_name || '');
+      data.append('is_auto_generated', formData.is_auto_generated ? 'true' : 'false');
+      
+      if (formData.template_file) {
+        data.append('template_file', formData.template_file);
+      }
+
+      const response = await apiClient.post('/consent-forms/templates', data, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return {
+        success: true,
+        data: response.data.data?.template || response.data.data
+      };
+    } catch (error) {
+      console.error('Error creating consent form template:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to create consent form template'
+      };
+    }
+  },
+
+  // Update a consent form template
+  updateConsentFormTemplate: async (templateId, formData) => {
+    try {
+      const data = new FormData();
+      data.append('procedure_name', formData.procedure_name || '');
+      data.append('test_name', formData.test_name || '');
+      data.append('is_auto_generated', formData.is_auto_generated ? 'true' : 'false');
+      
+      if (formData.template_file) {
+        data.append('template_file', formData.template_file);
+      }
+
+      const response = await apiClient.put(`/consent-forms/templates/${templateId}`, data, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return {
+        success: true,
+        data: response.data.data?.template || response.data.data
+      };
+    } catch (error) {
+      console.error('Error updating consent form template:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to update consent form template'
+      };
+    }
+  },
+
+  // Delete a consent form template
+  deleteConsentFormTemplate: async (templateId) => {
+    try {
+      const response = await apiClient.delete(`/consent-forms/templates/${templateId}`);
+      return {
+        success: true,
+        data: response.data.data
+      };
+    } catch (error) {
+      console.error('Error deleting consent form template:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to delete consent form template'
       };
     }
   }
