@@ -56,9 +56,18 @@ const ConsentForms = () => {
         status: error?.response?.status,
         statusText: error?.response?.statusText,
         data: error?.response?.data,
-        url: error?.config?.url
+        url: error?.config?.url,
+        baseURL: error?.config?.baseURL,
+        fullURL: error?.config?.baseURL + error?.config?.url
       });
-      setErrorMessage(errorMsg);
+      
+      // Provide more helpful error message for 404
+      let displayError = errorMsg;
+      if (error?.response?.status === 404) {
+        displayError = 'The consent forms API endpoint was not found. Please check if the backend server is running and the route is properly configured. If this persists, please contact the administrator.';
+      }
+      
+      setErrorMessage(displayError);
       setShowErrorModal(true);
     } finally {
       setIsLoading(false);

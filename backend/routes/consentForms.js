@@ -17,6 +17,16 @@ import { xssProtection } from '../middleware/sanitizer.js';
 
 const router = express.Router();
 
+// Test endpoint to verify route is accessible
+router.get('/test', (req, res) => {
+  console.log('✅ Consent forms test endpoint hit');
+  res.json({
+    success: true,
+    message: 'Consent forms route is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Apply XSS protection to all routes
 router.use(xssProtection);
 
@@ -57,6 +67,13 @@ router.post('/patients/:patientId',
 // Get all consent form templates (accessible to superadmin, nurses, and doctors)
 router.get('/templates',
   generalLimiter,
+  (req, res, next) => {
+    console.log('🔍 [Consent Forms] GET /templates route hit');
+    console.log('🔍 [Consent Forms] Request path:', req.path);
+    console.log('🔍 [Consent Forms] Request originalUrl:', req.originalUrl);
+    console.log('🔍 [Consent Forms] Request method:', req.method);
+    next();
+  },
   authenticateToken,
   requireRole(['superadmin', 'urology_nurse', 'urologist', 'doctor']),
   getConsentFormTemplates
