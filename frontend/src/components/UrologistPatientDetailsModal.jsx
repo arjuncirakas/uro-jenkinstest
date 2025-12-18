@@ -690,21 +690,82 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
   // Get consent form template for a test
   const getConsentFormTemplate = (testName) => {
-    const normalizedTestName = testName.toUpperCase();
-    return consentFormTemplates.find(t => 
-      (t.test_name && t.test_name.toUpperCase() === normalizedTestName) ||
-      (t.procedure_name && t.procedure_name.toUpperCase() === normalizedTestName)
-    );
+    if (!testName) return null;
+    
+    // Normalize test name - remove "CUSTOM:" prefix if present
+    let normalizedTestName = testName.toUpperCase().trim();
+    if (normalizedTestName.startsWith('CUSTOM:')) {
+      normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
+    }
+    
+    // Try exact match first (with whitespace normalization)
+    const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
+    let template = consentFormTemplates.find(t => {
+      const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
+      const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
+      const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
+      const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
+      return (templateTestName && (templateTestName === normalizedTestName || templateTestNameNoSpaces === normalizedTestNameNoSpaces)) ||
+             (templateProcName && (templateProcName === normalizedTestName || templateProcNameNoSpaces === normalizedTestNameNoSpaces));
+    });
+    
+    // If no exact match, try partial match (for cases where names might have slight variations)
+    if (!template) {
+      template = consentFormTemplates.find(t => {
+        const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
+        const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
+        // Check if either name contains the other (bidirectional matching)
+        // Also check for case-insensitive equality (handles variations in spacing/casing)
+        return (templateTestName && (
+                 normalizedTestName === templateTestName ||
+                 normalizedTestName.includes(templateTestName) || 
+                 templateTestName.includes(normalizedTestName) ||
+                 normalizedTestName.replace(/\s+/g, '') === templateTestName.replace(/\s+/g, '')
+               )) ||
+               (templateProcName && (
+                 normalizedTestName === templateProcName ||
+                 normalizedTestName.includes(templateProcName) || 
+                 templateProcName.includes(normalizedTestName) ||
+                 normalizedTestName.replace(/\s+/g, '') === templateProcName.replace(/\s+/g, '')
+               ));
+      });
+    }
+    
+    // Debug logging for custom tests
+    if (normalizedTestName && !normalizedTestName.match(/^(MRI|TRUS|BIOPSY|PSA)/i)) {
+      console.log(`[Consent Form] Looking for template for custom test: "${normalizedTestName}"`, {
+        foundTemplate: !!template,
+        templateId: template?.id,
+        templateTestName: template?.test_name,
+        templateProcName: template?.procedure_name,
+        allTemplates: consentFormTemplates.map(t => ({
+          id: t.id,
+          test_name: t.test_name,
+          procedure_name: t.procedure_name
+        }))
+      });
+    }
+    
+    return template;
   };
 
   // Get patient consent form for a test
   const getPatientConsentForm = (testName) => {
-    const normalizedTestName = testName.toUpperCase();
+    if (!testName) return null;
+    
+    // Normalize test name - remove "CUSTOM:" prefix if present
+    let normalizedTestName = testName.toUpperCase().trim();
+    if (normalizedTestName.startsWith('CUSTOM:')) {
+      normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
+    }
+    
     return patientConsentForms.find(cf => {
       // First, try matching by consent_form_name (from API response)
       if (cf.consent_form_name) {
-        const consentFormName = cf.consent_form_name.toUpperCase();
-        if (consentFormName === normalizedTestName) {
+        const consentFormName = cf.consent_form_name.toUpperCase().trim();
+        if (consentFormName === normalizedTestName || 
+            consentFormName.includes(normalizedTestName) || 
+            normalizedTestName.includes(consentFormName)) {
           return true;
         }
       }
@@ -712,8 +773,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       // Second, try matching by template
       const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
       if (template) {
-        return (template.test_name && template.test_name.toUpperCase() === normalizedTestName) ||
-               (template.procedure_name && template.procedure_name.toUpperCase() === normalizedTestName);
+        const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
+        const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
+        return (templateTestName === normalizedTestName) ||
+               (templateProcName === normalizedTestName) ||
+               (templateTestName && normalizedTestName.includes(templateTestName)) ||
+               (templateProcName && normalizedTestName.includes(templateProcName)) ||
+               (templateTestName && templateTestName.includes(normalizedTestName)) ||
+               (templateProcName && templateProcName.includes(normalizedTestName));
       }
       
       return false;
@@ -3447,10 +3514,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                 </div>
                                               )}
 
-                                              {/* Consent Form Section - Show for tests that have templates or typically require consent */}
+                                              {/* Consent Form Section - ALWAYS show for all tests, show "Template Not Available" if no template */}
                                               {(() => {
                                                 // Check if test name contains MRI, TRUS, or Biopsy keywords (case-insensitive)
-                                                const normalizedName = investigationName.toUpperCase();
+                                                const normalizedName = investigationName.toUpperCase().trim();
                                                 const isConsentRequiredTest = normalizedName.includes('MRI') || 
                                                                               normalizedName.includes('TRUS') || 
                                                                               normalizedName.includes('BIOPSY');
@@ -3458,14 +3525,27 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                 // Get consent form template for this test
                                                 const consentTemplate = getConsentFormTemplate(investigationName);
                                                 
-                                                // Show consent form section if:
-                                                // 1. Test has a consent form template, OR
-                                                // 2. Test typically requires consent (MRI, TRUS, Biopsy)
-                                                if (!consentTemplate && !isConsentRequiredTest) {
-                                                  return null;
-                                                }
+                                                // Also check ALL templates to see if any match (for custom tests)
+                                                // This handles cases where the template name might not exactly match
+                                                // Only search if consentTemplate wasn't found
+                                                const matchingTemplate = consentTemplate ? null : consentFormTemplates.find(t => {
+                                                  const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
+                                                  const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
+                                                  return (templateTestName && (templateTestName === normalizedName || normalizedName.includes(templateTestName) || templateTestName.includes(normalizedName))) ||
+                                                         (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
+                                                });
+                                                
+                                                // Also check if there's a patient consent form (which indicates a template exists)
+                                                const patientConsentFormCheck = getPatientConsentForm(investigationName);
+                                                
+                                                // Use the template if found - prioritize direct match, then matching template, then from patient consent form
+                                                const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ? 
+                                                  consentFormTemplates.find(t => 
+                                                    t.id === patientConsentFormCheck.template_id || 
+                                                    t.id === patientConsentFormCheck.consent_form_id
+                                                  ) : null);
 
-                                                const patientConsentForm = getPatientConsentForm(investigationName);
+                                                const patientConsentForm = patientConsentFormCheck || getPatientConsentForm(investigationName);
                                                 
                                                 // Check for uploaded form - check multiple possible field names
                                                 const hasUploadedForm = patientConsentForm && (
@@ -3474,6 +3554,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                   patientConsentForm.signed_file_path ||
                                                   patientConsentForm.signed_filePath
                                                 );
+                                                
+                                                // ALWAYS show consent form section for ALL tests - if no template, show "Template Not Available" tag
 
                                                 return (
                                                   <div className="mt-4 pt-4 border-t border-gray-200">
@@ -3484,7 +3566,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                           Signed
                                                         </span>
                                                       )}
-                                                      {!consentTemplate && (
+                                                      {!templateToUse && (
                                                         <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
                                                           Template Not Available
                                                         </span>
@@ -3495,24 +3577,24 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                     <div className="flex items-center gap-2 flex-wrap mb-2">
                                                       <button
                                                         type="button"
-                                                        onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
-                                                        disabled={!consentTemplate}
+                                                        onClick={() => templateToUse && handlePrintConsentForm(templateToUse, investigationName)}
+                                                        disabled={!templateToUse}
                                                         className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                                                          consentTemplate
+                                                          templateToUse
                                                             ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
                                                             : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
                                                         }`}
-                                                        title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
+                                                        title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
                                                       >
                                                         <IoPrint className="w-3 h-3" />
                                                         Print
                                                       </button>
                                                       <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${
-                                                        consentTemplate
+                                                        templateToUse
                                                           ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
                                                           : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
                                                       }`}
-                                                      title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+                                                      title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
                                                       >
                                                         <IoCloudUpload className="w-3 h-3" />
                                                         {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
@@ -3521,9 +3603,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                           accept=".pdf,image/*"
                                                           onChange={(e) => {
                                                             const file = e.target.files[0];
-                                                            if (file && consentTemplate) {
-                                                              handleConsentFormUpload(investigationName, consentTemplate, file);
-                                                            } else if (file && !consentTemplate) {
+                                                            if (file && templateToUse) {
+                                                              handleConsentFormUpload(investigationName, templateToUse, file);
+                                                            } else if (file && !templateToUse) {
                                                               setErrorModalTitle('Error');
                                                               setErrorModalMessage('Consent form template not available. Please create one in the superadmin panel first.');
                                                               setIsErrorModalOpen(true);
@@ -3531,7 +3613,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                             e.target.value = ''; // Reset input
                                                           }}
                                                           className="hidden"
-                                                          disabled={!consentTemplate || uploadingConsentForms[investigationName.toLowerCase()]}
+                                                          disabled={!templateToUse || uploadingConsentForms[investigationName.toLowerCase()]}
                                                         />
                                                       </label>
                                                     </div>
@@ -5649,13 +5731,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           isOpen={isAddInvestigationModalOpen}
           onClose={() => setIsAddInvestigationModalOpen(false)}
           patient={patient}
-          onSuccess={(message) => {
+          onSuccess={async (message) => {
             setIsAddInvestigationModalOpen(false);
             // Refresh notes to show the new clinical investigation instantly
             fetchNotes();
             // Refresh investigation requests and results
             fetchInvestigationRequests();
             fetchInvestigations();
+            // IMPORTANT: Refresh consent forms to include newly created auto-generated templates
+            await fetchConsentForms();
           }}
         />
 
