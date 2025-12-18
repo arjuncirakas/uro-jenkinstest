@@ -3336,8 +3336,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                 const consentTemplate = getConsentFormTemplate(investigationName);
                                                 const patientConsentForm = getPatientConsentForm(investigationName);
                                                 
-                                                if (!consentTemplate) return null;
-
                                                 // Check for uploaded form - check multiple possible field names
                                                 const hasUploadedForm = patientConsentForm && (
                                                   patientConsentForm.file_path || 
@@ -3350,11 +3348,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                 if (investigationName === 'BIOPSY' || investigationName === 'TRUS' || investigationName === 'MRI') {
                                                   console.log(`Consent Form Debug for ${investigationName}:`, {
                                                     investigationName,
-                                                    consentTemplate: {
+                                                    consentTemplate: consentTemplate ? {
                                                       id: consentTemplate.id,
                                                       test_name: consentTemplate.test_name,
                                                       procedure_name: consentTemplate.procedure_name
-                                                    },
+                                                    } : null,
                                                     patientConsentForm: patientConsentForm ? {
                                                       id: patientConsentForm.id,
                                                       consent_form_name: patientConsentForm.consent_form_name,
@@ -3382,19 +3380,36 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                           Signed
                                                         </span>
                                                       )}
+                                                      {!consentTemplate && (
+                                                        <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
+                                                          Template Not Available
+                                                        </span>
+                                                      )}
                                                     </div>
                                                     
                                                     {/* Print and Upload Section */}
                                                     <div className="flex items-center gap-2 flex-wrap mb-2">
                                                       <button
                                                         type="button"
-                                                        onClick={() => handlePrintConsentForm(consentTemplate, investigationName)}
-                                                        className="px-3 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded hover:bg-teal-100 transition-colors flex items-center gap-1.5"
+                                                        onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
+                                                        disabled={!consentTemplate}
+                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                                                          consentTemplate
+                                                            ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
+                                                            : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                        }`}
+                                                        title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
                                                       >
                                                         <IoPrint className="w-3 h-3" />
                                                         Print
                                                       </button>
-                                                      <label className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors cursor-pointer flex items-center gap-1.5">
+                                                      <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${
+                                                        consentTemplate
+                                                          ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                      }`}
+                                                      title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+                                                      >
                                                         <IoCloudUpload className="w-3 h-3" />
                                                         {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
                                                         <input
@@ -3402,13 +3417,15 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                           accept=".pdf,image/*"
                                                           onChange={(e) => {
                                                             const file = e.target.files[0];
-                                                            if (file) {
+                                                            if (file && consentTemplate) {
                                                               handleConsentFormUpload(investigationName, consentTemplate, file);
+                                                            } else if (file && !consentTemplate) {
+                                                              alert('Consent form template not available. Please create one in the superadmin panel first.');
                                                             }
                                                             e.target.value = ''; // Reset input
                                                           }}
                                                           className="hidden"
-                                                          disabled={uploadingConsentForms[investigationName.toLowerCase()]}
+                                                          disabled={!consentTemplate || uploadingConsentForms[investigationName.toLowerCase()]}
                                                         />
                                                       </label>
                                                     </div>
@@ -3424,6 +3441,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                           <Eye className="w-3 h-3" />
                                                           View Consent Form
                                                         </button>
+                                                      </div>
+                                                    )}
+
+                                                    {/* Message when template is not available */}
+                                                    {!consentTemplate && (
+                                                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                                                        Consent form template not available. Please create one in the superadmin panel.
                                                       </div>
                                                     )}
                                                   </div>
