@@ -3108,6 +3108,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               return true;
                             });
 
+                            // Debug logging
+                            console.log('🔍 UrologistPatientDetailsModal - Investigation Requests:', {
+                              total: investigationRequests.length,
+                              filtered: filteredInvestigationRequests.length,
+                              requests: investigationRequests.map(r => ({
+                                id: r.id,
+                                name: r.investigationName || r.investigation_name,
+                                type: r.investigationType || r.investigation_type
+                              }))
+                            });
+
                             const filteredClinicalInvestigations = clinicalInvestigations.filter(request => {
                               const investigationName = (request.investigationName || request.investigation_name || '').toUpperCase();
                               const investigationType = (request.investigationType || request.investigation_type || '').toLowerCase();
@@ -3138,12 +3149,36 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             // Combine investigation requests and clinical investigations
                             const allInvestigations = [...filteredInvestigationRequests, ...filteredClinicalInvestigations];
 
+                            // If no investigations after filtering, show message
+                            if (allInvestigations.length === 0) {
+                              return (
+                                <div className="text-center py-8">
+                                  <p className="text-gray-500 text-sm">
+                                    {investigationRequests.length > 0 
+                                      ? "No test investigations found. All requests may have been filtered out." 
+                                      : "No test investigations have been recorded for this patient yet."}
+                                  </p>
+                                </div>
+                              );
+                            }
+
                             // Group by date
                             const groupedByDate = {};
                             allInvestigations.forEach((request) => {
                               let dateKey = 'No Date';
+                              let dateObj = null;
+
+                              // Try scheduled date first
                               if (request.scheduledDate || request.scheduled_date) {
-                                const dateObj = new Date(request.scheduledDate || request.scheduled_date);
+                                dateObj = new Date(request.scheduledDate || request.scheduled_date);
+                              }
+                              // Try created date as fallback
+                              else if (request.createdAt || request.created_at) {
+                                dateObj = new Date(request.createdAt || request.created_at);
+                              }
+
+                              // Only use the date if it's valid (not epoch 0 or invalid)
+                              if (dateObj && !isNaN(dateObj.getTime()) && dateObj.getFullYear() > 1970) {
                                 const day = String(dateObj.getDate()).padStart(2, '0');
                                 const month = String(dateObj.getMonth() + 1).padStart(2, '0');
                                 const year = dateObj.getFullYear();
@@ -3164,6 +3199,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               if (b === 'No Date') return -1;
                               return b.localeCompare(a);
                             });
+
+                            // If no dates after grouping, return empty fragment
+                            if (sortedDates.length === 0) {
+                              return <></>;
+                            }
 
                             return sortedDates.map((dateKey) => {
                               // Sort tests within this date group: 
