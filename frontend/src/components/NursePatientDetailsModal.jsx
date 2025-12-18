@@ -3411,9 +3411,23 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                 </div>
                                               )}
 
-                                              {/* Consent Form Section - ALWAYS show for all tests, show "Template Not Available" if no template */}
+                                              {/* Consent Form Section - Skip for PSA tests */}
                                               {(() => {
                                                 const normalizedName = investigationName.toUpperCase().trim();
+                                                
+                                                // Skip consent form for PSA tests
+                                                const isPSATest = normalizedName.includes('PSA') || 
+                                                                  normalizedName.startsWith('PSA') ||
+                                                                  normalizedName === 'PSA TOTAL' ||
+                                                                  normalizedName === 'PSA FREE' ||
+                                                                  normalizedName === 'PSA RATIO' ||
+                                                                  normalizedName === 'PSA VELOCITY' ||
+                                                                  normalizedName === 'PSA DENSITY';
+                                                
+                                                // Don't show consent form section for PSA tests
+                                                if (isPSATest) {
+                                                  return null;
+                                                }
                                                 
                                                 // Get consent form template for this test
                                                 const consentTemplate = getConsentFormTemplate(investigationName);

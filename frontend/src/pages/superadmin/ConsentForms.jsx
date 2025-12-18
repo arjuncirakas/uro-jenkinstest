@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, Edit2, Trash2, Eye, Loader2, Sparkles, FileCheck, Filter } from 'lucide-react';
+import { Plus, Search, FileText, Edit2, Trash2, Eye, Loader2, FileCheck, Filter } from 'lucide-react';
 import { consentFormService } from '../../services/consentFormService';
 import AddConsentFormModal from '../../components/modals/AddConsentFormModal';
 
@@ -8,7 +8,6 @@ const ConsentForms = () => {
   const [filteredTemplates, setFilteredTemplates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all'); // all, auto-generated, uploaded
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -50,15 +49,9 @@ const ConsentForms = () => {
       );
     }
 
-    // Apply type filter
-    if (filterType === 'auto-generated') {
-      filtered = filtered.filter(t => t.is_auto_generated);
-    } else if (filterType === 'uploaded') {
-      filtered = filtered.filter(t => !t.is_auto_generated);
-    }
 
     setFilteredTemplates(filtered);
-  }, [templates, searchQuery, filterType]);
+  }, [templates, searchQuery]);
 
   // Handle delete
   const handleDelete = (template) => {
@@ -162,9 +155,9 @@ const ConsentForms = () => {
             </h3>
           </div>
           <div className="p-4 sm:p-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex items-end gap-4">
               {/* Search */}
-              <div>
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Search
                 </label>
@@ -182,32 +175,15 @@ const ConsentForms = () => {
                 </div>
               </div>
 
-              {/* Type Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Type
-                </label>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
-                >
-                  <option value="all">All Types</option>
-                  <option value="auto-generated">Auto-Generated</option>
-                  <option value="uploaded">Uploaded</option>
-                </select>
-              </div>
-
               {/* Clear Filters */}
-              <div className="flex items-end">
+              <div>
                 <button
                   onClick={() => {
                     setSearchQuery('');
-                    setFilterType('all');
                   }}
-                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all duration-200"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all duration-200"
                 >
-                  Clear Filters
+                  Clear
                 </button>
               </div>
             </div>
@@ -278,11 +254,7 @@ const ConsentForms = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="h-10 w-10 rounded-lg bg-teal-100 flex items-center justify-center">
-                            {template.is_auto_generated ? (
-                              <Sparkles className="h-5 w-5 text-teal-600" />
-                            ) : (
-                              <FileText className="h-5 w-5 text-teal-600" />
-                            )}
+                            <FileText className="h-5 w-5 text-teal-600" />
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
@@ -300,21 +272,9 @@ const ConsentForms = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${template.is_auto_generated
-                            ? 'text-purple-600 bg-purple-100'
-                            : 'text-blue-600 bg-blue-100'
-                          }`}>
-                          {template.is_auto_generated ? (
-                            <>
-                              <Sparkles className="h-3 w-3 mr-1" />
-                              Auto-Generated
-                            </>
-                          ) : (
-                            <>
-                              <FileCheck className="h-3 w-3 mr-1" />
-                              Uploaded
-                            </>
-                          )}
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-blue-600 bg-blue-100">
+                          <FileCheck className="h-3 w-3 mr-1" />
+                          Uploaded
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

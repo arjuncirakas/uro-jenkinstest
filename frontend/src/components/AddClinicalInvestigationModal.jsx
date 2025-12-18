@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { IoClose, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import { FaFlask, FaXRay, FaMicroscope } from 'react-icons/fa';
-import { Eye, Upload, FileText, Sparkles } from 'lucide-react';
+import { Eye, Upload, FileText } from 'lucide-react';
 import { notesService } from '../services/notesService';
 import { consentFormService } from '../services/consentFormService';
 
@@ -10,7 +10,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
   const [testNamesByType, setTestNamesByType] = useState({}); // Object to store test names for each investigation type
   const [customTestNames, setCustomTestNames] = useState({}); // Object to store custom test names for each type
   const [customTestConsentRequired, setCustomTestConsentRequired] = useState({}); // Object to store consent required flag for custom tests
-  const [customTestConsentData, setCustomTestConsentData] = useState({}); // Object to store consent form data for custom tests (auto-generate or file)
+  const [customTestConsentData, setCustomTestConsentData] = useState({}); // Object to store consent form data for custom tests (file only)
   const [isUrgent, setIsUrgent] = useState(false);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -339,7 +339,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
             consentFormService.createConsentFormTemplate({
               procedure_name: customName,
               test_name: '',
-              is_auto_generated: consentData.is_auto_generated || false,
+              is_auto_generated: false,
               template_file: consentData.template_file || null
             })
           );
@@ -713,264 +713,52 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                               Consent Form Template
                             </label>
                             
-                            {/* Auto-Generate Option */}
-                            <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-300">
-                              <div className="flex items-center space-x-2">
-                                <Sparkles className="h-4 w-4 text-purple-600" />
-                                <div>
-                                  <div className="text-xs font-medium text-gray-900">Auto-Generate Template</div>
-                                  <div className="text-xs text-gray-500">
-                                    Generate a standard template automatically
-                                  </div>
-                                </div>
-                              </div>
-                              <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={customTestConsentData[customType.value]?.is_auto_generated || false}
-                                  onChange={(e) => {
-                                    setCustomTestConsentData(prev => ({
-                                      ...prev,
-                                      [customType.value]: {
-                                        ...prev[customType.value],
-                                        is_auto_generated: e.target.checked,
-                                        template_file: e.target.checked ? null : prev[customType.value]?.template_file
-                                      }
-                                    }));
-                                  }}
-                                  className="sr-only peer"
-                                />
-                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
-                              </label>
-                            </div>
-                            
-                            {/* Preview Auto-Generated Form */}
-                            {customTestConsentData[customType.value]?.is_auto_generated && customNameForType && (
-                              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-3">
-                                <div className="flex items-center justify-between mb-3">
-                                  <h3 className="text-xs font-semibold text-gray-700">Template Preview</h3>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const previewWindow = window.open('', '_blank');
-                                      const name = customNameForType;
-                                      const dateOfBirth = patient?.dateOfBirth || patient?.date_of_birth || '';
-                                      const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
-                                      
-                                      const htmlContent = `
-                                        <!DOCTYPE html>
-                                        <html>
-                                        <head>
-                                          <title>${name} Consent Form</title>
-                                          <style>
-                                            @media print {
-                                              @page { margin: 20mm; }
-                                              body { margin: 0; }
-                                            }
-                                            body {
-                                              font-family: 'Arial', sans-serif;
-                                              max-width: 800px;
-                                              margin: 0 auto;
-                                              padding: 40px;
-                                              background: white;
-                                            }
-                                            .header {
-                                              text-align: center;
-                                              border-bottom: 3px solid #0d9488;
-                                              padding-bottom: 20px;
-                                              margin-bottom: 30px;
-                                            }
-                                            h1 {
-                                              color: #0d9488;
-                                              font-size: 28px;
-                                              margin: 0;
-                                              font-weight: 700;
-                                            }
-                                            .subtitle {
-                                              color: #6b7280;
-                                              font-size: 14px;
-                                              margin-top: 5px;
-                                            }
-                                            .section {
-                                              margin-bottom: 30px;
-                                            }
-                                            .patient-info {
-                                              padding: 20px;
-                                              background: #f9fafb;
-                                              border-left: 4px solid #0d9488;
-                                              border-radius: 4px;
-                                            }
-                                            .signature-section {
-                                              margin-top: 40px;
-                                              padding-top: 30px;
-                                              border-top: 2px solid #e5e7eb;
-                                            }
-                                          </style>
-                                        </head>
-                                        <body>
-                                          <div class="header">
-                                            <h1>CONSENT FORM</h1>
-                                            <p class="subtitle">Test Consent</p>
-                                          </div>
-                                          <div class="section">
-                                            <h2 style="color: #1f2937; font-size: 20px; margin-bottom: 15px; font-weight: 600;">${name.toUpperCase()}</h2>
-                                            <p style="color: #4b5563; line-height: 1.6; font-size: 14px;">
-                                              I hereby give my consent for the test mentioned above to be performed on me.
-                                            </p>
-                                          </div>
-                                          <div class="patient-info">
-                                            <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Patient Information</h3>
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
-                                              <div>
-                                                <strong style="color: #374151;">Patient Name:</strong>
-                                                <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient?.name || patient?.fullName || '_________________________'}</p>
-                                              </div>
-                                              <div>
-                                                <strong style="color: #374151;">Date of Birth:</strong>
-                                                <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${formattedDOB || '_________________________'}</p>
-                                              </div>
-                                              <div>
-                                                <strong style="color: #374151;">Hospital Number (UPI):</strong>
-                                                <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient?.upi || '_________________________'}</p>
-                                              </div>
-                                              <div>
-                                                <strong style="color: #374151;">Age:</strong>
-                                                <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient?.age ? `${patient.age} years` : '_________________________'}</p>
-                                              </div>
-                                              <div>
-                                                <strong style="color: #374151;">Date:</strong>
-                                                <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${new Date().toLocaleDateString('en-GB')}</p>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          <div class="section">
-                                            <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Test Details</h3>
-                                            <p style="color: #4b5563; line-height: 1.8; font-size: 14px; margin-bottom: 15px;">
-                                              I understand that the test involves:
-                                            </p>
-                                            <ul style="color: #4b5563; line-height: 1.8; font-size: 14px; padding-left: 20px;">
-                                              <li>Explanation of the test has been provided to me</li>
-                                              <li>I have been informed about the benefits and potential risks</li>
-                                              <li>I have had the opportunity to ask questions</li>
-                                              <li>I understand that I can withdraw my consent at any time</li>
-                                            </ul>
-                                          </div>
-                                          <div class="signature-section">
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
-                                              <div>
-                                                <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Patient Signature:</strong></p>
-                                                <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
-                                                <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
-                                              </div>
-                                              <div>
-                                                <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Witness Signature:</strong></p>
-                                                <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
-                                                <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Doctor/Healthcare Provider Signature:</strong></p>
-                                              <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
-                                              <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
-                                            </div>
-                                          </div>
-                                        </body>
-                                        </html>
-                                      `;
-                                      previewWindow.document.write(htmlContent);
-                                      previewWindow.document.close();
-                                    }}
-                                    className="text-xs text-teal-600 hover:text-teal-700 font-medium underline"
-                                  >
-                                    View Full Preview
-                                  </button>
-                                </div>
-                                <div className="bg-white border border-gray-300 rounded p-3 max-h-64 overflow-y-auto">
-                                  <div className="text-center border-b-2 border-teal-600 pb-2 mb-3">
-                                    <h4 className="text-teal-600 font-bold text-sm">CONSENT FORM</h4>
-                                    <p className="text-gray-500 text-xs">Test Consent</p>
-                                  </div>
-                                  <div className="mb-3">
-                                    <h5 className="font-semibold text-gray-800 mb-1 text-sm">{customNameForType.toUpperCase()}</h5>
-                                    <p className="text-xs text-gray-600">
-                                      I hereby give my consent for the test mentioned above to be performed on me.
-                                    </p>
-                                  </div>
-                                  <div className="bg-gray-50 border-l-4 border-teal-600 p-2 mb-3 rounded">
-                                    <h6 className="font-semibold text-gray-800 text-xs mb-1">Patient Information</h6>
-                                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                                      <div>Patient Name: {patient?.name || patient?.fullName || '_______________'}</div>
-                                      <div>Date of Birth: {patient?.dateOfBirth || patient?.date_of_birth ? new Date(patient.dateOfBirth || patient.date_of_birth).toLocaleDateString('en-GB') : '_______________'}</div>
-                                      <div>Hospital Number (UPI): {patient?.upi || '_______________'}</div>
-                                      <div>Age: {patient?.age ? `${patient.age} years` : '_______________'}</div>
-                                      <div>Date: {new Date().toLocaleDateString('en-GB')}</div>
-                                    </div>
-                                  </div>
-                                  <div className="text-xs text-gray-600">
-                                    <p className="font-semibold mb-1">Test Details:</p>
-                                    <ul className="list-disc list-inside space-y-0.5">
-                                      <li>Explanation of the test has been provided</li>
-                                      <li>Informed about benefits and potential risks</li>
-                                      <li>Opportunity to ask questions</li>
-                                      <li>Can withdraw consent at any time</li>
-                                    </ul>
-                                  </div>
-                                  <div className="mt-3 pt-2 border-t border-gray-200 text-xs text-gray-500">
-                                    <p>Signature sections for Patient, Witness, and Doctor/Healthcare Provider</p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
                             {/* Upload Template Option */}
-                            {!customTestConsentData[customType.value]?.is_auto_generated && (
-                              <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-2">
-                                  Upload Template File (PDF)
-                                </label>
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-teal-500 transition-colors bg-white">
-                                  <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                                  <label className="cursor-pointer">
-                                    <span className="text-teal-600 hover:text-teal-700 font-medium text-xs">
-                                      Choose a file
-                                    </span>
-                                    <input
-                                      type="file"
-                                      accept=".pdf"
-                                      onChange={(e) => {
-                                        const file = e.target.files[0];
-                                        if (file) {
-                                          if (file.type !== 'application/pdf') {
-                                            alert('Only PDF files are allowed');
-                                            return;
-                                          }
-                                          if (file.size > 10 * 1024 * 1024) {
-                                            alert('File size must be less than 10MB');
-                                            return;
-                                          }
-                                          setCustomTestConsentData(prev => ({
-                                            ...prev,
-                                            [customType.value]: {
-                                              ...prev[customType.value],
-                                              template_file: file,
-                                              is_auto_generated: false
-                                            }
-                                          }));
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-2">
+                                Upload Template File (PDF)
+                              </label>
+                              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-teal-500 transition-colors bg-white">
+                                <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                                <label className="cursor-pointer">
+                                  <span className="text-teal-600 hover:text-teal-700 font-medium text-xs">
+                                    Choose a file
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept=".pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files[0];
+                                      if (file) {
+                                        if (file.type !== 'application/pdf') {
+                                          alert('Only PDF files are allowed');
+                                          return;
                                         }
-                                        e.target.value = '';
-                                      }}
-                                      className="hidden"
-                                    />
-                                  </label>
-                                  <p className="text-xs text-gray-500 mt-1">PDF up to 10MB</p>
-                                  {customTestConsentData[customType.value]?.template_file && (
-                                    <div className="mt-2 text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded inline-block">
-                                      {customTestConsentData[customType.value].template_file.name}
-                                    </div>
-                                  )}
-                                </div>
+                                        if (file.size > 10 * 1024 * 1024) {
+                                          alert('File size must be less than 10MB');
+                                          return;
+                                        }
+                                        setCustomTestConsentData(prev => ({
+                                          ...prev,
+                                          [customType.value]: {
+                                            ...prev[customType.value],
+                                            template_file: file
+                                          }
+                                        }));
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                    className="hidden"
+                                  />
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">PDF up to 10MB</p>
+                                {customTestConsentData[customType.value]?.template_file && (
+                                  <div className="mt-2 text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded inline-block">
+                                    {customTestConsentData[customType.value].template_file.name}
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </div>
                         )}
                       </div>

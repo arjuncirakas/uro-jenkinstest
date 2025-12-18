@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, FileText, Sparkles, ChevronDown } from 'lucide-react';
+import { X, Upload, FileText, ChevronDown } from 'lucide-react';
 import { consentFormService } from '../../services/consentFormService';
 
 const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) => {
   const [formData, setFormData] = useState({
     procedure_name: '',
-    is_auto_generated: false,
     template_file: null
   });
   const [fileName, setFileName] = useState('');
@@ -19,10 +18,11 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
     if (template) {
       setFormData({
         procedure_name: template.procedure_name || template.test_name || '',
-        is_auto_generated: template.is_auto_generated,
         template_file: null
       });
-      setFileName('');
+      // Set the current file name if editing and template has a file
+      const currentFileName = template.template_file_name || template.file_name || '';
+      setFileName(currentFileName);
     } else {
       resetForm();
     }
@@ -31,7 +31,6 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
   const resetForm = () => {
     setFormData({
       procedure_name: '',
-      is_auto_generated: false,
       template_file: null
     });
     setFileName('');
@@ -70,8 +69,8 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
       return;
     }
 
-    if (!formData.is_auto_generated && !formData.template_file && !template) {
-      setError('Template file is required when auto-generation is disabled');
+    if (!formData.template_file && !template) {
+      setError('Template file is required');
       return;
     }
 
@@ -81,7 +80,7 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
       const submitData = {
         procedure_name: formData.procedure_name,
         test_name: '', // Always empty since everything is a procedure
-        is_auto_generated: formData.is_auto_generated,
+        is_auto_generated: false,
         template_file: formData.template_file
       };
 
@@ -267,209 +266,11 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
             )}
           </div>
 
-          {/* Auto-Generate Toggle */}
-          <div className="flex items-center justify-between p-4 bg-purple-50 border border-purple-200 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <Sparkles className="h-5 w-5 text-purple-600" />
-              <div>
-                <div className="font-medium text-gray-900">Auto-Generate Template</div>
-                <div className="text-sm text-gray-500">
-                  Generate a standard template automatically
-                </div>
-              </div>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.is_auto_generated}
-                onChange={(e) => setFormData(prev => ({ ...prev, is_auto_generated: e.target.checked }))}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+          {/* File Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload Template File (PDF) {!template && '*'}
             </label>
-          </div>
-
-          {/* Preview Auto-Generated Form */}
-          {formData.is_auto_generated && formData.procedure_name && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Preview</h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const previewWindow = window.open('', '_blank');
-                    const name = formData.procedure_name;
-                    const htmlContent = `
-                      <!DOCTYPE html>
-                      <html>
-                      <head>
-                        <title>${name} Consent Form</title>
-                        <style>
-                          @media print {
-                            @page { margin: 20mm; }
-                            body { margin: 0; }
-                          }
-                          body {
-                            font-family: 'Arial', sans-serif;
-                            max-width: 800px;
-                            margin: 0 auto;
-                            padding: 40px;
-                            background: white;
-                          }
-                          .header {
-                            text-align: center;
-                            border-bottom: 3px solid #0d9488;
-                            padding-bottom: 20px;
-                            margin-bottom: 30px;
-                          }
-                          h1 {
-                            color: #0d9488;
-                            font-size: 28px;
-                            margin: 0;
-                            font-weight: 700;
-                          }
-                          .subtitle {
-                            color: #6b7280;
-                            font-size: 14px;
-                            margin-top: 5px;
-                          }
-                          .section {
-                            margin-bottom: 30px;
-                          }
-                          .patient-info {
-                            padding: 20px;
-                            background: #f9fafb;
-                            border-left: 4px solid #0d9488;
-                            border-radius: 4px;
-                          }
-                          .signature-section {
-                            margin-top: 40px;
-                            padding-top: 30px;
-                            border-top: 2px solid #e5e7eb;
-                          }
-                        </style>
-                      </head>
-                      <body>
-                        <div class="header">
-                          <h1>CONSENT FORM</h1>
-                          <p class="subtitle">Procedure Consent</p>
-                        </div>
-                        <div class="section">
-                          <h2 style="color: #1f2937; font-size: 20px; margin-bottom: 15px; font-weight: 600;">${name.toUpperCase()}</h2>
-                          <p style="color: #4b5563; line-height: 1.6; font-size: 14px;">
-                            I hereby give my consent for the procedure mentioned above to be performed on me.
-                          </p>
-                        </div>
-                        <div class="patient-info">
-                          <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Patient Information</h3>
-                          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
-                            <div>
-                              <strong style="color: #374151;">Patient Name:</strong>
-                              <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">_________________________</p>
-                            </div>
-                            <div>
-                              <strong style="color: #374151;">Date of Birth:</strong>
-                              <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">_________________________</p>
-                            </div>
-                            <div>
-                              <strong style="color: #374151;">Hospital Number (UPI):</strong>
-                              <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">_________________________</p>
-                            </div>
-                            <div>
-                              <strong style="color: #374151;">Age:</strong>
-                              <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">_________________________</p>
-                            </div>
-                            <div>
-                              <strong style="color: #374151;">Date:</strong>
-                              <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${new Date().toLocaleDateString('en-GB')}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div class="section">
-                          <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Procedure/Test Details</h3>
-                          <p style="color: #4b5563; line-height: 1.8; font-size: 14px; margin-bottom: 15px;">
-                            I understand that the procedure involves:
-                          </p>
-                          <ul style="color: #4b5563; line-height: 1.8; font-size: 14px; padding-left: 20px;">
-                            <li>Explanation of the procedure has been provided to me</li>
-                            <li>I have been informed about the benefits and potential risks</li>
-                            <li>I have had the opportunity to ask questions</li>
-                            <li>I understand that I can withdraw my consent at any time</li>
-                          </ul>
-                        </div>
-                        <div class="signature-section">
-                          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
-                            <div>
-                              <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Patient Signature:</strong></p>
-                              <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
-                              <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
-                            </div>
-                            <div>
-                              <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Witness Signature:</strong></p>
-                              <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
-                              <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
-                            </div>
-                          </div>
-                          <div>
-                            <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Doctor/Healthcare Provider Signature:</strong></p>
-                            <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
-                            <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
-                          </div>
-                        </div>
-                      </body>
-                      </html>
-                    `;
-                    previewWindow.document.write(htmlContent);
-                    previewWindow.document.close();
-                  }}
-                  className="text-xs text-teal-600 hover:text-teal-700 font-medium"
-                >
-                  View Full Preview
-                </button>
-              </div>
-              <div className="bg-white border border-gray-300 rounded p-3 max-h-64 overflow-y-auto">
-                <div className="text-center border-b-2 border-teal-600 pb-2 mb-3">
-                  <h4 className="text-teal-600 font-bold text-lg">CONSENT FORM</h4>
-                  <p className="text-gray-500 text-xs">Procedure Consent</p>
-                </div>
-                <div className="mb-3">
-                  <h5 className="font-semibold text-gray-800 mb-1">{formData.procedure_name.toUpperCase()}</h5>
-                  <p className="text-sm text-gray-600">
-                    I hereby give my consent for the procedure mentioned above to be performed on me.
-                  </p>
-                </div>
-                <div className="bg-gray-50 border-l-4 border-teal-600 p-2 mb-3 rounded">
-                  <h6 className="font-semibold text-gray-800 text-xs mb-1">Patient Information</h6>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                    <div>Patient Name: _______________</div>
-                    <div>Date of Birth: _______________</div>
-                    <div>Hospital Number (UPI): _______________</div>
-                    <div>Age: _______________</div>
-                    <div>Date: {new Date().toLocaleDateString('en-GB')}</div>
-                  </div>
-                </div>
-                <div className="text-xs text-gray-600">
-                  <p className="font-semibold mb-1">Procedure/Test Details:</p>
-                  <ul className="list-disc list-inside space-y-0.5">
-                    <li>Explanation of the procedure has been provided</li>
-                    <li>Informed about benefits and potential risks</li>
-                    <li>Opportunity to ask questions</li>
-                    <li>Can withdraw consent at any time</li>
-                  </ul>
-                </div>
-                <div className="mt-3 pt-2 border-t border-gray-200 text-xs text-gray-500">
-                  <p>Signature sections for Patient, Witness, and Doctor/Healthcare Provider</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* File Upload (if not auto-generated) */}
-          {!formData.is_auto_generated && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Upload Template File (PDF) {!template && '*'}
-              </label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-teal-500 transition-colors">
                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
                 <label className="cursor-pointer">
@@ -487,12 +288,18 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
                 <p className="text-xs text-gray-400 mt-2">PDF up to 10MB</p>
                 {fileName && (
                   <div className="mt-3 text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded inline-block">
-                    {fileName}
+                    {template && !formData.template_file ? (
+                      <span className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-teal-600" />
+                        <span>Current file: {fileName}</span>
+                      </span>
+                    ) : (
+                      fileName
+                    )}
                   </div>
                 )}
               </div>
             </div>
-          )}
 
           {/* Actions */}
           <div className="flex space-x-3 pt-4 border-t border-gray-200">

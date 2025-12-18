@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { IoClose, IoDocument, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
+import React, { useState, useEffect, useCallback } from 'react';
+import { IoClose, IoDocument, IoCheckmarkCircle, IoCloseCircle, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import { FiX } from 'react-icons/fi';
-import { Upload } from 'lucide-react';
+import { Upload, Eye } from 'lucide-react';
 import { investigationService } from '../services/investigationService';
+import { consentFormService } from '../services/consentFormService';
+import PDFViewerModal from './PDFViewerModal';
+import ImageViewerModal from './ImageViewerModal';
 
 const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, patient, existingResult, onSuccess, isPSATest = false, onStatusUpdate }) => {
   const [result, setResult] = useState('');
@@ -11,6 +14,19 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   const [fileName, setFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Consent form state
+  const [consentFormTemplates, setConsentFormTemplates] = useState([]);
+  const [patientConsentForms, setPatientConsentForms] = useState([]);
+  const [loadingConsentForms, setLoadingConsentForms] = useState(false);
+  const [uploadingConsentForm, setUploadingConsentForm] = useState(false);
+  const [consentFormNotification, setConsentFormNotification] = useState({ type: '', message: '' });
+  const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
+  const [pdfViewerFileName, setPdfViewerFileName] = useState(null);
+  const [isImageViewerModalOpen, setIsImageViewerModalOpen] = useState(false);
+  const [imageViewerUrl, setImageViewerUrl] = useState(null);
+  const [imageViewerFileName, setImageViewerFileName] = useState(null);
 
   // Get existing file info (calculate before early return)
   const existingFilePath = existingResult?.filePath || existingResult?.file_path || null;
@@ -26,6 +42,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       setFile(null);
       setFileName('');
       setError('');
+      setConsentFormNotification({ type: '', message: '' });
       return;
     }
 
@@ -52,6 +69,361 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       console.log('🔍 AddInvestigationResultModal - Has existing file:', hasExistingFile);
     }
   }, [existingResult, existingFilePath, existingFileName, hasExistingFile, isOpen]);
+
+  // Fetch consent form templates and patient consent forms
+  const fetchConsentForms = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) return;
+
+    setLoadingConsentForms(true);
+    try {
+      // Fetch templates
+      const templatesResponse = await consentFormService.getConsentFormTemplates();
+      if (templatesResponse.success) {
+        setConsentFormTemplates(templatesResponse.data || []);
+      }
+
+      // Fetch patient consent forms
+      const patientFormsResponse = await consentFormService.getPatientConsentForms(patientId);
+      if (patientFormsResponse.success) {
+        setPatientConsentForms(patientFormsResponse.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching consent forms:', error);
+    } finally {
+      setLoadingConsentForms(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
+
+  // Fetch consent forms when modal opens
+  useEffect(() => {
+    if (isOpen && patient?.id && !isPSATest) {
+      fetchConsentForms();
+    }
+  }, [isOpen, patient?.id, isPSATest, fetchConsentForms]);
+
+  // Debug: Log when patientConsentForms changes
+  useEffect(() => {
+    if (isOpen && patientConsentForms.length > 0) {
+      console.log('🔄 patientConsentForms updated:', patientConsentForms);
+    }
+  }, [patientConsentForms, isOpen]);
+
+  // Get consent form template for the investigation
+  const getConsentFormTemplate = (testName) => {
+    if (!testName) return null;
+    const normalizedTestName = testName.toUpperCase().trim();
+    return consentFormTemplates.find(t => 
+      (t.test_name && t.test_name.toUpperCase().trim() === normalizedTestName) ||
+      (t.procedure_name && t.procedure_name.toUpperCase().trim() === normalizedTestName)
+    );
+  };
+
+  // Get patient consent form for the investigation
+  const getPatientConsentForm = (testName, templateId = null) => {
+    if (!testName) return null;
+    const normalizedTestName = testName.toUpperCase().trim();
+    
+    // Debug logging
+    console.log('🔍 getPatientConsentForm - Searching for:', normalizedTestName, 'with templateId:', templateId);
+    console.log('🔍 Available patient consent forms:', patientConsentForms);
+    console.log('🔍 Available templates:', consentFormTemplates);
+    
+    const foundForm = patientConsentForms.find(cf => {
+      // First, if we have a templateId, try matching by consent_form_id directly
+      if (templateId && (cf.consent_form_id === templateId || cf.template_id === templateId)) {
+        console.log('✅ Matched by template ID:', cf);
+        return true;
+      }
+      
+      // Second, try matching by consent_form_name
+      if (cf.consent_form_name) {
+        const consentFormName = cf.consent_form_name.toUpperCase().trim();
+        if (consentFormName === normalizedTestName) {
+          console.log('✅ Matched by consent_form_name:', cf);
+          return true;
+        }
+      }
+      
+      // Third, try matching by test_name or procedure_name from the joined data
+      if (cf.test_name) {
+        const cfTestName = cf.test_name.toUpperCase().trim();
+        if (cfTestName === normalizedTestName) {
+          console.log('✅ Matched by test_name:', cf);
+          return true;
+        }
+      }
+      
+      if (cf.procedure_name) {
+        const cfProcName = cf.procedure_name.toUpperCase().trim();
+        if (cfProcName === normalizedTestName) {
+          console.log('✅ Matched by procedure_name:', cf);
+          return true;
+        }
+      }
+      
+      // Fourth, try matching by template
+      const template = consentFormTemplates.find(t => 
+        t.id === cf.template_id || 
+        t.id === cf.consent_form_id ||
+        cf.template_id === t.id ||
+        cf.consent_form_id === t.id
+      );
+      
+      if (template) {
+        const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
+        const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
+        const matches = (templateTestName === normalizedTestName) ||
+                       (templateProcName === normalizedTestName);
+        
+        if (matches) {
+          console.log('✅ Matched by template:', { template, cf });
+        }
+        return matches;
+      }
+      
+      return false;
+    });
+    
+    console.log('🔍 Found form:', foundForm);
+    return foundForm;
+  };
+
+  // Print consent form
+  const handlePrintConsentForm = async (template, testName) => {
+    if (!template || !patient) return;
+
+    try {
+      if (template.is_auto_generated) {
+        const printWindow = window.open('', '_blank');
+        const name = template.procedure_name || template.test_name || testName;
+        const type = template.procedure_name ? 'Procedure' : 'Test';
+        const dateOfBirth = patient.dateOfBirth || patient.date_of_birth || '';
+        const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
+        
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${name} Consent Form</title>
+            <style>
+              @media print {
+                @page { margin: 20mm; }
+                body { margin: 0; }
+              }
+              body {
+                font-family: 'Arial', sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px;
+                background: white;
+              }
+              .header {
+                text-align: center;
+                border-bottom: 3px solid #0d9488;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+              }
+              .patient-info {
+                margin: 20px 0;
+                padding: 15px;
+                background: #f0fdfa;
+                border-left: 4px solid #0d9488;
+              }
+              .consent-section {
+                margin: 30px 0;
+                line-height: 1.8;
+              }
+              .signature-section {
+                margin-top: 50px;
+                display: flex;
+                justify-content: space-between;
+              }
+              .signature-box {
+                width: 45%;
+                border-top: 2px solid #333;
+                padding-top: 10px;
+                margin-top: 60px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>${name} Consent Form</h1>
+            </div>
+            <div class="patient-info">
+              <p><strong>Patient Name:</strong> ${patient.name || patient.fullName || 'N/A'}</p>
+              <p><strong>Date of Birth:</strong> ${formattedDOB || 'N/A'}</p>
+              <p><strong>Date:</strong> ${new Date().toLocaleDateString('en-GB')}</p>
+            </div>
+            <div class="consent-section">
+              <p>I, <strong>${patient.name || patient.fullName || '[Patient Name]'}</strong>, hereby give my consent for the ${type.toLowerCase()} <strong>${name}</strong> to be performed.</p>
+              <p>I understand the nature and purpose of this ${type.toLowerCase()}, including the potential risks and benefits. I have been given the opportunity to ask questions, and all my questions have been answered to my satisfaction.</p>
+              <p>I understand that I may withdraw my consent at any time before the ${type.toLowerCase()} is performed.</p>
+            </div>
+            <div class="signature-section">
+              <div class="signature-box">
+                <p><strong>Patient Signature</strong></p>
+                <p style="margin-top: 40px;">_________________________</p>
+              </div>
+              <div class="signature-box">
+                <p><strong>Date</strong></p>
+                <p style="margin-top: 40px;">_________________________</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      } else {
+        const printWindow = window.open(template.template_file_url, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 250);
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error printing consent form:', error);
+      setConsentFormNotification({ type: 'error', message: 'Failed to print consent form. Please try again.' });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+    }
+  };
+
+  // Handle consent form upload
+  const handleConsentFormUpload = async (testName, template, file) => {
+    if (!file || !template || !patient) return;
+
+    const patientId = patient.id || patient.patientId || patient.patient_id;
+    if (!patientId) {
+      setConsentFormNotification({ type: 'error', message: 'Patient ID is missing' });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+      return;
+    }
+
+    setUploadingConsentForm(true);
+    setConsentFormNotification({ type: '', message: '' });
+    try {
+      const result = await consentFormService.uploadConsentForm(patientId, template.id, file);
+      if (result.success) {
+        console.log('✅ Consent form uploaded successfully:', result.data);
+        
+        // Refresh consent forms - wait a bit for backend to process
+        await new Promise(resolve => setTimeout(resolve, 800));
+        await fetchConsentForms();
+        
+        // Refresh again after a longer delay to ensure backend has fully processed
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await fetchConsentForms();
+        
+        // One more refresh to be absolutely sure
+        await new Promise(resolve => setTimeout(resolve, 700));
+        await fetchConsentForms();
+        
+        // Force a state update by logging and checking
+        console.log('✅ Refreshed consent forms after upload');
+        console.log('✅ Current patientConsentForms:', patientConsentForms);
+        setConsentFormNotification({ type: 'success', message: `${testName} signed consent form uploaded successfully` });
+        // Clear notification after 5 seconds
+        setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+      } else {
+        setConsentFormNotification({ type: 'error', message: `Failed to upload consent form: ${result.error || 'Unknown error'}` });
+        setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+      }
+    } catch (error) {
+      console.error('Error uploading consent form:', error);
+      setConsentFormNotification({ type: 'error', message: 'Failed to upload consent form. Please try again.' });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+    } finally {
+      setUploadingConsentForm(false);
+    }
+  };
+
+  // View uploaded consent form
+  const handleViewConsentForm = async (consentForm) => {
+    if (!consentForm) {
+      console.error('No consent form provided to handleViewConsentForm');
+      return;
+    }
+    
+    const filePath = consentForm.file_path || 
+                     consentForm.filePath || 
+                     consentForm.signed_file_path || 
+                     consentForm.signed_filePath;
+    
+    if (!filePath) {
+      console.error('No file path found in consent form:', consentForm);
+      setConsentFormNotification({ type: 'error', message: 'No file available to view' });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+      return;
+    }
+    
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    let relativePath = normalizedPath;
+    if (relativePath.startsWith('uploads/')) {
+      relativePath = relativePath.replace(/^uploads\//, '');
+    }
+    
+    const fileExtension = normalizedPath.split('.').pop().toLowerCase();
+    const fileName = consentForm.file_name || consentForm.fileName || 'Consent Form';
+    
+    try {
+      const response = await consentFormService.getConsentFormFile(relativePath);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch file');
+      }
+
+      const blob = response.data;
+      const blobUrl = URL.createObjectURL(blob);
+      
+      if (fileExtension === 'pdf') {
+        setPdfViewerUrl(blobUrl);
+        setPdfViewerFileName(fileName);
+        setIsPDFViewerModalOpen(true);
+      } else {
+        setImageViewerUrl(blobUrl);
+        setImageViewerFileName(fileName);
+        setIsImageViewerModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching consent form file:', error);
+      setConsentFormNotification({ type: 'error', message: 'Failed to view consent form. Please try again.' });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+    }
+  };
+
+  // Close PDF viewer and cleanup
+  const handleClosePDFViewer = () => {
+    setIsPDFViewerModalOpen(false);
+    if (pdfViewerUrl) {
+      URL.revokeObjectURL(pdfViewerUrl);
+      setPdfViewerUrl(null);
+    }
+    setTimeout(() => {
+      setPdfViewerFileName(null);
+    }, 300);
+  };
+
+  // Close image viewer and cleanup
+  const handleCloseImageViewer = () => {
+    setIsImageViewerModalOpen(false);
+    if (imageViewerUrl) {
+      URL.revokeObjectURL(imageViewerUrl);
+      setImageViewerUrl(null);
+    }
+    setTimeout(() => {
+      setImageViewerFileName(null);
+    }, 300);
+  };
 
   // Early return after all hooks
   if (!isOpen || !investigationRequest) return null;
@@ -166,7 +538,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-xl w-full flex flex-col">
+      <div className="bg-white rounded-lg max-w-lg w-full flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
           <div>
@@ -365,6 +737,161 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
               </div>
             </div>
           )}
+
+          {/* Consent Form Section - Professional minimal design, hidden for PSA tests */}
+          {!isPSATest && (() => {
+            const investigationName = investigationRequest?.investigationName || investigationRequest?.investigation_name || '';
+            const consentTemplate = getConsentFormTemplate(investigationName);
+            const patientConsentForm = getPatientConsentForm(investigationName, consentTemplate?.id);
+            
+            // Check if form has been uploaded - simplified check
+            const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath || patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
+            const fileName = patientConsentForm?.file_name || patientConsentForm?.fileName || 'Consent Form';
+            
+            // Simplified check - if patientConsentForm exists and has a file_path, it's uploaded
+            // Only exclude if it's clearly a template or auto-generated
+            // Be very lenient - any file_path means it's uploaded
+            const hasUploadedForm = !!(patientConsentForm && 
+                                   filePath && 
+                                   typeof filePath === 'string' &&
+                                   filePath.trim() !== '' &&
+                                   !filePath.toLowerCase().includes('template') &&
+                                   !filePath.toLowerCase().includes('auto-generated'));
+            
+            // Debug logging
+            console.log('🔍 Consent Form Section Render:', {
+              investigationName,
+              hasPatientConsentForm: !!patientConsentForm,
+              patientConsentForm,
+              filePath,
+              fileName,
+              hasUploadedForm,
+              patientConsentFormsCount: patientConsentForms.length,
+              templatesCount: consentFormTemplates.length
+            });
+
+            return (
+              <div className="px-4 pb-3 mt-3">
+                {/* Consent Form Section */}
+                <div className="border-t border-gray-200 pt-3">
+                  {/* Section Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-semibold text-gray-700">
+                      Consent Form for {investigationName}
+                    </h3>
+                    {hasUploadedForm && (
+                      <span className="text-xs text-gray-500 font-medium">Uploaded</span>
+                    )}
+                  </div>
+
+                  {/* Notification Message */}
+                  {consentFormNotification.message && (
+                    <div className={`mb-3 p-2 rounded text-xs ${
+                      consentFormNotification.type === 'success' 
+                        ? 'bg-gray-50 text-gray-700 border border-gray-200' 
+                        : 'bg-gray-50 text-gray-700 border border-gray-200'
+                    }`}>
+                      {consentFormNotification.message}
+                    </div>
+                  )}
+
+                  {/* Uploaded File Info */}
+                  {hasUploadedForm && (
+                    <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <IoDocument className="w-3.5 h-3.5 text-gray-500" />
+                        <span className="text-xs text-gray-600 truncate">{fileName}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loading/Uploading Status */}
+                  {loadingConsentForms && (
+                    <div className="mb-3 flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading...</span>
+                    </div>
+                  )}
+                  {uploadingConsentForm && (
+                    <div className="mb-3 flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Uploading...</span>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
+                      disabled={!consentTemplate || loadingConsentForms}
+                      className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
+                        consentTemplate && !loadingConsentForms
+                          ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                          : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                      }`}
+                      title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
+                    >
+                      <IoPrint className="w-3.5 h-3.5" />
+                      <span>Print</span>
+                    </button>
+
+                    <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                      consentTemplate && !loadingConsentForms && !uploadingConsentForm
+                        ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                        : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                    }`}
+                    title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+                    >
+                      <IoCloudUpload className="w-3.5 h-3.5" />
+                      <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
+                      <input
+                        type="file"
+                        accept=".pdf,image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && consentTemplate) {
+                            handleConsentFormUpload(investigationName, consentTemplate, file);
+                          } else if (file && !consentTemplate) {
+                            setConsentFormNotification({ type: 'error', message: 'Consent form template not available. Please create one in the superadmin panel first.' });
+                            setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+                          }
+                          // Reset input
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                        disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm}
+                      />
+                    </label>
+
+                    {hasUploadedForm ? (
+                      <button
+                        type="button"
+                        onClick={() => handleViewConsentForm(patientConsentForm)}
+                        className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                        title="View uploaded consent form"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View</span>
+                      </button>
+                    ) : (
+                      <div className="flex-1 px-3 py-2 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded flex items-center justify-center gap-1.5">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Helper Text */}
+                  {!consentTemplate && (
+                    <p className="mt-2 text-xs text-gray-500 text-center">
+                      Template not available
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Fixed Footer */}
@@ -403,6 +930,22 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
           </div>
         </div>
       </div>
+
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={isPDFViewerModalOpen}
+        onClose={handleClosePDFViewer}
+        pdfUrl={pdfViewerUrl}
+        fileName={pdfViewerFileName}
+      />
+
+      {/* Image Viewer Modal */}
+      <ImageViewerModal
+        isOpen={isImageViewerModalOpen}
+        onClose={handleCloseImageViewer}
+        imageUrl={imageViewerUrl}
+        fileName={imageViewerFileName}
+      />
     </div>
   );
 };
