@@ -198,6 +198,7 @@ console.log('✅ Nurses routes registered at /api/nurses');
 
 // Register consent forms routes with explicit logging
 console.log('🔧 Registering consent forms routes at /api/consent-forms');
+console.log('🔧 Consent forms routes file imported:', consentFormRoutes ? 'YES' : 'NO');
 app.use('/api/consent-forms', (req, res, next) => {
   console.log(`🔍 [Consent Forms Router] ${req.method} ${req.originalUrl}`);
   console.log(`🔍 [Consent Forms Router] Path: ${req.path}`);
@@ -205,6 +206,7 @@ app.use('/api/consent-forms', (req, res, next) => {
   next();
 }, consentFormRoutes);
 console.log('✅ Consent forms routes registered at /api/consent-forms');
+console.log('✅ Available routes: GET /api/consent-forms/templates, POST /api/consent-forms/templates, etc.');
 app.use('/api/kpi', kpiRoutes);
 console.log('✅ KPI routes registered at /api/kpi');
 app.use('/api/export', exportRoutes);
