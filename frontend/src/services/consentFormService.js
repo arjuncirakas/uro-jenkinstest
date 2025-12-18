@@ -136,5 +136,25 @@ export const consentFormService = {
         error: error.response?.data?.message || 'Failed to upload consent form'
       };
     }
+  },
+
+  // Get consent form file (for viewing)
+  getConsentFormFile: async (filePath) => {
+    try {
+      const response = await apiClient.get(`/consent-forms/files/${filePath}`, {
+        responseType: 'blob' // Important: fetch as blob
+      });
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('Error fetching consent form file:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to fetch consent form file'
+      };
+    }
   }
 };
