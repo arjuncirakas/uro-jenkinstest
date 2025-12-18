@@ -3,6 +3,7 @@ import { FiChevronLeft, FiChevronRight, FiMoreVertical } from 'react-icons/fi';
 import { bookingService } from '../services/bookingService';
 import RescheduleConfirmationModal from './RescheduleConfirmationModal';
 import AppointmentDetailsModal from './AppointmentDetailsModal';
+import SuccessErrorModal from './SuccessErrorModal';
 
 const Calendar = ({ 
   appointments = null, 
@@ -20,6 +21,7 @@ const Calendar = ({
   const [draggedAppointment, setDraggedAppointment] = useState(null);
   const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, appointment: null, newDate: null, newTime: null });
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, appointment: null });
+  const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
   const [refreshKey, setRefreshKey] = useState(0); // Force re-render
   const dragRef = useRef(null);
   const previousMonthRef = useRef({ month: new Date().getMonth(), year: new Date().getFullYear() });
@@ -406,7 +408,10 @@ const Calendar = ({
       targetDateOnly.setHours(0, 0, 0, 0);
       
       if (targetDateOnly < today) {
-        alert('Cannot reschedule appointments to a past date. Please select today or a future date.');
+        setErrorModal({
+          isOpen: true,
+          message: 'Cannot reschedule appointments to a past date. Please select today or a future date.'
+        });
         setDraggedAppointment(null);
         return;
       }
@@ -1144,6 +1149,14 @@ const Calendar = ({
           }
           setDetailsModal({ isOpen: false, appointment: null });
         }}
+      />
+
+      {/* Error Modal */}
+      <SuccessErrorModal
+        isOpen={errorModal.isOpen}
+        onClose={() => setErrorModal({ isOpen: false, message: '' })}
+        message={errorModal.message}
+        type="error"
       />
     </div>
   );
