@@ -17,13 +17,24 @@ import { xssProtection } from '../middleware/sanitizer.js';
 
 const router = express.Router();
 
+// Log all requests to this router
+router.use((req, res, next) => {
+  console.log(`🔍 [Consent Forms Router] Incoming request: ${req.method} ${req.path}`);
+  console.log(`🔍 [Consent Forms Router] Original URL: ${req.originalUrl}`);
+  console.log(`🔍 [Consent Forms Router] Base URL: ${req.baseUrl}`);
+  next();
+});
+
 // Test endpoint to verify route is accessible
 router.get('/test', (req, res) => {
   console.log('✅ Consent forms test endpoint hit');
   res.json({
     success: true,
     message: 'Consent forms route is working',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    path: req.path,
+    originalUrl: req.originalUrl,
+    baseUrl: req.baseUrl
   });
 });
 
@@ -72,6 +83,8 @@ router.get('/templates',
     console.log('🔍 [Consent Forms] Request path:', req.path);
     console.log('🔍 [Consent Forms] Request originalUrl:', req.originalUrl);
     console.log('🔍 [Consent Forms] Request method:', req.method);
+    console.log('🔍 [Consent Forms] Request baseUrl:', req.baseUrl);
+    console.log('🔍 [Consent Forms] Request url:', req.url);
     next();
   },
   authenticateToken,

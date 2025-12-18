@@ -162,6 +162,12 @@ app.use('/api', (req, res, next) => {
   console.log(`🌐 [API Request] ${req.method} ${req.originalUrl}`);
   console.log(`🌐 [API Request] Path: ${req.path}`);
   console.log(`🌐 [API Request] Base URL: ${req.baseUrl}`);
+  console.log(`🌐 [API Request] URL: ${req.url}`);
+  console.log(`🌐 [API Request] Headers:`, {
+    host: req.get('host'),
+    'x-forwarded-for': req.get('x-forwarded-for'),
+    'x-real-ip': req.get('x-real-ip')
+  });
   next();
 });
 
@@ -189,7 +195,15 @@ app.use('/api', doctorsRoutes);
 app.use('/api/gp', gpRoutes);
 app.use('/api/nurses', nursesRoutes);
 console.log('✅ Nurses routes registered at /api/nurses');
-app.use('/api/consent-forms', consentFormRoutes);
+
+// Register consent forms routes with explicit logging
+console.log('🔧 Registering consent forms routes at /api/consent-forms');
+app.use('/api/consent-forms', (req, res, next) => {
+  console.log(`🔍 [Consent Forms Router] ${req.method} ${req.originalUrl}`);
+  console.log(`🔍 [Consent Forms Router] Path: ${req.path}`);
+  console.log(`🔍 [Consent Forms Router] Base URL: ${req.baseUrl}`);
+  next();
+}, consentFormRoutes);
 console.log('✅ Consent forms routes registered at /api/consent-forms');
 app.use('/api/kpi', kpiRoutes);
 console.log('✅ KPI routes registered at /api/kpi');
