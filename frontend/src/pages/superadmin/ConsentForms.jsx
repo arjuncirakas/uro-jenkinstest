@@ -39,15 +39,26 @@ const ConsentForms = () => {
     setIsLoading(true);
     try {
       const response = await consentFormService.getConsentFormTemplates();
+      console.log('Fetch templates response:', response);
       if (response.success) {
         setTemplates(response.data || []);
       } else {
+        console.error('Failed to fetch templates:', response.error);
         setErrorMessage(response.error || 'Failed to fetch consent form templates');
         setShowErrorModal(true);
       }
     } catch (error) {
       console.error('Error fetching templates:', error);
-      setErrorMessage(error?.response?.data?.message || 'Failed to fetch consent form templates');
+      const errorMsg = error?.response?.data?.message || 
+                      error?.message || 
+                      'Failed to fetch consent form templates';
+      console.error('Error details:', {
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data,
+        url: error?.config?.url
+      });
+      setErrorMessage(errorMsg);
       setShowErrorModal(true);
     } finally {
       setIsLoading(false);
@@ -57,6 +68,13 @@ const ConsentForms = () => {
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  // Retry function for error modal
+  const handleRetry = () => {
+    setShowErrorModal(false);
+    setErrorMessage('');
+    fetchTemplates();
+  };
 
   // Filter templates
   const filteredTemplates = templates.filter(template => {
@@ -511,6 +529,7 @@ const ConsentForms = () => {
           setShowErrorModal(false);
           setErrorMessage('');
         }}
+        onConfirm={handleRetry}
         message={errorMessage}
         title="Error"
       />

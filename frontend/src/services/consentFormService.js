@@ -84,16 +84,26 @@ export const consentFormService = {
   // Get all consent form templates
   getConsentFormTemplates: async () => {
     try {
+      console.log('Fetching consent form templates from /consent-forms/templates');
       const response = await apiClient.get('/consent-forms/templates');
+      console.log('Consent form templates response:', response);
       return {
         success: true,
-        data: response.data.data?.templates || response.data.data || []
+        data: response.data.data?.templates || response.data.data || response.data || []
       };
     } catch (error) {
       console.error('Error fetching consent form templates:', error);
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        fullURL: error.config?.baseURL + error.config?.url
+      });
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to fetch consent form templates',
+        error: error.response?.data?.message || error.message || 'Failed to fetch consent form templates',
         data: []
       };
     }
