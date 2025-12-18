@@ -357,6 +357,33 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   }, [patient?.id]);
 
+  // Fetch consent form templates and patient consent forms
+  const fetchConsentForms = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) {
+      return;
+    }
+
+    setLoadingConsentForms(true);
+    try {
+      // Fetch templates
+      const templatesResponse = await consentFormService.getConsentFormTemplates();
+      if (templatesResponse.success) {
+        setConsentFormTemplates(templatesResponse.data || []);
+      }
+
+      // Fetch patient consent forms
+      const patientFormsResponse = await consentFormService.getPatientConsentForms(patientId);
+      if (patientFormsResponse.success) {
+        setPatientConsentForms(patientFormsResponse.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching consent forms:', error);
+    } finally {
+      setLoadingConsentForms(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
+
   // Load patient data when modal opens
   useEffect(() => {
     console.log('🔍 UrologistPatientDetailsModal: useEffect triggered', { isOpen, patient });
@@ -660,33 +687,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       }
     }
   };
-
-  // Fetch consent form templates and patient consent forms
-  const fetchConsentForms = useCallback(async () => {
-    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
-    if (!patientId) {
-      return;
-    }
-
-    setLoadingConsentForms(true);
-    try {
-      // Fetch templates
-      const templatesResponse = await consentFormService.getConsentFormTemplates();
-      if (templatesResponse.success) {
-        setConsentFormTemplates(templatesResponse.data || []);
-      }
-
-      // Fetch patient consent forms
-      const patientFormsResponse = await consentFormService.getPatientConsentForms(patientId);
-      if (patientFormsResponse.success) {
-        setPatientConsentForms(patientFormsResponse.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching consent forms:', error);
-    } finally {
-      setLoadingConsentForms(false);
-    }
-  }, [patient?.id, patient?.patientId, patient?.patient_id]);
 
   // Get consent form template for a test
   const getConsentFormTemplate = (testName) => {
