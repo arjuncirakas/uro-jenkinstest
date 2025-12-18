@@ -320,9 +320,14 @@ export const getPatientConsentForms = async (req, res) => {
 
 // Get all consent form templates
 export const getConsentFormTemplates = async (req, res) => {
+  const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  console.log(`📋 [Consent Forms ${requestId}] GET /templates - Starting`);
+  console.log(`📋 [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
+  
   const client = await pool.connect();
   
   try {
+    console.log(`📋 [Consent Forms ${requestId}] Executing database query...`);
     const result = await client.query(
       `SELECT 
         id,
@@ -340,6 +345,8 @@ export const getConsentFormTemplates = async (req, res) => {
        ORDER BY created_at DESC`
     );
 
+    console.log(`📋 [Consent Forms ${requestId}] Database query successful - Found ${result.rows.length} templates`);
+
     // Add full URL for template files
     const templates = result.rows.map(template => ({
       ...template,
@@ -347,6 +354,9 @@ export const getConsentFormTemplates = async (req, res) => {
         ? `${req.protocol}://${req.get('host')}/${template.template_file_path}`
         : null
     }));
+
+    console.log(`📋 [Consent Forms ${requestId}] Templates processed successfully`);
+    console.log(`📋 [Consent Forms ${requestId}] Template names: ${templates.map(t => t.name || t.procedure_name || t.test_name).join(', ') || 'None'}`);
 
     return res.status(200).json({
       success: true,
@@ -356,7 +366,12 @@ export const getConsentFormTemplates = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching consent form templates:', error);
+    console.error(`❌ [Consent Forms ${requestId}] Error fetching consent form templates:`, error);
+    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch consent form templates',
@@ -364,19 +379,34 @@ export const getConsentFormTemplates = async (req, res) => {
     });
   } finally {
     client.release();
+    console.log(`📋 [Consent Forms ${requestId}] Database connection released`);
   }
 };
 
 // Create a new consent form template
 export const createConsentFormTemplate = async (req, res) => {
+  const requestId = req.requestId || Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  console.log(`📝 [Consent Forms ${requestId}] POST /templates - Starting`);
+  console.log(`📝 [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
+  
   const client = await pool.connect();
   
   try {
     const { procedure_name, test_name, is_auto_generated } = req.body;
     const file = req.file;
 
+    console.log(`📝 [Consent Forms ${requestId}] Request body:`, {
+      procedure_name: procedure_name || 'N/A',
+      test_name: test_name || 'N/A',
+      is_auto_generated: is_auto_generated,
+      has_file: !!file,
+      file_name: file?.originalname || 'N/A',
+      file_size: file?.size || 'N/A'
+    });
+
     // Validate that either procedure_name or test_name is provided
     if ((!procedure_name || !procedure_name.trim()) && (!test_name || !test_name.trim())) {
+      console.log(`❌ [Consent Forms ${requestId}] Validation failed: Neither procedure_name nor test_name provided`);
       return res.status(400).json({
         success: false,
         message: 'Either procedure name or test name is required'
@@ -385,7 +415,10 @@ export const createConsentFormTemplate = async (req, res) => {
 
     // If not auto-generated, file is required (unless updating existing template)
     const isAutoGen = is_auto_generated === 'true' || is_auto_generated === true;
+    console.log(`📝 [Consent Forms ${requestId}] Auto-generated: ${isAutoGen}`);
+    
     if (!isAutoGen && !file) {
+      console.log(`❌ [Consent Forms ${requestId}] Validation failed: File required but not provided`);
       return res.status(400).json({
         success: false,
         message: 'Template file is required when auto-generation is disabled'
@@ -394,8 +427,10 @@ export const createConsentFormTemplate = async (req, res) => {
 
     // Generate name from procedure or test name
     const name = procedure_name || test_name;
+    console.log(`📝 [Consent Forms ${requestId}] Template name: ${name.trim()}`);
     
     // Check if template with same name already exists
+    console.log(`📝 [Consent Forms ${requestId}] Checking for existing template...`);
     const existingTemplate = await client.query(
       `SELECT id FROM consent_forms 
        WHERE (procedure_name IS NOT NULL AND LOWER(procedure_name) = LOWER($1))
@@ -404,6 +439,7 @@ export const createConsentFormTemplate = async (req, res) => {
     );
 
     if (existingTemplate.rows.length > 0) {
+      console.log(`❌ [Consent Forms ${requestId}] Template already exists with ID: ${existingTemplate.rows[0].id}`);
       return res.status(400).json({
         success: false,
         message: 'A template with this name already exists'
@@ -418,9 +454,15 @@ export const createConsentFormTemplate = async (req, res) => {
       templateFilePath = path.join('uploads', 'consent-forms', 'templates', file.filename);
       templateFileName = file.originalname;
       templateFileSize = file.size;
+      console.log(`📝 [Consent Forms ${requestId}] File details:`, {
+        path: templateFilePath,
+        name: templateFileName,
+        size: templateFileSize
+      });
     }
 
     // Insert new template
+    console.log(`📝 [Consent Forms ${requestId}] Inserting template into database...`);
     const result = await client.query(
       `INSERT INTO consent_forms 
        (name, procedure_name, test_name, is_auto_generated, template_file_path, template_file_name, template_file_size, created_at, updated_at) 
@@ -442,6 +484,15 @@ export const createConsentFormTemplate = async (req, res) => {
       ? `${req.protocol}://${req.get('host')}/${templateFilePath}`
       : null;
 
+    console.log(`✅ [Consent Forms ${requestId}] Template created successfully with ID: ${template.id}`);
+    console.log(`✅ [Consent Forms ${requestId}] Template details:`, {
+      id: template.id,
+      name: template.name,
+      procedure_name: template.procedure_name,
+      test_name: template.test_name,
+      is_auto_generated: template.is_auto_generated
+    });
+
     return res.status(201).json({
       success: true,
       message: 'Consent form template created successfully',
@@ -450,7 +501,12 @@ export const createConsentFormTemplate = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error creating consent form template:', error);
+    console.error(`❌ [Consent Forms ${requestId}] Error creating consent form template:`, error);
+    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to create consent form template',
@@ -458,11 +514,16 @@ export const createConsentFormTemplate = async (req, res) => {
     });
   } finally {
     client.release();
+    console.log(`📝 [Consent Forms ${requestId}] Database connection released`);
   }
 };
 
 // Update a consent form template
 export const updateConsentFormTemplate = async (req, res) => {
+  const requestId = req.requestId || Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  console.log(`✏️ [Consent Forms ${requestId}] PUT /templates/:templateId - Starting`);
+  console.log(`✏️ [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
+  
   const client = await pool.connect();
   
   try {
@@ -470,8 +531,18 @@ export const updateConsentFormTemplate = async (req, res) => {
     const { procedure_name, test_name, is_auto_generated } = req.body;
     const file = req.file;
 
+    console.log(`✏️ [Consent Forms ${requestId}] Update request for template ID: ${templateId}`);
+    console.log(`✏️ [Consent Forms ${requestId}] Request body:`, {
+      procedure_name: procedure_name || 'N/A',
+      test_name: test_name || 'N/A',
+      is_auto_generated: is_auto_generated,
+      has_file: !!file,
+      file_name: file?.originalname || 'N/A'
+    });
+
     // Validate that either procedure_name or test_name is provided
     if ((!procedure_name || !procedure_name.trim()) && (!test_name || !test_name.trim())) {
+      console.log(`❌ [Consent Forms ${requestId}] Validation failed: Neither procedure_name nor test_name provided`);
       return res.status(400).json({
         success: false,
         message: 'Either procedure name or test name is required'
@@ -479,17 +550,20 @@ export const updateConsentFormTemplate = async (req, res) => {
     }
 
     // Check if template exists
+    console.log(`✏️ [Consent Forms ${requestId}] Checking if template exists...`);
     const existingTemplate = await client.query(
       `SELECT id, template_file_path FROM consent_forms WHERE id = $1`,
       [templateId]
     );
 
     if (existingTemplate.rows.length === 0) {
+      console.log(`❌ [Consent Forms ${requestId}] Template not found with ID: ${templateId}`);
       return res.status(404).json({
         success: false,
         message: 'Template not found'
       });
     }
+    console.log(`✏️ [Consent Forms ${requestId}] Template found, proceeding with update...`);
 
     // Generate name from procedure or test name
     const name = procedure_name || test_name;
@@ -533,6 +607,7 @@ export const updateConsentFormTemplate = async (req, res) => {
     const isAutoGen = is_auto_generated === 'true' || is_auto_generated === true;
 
     // Update template
+    console.log(`✏️ [Consent Forms ${requestId}] Updating template in database...`);
     const result = await client.query(
       `UPDATE consent_forms 
        SET name = $1, 
@@ -562,6 +637,14 @@ export const updateConsentFormTemplate = async (req, res) => {
       ? `${req.protocol}://${req.get('host')}/${templateFilePath}`
       : null;
 
+    console.log(`✅ [Consent Forms ${requestId}] Template updated successfully with ID: ${template.id}`);
+    console.log(`✅ [Consent Forms ${requestId}] Updated template details:`, {
+      id: template.id,
+      name: template.name,
+      procedure_name: template.procedure_name,
+      test_name: template.test_name
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Consent form template updated successfully',
@@ -570,7 +653,12 @@ export const updateConsentFormTemplate = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error updating consent form template:', error);
+    console.error(`❌ [Consent Forms ${requestId}] Error updating consent form template:`, error);
+    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to update consent form template',
@@ -578,23 +666,32 @@ export const updateConsentFormTemplate = async (req, res) => {
     });
   } finally {
     client.release();
+    console.log(`✏️ [Consent Forms ${requestId}] Database connection released`);
   }
 };
 
 // Delete a consent form template
 export const deleteConsentFormTemplate = async (req, res) => {
+  const requestId = req.requestId || Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  console.log(`🗑️ [Consent Forms ${requestId}] DELETE /templates/:templateId - Starting`);
+  console.log(`🗑️ [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
+  
   const client = await pool.connect();
   
   try {
     const { templateId } = req.params;
 
+    console.log(`🗑️ [Consent Forms ${requestId}] Delete request for template ID: ${templateId}`);
+
     // Check if template exists and get file path
+    console.log(`🗑️ [Consent Forms ${requestId}] Checking if template exists...`);
     const template = await client.query(
       `SELECT id, template_file_path FROM consent_forms WHERE id = $1`,
       [templateId]
     );
 
     if (template.rows.length === 0) {
+      console.log(`❌ [Consent Forms ${requestId}] Template not found with ID: ${templateId}`);
       return res.status(404).json({
         success: false,
         message: 'Template not found'
@@ -606,22 +703,36 @@ export const deleteConsentFormTemplate = async (req, res) => {
     if (filePath) {
       const fullPath = path.join(process.cwd(), filePath);
       if (fs.existsSync(fullPath)) {
+        console.log(`🗑️ [Consent Forms ${requestId}] Deleting file: ${filePath}`);
         fs.unlinkSync(fullPath);
+        console.log(`✅ [Consent Forms ${requestId}] File deleted successfully`);
+      } else {
+        console.log(`⚠️ [Consent Forms ${requestId}] File not found at path: ${filePath}`);
       }
+    } else {
+      console.log(`ℹ️ [Consent Forms ${requestId}] No file associated with this template`);
     }
 
     // Delete template
+    console.log(`🗑️ [Consent Forms ${requestId}] Deleting template from database...`);
     await client.query(
       `DELETE FROM consent_forms WHERE id = $1`,
       [templateId]
     );
+
+    console.log(`✅ [Consent Forms ${requestId}] Template deleted successfully with ID: ${templateId}`);
 
     return res.status(200).json({
       success: true,
       message: 'Consent form template deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting consent form template:', error);
+    console.error(`❌ [Consent Forms ${requestId}] Error deleting consent form template:`, error);
+    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to delete consent form template',
@@ -629,6 +740,7 @@ export const deleteConsentFormTemplate = async (req, res) => {
     });
   } finally {
     client.release();
+    console.log(`🗑️ [Consent Forms ${requestId}] Database connection released`);
   }
 };
 
