@@ -3439,13 +3439,19 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                 
                                                 const patientConsentForm = patientConsentFormCheck || getPatientConsentForm(investigationName);
                                                 
-                                                // Check for uploaded form - check multiple possible field names
-                                                const hasUploadedForm = patientConsentForm && (
-                                                  patientConsentForm.file_path || 
-                                                  patientConsentForm.filePath ||
-                                                  patientConsentForm.signed_file_path ||
-                                                  patientConsentForm.signed_filePath
-                                                );
+                                                // Check for uploaded signed form - only consider it signed if it's manually uploaded
+                                                // Auto-attached forms have file_path set to template paths, which should not be considered "signed"
+                                                const filePath = patientConsentForm?.file_path || 
+                                                                 patientConsentForm?.filePath ||
+                                                                 patientConsentForm?.signed_file_path ||
+                                                                 patientConsentForm?.signed_filePath;
+                                                
+                                                // Only consider it signed if the file path indicates a manually uploaded file
+                                                // (starts with 'uploads/consent-forms/patients/') and not a template reference
+                                                const hasUploadedForm = filePath && 
+                                                  filePath.startsWith('uploads/consent-forms/patients/') &&
+                                                  !filePath.includes('templates/') &&
+                                                  !filePath.includes('auto-generated');
 
                                                 return (
                                                   <div className="mt-4 pt-4 border-t border-gray-200">

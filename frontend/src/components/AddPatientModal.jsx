@@ -19,14 +19,12 @@ import {
   Trash2,
   ChevronDown,
   Upload,
-  FileCheck,
   XCircle
 } from 'lucide-react';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
 import { patientService } from '../services/patientService.js';
 import { bookingService } from '../services/bookingService.js';
-import { consentFormService } from '../services/consentFormService.js';
 import {
   validateNameInput,
   validatePhoneInput,
@@ -79,9 +77,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     gleasonScore: '',
     comorbidities: [],
 
-    // Consent Forms
-    selectedConsentForms: [],
-    consentFormFiles: {} // Map of consentFormId to File object
   });
 
   // Predefined symptoms for triage
@@ -121,19 +116,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
   const [loadingUrologists, setLoadingUrologists] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState('');
   
-  // Consent Forms state
-  const [availableConsentForms, setAvailableConsentForms] = useState([]);
-  const [loadingConsentForms, setLoadingConsentForms] = useState(false);
-  const [showAddConsentFormModal, setShowAddConsentFormModal] = useState(false);
-  const [newConsentFormName, setNewConsentFormName] = useState('');
-  const [isAddingConsentForm, setIsAddingConsentForm] = useState(false);
 
 
-  // Fetch urologists and consent forms when modal opens
+  // Fetch urologists when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchUrologists();
-      fetchConsentForms();
       // Get current user role
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       setCurrentUserRole(user.role || '');
@@ -166,23 +154,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     }
   };
 
-  const fetchConsentForms = async () => {
-    setLoadingConsentForms(true);
-    try {
-      const result = await consentFormService.getConsentForms();
-      if (result.success) {
-        setAvailableConsentForms(result.data || []);
-      } else {
-        console.error('Failed to fetch consent forms:', result.error);
-        setAvailableConsentForms([]);
-      }
-    } catch (error) {
-      console.error('Error fetching consent forms:', error);
-      setAvailableConsentForms([]);
-    } finally {
-      setLoadingConsentForms(false);
-    }
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -440,27 +411,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       if (result.success) {
         const patientId = result.data.id || result.data._id;
 
-        // Upload consent form files if any are selected
-        if (formData.selectedConsentForms.length > 0 && Object.keys(formData.consentFormFiles).length > 0) {
-          const uploadPromises = formData.selectedConsentForms
-            .filter(formId => formData.consentFormFiles[formId])
-            .map(async (formId) => {
-              const file = formData.consentFormFiles[formId];
-              try {
-                const uploadResult = await consentFormService.uploadConsentForm(patientId, formId, file);
-                if (!uploadResult.success) {
-                  console.error(`Failed to upload consent form ${formId}:`, uploadResult.error);
-                }
-                return uploadResult;
-              } catch (error) {
-                console.error(`Error uploading consent form ${formId}:`, error);
-                return { success: false, error: error.message };
-              }
-            });
-
-          // Wait for all uploads to complete (but don't fail the entire operation if some fail)
-          await Promise.allSettled(uploadPromises);
-        }
 
         // Call the callback function to notify parent component
         if (onPatientAdded) {
@@ -563,8 +513,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       priorBiopsyDate: '',
       gleasonScore: '',
       comorbidities: [],
-      selectedConsentForms: [],
-      consentFormFiles: {}
     });
     setTriageSymptoms(
       predefinedSymptoms.map(symptom => ({
@@ -593,8 +541,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     formData.medicalHistory.trim() !== '' ||
     formData.notes.trim() !== '' ||
     triageSymptoms.some(s => s.checked || s.isCustom) ||
-    formData.dreDone || formData.priorBiopsy === 'yes' || formData.comorbidities.length > 0 ||
-    formData.selectedConsentForms.length > 0 || Object.keys(formData.consentFormFiles).length > 0;
+    formData.dreDone || formData.priorBiopsy === 'yes' || formData.comorbidities.length > 0;
 
   // Handle save function for Escape key
   const handleSaveChanges = (e) => {
@@ -724,84 +671,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     setTriageSymptoms(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Handle consent form selection
-  const handleConsentFormToggle = (consentFormId) => {
-    setFormData(prev => {
-      const isSelected = prev.selectedConsentForms.includes(consentFormId);
-      if (isSelected) {
-        // Remove from selection and remove file if exists
-        const newFiles = { ...prev.consentFormFiles };
-        delete newFiles[consentFormId];
-        return {
-          ...prev,
-          selectedConsentForms: prev.selectedConsentForms.filter(id => id !== consentFormId),
-          consentFormFiles: newFiles
-        };
-      } else {
-        // Add to selection
-        return {
-          ...prev,
-          selectedConsentForms: [...prev.selectedConsentForms, consentFormId]
-        };
-      }
-    });
-  };
-
-  // Handle consent form file upload
-  const handleConsentFormFileChange = (consentFormId, file) => {
-    if (file) {
-      setFormData(prev => ({
-        ...prev,
-        consentFormFiles: {
-          ...prev.consentFormFiles,
-          [consentFormId]: file
-        }
-      }));
-    }
-  };
-
-  // Handle remove consent form file
-  const handleRemoveConsentFormFile = (consentFormId) => {
-    setFormData(prev => {
-      const newFiles = { ...prev.consentFormFiles };
-      delete newFiles[consentFormId];
-      return {
-        ...prev,
-        consentFormFiles: newFiles
-      };
-    });
-  };
-
-  // Handle add new consent form
-  const handleAddNewConsentForm = async () => {
-    if (!newConsentFormName.trim()) {
-      return;
-    }
-
-    setIsAddingConsentForm(true);
-    try {
-      const result = await consentFormService.createConsentForm(newConsentFormName.trim());
-      if (result.success) {
-        // Add to available forms and select it
-        const newForm = result.data;
-        setAvailableConsentForms(prev => [...prev, newForm]);
-        setFormData(prev => ({
-          ...prev,
-          selectedConsentForms: [...prev.selectedConsentForms, newForm.id || newForm._id]
-        }));
-        setNewConsentFormName('');
-        setShowAddConsentFormModal(false);
-      } else {
-        console.error('Failed to create consent form:', result.error);
-        setErrors(prev => ({ ...prev, consentForms: result.error }));
-      }
-    } catch (error) {
-      console.error('Error creating consent form:', error);
-      setErrors(prev => ({ ...prev, consentForms: 'Failed to create consent form' }));
-    } finally {
-      setIsAddingConsentForm(false);
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -1686,141 +1555,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                 </div>
               </div>
 
-              {/* Consent Forms */}
-              <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
-                    <FileCheck className="w-6 h-6 text-teal-600" />
-                  </div>
-                  <div>
-                    <h4 className="text-base font-semibold text-gray-900">Consent Forms</h4>
-                    <p className="text-sm text-gray-600">Select and upload patient consent forms</p>
-                  </div>
-                </div>
-
-                {/* Consent Forms Dropdown */}
-                <div className="mb-4">
-                  <div className="relative">
-                    <div className="flex items-center gap-2 mb-2">
-                      <label className="text-sm font-medium text-gray-700">
-                        Select Consent Forms
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddConsentFormModal(true)}
-                        className="ml-auto flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-teal-600 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add New Form
-                      </button>
-                    </div>
-                    
-                    <div className="border border-gray-300 rounded-lg bg-white min-h-[120px] max-h-[200px] overflow-y-auto p-3">
-                      {loadingConsentForms ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-5 h-5 text-teal-600 animate-spin" />
-                          <span className="ml-2 text-sm text-gray-600">Loading consent forms...</span>
-                        </div>
-                      ) : availableConsentForms.length === 0 ? (
-                        <div className="text-center py-4 text-sm text-gray-500">
-                          No consent forms available. Click "Add New Form" to create one.
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {availableConsentForms.map((form) => {
-                            const formId = form.id || form._id;
-                            const formName = form.name || form.formName;
-                            const isSelected = formData.selectedConsentForms.includes(formId);
-                            const hasFile = formData.consentFormFiles[formId];
-                            
-                            return (
-                              <div
-                                key={formId}
-                                className={`border rounded-lg p-3 transition-all ${
-                                  isSelected
-                                    ? 'border-teal-500 bg-teal-50'
-                                    : 'border-gray-200 bg-white hover:border-gray-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => handleConsentFormToggle(formId)}
-                                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
-                                  />
-                                  <label
-                                    className="flex-1 text-sm font-medium text-gray-900 cursor-pointer"
-                                    onClick={() => handleConsentFormToggle(formId)}
-                                  >
-                                    {formName}
-                                  </label>
-                                </div>
-
-                                {/* File Upload Section for Selected Forms */}
-                                {isSelected && (
-                                  <div className="mt-3 pt-3 border-t border-gray-200">
-                                    <div className="flex items-center gap-2">
-                                      <label className="flex-1">
-                                        <input
-                                          type="file"
-                                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                          onChange={(e) => {
-                                            const file = e.target.files[0];
-                                            if (file) {
-                                              handleConsentFormFileChange(formId, file);
-                                            }
-                                          }}
-                                          className="hidden"
-                                          id={`consent-file-${formId}`}
-                                        />
-                                        <div className="flex items-center gap-2 cursor-pointer">
-                                          <button
-                                            type="button"
-                                            onClick={() => document.getElementById(`consent-file-${formId}`).click()}
-                                            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-teal-600 bg-white border border-teal-300 rounded-lg hover:bg-teal-50 transition-colors"
-                                          >
-                                            <Upload className="w-3 h-3" />
-                                            {hasFile ? 'Change File' : 'Upload File'}
-                                          </button>
-                                          {hasFile && (
-                                            <span className="text-xs text-gray-600 flex items-center gap-1">
-                                              <FileText className="w-3 h-3" />
-                                              {hasFile.name}
-                                              <button
-                                                type="button"
-                                                onClick={() => handleRemoveConsentFormFile(formId)}
-                                                className="ml-1 text-red-600 hover:text-red-700"
-                                              >
-                                                <XCircle className="w-3 h-3" />
-                                              </button>
-                                            </span>
-                                          )}
-                                        </div>
-                                      </label>
-                                    </div>
-                                    {hasFile && (
-                                      <p className="mt-1 text-xs text-gray-500">
-                                        File size: {(hasFile.size / 1024).toFixed(2)} KB
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {formData.selectedConsentForms.length > 0 && (
-                    <div className="mt-2 text-sm text-gray-600">
-                      {formData.selectedConsentForms.length} form(s) selected
-                    </div>
-                  )}
-                </div>
-              </div>
 
               {/* PSA Information */}
               <div className="bg-white border border-gray-200 rounded p-4">
@@ -2205,98 +1939,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         title="Unsaved Changes"
         message="You have unsaved changes. Do you want to save before closing?"
       />
-
-      {/* Add Consent Form Modal */}
-      {showAddConsentFormModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg w-full max-w-md border border-gray-200">
-            <div className="bg-teal-600 px-6 py-4 flex items-center justify-between border-b border-teal-700">
-              <h3 className="text-lg font-semibold text-white">Add New Consent Form</h3>
-              <button
-                onClick={() => {
-                  setShowAddConsentFormModal(false);
-                  setNewConsentFormName('');
-                }}
-                className="p-1 hover:bg-white/10 rounded transition-colors"
-                disabled={isAddingConsentForm}
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="relative mb-6">
-                <input
-                  type="text"
-                  value={newConsentFormName}
-                  onChange={(e) => setNewConsentFormName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isAddingConsentForm && newConsentFormName.trim()) {
-                      handleAddNewConsentForm();
-                    }
-                  }}
-                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                    newConsentFormName
-                      ? 'border-teal-500 focus:border-teal-500 bg-white'
-                      : 'border-gray-300 focus:border-teal-500 bg-white'
-                  } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
-                  placeholder=" "
-                  disabled={isAddingConsentForm}
-                />
-                <label
-                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                    newConsentFormName
-                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                      : 'text-gray-500'
-                  } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
-                >
-                  Consent Form Name <span className="text-red-500">*</span>
-                </label>
-              </div>
-
-              {errors.consentForms && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-sm text-red-600">
-                    {errors.consentForms}
-                  </p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddConsentFormModal(false);
-                    setNewConsentFormName('');
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded transition-colors"
-                  disabled={isAddingConsentForm}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddNewConsentForm}
-                  disabled={isAddingConsentForm || !newConsentFormName.trim()}
-                  className="px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                >
-                  {isAddingConsentForm ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Form
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Custom Symptom Modal */}
       {showCustomSymptomModal && (
