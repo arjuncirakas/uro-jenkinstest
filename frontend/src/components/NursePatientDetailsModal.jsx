@@ -3213,8 +3213,19 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                       // Get the latest result for quick display
                                       const uploadedResult = sortedResults.length > 0 ? sortedResults[0] : null;
 
-                                      // Check if this is a main test (MRI, TRUS, Biopsy)
-                                      const isMainTest = ['MRI', 'TRUS', 'BIOPSY'].includes(investigationName);
+                                      // Check if test name contains MRI, TRUS, or Biopsy keywords (case-insensitive)
+                                      const normalizedName = investigationName.toUpperCase();
+                                      const isConsentRequiredTest = normalizedName.includes('MRI') || 
+                                                                    normalizedName.includes('TRUS') || 
+                                                                    normalizedName.includes('BIOPSY');
+                                      
+                                      // Get consent form template for this test
+                                      const consentTemplateForCheck = getConsentFormTemplate(investigationName);
+                                      
+                                      // Determine if consent form section should be shown:
+                                      // 1. Test has a consent form template, OR
+                                      // 2. Test typically requires consent (MRI, TRUS, Biopsy)
+                                      const shouldShowConsentForm = consentTemplateForCheck || isConsentRequiredTest;
 
                                       // Handle status update for main tests
                                       const handleStatusUpdate = async (newStatus) => {
@@ -3348,8 +3359,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                 </div>
                                               )}
 
-                                              {/* Consent Form Section - Only for MRI, TRUS, Biopsy */}
-                                              {isMainTest && (() => {
+                                              {/* Consent Form Section - Show for tests that have templates or typically require consent */}
+                                              {shouldShowConsentForm && (() => {
                                                 const consentTemplate = getConsentFormTemplate(investigationName);
                                                 const patientConsentForm = getPatientConsentForm(investigationName);
                                                 
@@ -3360,33 +3371,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                   patientConsentForm.signed_file_path ||
                                                   patientConsentForm.signed_filePath
                                                 );
-
-                                                // Debug logging for main tests
-                                                if (investigationName === 'BIOPSY' || investigationName === 'TRUS' || investigationName === 'MRI') {
-                                                  console.log(`Consent Form Debug for ${investigationName}:`, {
-                                                    investigationName,
-                                                    consentTemplate: consentTemplate ? {
-                                                      id: consentTemplate.id,
-                                                      test_name: consentTemplate.test_name,
-                                                      procedure_name: consentTemplate.procedure_name
-                                                    } : null,
-                                                    patientConsentForm: patientConsentForm ? {
-                                                      id: patientConsentForm.id,
-                                                      consent_form_name: patientConsentForm.consent_form_name,
-                                                      template_id: patientConsentForm.template_id,
-                                                      consent_form_id: patientConsentForm.consent_form_id,
-                                                      file_path: patientConsentForm.file_path,
-                                                      filePath: patientConsentForm.filePath
-                                                    } : null,
-                                                    hasUploadedForm,
-                                                    allPatientConsentForms: patientConsentForms.map(cf => ({
-                                                      id: cf.id,
-                                                      consent_form_name: cf.consent_form_name,
-                                                      file_path: cf.file_path,
-                                                      template_id: cf.template_id
-                                                    }))
-                                                  });
-                                                }
 
                                                 return (
                                                   <div className="mt-4 pt-4 border-t border-gray-200">

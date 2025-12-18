@@ -3447,12 +3447,24 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                 </div>
                                               )}
 
-                                              {/* Consent Form Section - Only for MRI, TRUS, Biopsy */}
+                                              {/* Consent Form Section - Show for tests that have templates or typically require consent */}
                                               {(() => {
-                                                const isMainTest = ['MRI', 'TRUS', 'BIOPSY'].includes(investigationName);
-                                                if (!isMainTest) return null;
-
+                                                // Check if test name contains MRI, TRUS, or Biopsy keywords (case-insensitive)
+                                                const normalizedName = investigationName.toUpperCase();
+                                                const isConsentRequiredTest = normalizedName.includes('MRI') || 
+                                                                              normalizedName.includes('TRUS') || 
+                                                                              normalizedName.includes('BIOPSY');
+                                                
+                                                // Get consent form template for this test
                                                 const consentTemplate = getConsentFormTemplate(investigationName);
+                                                
+                                                // Show consent form section if:
+                                                // 1. Test has a consent form template, OR
+                                                // 2. Test typically requires consent (MRI, TRUS, Biopsy)
+                                                if (!consentTemplate && !isConsentRequiredTest) {
+                                                  return null;
+                                                }
+
                                                 const patientConsentForm = getPatientConsentForm(investigationName);
                                                 
                                                 // Check for uploaded form - check multiple possible field names
