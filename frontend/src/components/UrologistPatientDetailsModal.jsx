@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard } from 'react-icons/io5';
+import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
 import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
@@ -26,6 +26,8 @@ import { getPatientPipelineStage } from '../utils/patientPipeline';
 import DecisionSupportPanel from './DecisionSupportPanel';
 import PathwayValidator from './PathwayValidator';
 import PDFViewerModal from './PDFViewerModal';
+import ImageViewerModal from './ImageViewerModal';
+import { consentFormService } from '../services/consentFormService';
 
 const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error, onTransferSuccess }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -65,6 +67,17 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
   const [pdfViewerFileName, setPdfViewerFileName] = useState(null);
   const [pdfViewerBlobUrl, setPdfViewerBlobUrl] = useState(null);
+
+  // Image viewer modal state
+  const [isImageViewerModalOpen, setIsImageViewerModalOpen] = useState(false);
+  const [imageViewerUrl, setImageViewerUrl] = useState(null);
+  const [imageViewerFileName, setImageViewerFileName] = useState(null);
+
+  // Consent forms state
+  const [consentFormTemplates, setConsentFormTemplates] = useState([]);
+  const [patientConsentForms, setPatientConsentForms] = useState([]);
+  const [loadingConsentForms, setLoadingConsentForms] = useState(false);
+  const [uploadingConsentForms, setUploadingConsentForms] = useState({});
 
   // Transfer form states
   const [transferDetails, setTransferDetails] = useState({
@@ -360,6 +373,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       checkSurgeryAppointment();
       fetchAppointments();
       fetchMDTMeetings();
+      fetchConsentForms();
 
       // Also set any existing data from props
       if (patient.recentNotes) {
@@ -379,7 +393,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setHasSurgeryAppointment(false);
       setFullPatientData(null);
     }
-  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData]);
+  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData, fetchConsentForms]);
 
   // Listen for PDF viewer events
   useEffect(() => {
@@ -644,6 +658,313 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           }
         }, 500);
       }
+    }
+  };
+
+  // Fetch consent form templates and patient consent forms
+  const fetchConsentForms = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) {
+      return;
+    }
+
+    setLoadingConsentForms(true);
+    try {
+      // Fetch templates
+      const templatesResponse = await consentFormService.getConsentFormTemplates();
+      if (templatesResponse.success) {
+        setConsentFormTemplates(templatesResponse.data || []);
+      }
+
+      // Fetch patient consent forms
+      const patientFormsResponse = await consentFormService.getPatientConsentForms(patientId);
+      if (patientFormsResponse.success) {
+        setPatientConsentForms(patientFormsResponse.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching consent forms:', error);
+    } finally {
+      setLoadingConsentForms(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
+
+  // Get consent form template for a test
+  const getConsentFormTemplate = (testName) => {
+    const normalizedTestName = testName.toUpperCase();
+    return consentFormTemplates.find(t => 
+      (t.test_name && t.test_name.toUpperCase() === normalizedTestName) ||
+      (t.procedure_name && t.procedure_name.toUpperCase() === normalizedTestName)
+    );
+  };
+
+  // Get patient consent form for a test
+  const getPatientConsentForm = (testName) => {
+    const normalizedTestName = testName.toUpperCase();
+    return patientConsentForms.find(cf => {
+      // First, try matching by consent_form_name (from API response)
+      if (cf.consent_form_name) {
+        const consentFormName = cf.consent_form_name.toUpperCase();
+        if (consentFormName === normalizedTestName) {
+          return true;
+        }
+      }
+      
+      // Second, try matching by template
+      const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
+      if (template) {
+        return (template.test_name && template.test_name.toUpperCase() === normalizedTestName) ||
+               (template.procedure_name && template.procedure_name.toUpperCase() === normalizedTestName);
+      }
+      
+      return false;
+    });
+  };
+
+  // Print consent form
+  const handlePrintConsentForm = async (template, testName) => {
+    if (!template || !patient) return;
+
+    try {
+      if (template.is_auto_generated) {
+        const printWindow = window.open('', '_blank');
+        const name = template.procedure_name || template.test_name || testName;
+        const type = template.procedure_name ? 'Procedure' : 'Test';
+        const dateOfBirth = patient.dateOfBirth || patient.date_of_birth || '';
+        const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
+        
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${name} Consent Form</title>
+            <style>
+              @media print {
+                @page { margin: 20mm; }
+                body { margin: 0; }
+              }
+              body {
+                font-family: 'Arial', sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px;
+                background: white;
+              }
+              .header {
+                text-align: center;
+                border-bottom: 3px solid #0d9488;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+              }
+              h1 {
+                color: #0d9488;
+                font-size: 28px;
+                margin: 0;
+                font-weight: 700;
+              }
+              .subtitle {
+                color: #6b7280;
+                font-size: 14px;
+                margin-top: 5px;
+              }
+              .section {
+                margin-bottom: 30px;
+              }
+              .patient-info {
+                padding: 20px;
+                background: #f9fafb;
+                border-left: 4px solid #0d9488;
+                border-radius: 4px;
+              }
+              .signature-section {
+                margin-top: 40px;
+                padding-top: 30px;
+                border-top: 2px solid #e5e7eb;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>CONSENT FORM</h1>
+              <p class="subtitle">${type} Consent</p>
+            </div>
+            <div class="section">
+              <h2 style="color: #1f2937; font-size: 20px; margin-bottom: 15px; font-weight: 600;">${name.toUpperCase()}</h2>
+              <p style="color: #4b5563; line-height: 1.6; font-size: 14px;">
+                I hereby give my consent for the ${template.procedure_name ? 'procedure' : 'test'} mentioned above to be performed on me.
+              </p>
+            </div>
+            <div class="patient-info">
+              <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Patient Information</h3>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
+                <div>
+                  <strong style="color: #374151;">Patient Name:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.name || patient.fullName || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Date of Birth:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${formattedDOB || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Hospital Number (UPI):</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.upi || '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Age:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${patient.age ? `${patient.age} years` : '_________________________'}</p>
+                </div>
+                <div>
+                  <strong style="color: #374151;">Date:</strong>
+                  <p style="color: #1f2937; margin-top: 5px; font-weight: 500; border-bottom: 1px solid #9ca3af; min-height: 20px;">${new Date().toLocaleDateString('en-GB')}</p>
+                </div>
+              </div>
+            </div>
+            <div class="section">
+              <h3 style="color: #1f2937; font-size: 16px; margin-bottom: 15px; font-weight: 600;">Procedure/Test Details</h3>
+              <p style="color: #4b5563; line-height: 1.8; font-size: 14px; margin-bottom: 15px;">
+                I understand that the ${template.procedure_name ? 'procedure' : 'test'} involves:
+              </p>
+              <ul style="color: #4b5563; line-height: 1.8; font-size: 14px; padding-left: 20px;">
+                <li>Explanation of the ${template.procedure_name ? 'procedure' : 'test'} has been provided to me</li>
+                <li>I have been informed about the benefits and potential risks</li>
+                <li>I have had the opportunity to ask questions</li>
+                <li>I understand that I can withdraw my consent at any time</li>
+              </ul>
+            </div>
+            <div class="signature-section">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                <div>
+                  <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Patient Signature:</strong></p>
+                  <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                  <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+                </div>
+                <div>
+                  <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Witness Signature:</strong></p>
+                  <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                  <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+                </div>
+              </div>
+              <div>
+                <p style="color: #374151; font-size: 14px; margin-bottom: 10px;"><strong>Doctor/Healthcare Provider Signature:</strong></p>
+                <div style="border-bottom: 2px solid #9ca3af; height: 50px; margin-bottom: 10px;"></div>
+                <p style="color: #6b7280; font-size: 12px;">Date: _________________</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+        
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      } else if (template.template_file_url) {
+        const printWindow = window.open(template.template_file_url, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error printing consent form:', error);
+      setErrorModalTitle('Error');
+      setErrorModalMessage('Failed to print consent form. Please try again.');
+      setIsErrorModalOpen(true);
+    }
+  };
+
+  // Handle consent form upload
+  const handleConsentFormUpload = async (testName, template, file) => {
+    if (!file || !template || !patient) return;
+
+    const patientId = patient.id || patient.patientId || patient.patient_id;
+    if (!patientId) return;
+
+    const testType = testName.toLowerCase();
+    setUploadingConsentForms(prev => ({ ...prev, [testType]: true }));
+
+    try {
+      const result = await consentFormService.uploadConsentForm(patientId, template.id, file);
+      if (result.success) {
+        // Refresh consent forms
+        await fetchConsentForms();
+        setSuccessModalTitle('Success');
+        setSuccessModalMessage(`${testName} signed consent form uploaded successfully`);
+        setIsSuccessModalOpen(true);
+      } else {
+        setErrorModalTitle('Upload Failed');
+        setErrorModalMessage(result.error || 'Failed to upload consent form');
+        setIsErrorModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error uploading consent form:', error);
+      setErrorModalTitle('Upload Failed');
+      setErrorModalMessage('Failed to upload consent form. Please try again.');
+      setIsErrorModalOpen(true);
+    } finally {
+      setUploadingConsentForms(prev => ({ ...prev, [testType]: false }));
+    }
+  };
+
+  // View uploaded consent form
+  const handleViewConsentForm = async (consentForm) => {
+    if (!consentForm) {
+      console.error('No consent form provided to handleViewConsentForm');
+      return;
+    }
+    
+    // Try multiple field name variations
+    const filePath = consentForm.file_path || 
+                     consentForm.filePath || 
+                     consentForm.signed_file_path || 
+                     consentForm.signed_filePath;
+    
+    if (!filePath) {
+      console.error('No file path found in consent form:', consentForm);
+      return;
+    }
+    
+    // Normalize Windows paths (replace backslashes with forward slashes)
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    
+    // Remove 'uploads/' prefix if present, as the endpoint expects relative path
+    let relativePath = normalizedPath;
+    if (relativePath.startsWith('uploads/')) {
+      relativePath = relativePath.replace(/^uploads\//, '');
+    }
+    
+    // Check if it's a PDF or image
+    const fileExtension = normalizedPath.split('.').pop().toLowerCase();
+    const fileName = consentForm.file_name || consentForm.fileName || 'Consent Form';
+    
+    try {
+      // Use apiClient to fetch the file as a blob with proper authentication
+      const response = await consentFormService.getConsentFormFile(relativePath);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch file');
+      }
+
+      const blob = response.data;
+      const blobUrl = URL.createObjectURL(blob);
+      
+      if (fileExtension === 'pdf') {
+        setPdfViewerUrl(blobUrl);
+        setPdfViewerFileName(fileName);
+        setIsPDFViewerModalOpen(true);
+      } else {
+        setImageViewerUrl(blobUrl);
+        setImageViewerFileName(fileName);
+        setIsImageViewerModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching consent form file:', error);
+      setErrorModalTitle('Error');
+      setErrorModalMessage(error.message || 'Failed to load consent form. Please try again.');
+      setIsErrorModalOpen(true);
     }
   };
 
@@ -2902,12 +3223,30 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       });
 
                                       const hasResults = allTestResults.length > 0;
-                                      // Get the latest result for display
-                                      const uploadedResult = allTestResults.length > 0 ? latestOtherTests.find(result => {
-                                        const resultName = (result.testName || '').trim().toUpperCase();
-                                        const resultType = (result.testType || '').trim().toUpperCase();
-                                        return resultName === investigationName || resultType === investigationName;
-                                      }) : null;
+                                      // Get all results sorted by date (most recent first) for display
+                                      const sortedResults = allTestResults.map(result => ({
+                                        id: result.id,
+                                        testName: result.testName || result.test_name || result.testType || result.test_type,
+                                        date: result.testDate || result.test_date || result.created_at,
+                                        result: result.result || result.result_value,
+                                        referenceRange: result.referenceRange || result.reference_range || 'N/A',
+                                        status: result.status || 'Completed',
+                                        notes: result.notes || result.comments || '',
+                                        filePath: result.filePath || result.file_path,
+                                        authorName: result.authorName || result.author_name,
+                                        authorRole: result.authorRole || result.author_role,
+                                        createdAt: result.createdAt || result.created_at
+                                      })).sort((a, b) => {
+                                        // Sort by date, most recent first
+                                        const dateA = new Date(a.date || a.createdAt || 0);
+                                        const dateB = new Date(b.date || b.createdAt || 0);
+                                        return dateB - dateA;
+                                      });
+                                      // Get the latest result for quick display
+                                      const uploadedResult = sortedResults.length > 0 ? sortedResults[0] : null;
+
+                                      // Check if this is a main test (MRI, TRUS, Biopsy)
+                                      const isMainTest = ['MRI', 'TRUS', 'BIOPSY'].includes(investigationName);
 
                                       // Handle status update for investigation requests
                                       const handleStatusUpdate = async (newStatus) => {
@@ -2959,21 +3298,93 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                 )}
                                               </div>
 
-                                              {uploadedResult && uploadedResult.result && (
-                                                <div className="text-sm text-gray-700 mb-2">
-                                                  <span className="font-medium text-gray-600">Result: </span>
-                                                  <span className="text-gray-900">{uploadedResult.result}</span>
+                                              {/* Show all result details inline */}
+                                              {hasResults && sortedResults.length > 0 && (
+                                                <div className="space-y-3 mt-3">
+                                                  {sortedResults.map((result, idx) => {
+                                                    const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
+                                                      day: '2-digit',
+                                                      month: '2-digit',
+                                                      year: 'numeric'
+                                                    }) : 'N/A';
+                                                    
+                                                    return (
+                                                      <div key={result.id || idx} className="bg-white rounded-md p-3 border border-gray-200">
+                                                        <div className="flex items-start justify-between mb-2">
+                                                          <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-semibold text-gray-600">Result #{sortedResults.length - idx}</span>
+                                                            {result.status && (
+                                                              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                result.status.toLowerCase() === 'normal' ? 'bg-green-100 text-green-700' :
+                                                                result.status.toLowerCase() === 'high' || result.status.toLowerCase() === 'elevated' ? 'bg-red-100 text-red-700' :
+                                                                result.status.toLowerCase() === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
+                                                                'bg-blue-100 text-blue-700'
+                                                              }`}>
+                                                                {result.status}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                          {result.filePath && (
+                                                            <button
+                                                              onClick={() => {
+                                                                const fileUrl = result.filePath.startsWith('http') 
+                                                                  ? result.filePath 
+                                                                  : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${result.filePath}`;
+                                                                window.open(fileUrl, '_blank');
+                                                              }}
+                                                              className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                                              title="View file"
+                                                            >
+                                                              <Eye className="w-3 h-3" />
+                                                              View File
+                                                            </button>
+                                                          )}
+                                                        </div>
+                                                        
+                                                        <div className="space-y-1.5">
+                                                          <div className="text-xs text-gray-600">
+                                                            <span className="font-medium">Date: </span>
+                                                            <span className="text-gray-900">{resultDate}</span>
+                                                          </div>
+                                                          
+                                                          {result.authorName && (
+                                                            <div className="text-xs text-gray-600">
+                                                              <span className="font-medium">Added by: </span>
+                                                              <span className="text-gray-900">{result.authorName}</span>
+                                                              {result.authorRole && (
+                                                                <span className="text-gray-500"> ({result.authorRole})</span>
+                                                              )}
+                                                            </div>
+                                                          )}
+                                                          
+                                                          {result.result && (
+                                                            <div className="text-sm text-gray-700">
+                                                              <span className="font-medium text-gray-600">Result Value: </span>
+                                                              <span className="text-lg font-semibold text-gray-900">{result.result}</span>
+                                                            </div>
+                                                          )}
+                                                          
+                                                          {result.referenceRange && result.referenceRange !== 'N/A' && (
+                                                            <div className="text-xs text-gray-600">
+                                                              <span className="font-medium">Reference Range: </span>
+                                                              <span className="text-gray-900">{result.referenceRange}</span>
+                                                            </div>
+                                                          )}
+                                                          
+                                                          {result.notes && (
+                                                            <div className="text-xs text-gray-600 pt-1 border-t border-gray-100">
+                                                              <span className="font-medium">Notes: </span>
+                                                              <span className="text-gray-900">{result.notes}</span>
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    );
+                                                  })}
                                                 </div>
                                               )}
 
-                                              {uploadedResult && uploadedResult.notes && (
-                                                <div className="text-sm text-gray-600 mb-2">
-                                                  <span className="font-medium">Notes: </span>
-                                                  <span>{uploadedResult.notes}</span>
-                                                </div>
-                                              )}
-
-                                              {!uploadedResult && request.notes && (
+                                              {!hasResults && request.notes && (
                                                 <div className="text-sm text-gray-600 mb-2">
                                                   <span className="font-medium">Notes: </span>
                                                   <span>{request.notes}</span>
@@ -2995,40 +3406,118 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                   </button>
                                                 </div>
                                               )}
+
+                                              {/* Consent Form Section - Only for MRI, TRUS, Biopsy */}
+                                              {(() => {
+                                                const isMainTest = ['MRI', 'TRUS', 'BIOPSY'].includes(investigationName);
+                                                if (!isMainTest) return null;
+
+                                                const consentTemplate = getConsentFormTemplate(investigationName);
+                                                const patientConsentForm = getPatientConsentForm(investigationName);
+                                                
+                                                // Check for uploaded form - check multiple possible field names
+                                                const hasUploadedForm = patientConsentForm && (
+                                                  patientConsentForm.file_path || 
+                                                  patientConsentForm.filePath ||
+                                                  patientConsentForm.signed_file_path ||
+                                                  patientConsentForm.signed_filePath
+                                                );
+
+                                                return (
+                                                  <div className="mt-4 pt-4 border-t border-gray-200">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                      <span className="text-xs font-semibold text-gray-700">Consent Form</span>
+                                                      {hasUploadedForm && (
+                                                        <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                                                          Signed
+                                                        </span>
+                                                      )}
+                                                      {!consentTemplate && (
+                                                        <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
+                                                          Template Not Available
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    
+                                                    {/* Print and Upload Section */}
+                                                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
+                                                        disabled={!consentTemplate}
+                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
+                                                          consentTemplate
+                                                            ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
+                                                            : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                        }`}
+                                                        title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
+                                                      >
+                                                        <IoPrint className="w-3 h-3" />
+                                                        Print
+                                                      </button>
+                                                      <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${
+                                                        consentTemplate
+                                                          ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                      }`}
+                                                      title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+                                                      >
+                                                        <IoCloudUpload className="w-3 h-3" />
+                                                        {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
+                                                        <input
+                                                          type="file"
+                                                          accept=".pdf,image/*"
+                                                          onChange={(e) => {
+                                                            const file = e.target.files[0];
+                                                            if (file && consentTemplate) {
+                                                              handleConsentFormUpload(investigationName, consentTemplate, file);
+                                                            } else if (file && !consentTemplate) {
+                                                              setErrorModalTitle('Error');
+                                                              setErrorModalMessage('Consent form template not available. Please create one in the superadmin panel first.');
+                                                              setIsErrorModalOpen(true);
+                                                            }
+                                                            e.target.value = ''; // Reset input
+                                                          }}
+                                                          className="hidden"
+                                                          disabled={!consentTemplate || uploadingConsentForms[investigationName.toLowerCase()]}
+                                                        />
+                                                      </label>
+                                                    </div>
+
+                                                    {/* View Consent Form Button - Only visible when form is uploaded */}
+                                                    {hasUploadedForm && (
+                                                      <div className="mt-2">
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleViewConsentForm(patientConsentForm)}
+                                                          className="px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100"
+                                                          title="View uploaded consent form"
+                                                        >
+                                                          <Eye className="w-3 h-3" />
+                                                          View Consent Form
+                                                        </button>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })()}
                                             </div>
                                             <div className="flex-shrink-0">
                                               {hasResults ? (
-                                                <button
-                                                  onClick={() => {
-                                                    // Map all results to display format
-                                                    const formattedResults = allTestResults.map(result => ({
-                                                      id: result.id,
-                                                      testName: result.testName || result.test_name || result.testType || result.test_type,
-                                                      date: result.testDate || result.test_date || result.created_at,
-                                                      result: result.result || result.result_value,
-                                                      referenceRange: result.referenceRange || result.reference_range || 'N/A',
-                                                      status: result.status || 'Completed',
-                                                      notes: result.notes || result.comments || '',
-                                                      filePath: result.filePath || result.file_path,
-                                                      authorName: result.authorName || result.author_name,
-                                                      authorRole: result.authorRole || result.author_role,
-                                                      createdAt: result.createdAt || result.created_at
-                                                    })).sort((a, b) => {
-                                                      // Sort by date, most recent first
-                                                      const dateA = new Date(a.date || a.createdAt || 0);
-                                                      const dateB = new Date(b.date || b.createdAt || 0);
-                                                      return dateB - dateA;
-                                                    });
-
-                                                    setSelectedTestResults(formattedResults);
-                                                    setSelectedTestName(investigationName);
-                                                    setIsViewResultsModalOpen(true);
-                                                  }}
-                                                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-                                                >
-                                                  <Eye className="w-4 h-4" />
-                                                  View
-                                                </button>
+                                                uploadedResult && uploadedResult.filePath ? (
+                                                  <button
+                                                    onClick={() => {
+                                                      const fileUrl = uploadedResult.filePath.startsWith('http') 
+                                                        ? uploadedResult.filePath 
+                                                        : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${uploadedResult.filePath}`;
+                                                      window.open(fileUrl, '_blank');
+                                                    }}
+                                                    className="px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                                                  >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                    View File
+                                                  </button>
+                                                ) : null
                                               ) : (
                                                 (() => {
                                                   // Don't show upload button if status is not_required
@@ -6991,9 +7480,31 @@ ${transferDetails.additionalNotes}` : ''}
       {/* PDF Viewer Modal */}
       <PDFViewerModal
         isOpen={isPDFViewerModalOpen}
-        onClose={handleClosePDFViewer}
+        onClose={() => {
+          setIsPDFViewerModalOpen(false);
+          if (pdfViewerUrl && pdfViewerUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(pdfViewerUrl);
+          }
+          setPdfViewerUrl(null);
+          setPdfViewerFileName(null);
+        }}
         pdfUrl={pdfViewerUrl}
         fileName={pdfViewerFileName}
+      />
+
+      {/* Image Viewer Modal */}
+      <ImageViewerModal
+        isOpen={isImageViewerModalOpen}
+        onClose={() => {
+          setIsImageViewerModalOpen(false);
+          if (imageViewerUrl && imageViewerUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(imageViewerUrl);
+          }
+          setImageViewerUrl(null);
+          setImageViewerFileName(null);
+        }}
+        imageUrl={imageViewerUrl}
+        fileName={imageViewerFileName}
       />
     </>
   );
