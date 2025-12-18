@@ -5,25 +5,21 @@ import { consentFormService } from '../../services/consentFormService';
 const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) => {
   const [formData, setFormData] = useState({
     procedure_name: '',
-    test_name: '',
     is_auto_generated: true,
     template_file: null
   });
   const [fileName, setFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [templateType, setTemplateType] = useState('procedure');
 
   // Populate form if editing
   useEffect(() => {
     if (template) {
       setFormData({
-        procedure_name: template.procedure_name || '',
-        test_name: template.test_name || '',
+        procedure_name: template.procedure_name || template.test_name || '',
         is_auto_generated: template.is_auto_generated,
         template_file: null
       });
-      setTemplateType(template.procedure_name ? 'procedure' : 'test');
       setFileName('');
     } else {
       resetForm();
@@ -33,12 +29,10 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
   const resetForm = () => {
     setFormData({
       procedure_name: '',
-      test_name: '',
       is_auto_generated: true,
       template_file: null
     });
     setFileName('');
-    setTemplateType('procedure');
     setError('');
   };
 
@@ -69,12 +63,8 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
     setError('');
 
     // Validation
-    if (templateType === 'procedure' && !formData.procedure_name.trim()) {
+    if (!formData.procedure_name.trim()) {
       setError('Procedure name is required');
-      return;
-    }
-    if (templateType === 'test' && !formData.test_name.trim()) {
-      setError('Test name is required');
       return;
     }
 
@@ -87,8 +77,8 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
 
     try {
       const submitData = {
-        procedure_name: templateType === 'procedure' ? formData.procedure_name : '',
-        test_name: templateType === 'test' ? formData.test_name : '',
+        procedure_name: formData.procedure_name,
+        test_name: '', // Always empty since everything is a procedure
         is_auto_generated: formData.is_auto_generated,
         template_file: formData.template_file
       };
@@ -155,69 +145,24 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
             </div>
           )}
 
-          {/* Template Type */}
+          {/* Procedure Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Template Type
+              Procedure Name *
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setTemplateType('procedure')}
-                className={`px-4 py-3 rounded-lg border-2 transition-all ${templateType === 'procedure'
-                    ? 'border-teal-600 bg-teal-50 text-teal-700'
-                    : 'border-gray-200 hover:border-gray-300'
-                  }`}
-              >
-                <div className="font-medium">Procedure</div>
-                <div className="text-xs text-gray-500">Surgical procedures</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTemplateType('test')}
-                className={`px-4 py-3 rounded-lg border-2 transition-all ${templateType === 'test'
-                    ? 'border-teal-600 bg-teal-50 text-teal-700'
-                    : 'border-gray-200 hover:border-gray-300'
-                  }`}
-              >
-                <div className="font-medium">Test</div>
-                <div className="text-xs text-gray-500">Medical tests</div>
-              </button>
-            </div>
+            <select
+              name="procedure_name"
+              value={formData.procedure_name}
+              onChange={handleInputChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              required
+            >
+              <option value="">Select a procedure</option>
+              <option value="MRI">MRI</option>
+              <option value="TRUS">TRUS</option>
+              <option value="Biopsy">Biopsy</option>
+            </select>
           </div>
-
-          {/* Procedure/Test Name */}
-          {templateType === 'procedure' ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Procedure Name *
-              </label>
-              <input
-                type="text"
-                name="procedure_name"
-                value={formData.procedure_name}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="e.g., Transurethral Resection of Prostate"
-                required
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Test Name *
-              </label>
-              <input
-                type="text"
-                name="test_name"
-                value={formData.test_name}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="e.g., PSA Blood Test"
-                required
-              />
-            </div>
-          )}
 
           {/* Auto-Generate Toggle */}
           <div className="flex items-center justify-between p-4 bg-purple-50 border border-purple-200 rounded-lg">
