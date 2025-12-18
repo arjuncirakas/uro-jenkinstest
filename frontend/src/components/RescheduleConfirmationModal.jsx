@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiX, FiCalendar, FiClock, FiUser, FiPhone, FiMail, FiArrowRight, FiCheck, FiAlertCircle, FiUserCheck } from 'react-icons/fi';
 import { bookingService } from '../services/bookingService';
+import SuccessErrorModal from './SuccessErrorModal';
 
 const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, onConfirm, onCancel }) => {
   const [selectedTime, setSelectedTime] = useState(newTime || '09:00');
@@ -12,6 +13,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState(null);
+  const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
 
   useEffect(() => {
     if (isOpen && appointment) {
@@ -133,6 +135,16 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
   const handleConfirm = async () => {
     if (!selectedDoctor) {
       setError('Please select a doctor');
+      return;
+    }
+
+    // Validate that the selected time slot is available
+    const selectedSlot = allTimeSlots.find(slot => slot.time === selectedTime);
+    if (!selectedSlot || !selectedSlot.available) {
+      setErrorModal({
+        isOpen: true,
+        message: `The selected time slot (${formatTime(selectedTime)}) is already booked. Please select an available time slot.`
+      });
       return;
     }
 
@@ -427,7 +439,17 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                   {allTimeSlots.map((slot) => (
                     <button
                       key={slot.time}
-                      onClick={() => slot.available && setSelectedTime(slot.time)}
+                      onClick={() => {
+                        if (slot.available) {
+                          setSelectedTime(slot.time);
+                          setError(null); // Clear any previous errors
+                        } else {
+                          setErrorModal({
+                            isOpen: true,
+                            message: `The time slot ${formatTime(slot.time)} is already booked. Please select an available time slot.`
+                          });
+                        }
+                      }}
                       disabled={!slot.available}
                       className={`px-3 py-2 text-xs rounded transition-colors ${
                         selectedTime === slot.time
@@ -510,6 +532,14 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
           </div>
         </div>
       </div>
+
+      {/* Error Modal */}
+      <SuccessErrorModal
+        isOpen={errorModal.isOpen}
+        onClose={() => setErrorModal({ isOpen: false, message: '' })}
+        message={errorModal.message}
+        type="error"
+      />
     </div>
   );
 };
