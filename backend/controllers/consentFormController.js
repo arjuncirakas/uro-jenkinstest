@@ -3,28 +3,10 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// Configure multer for file uploads (patient consent forms)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'consent-forms');
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `consent-${uniqueSuffix}${ext}`);
-  }
-});
-
 // Configure multer for template uploads
 const templateStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads', 'consent-forms', 'templates');
-    // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -37,299 +19,27 @@ const templateStorage = multer.diskStorage({
   }
 });
 
-const fileFilter = (req, file, cb) => {
-  // Allow PDF, DOC, DOCX, JPG, JPEG, PNG
-  const allowedTypes = /jpeg|jpg|png|pdf|doc|docx/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
-
-  if (mimetype && extname) {
-    return cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Only PDF, DOC, DOCX, JPG, JPEG, PNG files are allowed.'));
-  }
-};
-
 const templateFileFilter = (req, file, cb) => {
-  // For templates, only allow PDF
   if (file.mimetype === 'application/pdf') {
     return cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PDF files are allowed for templates.'));
+    cb(new Error('Only PDF files are allowed for templates'));
   }
 };
-
-export const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
-  fileFilter: fileFilter
-});
 
 export const uploadTemplate = multer({
   storage: templateStorage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: templateFileFilter
 });
 
-// Get all consent forms
-export const getConsentForms = async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    const result = await client.query(
-      `SELECT id, name, created_at, updated_at 
-       FROM consent_forms 
-       ORDER BY name ASC`
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: 'Consent forms retrieved successfully',
-      data: {
-        consentForms: result.rows
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching consent forms:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch consent forms',
-      error: error.message
-    });
-  } finally {
-    client.release();
-  }
-};
-
-// Create a new consent form
-export const createConsentForm = async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    const { name } = req.body;
-
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Consent form name is required'
-      });
-    }
-
-    // Check if consent form with same name already exists
-    const existingForm = await client.query(
-      `SELECT id FROM consent_forms WHERE LOWER(name) = LOWER($1)`,
-      [name.trim()]
-    );
-
-    if (existingForm.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'A consent form with this name already exists'
-      });
-    }
-
-    // Insert new consent form
-    const result = await client.query(
-      `INSERT INTO consent_forms (name, created_at, updated_at) 
-       VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-       RETURNING *`,
-      [name.trim()]
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: 'Consent form created successfully',
-      data: {
-        consentForm: result.rows[0]
-      }
-    });
-  } catch (error) {
-    console.error('Error creating consent form:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to create consent form',
-      error: error.message
-    });
-  } finally {
-    client.release();
-  }
-};
-
-// Upload consent form file for a patient
-export const uploadPatientConsentForm = async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    const { patientId } = req.params;
-    const { consentFormId } = req.body;
-    const file = req.file;
-
-    if (!consentFormId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Consent form ID is required'
-      });
-    }
-
-    if (!file) {
-      return res.status(400).json({
-        success: false,
-        message: 'File is required'
-      });
-    }
-
-    // Verify patient exists
-    const patientCheck = await client.query(
-      `SELECT id FROM patients WHERE id = $1`,
-      [patientId]
-    );
-
-    if (patientCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Patient not found'
-      });
-    }
-
-    // Verify consent form exists
-    const formCheck = await client.query(
-      `SELECT id, name FROM consent_forms WHERE id = $1`,
-      [consentFormId]
-    );
-
-    if (formCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Consent form not found'
-      });
-    }
-
-    // Check if patient already has this consent form uploaded
-    const existingUpload = await client.query(
-      `SELECT id FROM patient_consent_forms 
-       WHERE patient_id = $1 AND consent_form_id = $2`,
-      [patientId, consentFormId]
-    );
-
-    const filePath = path.join('uploads', 'consent-forms', file.filename);
-
-    if (existingUpload.rows.length > 0) {
-      // Update existing record
-      const oldFile = await client.query(
-        `SELECT file_path FROM patient_consent_forms WHERE id = $1`,
-        [existingUpload.rows[0].id]
-      );
-
-      // Delete old file if exists
-      if (oldFile.rows[0]?.file_path) {
-        const oldFilePath = path.join(process.cwd(), oldFile.rows[0].file_path);
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-        }
-      }
-
-      const result = await client.query(
-        `UPDATE patient_consent_forms 
-         SET file_path = $1, file_name = $2, file_size = $3, uploaded_at = CURRENT_TIMESTAMP
-         WHERE id = $4
-         RETURNING *`,
-        [filePath, file.originalname, file.size, existingUpload.rows[0].id]
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: 'Consent form file updated successfully',
-        data: result.rows[0]
-      });
-    } else {
-      // Insert new record
-      const result = await client.query(
-        `INSERT INTO patient_consent_forms 
-         (patient_id, consent_form_id, file_path, file_name, file_size, uploaded_at) 
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP) 
-         RETURNING *`,
-        [patientId, consentFormId, filePath, file.originalname, file.size]
-      );
-
-      return res.status(201).json({
-        success: true,
-        message: 'Consent form file uploaded successfully',
-        data: result.rows[0]
-      });
-    }
-  } catch (error) {
-    console.error('Error uploading consent form:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to upload consent form',
-      error: error.message
-    });
-  } finally {
-    client.release();
-  }
-};
-
-// Get patient consent forms
-export const getPatientConsentForms = async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    const { patientId } = req.params;
-
-    const result = await client.query(
-      `SELECT 
-        pcf.id,
-        pcf.patient_id,
-        pcf.consent_form_id,
-        pcf.file_path,
-        pcf.file_name,
-        pcf.file_size,
-        pcf.uploaded_at,
-        cf.name as consent_form_name
-       FROM patient_consent_forms pcf
-       JOIN consent_forms cf ON pcf.consent_form_id = cf.id
-       WHERE pcf.patient_id = $1
-       ORDER BY pcf.uploaded_at DESC`,
-      [patientId]
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: 'Patient consent forms retrieved successfully',
-      data: {
-        consentForms: result.rows
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching patient consent forms:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch patient consent forms',
-      error: error.message
-    });
-  } finally {
-    client.release();
-  }
-};
-
-// Template Management Endpoints
-
 // Get all consent form templates
 export const getConsentFormTemplates = async (req, res) => {
-  const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  console.log(`📋 [Consent Forms ${requestId}] GET /templates - Starting`);
-  console.log(`📋 [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
-  
   const client = await pool.connect();
-  
+
   try {
-    console.log(`📋 [Consent Forms ${requestId}] Executing database query...`);
-    const result = await client.query(
-      `SELECT 
+    const result = await client.query(`
+      SELECT 
         id,
         name,
         procedure_name,
@@ -340,38 +50,26 @@ export const getConsentFormTemplates = async (req, res) => {
         template_file_size,
         created_at,
         updated_at
-       FROM consent_forms 
-       WHERE procedure_name IS NOT NULL OR test_name IS NOT NULL
-       ORDER BY created_at DESC`
-    );
-
-    console.log(`📋 [Consent Forms ${requestId}] Database query successful - Found ${result.rows.length} templates`);
+      FROM consent_forms 
+      WHERE procedure_name IS NOT NULL OR test_name IS NOT NULL
+      ORDER BY created_at DESC
+    `);
 
     // Add full URL for template files
     const templates = result.rows.map(template => ({
       ...template,
-      template_file_url: template.template_file_path 
+      template_file_url: template.template_file_path
         ? `${req.protocol}://${req.get('host')}/${template.template_file_path}`
         : null
     }));
 
-    console.log(`📋 [Consent Forms ${requestId}] Templates processed successfully`);
-    console.log(`📋 [Consent Forms ${requestId}] Template names: ${templates.map(t => t.name || t.procedure_name || t.test_name).join(', ') || 'None'}`);
-
     return res.status(200).json({
       success: true,
       message: 'Consent form templates retrieved successfully',
-      data: {
-        templates
-      }
+      data: { templates }
     });
   } catch (error) {
-    console.error(`❌ [Consent Forms ${requestId}] Error fetching consent form templates:`, error);
-    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
+    console.error('Error fetching consent form templates:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch consent form templates',
@@ -379,67 +77,45 @@ export const getConsentFormTemplates = async (req, res) => {
     });
   } finally {
     client.release();
-    console.log(`📋 [Consent Forms ${requestId}] Database connection released`);
   }
 };
 
 // Create a new consent form template
 export const createConsentFormTemplate = async (req, res) => {
-  const requestId = req.requestId || Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  console.log(`📝 [Consent Forms ${requestId}] POST /templates - Starting`);
-  console.log(`📝 [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
-  
   const client = await pool.connect();
-  
+
   try {
     const { procedure_name, test_name, is_auto_generated } = req.body;
     const file = req.file;
 
-    console.log(`📝 [Consent Forms ${requestId}] Request body:`, {
-      procedure_name: procedure_name || 'N/A',
-      test_name: test_name || 'N/A',
-      is_auto_generated: is_auto_generated,
-      has_file: !!file,
-      file_name: file?.originalname || 'N/A',
-      file_size: file?.size || 'N/A'
-    });
-
-    // Validate that either procedure_name or test_name is provided
-    if ((!procedure_name || !procedure_name.trim()) && (!test_name || !test_name.trim())) {
-      console.log(`❌ [Consent Forms ${requestId}] Validation failed: Neither procedure_name nor test_name provided`);
+    // Validate input
+    if (!procedure_name?.trim() && !test_name?.trim()) {
       return res.status(400).json({
         success: false,
         message: 'Either procedure name or test name is required'
       });
     }
 
-    // If not auto-generated, file is required (unless updating existing template)
     const isAutoGen = is_auto_generated === 'true' || is_auto_generated === true;
-    console.log(`📝 [Consent Forms ${requestId}] Auto-generated: ${isAutoGen}`);
-    
+
+    // If not auto-generated, file is required
     if (!isAutoGen && !file) {
-      console.log(`❌ [Consent Forms ${requestId}] Validation failed: File required but not provided`);
       return res.status(400).json({
         success: false,
         message: 'Template file is required when auto-generation is disabled'
       });
     }
 
-    // Generate name from procedure or test name
     const name = procedure_name || test_name;
-    console.log(`📝 [Consent Forms ${requestId}] Template name: ${name.trim()}`);
-    
-    // Check if template with same name already exists
-    console.log(`📝 [Consent Forms ${requestId}] Checking for existing template...`);
-    const existingTemplate = await client.query(
-      `SELECT id FROM consent_forms 
-       WHERE (procedure_name IS NOT NULL AND LOWER(procedure_name) = LOWER($1))
-          OR (test_name IS NOT NULL AND LOWER(test_name) = LOWER($1))`,
-      [name.trim()]
-    );
+
+    // Check if template already exists
+    const existingTemplate = await client.query(`
+      SELECT id FROM consent_forms 
+      WHERE (procedure_name IS NOT NULL AND LOWER(procedure_name) = LOWER($1))
+         OR (test_name IS NOT NULL AND LOWER(test_name) = LOWER($1))
+    `, [name.trim()]);
 
     if (existingTemplate.rows.length > 0) {
-      console.log(`❌ [Consent Forms ${requestId}] Template already exists with ID: ${existingTemplate.rows[0].id}`);
       return res.status(400).json({
         success: false,
         message: 'A template with this name already exists'
@@ -454,59 +130,36 @@ export const createConsentFormTemplate = async (req, res) => {
       templateFilePath = path.join('uploads', 'consent-forms', 'templates', file.filename);
       templateFileName = file.originalname;
       templateFileSize = file.size;
-      console.log(`📝 [Consent Forms ${requestId}] File details:`, {
-        path: templateFilePath,
-        name: templateFileName,
-        size: templateFileSize
-      });
     }
 
     // Insert new template
-    console.log(`📝 [Consent Forms ${requestId}] Inserting template into database...`);
-    const result = await client.query(
-      `INSERT INTO consent_forms 
-       (name, procedure_name, test_name, is_auto_generated, template_file_path, template_file_name, template_file_size, created_at, updated_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-       RETURNING *`,
-      [
-        name.trim(),
-        procedure_name ? procedure_name.trim() : null,
-        test_name ? test_name.trim() : null,
-        isAutoGen,
-        templateFilePath,
-        templateFileName,
-        templateFileSize
-      ]
-    );
+    const result = await client.query(`
+      INSERT INTO consent_forms 
+      (name, procedure_name, test_name, is_auto_generated, template_file_path, template_file_name, template_file_size, created_at, updated_at) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+      RETURNING *
+    `, [
+      name.trim(),
+      procedure_name ? procedure_name.trim() : null,
+      test_name ? test_name.trim() : null,
+      isAutoGen,
+      templateFilePath,
+      templateFileName,
+      templateFileSize
+    ]);
 
     const template = result.rows[0];
-    template.template_file_url = templateFilePath 
+    template.template_file_url = templateFilePath
       ? `${req.protocol}://${req.get('host')}/${templateFilePath}`
       : null;
-
-    console.log(`✅ [Consent Forms ${requestId}] Template created successfully with ID: ${template.id}`);
-    console.log(`✅ [Consent Forms ${requestId}] Template details:`, {
-      id: template.id,
-      name: template.name,
-      procedure_name: template.procedure_name,
-      test_name: template.test_name,
-      is_auto_generated: template.is_auto_generated
-    });
 
     return res.status(201).json({
       success: true,
       message: 'Consent form template created successfully',
-      data: {
-        template
-      }
+      data: { template }
     });
   } catch (error) {
-    console.error(`❌ [Consent Forms ${requestId}] Error creating consent form template:`, error);
-    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
+    console.error('Error creating consent form template:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to create consent form template',
@@ -514,35 +167,20 @@ export const createConsentFormTemplate = async (req, res) => {
     });
   } finally {
     client.release();
-    console.log(`📝 [Consent Forms ${requestId}] Database connection released`);
   }
 };
 
 // Update a consent form template
 export const updateConsentFormTemplate = async (req, res) => {
-  const requestId = req.requestId || Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  console.log(`✏️ [Consent Forms ${requestId}] PUT /templates/:templateId - Starting`);
-  console.log(`✏️ [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
-  
   const client = await pool.connect();
-  
+
   try {
     const { templateId } = req.params;
     const { procedure_name, test_name, is_auto_generated } = req.body;
     const file = req.file;
 
-    console.log(`✏️ [Consent Forms ${requestId}] Update request for template ID: ${templateId}`);
-    console.log(`✏️ [Consent Forms ${requestId}] Request body:`, {
-      procedure_name: procedure_name || 'N/A',
-      test_name: test_name || 'N/A',
-      is_auto_generated: is_auto_generated,
-      has_file: !!file,
-      file_name: file?.originalname || 'N/A'
-    });
-
-    // Validate that either procedure_name or test_name is provided
-    if ((!procedure_name || !procedure_name.trim()) && (!test_name || !test_name.trim())) {
-      console.log(`❌ [Consent Forms ${requestId}] Validation failed: Neither procedure_name nor test_name provided`);
+    // Validate input
+    if (!procedure_name?.trim() && !test_name?.trim()) {
       return res.status(400).json({
         success: false,
         message: 'Either procedure name or test name is required'
@@ -550,32 +188,27 @@ export const updateConsentFormTemplate = async (req, res) => {
     }
 
     // Check if template exists
-    console.log(`✏️ [Consent Forms ${requestId}] Checking if template exists...`);
     const existingTemplate = await client.query(
-      `SELECT id, template_file_path FROM consent_forms WHERE id = $1`,
+      'SELECT id, template_file_path FROM consent_forms WHERE id = $1',
       [templateId]
     );
 
     if (existingTemplate.rows.length === 0) {
-      console.log(`❌ [Consent Forms ${requestId}] Template not found with ID: ${templateId}`);
       return res.status(404).json({
         success: false,
         message: 'Template not found'
       });
     }
-    console.log(`✏️ [Consent Forms ${requestId}] Template found, proceeding with update...`);
 
-    // Generate name from procedure or test name
     const name = procedure_name || test_name;
-    
+
     // Check if another template with same name exists
-    const duplicateCheck = await client.query(
-      `SELECT id FROM consent_forms 
-       WHERE id != $1 
-       AND ((procedure_name IS NOT NULL AND LOWER(procedure_name) = LOWER($2))
-          OR (test_name IS NOT NULL AND LOWER(test_name) = LOWER($2)))`,
-      [templateId, name.trim()]
-    );
+    const duplicateCheck = await client.query(`
+      SELECT id FROM consent_forms 
+      WHERE id != $1 
+      AND ((procedure_name IS NOT NULL AND LOWER(procedure_name) = LOWER($2))
+         OR (test_name IS NOT NULL AND LOWER(test_name) = LOWER($2)))
+    `, [templateId, name.trim()]);
 
     if (duplicateCheck.rows.length > 0) {
       return res.status(400).json({
@@ -603,62 +236,44 @@ export const updateConsentFormTemplate = async (req, res) => {
       templateFileSize = file.size;
     }
 
-    // Determine is_auto_generated value
     const isAutoGen = is_auto_generated === 'true' || is_auto_generated === true;
 
     // Update template
-    console.log(`✏️ [Consent Forms ${requestId}] Updating template in database...`);
-    const result = await client.query(
-      `UPDATE consent_forms 
-       SET name = $1, 
-           procedure_name = $2, 
-           test_name = $3, 
-           is_auto_generated = $4,
-           template_file_path = $5,
-           template_file_name = COALESCE($6, template_file_name),
-           template_file_size = COALESCE($7, template_file_size),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8
-       RETURNING *`,
-      [
-        name.trim(),
-        procedure_name ? procedure_name.trim() : null,
-        test_name ? test_name.trim() : null,
-        isAutoGen,
-        templateFilePath,
-        templateFileName,
-        templateFileSize,
-        templateId
-      ]
-    );
+    const result = await client.query(`
+      UPDATE consent_forms 
+      SET name = $1, 
+          procedure_name = $2, 
+          test_name = $3, 
+          is_auto_generated = $4,
+          template_file_path = $5,
+          template_file_name = COALESCE($6, template_file_name),
+          template_file_size = COALESCE($7, template_file_size),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $8
+      RETURNING *
+    `, [
+      name.trim(),
+      procedure_name ? procedure_name.trim() : null,
+      test_name ? test_name.trim() : null,
+      isAutoGen,
+      templateFilePath,
+      templateFileName,
+      templateFileSize,
+      templateId
+    ]);
 
     const template = result.rows[0];
-    template.template_file_url = templateFilePath 
+    template.template_file_url = templateFilePath
       ? `${req.protocol}://${req.get('host')}/${templateFilePath}`
       : null;
-
-    console.log(`✅ [Consent Forms ${requestId}] Template updated successfully with ID: ${template.id}`);
-    console.log(`✅ [Consent Forms ${requestId}] Updated template details:`, {
-      id: template.id,
-      name: template.name,
-      procedure_name: template.procedure_name,
-      test_name: template.test_name
-    });
 
     return res.status(200).json({
       success: true,
       message: 'Consent form template updated successfully',
-      data: {
-        template
-      }
+      data: { template }
     });
   } catch (error) {
-    console.error(`❌ [Consent Forms ${requestId}] Error updating consent form template:`, error);
-    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
+    console.error('Error updating consent form template:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to update consent form template',
@@ -666,32 +281,23 @@ export const updateConsentFormTemplate = async (req, res) => {
     });
   } finally {
     client.release();
-    console.log(`✏️ [Consent Forms ${requestId}] Database connection released`);
   }
 };
 
 // Delete a consent form template
 export const deleteConsentFormTemplate = async (req, res) => {
-  const requestId = req.requestId || Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  console.log(`🗑️ [Consent Forms ${requestId}] DELETE /templates/:templateId - Starting`);
-  console.log(`🗑️ [Consent Forms ${requestId}] User ID: ${req.user?.id || 'N/A'}, Role: ${req.user?.role || 'N/A'}`);
-  
   const client = await pool.connect();
-  
+
   try {
     const { templateId } = req.params;
 
-    console.log(`🗑️ [Consent Forms ${requestId}] Delete request for template ID: ${templateId}`);
-
     // Check if template exists and get file path
-    console.log(`🗑️ [Consent Forms ${requestId}] Checking if template exists...`);
     const template = await client.query(
-      `SELECT id, template_file_path FROM consent_forms WHERE id = $1`,
+      'SELECT id, template_file_path FROM consent_forms WHERE id = $1',
       [templateId]
     );
 
     if (template.rows.length === 0) {
-      console.log(`❌ [Consent Forms ${requestId}] Template not found with ID: ${templateId}`);
       return res.status(404).json({
         success: false,
         message: 'Template not found'
@@ -703,36 +309,19 @@ export const deleteConsentFormTemplate = async (req, res) => {
     if (filePath) {
       const fullPath = path.join(process.cwd(), filePath);
       if (fs.existsSync(fullPath)) {
-        console.log(`🗑️ [Consent Forms ${requestId}] Deleting file: ${filePath}`);
         fs.unlinkSync(fullPath);
-        console.log(`✅ [Consent Forms ${requestId}] File deleted successfully`);
-      } else {
-        console.log(`⚠️ [Consent Forms ${requestId}] File not found at path: ${filePath}`);
       }
-    } else {
-      console.log(`ℹ️ [Consent Forms ${requestId}] No file associated with this template`);
     }
 
-    // Delete template
-    console.log(`🗑️ [Consent Forms ${requestId}] Deleting template from database...`);
-    await client.query(
-      `DELETE FROM consent_forms WHERE id = $1`,
-      [templateId]
-    );
-
-    console.log(`✅ [Consent Forms ${requestId}] Template deleted successfully with ID: ${templateId}`);
+    // Delete template from database
+    await client.query('DELETE FROM consent_forms WHERE id = $1', [templateId]);
 
     return res.status(200).json({
       success: true,
       message: 'Consent form template deleted successfully'
     });
   } catch (error) {
-    console.error(`❌ [Consent Forms ${requestId}] Error deleting consent form template:`, error);
-    console.error(`❌ [Consent Forms ${requestId}] Error details:`, {
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
+    console.error('Error deleting consent form template:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to delete consent form template',
@@ -740,7 +329,5 @@ export const deleteConsentFormTemplate = async (req, res) => {
     });
   } finally {
     client.release();
-    console.log(`🗑️ [Consent Forms ${requestId}] Database connection released`);
   }
 };
-

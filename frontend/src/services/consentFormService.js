@@ -1,106 +1,16 @@
 import apiClient from '../config/axios.js';
 
-// Consent Form API service
 export const consentFormService = {
-  // Get all available consent forms
-  getConsentForms: async () => {
-    try {
-      const response = await apiClient.get('/consent-forms');
-      return {
-        success: true,
-        data: response.data.data?.consentForms || response.data.data || []
-      };
-    } catch (error) {
-      console.error('Error fetching consent forms:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to fetch consent forms',
-        data: []
-      };
-    }
-  },
-
-  // Create a new consent form
-  createConsentForm: async (formName) => {
-    try {
-      const response = await apiClient.post('/consent-forms', { name: formName });
-      return {
-        success: true,
-        data: response.data.data?.consentForm || response.data.data
-      };
-    } catch (error) {
-      console.error('Error creating consent form:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to create consent form'
-      };
-    }
-  },
-
-  // Get patient consent forms
-  getPatientConsentForms: async (patientId) => {
-    try {
-      const response = await apiClient.get(`/consent-forms/patients/${patientId}`);
-      return {
-        success: true,
-        data: response.data.data?.consentForms || response.data.data || []
-      };
-    } catch (error) {
-      console.error('Error fetching patient consent forms:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to fetch patient consent forms',
-        data: []
-      };
-    }
-  },
-
-  // Upload consent form file for a patient
-  uploadConsentForm: async (patientId, consentFormId, file) => {
-    try {
-      const formData = new FormData();
-      formData.append('consentFormId', consentFormId);
-      formData.append('file', file);
-
-      const response = await apiClient.post(`/consent-forms/patients/${patientId}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return {
-        success: true,
-        data: response.data.data
-      };
-    } catch (error) {
-      console.error('Error uploading consent form:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to upload consent form'
-      };
-    }
-  },
-
-  // Template Management Methods
   // Get all consent form templates
   getConsentFormTemplates: async () => {
     try {
-      console.log('Fetching consent form templates from /consent-forms/templates');
       const response = await apiClient.get('/consent-forms/templates');
-      console.log('Consent form templates response:', response);
       return {
         success: true,
-        data: response.data.data?.templates || response.data.data || response.data || []
+        data: response.data.data?.templates || []
       };
     } catch (error) {
       console.error('Error fetching consent form templates:', error);
-      console.error('Error details:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: error.config?.url,
-        baseURL: error.config?.baseURL,
-        fullURL: error.config?.baseURL + error.config?.url
-      });
       return {
         success: false,
         error: error.response?.data?.message || error.message || 'Failed to fetch consent form templates',
@@ -116,16 +26,15 @@ export const consentFormService = {
       data.append('procedure_name', formData.procedure_name || '');
       data.append('test_name', formData.test_name || '');
       data.append('is_auto_generated', formData.is_auto_generated ? 'true' : 'false');
-      
+
       if (formData.template_file) {
         data.append('template_file', formData.template_file);
       }
 
       const response = await apiClient.post('/consent-forms/templates', data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
+
       return {
         success: true,
         data: response.data.data?.template || response.data.data
@@ -146,16 +55,15 @@ export const consentFormService = {
       data.append('procedure_name', formData.procedure_name || '');
       data.append('test_name', formData.test_name || '');
       data.append('is_auto_generated', formData.is_auto_generated ? 'true' : 'false');
-      
+
       if (formData.template_file) {
         data.append('template_file', formData.template_file);
       }
 
       const response = await apiClient.put(`/consent-forms/templates/${templateId}`, data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
+
       return {
         success: true,
         data: response.data.data?.template || response.data.data
@@ -186,4 +94,3 @@ export const consentFormService = {
     }
   }
 };
-
