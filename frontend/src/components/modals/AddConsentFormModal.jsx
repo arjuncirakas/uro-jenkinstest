@@ -5,7 +5,7 @@ import { consentFormService } from '../../services/consentFormService';
 const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) => {
   const [formData, setFormData] = useState({
     procedure_name: '',
-    is_auto_generated: true,
+    is_auto_generated: false,
     template_file: null
   });
   const [fileName, setFileName] = useState('');
@@ -29,7 +29,7 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
   const resetForm = () => {
     setFormData({
       procedure_name: '',
-      is_auto_generated: true,
+      is_auto_generated: false,
       template_file: null
     });
     setFileName('');
