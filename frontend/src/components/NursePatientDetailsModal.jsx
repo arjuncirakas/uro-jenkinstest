@@ -1343,7 +1343,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   };
 
   // View uploaded consent form
-  const handleViewConsentForm = (consentForm) => {
+  const handleViewConsentForm = async (consentForm) => {
     if (!consentForm) {
       console.error('No consent form provided to handleViewConsentForm');
       return;
@@ -1363,26 +1363,56 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     // Normalize Windows paths (replace backslashes with forward slashes)
     const normalizedPath = filePath.replace(/\\/g, '/');
     
-    // Build the file URL
+    // Build the file URL using the authenticated endpoint
     const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
+    
+    // Remove 'uploads/' prefix if present, as the endpoint expects relative path
+    let relativePath = normalizedPath;
+    if (relativePath.startsWith('uploads/')) {
+      relativePath = relativePath.replace(/^uploads\//, '');
+    }
+    
+    // Use the authenticated file serving endpoint
     const fileUrl = normalizedPath.startsWith('http') 
       ? normalizedPath 
-      : `${baseURL}/${normalizedPath}`;
+      : `${baseURL}/consent-forms/files/${relativePath}`;
     
-    console.log('Viewing consent form:', { filePath, normalizedPath, fileUrl, consentForm });
+    console.log('Viewing consent form:', { filePath, normalizedPath, relativePath, fileUrl, consentForm });
     
     // Check if it's a PDF or image
     const fileExtension = normalizedPath.split('.').pop().toLowerCase();
     const fileName = consentForm.file_name || consentForm.fileName || 'Consent Form';
     
-    if (fileExtension === 'pdf') {
-      setPdfViewerUrl(fileUrl);
-      setPdfViewerFileName(fileName);
-      setIsPDFViewerModalOpen(true);
-    } else {
-      setImageViewerUrl(fileUrl);
-      setImageViewerFileName(fileName);
-      setIsImageViewerModalOpen(true);
+    try {
+      // Fetch the file as a blob with authentication
+      const token = localStorage.getItem('token');
+      const response = await fetch(fileUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      if (fileExtension === 'pdf') {
+        setPdfViewerUrl(blobUrl);
+        setPdfViewerFileName(fileName);
+        setIsPDFViewerModalOpen(true);
+      } else {
+        setImageViewerUrl(blobUrl);
+        setImageViewerFileName(fileName);
+        setIsImageViewerModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching consent form file:', error);
+      setErrorModalTitle('Error');
+      setErrorModalMessage('Failed to load consent form. Please try again.');
+      setIsErrorModalOpen(true);
     }
   };
 

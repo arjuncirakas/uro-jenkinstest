@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import {
   getConsentFormTemplates,
   createConsentFormTemplate,
@@ -7,10 +8,12 @@ import {
   uploadTemplate,
   getPatientConsentForms,
   uploadPatientConsentForm,
-  uploadPatientConsent
+  uploadPatientConsent,
+  serveConsentFormFile
 } from '../controllers/consentFormController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
+import { validateFilePathMiddleware } from '../utils/ssrfProtection.js';
 
 const router = express.Router();
 
@@ -70,6 +73,15 @@ router.post('/patients/:patientId',
   requireRole(['urologist', 'doctor', 'urology_nurse', 'superadmin']),
   uploadPatientConsent.single('file'),
   uploadPatientConsentForm
+);
+
+// Serve consent form files with authentication
+router.get('/files/:filePath(*)',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp', 'superadmin']),
+  validateFilePathMiddleware('filePath', path.join(process.cwd(), 'uploads')),
+  serveConsentFormFile
 );
 
 export default router;
