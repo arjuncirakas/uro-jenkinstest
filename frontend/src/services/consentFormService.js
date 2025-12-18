@@ -92,5 +92,49 @@ export const consentFormService = {
         error: error.response?.data?.message || 'Failed to delete consent form template'
       };
     }
+  },
+
+  // Get patient consent forms
+  getPatientConsentForms: async (patientId) => {
+    try {
+      const response = await apiClient.get(`/consent-forms/patients/${patientId}`);
+      return {
+        success: true,
+        data: response.data.data?.consentForms || []
+      };
+    } catch (error) {
+      console.error('Error fetching patient consent forms:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to fetch patient consent forms',
+        data: []
+      };
+    }
+  },
+
+  // Upload patient consent form
+  uploadConsentForm: async (patientId, templateId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('consentFormId', templateId);
+
+      const response = await apiClient.post(`/consent-forms/patients/${patientId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      return {
+        success: true,
+        data: response.data.data
+      };
+    } catch (error) {
+      console.error('Error uploading consent form:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to upload consent form'
+      };
+    }
   }
 };

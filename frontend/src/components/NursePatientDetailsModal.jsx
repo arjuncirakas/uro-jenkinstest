@@ -3443,13 +3443,6 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                         </button>
                                                       </div>
                                                     )}
-
-                                                    {/* Message when template is not available */}
-                                                    {!consentTemplate && (
-                                                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
-                                                        Consent form template not available. Please create one in the superadmin panel.
-                                                      </div>
-                                                    )}
                                                   </div>
                                                 );
                                               })()}

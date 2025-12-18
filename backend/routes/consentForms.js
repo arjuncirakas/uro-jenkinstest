@@ -4,7 +4,10 @@ import {
   createConsentFormTemplate,
   updateConsentFormTemplate,
   deleteConsentFormTemplate,
-  uploadTemplate
+  uploadTemplate,
+  getPatientConsentForms,
+  uploadPatientConsentForm,
+  uploadPatientConsent
 } from '../controllers/consentFormController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
@@ -49,6 +52,24 @@ router.delete('/templates/:templateId',
   authenticateToken,
   requireRole(['superadmin']),
   deleteConsentFormTemplate
+);
+
+// Patient consent forms routes
+// Get patient consent forms
+router.get('/patients/:patientId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp', 'superadmin']),
+  getPatientConsentForms
+);
+
+// Upload patient consent form
+router.post('/patients/:patientId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'superadmin']),
+  uploadPatientConsent.single('file'),
+  uploadPatientConsentForm
 );
 
 export default router;
