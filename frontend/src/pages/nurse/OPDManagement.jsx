@@ -143,7 +143,7 @@ const OPDManagement = () => {
     try {
       const currentOffset = reset ? 0 : offsetRef.current;
       const limit = reset ? 3 : 10; // First load: 3 items, subsequent: 10 items
-      
+
       const result = await bookingService.getUpcomingAppointments({
         limit: limit,
         offset: currentOffset,
@@ -162,7 +162,7 @@ const OPDManagement = () => {
 
         hasMoreRef.current = result.data.hasMore || false;
         setHasMoreUpcoming(hasMoreRef.current);
-        
+
         if (hasMoreRef.current) {
           offsetRef.current = currentOffset + limit;
           setUpcomingOffset(offsetRef.current);
@@ -714,118 +714,141 @@ const OPDManagement = () => {
                   <table className="w-full min-w-[640px]">
                     <thead className="sticky top-0 bg-gray-50 z-10">
                       <tr className="border-b border-gray-200">
-                      {activeAppointmentTab === 'investigation' ? (
-                        <>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">PATIENT</th>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">DATE</th>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">UROLOGIST</th>
-                          <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">MRI</th>
-                          <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">BIOPSY</th>
-                          <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">TRUS</th>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">ACTIONS</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">PATIENT</th>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">DATE OF APPOINTMENT</th>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">UROLOGIST</th>
-                          <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">ACTIONS</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loadingAppointments ? (
-                      <tr>
-                        <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
-                          <div className="flex items-center justify-center space-x-2">
-                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
-                            <span className="text-gray-600 text-sm">Loading appointments...</span>
-                          </div>
-                        </td>
+                        {activeAppointmentTab === 'investigation' ? (
+                          <>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">PATIENT</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">DATE</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">UROLOGIST</th>
+                            <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">MRI</th>
+                            <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">BIOPSY</th>
+                            <th className="text-center py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">TRUS</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">ACTIONS</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">PATIENT</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">DATE OF APPOINTMENT</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">UROLOGIST</th>
+                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">ACTIONS</th>
+                          </>
+                        )}
                       </tr>
-                    ) : appointmentsError ? (
-                      <tr>
-                        <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
-                          <div className="text-red-600 text-sm mb-2">{appointmentsError}</div>
-                          <button
-                            onClick={() => fetchTodaysAppointments(activeAppointmentTab)}
-                            className="px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                          >
-                            Retry
-                          </button>
-                        </td>
-                      </tr>
-                    ) : appointments.filter(apt => apt.type === activeAppointmentTab && apt.status !== 'no_show').length === 0 ? (
-                      <tr>
-                        <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8 text-gray-500 text-sm">
-                          No {activeAppointmentTab} appointments found
-                        </td>
-                      </tr>
-                    ) : (
-                      appointments.filter(apt => apt.type === activeAppointmentTab && apt.status !== 'no_show').map((appointment) => (
-                        <tr key={appointment.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="py-3 sm:py-4 px-3 sm:px-6">
-                            <div className="flex items-center space-x-2">
-                              <div className="w-7 h-7 bg-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
-                                {getInitials(appointment.patientName)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-medium text-gray-900 text-xs sm:text-sm truncate">{appointment.patientName}</div>
-                                <div className="text-xs text-gray-600 truncate">
-                                  {appointment.age} years old
-                                </div>
-                                <div className="flex items-center mt-0.5">
-                                  <div className={`w-1 h-1 ${getPSAColor(appointment.psa).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
-                                  <span className={`text-xs ${getPSAColor(appointment.psa).textColor}`}>PSA: {appointment.psa}</span>
-                                </div>
-                              </div>
+                    </thead>
+                    <tbody>
+                      {loadingAppointments ? (
+                        <tr>
+                          <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
+                            <div className="flex items-center justify-center space-x-2">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                              <span className="text-gray-600 text-sm">Loading appointments...</span>
                             </div>
                           </td>
-                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
-                            <div className="font-medium truncate">{formatDate(appointment.appointmentDate)}</div>
-                            <div className="text-xs text-gray-500 truncate">{formatTime(appointment.appointmentTime)}</div>
-                          </td>
-                          {activeAppointmentTab === 'investigation' ? (
-                            <>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
-                                <div className="truncate">{appointment.urologist}</div>
-                              </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6">
-                                <div className="flex justify-center items-center">
-                                  {getStatusIcon('mri', appointment)}
-                                </div>
-                              </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6">
-                                <div className="flex justify-center items-center">
-                                  {getStatusIcon('biopsy', appointment)}
-                                </div>
-                              </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6">
-                                <div className="flex justify-center items-center">
-                                  {getStatusIcon('trus', appointment)}
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
-                              <div className="truncate">{appointment.urologist}</div>
-                            </td>
-                          )}
-                          <td className="py-3 sm:py-4 px-3 sm:px-6">
+                        </tr>
+                      ) : appointmentsError ? (
+                        <tr>
+                          <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
+                            <div className="text-red-600 text-sm mb-2">{appointmentsError}</div>
                             <button
-                              onClick={() => handleViewEdit(appointment)}
-                              className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
-                              aria-label={`View details for ${appointment.patientName}`}
+                              onClick={() => fetchTodaysAppointments(activeAppointmentTab)}
+                              className="px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
                             >
-                              View
+                              Retry
                             </button>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : appointments.filter(apt => apt.type === activeAppointmentTab && apt.status !== 'no_show').length === 0 ? (
+                        <tr>
+                          <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8 text-gray-500 text-sm">
+                            No {activeAppointmentTab} appointments found
+                          </td>
+                        </tr>
+                      ) : (
+                        appointments
+                          .filter(apt => apt.type === activeAppointmentTab && apt.status !== 'no_show')
+                          .sort((a, b) => {
+                            if (a.appointmentTime && !b.appointmentTime) return -1;
+                            if (!a.appointmentTime && b.appointmentTime) return 1;
+                            if (a.appointmentTime && b.appointmentTime) return a.appointmentTime.localeCompare(b.appointmentTime);
+                            return 0;
+                          })
+                          .map((appointment, index, array) => {
+                            const showSeparator = !appointment.appointmentTime && (index === 0 || array[index - 1].appointmentTime);
+                            return (
+                              <React.Fragment key={appointment.id}>
+                                {showSeparator && (
+                                  <tr>
+                                    <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="bg-slate-100 py-3 px-6 font-bold text-sm text-slate-700 border-y border-slate-200">
+                                      <div className="flex items-center">
+                                        <div className="w-2 h-2 rounded-full bg-purple-500 mr-2"></div>
+                                        Appointments Without Time Slots
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                                <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${!appointment.appointmentTime ? 'bg-slate-50/50' : ''}`}>
+                                  <td className="py-3 sm:py-4 px-3 sm:px-6">
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-7 h-7 bg-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                                        {getInitials(appointment.patientName)}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="font-medium text-gray-900 text-xs sm:text-sm truncate">{appointment.patientName}</div>
+                                        <div className="text-xs text-gray-600 truncate">
+                                          {appointment.age} years old
+                                        </div>
+                                        <div className="flex items-center mt-0.5">
+                                          <div className={`w-1 h-1 ${getPSAColor(appointment.psa).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
+                                          <span className={`text-xs ${getPSAColor(appointment.psa).textColor}`}>PSA: {appointment.psa}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
+                                    <div className="font-medium truncate">{formatDate(appointment.appointmentDate)}</div>
+                                    <div className="text-xs text-gray-500 truncate">{formatTime(appointment.appointmentTime)}</div>
+                                  </td>
+                                  {activeAppointmentTab === 'investigation' ? (
+                                    <>
+                                      <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
+                                        <div className="truncate">{appointment.urologist}</div>
+                                      </td>
+                                      <td className="py-3 sm:py-4 px-3 sm:px-6">
+                                        <div className="flex justify-center items-center">
+                                          {getStatusIcon('mri', appointment)}
+                                        </div>
+                                      </td>
+                                      <td className="py-3 sm:py-4 px-3 sm:px-6">
+                                        <div className="flex justify-center items-center">
+                                          {getStatusIcon('biopsy', appointment)}
+                                        </div>
+                                      </td>
+                                      <td className="py-3 sm:py-4 px-3 sm:px-6">
+                                        <div className="flex justify-center items-center">
+                                          {getStatusIcon('trus', appointment)}
+                                        </div>
+                                      </td>
+                                    </>
+                                  ) : (
+                                    <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
+                                      <div className="truncate">{appointment.urologist}</div>
+                                    </td>
+                                  )}
+                                  <td className="py-3 sm:py-4 px-3 sm:px-6">
+                                    <button
+                                      onClick={() => handleViewEdit(appointment)}
+                                      className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
+                                      aria-label={`View details for ${appointment.patientName}`}
+                                    >
+                                      View
+                                    </button>
+                                  </td>
+                                </tr>
+                              </React.Fragment>
+                            );
+                          })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -1109,7 +1132,7 @@ const OPDManagement = () => {
                       {upcomingAppointments.map((appointment, index) => {
                         const isLastItem = index === upcomingAppointments.length - 1;
                         const isFollowUp = appointment.type === 'automatic' || appointment.typeLabel === 'Follow-up Appointment';
-                        
+
                         return (
                           <div
                             key={appointment.id}

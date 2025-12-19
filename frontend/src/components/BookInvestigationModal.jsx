@@ -114,24 +114,24 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         });
 
         clearTimeout(timeoutId);
-        
+
         // If we get a 404, it's definitely not available
         if (response.status === 404) {
           return false;
         }
-        
+
         // If we get any other response, consider it available (even if it's an error, might be CORS)
         return response.ok;
       } catch (headError) {
         // If HEAD fails (CORS or network error), try GET with range request
         clearTimeout(timeoutId);
-        
+
         // If it's an abort (timeout), assume it might still be available (network issue)
         if (headError.name === 'AbortError') {
           console.warn('Template availability check timed out:', template.template_file_url);
           return null; // Uncertain - don't block printing
         }
-        
+
         const getController = new AbortController();
         const getTimeoutId = setTimeout(() => getController.abort(), 5000);
 
@@ -144,22 +144,22 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
           });
 
           clearTimeout(getTimeoutId);
-          
+
           // If we get a 404, it's definitely not available
           if (response.status === 404) {
             return false;
           }
-          
+
           return response.ok || response.status === 206; // 206 is Partial Content, which is fine
         } catch (getError) {
           clearTimeout(getTimeoutId);
-          
+
           // If it's a network/CORS error, don't mark as unavailable - might still work
           if (getError.name === 'AbortError' || getError.message?.includes('CORS') || getError.message?.includes('Failed to fetch')) {
             console.warn('Template availability check failed (network/CORS issue):', template.template_file_url);
             return null; // Uncertain - don't block printing
           }
-          
+
           console.warn(`Template file not accessible: ${template.template_file_url}`, getError);
           return false;
         }
@@ -170,7 +170,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         console.warn('Template availability check failed (network/CORS issue):', template.template_file_url);
         return null; // Uncertain - don't block printing
       }
-      
+
       console.warn(`Template file not accessible: ${template.template_file_url}`, error);
       return false;
     }
@@ -181,7 +181,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     setLoadingConsentForms(true);
     // Reset availability status
     setTemplateAvailability({ mri: null, trus: null, biopsy: null });
-    
+
     try {
       const response = await consentFormService.getConsentFormTemplates();
       if (response.success) {
@@ -291,8 +291,9 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!selectedDoctor || !selectedDate || !selectedTime) {
-      alert('Please fill in all required fields');
+    // Only doctor and date are required now - timeslot is optional
+    if (!selectedDoctor || !selectedDate) {
+      alert('Please select a urologist and date');
       return;
     }
 
@@ -309,7 +310,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         investigationType: selectedDoctorData.role, // Use doctor's role as investigation type
         investigationName: selectedDoctor,
         scheduledDate: selectedDate,
-        scheduledTime: selectedTime,
+        scheduledTime: selectedTime || null, // Allow null for no timeslot
         notes: notes || ''
       };
 
@@ -388,13 +389,13 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     if (!template.is_auto_generated && template.template_file_url) {
       const testType = testName.toLowerCase();
       const availability = templateAvailability[testType];
-      
+
       // Only block if explicitly marked as unavailable
       if (availability === false) {
         alert(`Template file appears to be unavailable for ${testName}. The file may have been moved or deleted. Please contact the administrator.`);
         return;
       }
-      
+
       // If still checking or available, proceed - let the browser handle any errors
     }
 
@@ -550,7 +551,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
               }
             }, 500);
           };
-          
+
           // If the window fails to load (e.g., 404), show an error after a delay
           setTimeout(() => {
             try {
@@ -874,8 +875,8 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900">Select Time</h3>
-                      <p className="text-sm text-gray-600">Choose your preferred appointment time</p>
+                      <h3 className="text-base font-semibold text-gray-900">Select Time <span className="text-gray-500 text-sm font-normal">(Optional)</span></h3>
+                      <p className="text-sm text-gray-600">Choose a time slot if needed, or leave blank</p>
                     </div>
                   </div>
 
@@ -922,10 +923,10 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                                 onClick={() => isAvailable && setSelectedTime(slot.time)}
                                 disabled={!isAvailable}
                                 className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${isSelected
-                                    ? 'bg-teal-600 text-white border-teal-600'
-                                    : isAvailable
-                                      ? 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-teal-50 hover:border-teal-300'
-                                      : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
+                                  ? 'bg-teal-600 text-white border-teal-600'
+                                  : isAvailable
+                                    ? 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-teal-50 hover:border-teal-300'
+                                    : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
                                   }`}
                               >
                                 <div className="text-center">
@@ -939,12 +940,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                       )}
 
                       {!selectedTime && (
-                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                           <div className="flex items-center space-x-2">
-                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <p className="text-sm text-blue-700 font-medium">Please select a time slot to continue</p>
+                            <p className="text-sm text-gray-600">No time slot selected - investigation will be scheduled without a specific time</p>
                           </div>
                         </div>
                       )}
@@ -987,13 +988,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         </div>
                       </div>
                       {mriConsentForm && (
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                          templateAvailability.mri === false 
-                            ? 'bg-red-500' 
-                            : templateAvailability.mri === true 
-                              ? 'bg-teal-500' 
-                              : 'bg-gray-400'
-                        }`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${templateAvailability.mri === false
+                          ? 'bg-red-500'
+                          : templateAvailability.mri === true
+                            ? 'bg-teal-500'
+                            : 'bg-gray-400'
+                          }`}>
                           {templateAvailability.mri === false ? (
                             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1012,11 +1012,10 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           type="button"
                           onClick={() => handlePrintConsentForm(mriConsentForm, 'MRI')}
                           disabled={!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                            !mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false
-                              ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
-                              : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
-                          }`}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false
+                            ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
+                            : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
+                            }`}
                         >
                           <IoPrint className="h-4 w-4 mr-2" />
                           Print
@@ -1071,13 +1070,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         </div>
                       </div>
                       {trusConsentForm && (
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                          templateAvailability.trus === false 
-                            ? 'bg-red-500' 
-                            : templateAvailability.trus === true 
-                              ? 'bg-teal-500' 
-                              : 'bg-gray-400'
-                        }`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${templateAvailability.trus === false
+                          ? 'bg-red-500'
+                          : templateAvailability.trus === true
+                            ? 'bg-teal-500'
+                            : 'bg-gray-400'
+                          }`}>
                           {templateAvailability.trus === false ? (
                             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1096,11 +1094,10 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           type="button"
                           onClick={() => handlePrintConsentForm(trusConsentForm, 'TRUS')}
                           disabled={!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                            !trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false
-                              ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
-                              : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
-                          }`}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false
+                            ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
+                            : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
+                            }`}
                         >
                           <IoPrint className="h-4 w-4 mr-2" />
                           Print
@@ -1155,13 +1152,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         </div>
                       </div>
                       {biopsyConsentForm && (
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                          templateAvailability.biopsy === false 
-                            ? 'bg-red-500' 
-                            : templateAvailability.biopsy === true 
-                              ? 'bg-teal-500' 
-                              : 'bg-gray-400'
-                        }`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${templateAvailability.biopsy === false
+                          ? 'bg-red-500'
+                          : templateAvailability.biopsy === true
+                            ? 'bg-teal-500'
+                            : 'bg-gray-400'
+                          }`}>
                           {templateAvailability.biopsy === false ? (
                             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1180,11 +1176,10 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           type="button"
                           onClick={() => handlePrintConsentForm(biopsyConsentForm, 'Biopsy')}
                           disabled={!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                            !biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false
-                              ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
-                              : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
-                          }`}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false
+                            ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
+                            : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
+                            }`}
                         >
                           <IoPrint className="h-4 w-4 mr-2" />
                           Print
@@ -1222,7 +1217,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!selectedDoctor || !selectedDate || !selectedTime}
+                disabled={!selectedDoctor || !selectedDate}
                 className="flex-1 bg-teal-600 text-white py-2.5 px-4 rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium text-sm"
               >
                 <div className="flex items-center justify-center space-x-2">

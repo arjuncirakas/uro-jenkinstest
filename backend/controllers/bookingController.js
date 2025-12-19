@@ -197,11 +197,11 @@ export const bookInvestigation = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    // Validate required fields
-    if (!investigationType || !investigationName || !scheduledDate || !scheduledTime) {
+    // Validate required fields - scheduledTime is now optional
+    if (!investigationType || !investigationName || !scheduledDate) {
       return res.status(400).json({
         success: false,
-        message: 'Investigation type, name, scheduled date, and time are required'
+        message: 'Investigation type, name, and scheduled date are required'
       });
     }
 
@@ -225,23 +225,25 @@ export const bookInvestigation = async (req, res) => {
       });
     }
 
-    // Check for conflicting investigation bookings at the same date/time
-    const conflictCheck = await client.query(
-      `SELECT ib.id, ib.investigation_name, p.first_name, p.last_name
-       FROM investigation_bookings ib
-       JOIN patients p ON ib.patient_id = p.id
-       WHERE ib.scheduled_date = $1 
-         AND ib.scheduled_time = $2 
-         AND ib.status IN ('scheduled', 'confirmed')`,
-      [scheduledDate, scheduledTime]
-    );
+    // Check for conflicting investigation bookings at the same date/time (only if time is provided)
+    if (scheduledTime) {
+      const conflictCheck = await client.query(
+        `SELECT ib.id, ib.investigation_name, p.first_name, p.last_name
+         FROM investigation_bookings ib
+         JOIN patients p ON ib.patient_id = p.id
+         WHERE ib.scheduled_date = $1 
+           AND ib.scheduled_time = $2 
+           AND ib.status IN ('scheduled', 'confirmed')`,
+        [scheduledDate, scheduledTime]
+      );
 
-    if (conflictCheck.rows.length > 0) {
-      const conflictingPatient = conflictCheck.rows[0];
-      return res.status(409).json({
-        success: false,
-        message: `Time slot already booked for ${conflictingPatient.first_name} ${conflictingPatient.last_name} with ${conflictingPatient.investigation_name}`
-      });
+      if (conflictCheck.rows.length > 0) {
+        const conflictingPatient = conflictCheck.rows[0];
+        return res.status(409).json({
+          success: false,
+          message: `Time slot already booked for ${conflictingPatient.first_name} ${conflictingPatient.last_name} with ${conflictingPatient.investigation_name}`
+        });
+      }
     }
 
     // Insert investigation booking
@@ -256,7 +258,7 @@ export const bookInvestigation = async (req, res) => {
         investigationType,
         investigationName,
         scheduledDate,
-        scheduledTime,
+        scheduledTime || null, // Allow null for investigations without specific time
         notes || '',
         userId
       ]
@@ -982,7 +984,6 @@ export const getTodaysAppointments = async (req, res) => {
         JOIN patients p ON ib.patient_id = p.id
         WHERE ib.scheduled_date = $1
           AND ib.scheduled_date IS NOT NULL
-          AND ib.scheduled_time IS NOT NULL
           AND ib.status NOT IN ('requested', 'requested_urgent')
         ORDER BY ib.scheduled_time
       `;
@@ -3145,7 +3146,6 @@ export const getAllAppointments = async (req, res) => {
       INNER JOIN patients p ON ib.patient_id = p.id
       WHERE ib.status != 'cancelled'
         AND ib.scheduled_date IS NOT NULL
-        AND ib.scheduled_time IS NOT NULL
         AND ib.status NOT IN ('requested', 'requested_urgent')
       
       UNION ALL

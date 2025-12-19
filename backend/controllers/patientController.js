@@ -217,7 +217,9 @@ export const addPatient = async (req, res) => {
       priorBiopsy,
       priorBiopsyDate,
       gleasonScore,
-      comorbidities // Array of comorbidities
+      comorbidities, // Array of comorbidities
+      gpName,
+      gpContact
     } = req.body;
 
     // Calculate dateOfBirth from age if dateOfBirth is not provided but age is
@@ -247,6 +249,24 @@ export const addPatient = async (req, res) => {
         success: false,
         message: 'Priority must be Low, Normal, High, or Urgent'
       });
+    }
+
+    // Validate GP Contact Email if GP Name is provided
+    if (gpName && gpName.trim() !== '') {
+      if (!gpContact || gpContact.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'GP Email is required when GP Name is provided'
+        });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(gpContact)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please enter a valid GP email address'
+        });
+      }
     }
 
     // Check if email already exists (if provided)
@@ -333,11 +353,11 @@ export const addPatient = async (req, res) => {
 
     // Format date fields to prevent timezone conversion issues
     // Ensure empty strings, "no", null, undefined, or invalid values are converted to null
-    const formattedDateOfBirth = (finalDateOfBirth && finalDateOfBirth !== '' && finalDateOfBirth !== 'no' && finalDateOfBirth !== 'No' && finalDateOfBirth !== 'NO') 
+    const formattedDateOfBirth = (finalDateOfBirth && finalDateOfBirth !== '' && finalDateOfBirth !== 'no' && finalDateOfBirth !== 'No' && finalDateOfBirth !== 'NO')
       ? formatDateOnly(finalDateOfBirth) : null;
-    const formattedReferralDate = (referralDate && referralDate !== '' && referralDate !== 'no' && referralDate !== 'No' && referralDate !== 'NO' && referralDate !== null && referralDate !== undefined) 
+    const formattedReferralDate = (referralDate && referralDate !== '' && referralDate !== 'no' && referralDate !== 'No' && referralDate !== 'NO' && referralDate !== null && referralDate !== undefined)
       ? formatDateOnly(referralDate) : null;
-    const formattedInitialPSADate = (initialPSADate && initialPSADate !== '' && initialPSADate !== 'no' && initialPSADate !== 'No' && initialPSADate !== 'NO' && initialPSADate !== null && initialPSADate !== undefined) 
+    const formattedInitialPSADate = (initialPSADate && initialPSADate !== '' && initialPSADate !== 'no' && initialPSADate !== 'No' && initialPSADate !== 'NO' && initialPSADate !== null && initialPSADate !== undefined)
       ? formatDateOnly(initialPSADate) : null;
 
     // Format prior biopsy date if provided and priorBiopsy is 'yes'
@@ -347,20 +367,20 @@ export const addPatient = async (req, res) => {
       // Convert to string and trim
       const dateStr = String(priorBiopsyDate).trim().toLowerCase();
       // Check if it's a valid date string (not "no", not empty, looks like a date)
-      if (dateStr !== '' && 
-          dateStr !== 'no' && 
-          dateStr !== 'none' &&
-          (dateStr.match(/^\d{4}-\d{2}-\d{2}$/) || dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/) || !isNaN(Date.parse(dateStr)))) {
+      if (dateStr !== '' &&
+        dateStr !== 'no' &&
+        dateStr !== 'none' &&
+        (dateStr.match(/^\d{4}-\d{2}-\d{2}$/) || dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/) || !isNaN(Date.parse(dateStr)))) {
         try {
           const formatted = formatDateOnly(String(priorBiopsyDate).trim());
           // Double-check the result is valid
-          if (formatted && 
-              formatted !== 'no' && 
-              formatted !== 'No' && 
-              formatted !== 'NO' &&
-              formatted !== 'Invalid Date' && 
-              formatted !== 'NaN' &&
-              !isNaN(Date.parse(formatted))) {
+          if (formatted &&
+            formatted !== 'no' &&
+            formatted !== 'No' &&
+            formatted !== 'NO' &&
+            formatted !== 'Invalid Date' &&
+            formatted !== 'NaN' &&
+            !isNaN(Date.parse(formatted))) {
             formattedPriorBiopsyDate = formatted;
           } else {
             console.warn('Invalid formatted prior biopsy date, setting to null:', formatted);
@@ -385,8 +405,8 @@ export const addPatient = async (req, res) => {
       : null;
 
     // Final safety check: Ensure formattedPriorBiopsyDate is never "no" or invalid
-    if (formattedPriorBiopsyDate === 'no' || formattedPriorBiopsyDate === 'No' || formattedPriorBiopsyDate === 'NO' || 
-        formattedPriorBiopsyDate === 'Invalid Date' || (formattedPriorBiopsyDate && isNaN(Date.parse(formattedPriorBiopsyDate)))) {
+    if (formattedPriorBiopsyDate === 'no' || formattedPriorBiopsyDate === 'No' || formattedPriorBiopsyDate === 'NO' ||
+      formattedPriorBiopsyDate === 'Invalid Date' || (formattedPriorBiopsyDate && isNaN(Date.parse(formattedPriorBiopsyDate)))) {
       console.warn('Invalid prior biopsy date detected, setting to null:', formattedPriorBiopsyDate);
       formattedPriorBiopsyDate = null;
     }
@@ -399,29 +419,32 @@ export const addPatient = async (req, res) => {
         initial_psa_date, medical_history, current_medications, allergies, 
         social_history, family_history, assigned_urologist, emergency_contact_name, emergency_contact_phone, 
         emergency_contact_relationship, priority, notes, created_by, referred_by_gp_id, triage_symptoms,
-        dre_done, dre_findings, prior_biopsy, prior_biopsy_date, gleason_score, comorbidities
+        dre_done, dre_findings, prior_biopsy, prior_biopsy_date, gleason_score, comorbidities,
+        gp_name, gp_contact
       ) VALUES (
         $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12::date, $13, $14::date, $15, 
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32::date, $33, $34
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32::date, $33, $34,
+        $35, $36
       ) RETURNING *`,
       [
-        upi, firstName, lastName, 
+        upi, firstName, lastName,
         // Ensure dateOfBirth is never "no" - use null instead
         (formattedDateOfBirth && formattedDateOfBirth !== 'no' && formattedDateOfBirth !== 'No' && formattedDateOfBirth !== 'NO') ? formattedDateOfBirth : null,
         phone, email, address,
-        postcode, city, state, referringDepartment, 
+        postcode, city, state, referringDepartment,
         // Ensure referralDate is never "no" - use null instead
-        (formattedReferralDate && formattedReferralDate !== 'no' && formattedReferralDate !== 'No' && formattedReferralDate !== 'NO') ? formattedReferralDate : null, 
+        (formattedReferralDate && formattedReferralDate !== 'no' && formattedReferralDate !== 'No' && formattedReferralDate !== 'NO') ? formattedReferralDate : null,
         initialPSA,
         // Ensure initialPSADate is never "no" - use null instead
         (formattedInitialPSADate && formattedInitialPSADate !== 'no' && formattedInitialPSADate !== 'No' && formattedInitialPSADate !== 'NO') ? formattedInitialPSADate : null,
         medicalHistory, currentMedications, allergies,
         socialHistory || '', familyHistory || '', finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
         emergencyContactRelationship, priority, notes || '', req.user.id, finalReferredByGpId, triageSymptoms || null,
-        dreDone || false, dreFindings || null, priorBiopsy || 'no', 
+        dreDone || false, dreFindings || null, priorBiopsy || 'no',
         // Ensure prior_biopsy_date is never "no" - use null instead
-        (formattedPriorBiopsyDate && formattedPriorBiopsyDate !== 'no' && formattedPriorBiopsyDate !== 'No' && formattedPriorBiopsyDate !== 'NO') ? formattedPriorBiopsyDate : null, 
-        gleasonScore || null, comorbiditiesJson
+        (formattedPriorBiopsyDate && formattedPriorBiopsyDate !== 'no' && formattedPriorBiopsyDate !== 'No' && formattedPriorBiopsyDate !== 'NO') ? formattedPriorBiopsyDate : null,
+        gleasonScore || null, comorbiditiesJson,
+        gpName || null, gpContact || null
       ]
     );
 
@@ -553,7 +576,9 @@ export const addPatient = async (req, res) => {
               console.error('Error parsing comorbidities:', e);
               return [];
             }
-          })() : []
+          })() : [],
+          gpName: newPatient.gp_name,
+          gpContact: newPatient.gp_contact
         }
       }
     });
@@ -758,6 +783,7 @@ export const getPatients = async (req, res) => {
         p.care_pathway, p.created_by, p.created_at, p.updated_at,
         p.triage_symptoms, p.dre_done, p.dre_findings, p.prior_biopsy,
         p.prior_biopsy_date, p.gleason_score, p.comorbidities,
+        p.gp_name, p.gp_contact,
         TO_CHAR(p.date_of_birth, 'YYYY-MM-DD') as date_of_birth,
         TO_CHAR(p.referral_date, 'YYYY-MM-DD') as referral_date,
         TO_CHAR(p.initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,

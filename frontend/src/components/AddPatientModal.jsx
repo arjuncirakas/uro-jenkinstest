@@ -59,6 +59,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     familyHistory: '',
     assignedUrologist: '',
     referringGP: '',
+    gpName: '',
+    gpContact: '',
 
     // Emergency Contact
     emergencyContactName: '',
@@ -115,7 +117,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
   const [urologists, setUrologists] = useState([]);
   const [loadingUrologists, setLoadingUrologists] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState('');
-  
+
 
 
   // Fetch urologists when modal opens
@@ -296,6 +298,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       }
     });
 
+    // Validate GP Contact - must be valid email if provided
+    if (formData.gpContact && formData.gpContact.trim() !== '') {
+      // Basic email regex
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.gpContact)) {
+        newErrors.gpContact = 'Please enter a valid email address';
+      }
+    } else if (formData.gpName && formData.gpName.trim() !== '') {
+      // If GP Name is provided, GP Contact (Email) is required as per user request
+      // "just email is required for the gp contact"
+      newErrors.gpContact = 'GP Email is required when GP Name is provided';
+    }
+
     setErrors(newErrors);
 
     // Scroll to first error if validation fails
@@ -397,7 +412,9 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         dreFindings: Array.isArray(formData.dreFindings) ? formData.dreFindings.join(', ') : (formData.dreFindings || ''),
         priorBiopsy: formData.priorBiopsy || 'no',
         gleasonScore: formData.gleasonScore || '',
-        comorbidities: formData.comorbidities || []
+        comorbidities: formData.comorbidities || [],
+        gpName: formData.gpName.trim(),
+        gpContact: formData.gpContact.trim()
       };
 
       // Only include priorBiopsyDate in payload if priorBiopsy is 'yes' and date is provided
@@ -501,7 +518,10 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       allergies: '',
       socialHistory: '',
       familyHistory: '',
+      familyHistory: '',
       assignedUrologist: '',
+      gpName: '',
+      gpContact: '',
       emergencyContactName: '',
       emergencyContactPhone: '',
       emergencyContactRelationship: '',
@@ -606,7 +626,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       };
       return updated;
     });
-    
+
     // Clear error when IPSS score is selected for LUTS or Nocturia
     if (field === 'ipssScore' && value) {
       setErrors(prev => {
@@ -636,7 +656,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     };
 
     const capitalizedName = capitalizeFirstLetter(customSymptomName);
-    
+
     // Validate IPSS score for LUTS and Nocturia
     if ((capitalizedName === 'LUTS' || capitalizedName === 'Nocturia') && !customSymptomIpssScore) {
       // Show error - you could add a state for custom symptom errors here
@@ -721,21 +741,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.firstName
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.firstName
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.firstName
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.firstName
                           ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
                           : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.firstName
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.firstName ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.firstName
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.firstName ? '!text-red-500' : ''}`}
                     >
                       First Name <span className="text-red-500">*</span>
                     </label>
@@ -752,21 +770,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.lastName
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.lastName
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.lastName
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.lastName
                           ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
                           : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.lastName
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.lastName ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.lastName
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.lastName ? '!text-red-500' : ''}`}
                     >
                       Last Name <span className="text-red-500">*</span>
                     </label>
@@ -784,20 +800,18 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.dateOfBirth}
                       onChange={handleInputChange}
                       max={new Date().toISOString().split('T')[0]}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.dateOfBirth && !formData.age
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.dateOfBirth
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.dateOfBirth && !formData.age
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.dateOfBirth
                           ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
                           : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.dateOfBirth
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.dateOfBirth && !formData.age ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.dateOfBirth
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.dateOfBirth && !formData.age ? '!text-red-500' : ''}`}
                     >
                       Date of Birth {formData.age ? '' : <span className="text-red-500">*</span>}
                     </label>
@@ -816,21 +830,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       onChange={handleInputChange}
                       min="0"
                       max="120"
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.age && !formData.dateOfBirth
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.age
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.age && !formData.dateOfBirth
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.age
                           ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
                           : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.age
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.age && !formData.dateOfBirth ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.age
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.age && !formData.dateOfBirth ? '!text-red-500' : ''}`}
                     >
                       Age {formData.dateOfBirth ? '' : <span className="text-red-500">*</span>}
                     </label>
@@ -847,21 +859,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.phone
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.phone
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.phone
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.phone
                           ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
                           : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.phone
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.phone ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.phone
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.phone ? '!text-red-500' : ''}`}
                     >
                       Phone Number <span className="text-red-500">*</span>
                     </label>
@@ -878,21 +888,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.email
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.email
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.email
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.email
                           ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
                           : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.email
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.email ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.email
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.email ? '!text-red-500' : ''}`}
                     >
                       Email Address
                     </label>
@@ -910,20 +918,18 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     name="address"
                     value={formData.address}
                     onChange={handleInputChange}
-                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                      errors.address
-                        ? 'border-red-500 focus:border-red-500 bg-red-50'
-                        : formData.address
+                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.address
+                      ? 'border-red-500 focus:border-red-500 bg-red-50'
+                      : formData.address
                         ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
                         : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                    } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                     placeholder=" "
                   />
                   <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.address
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
+                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.address
+                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                      : 'text-gray-500'
                       } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.address ? '!text-red-500' : ''}`}
                   >
                     Address <span className="text-red-500">*</span>
@@ -942,19 +948,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="postcode"
                       value={formData.postcode}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        formData.postcode
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${formData.postcode
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.postcode
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.postcode
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Postcode
                     </label>
@@ -966,19 +970,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="city"
                       value={formData.city}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        formData.city
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${formData.city
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.city
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.city
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       City
                     </label>
@@ -989,11 +991,10 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="state"
                       value={formData.state}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                        formData.state
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${formData.state
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                     >
                       <option value="" disabled hidden>Select state</option>
                       <option value="NSW">NSW</option>
@@ -1006,17 +1007,81 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       <option value="NT">NT</option>
                     </select>
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.state
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.state
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       State
                     </label>
-                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
-                      formData.state ? 'text-teal-500' : 'text-gray-400'
-                    }`} />
+                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${formData.state ? 'text-teal-500' : 'text-gray-400'
+                      }`} />
+                  </div>
+                </div>
+              </div>
+
+              {/* GP Information */}
+              <div className="bg-white border border-gray-200 rounded p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                    <UserPlus className="w-6 h-6 text-teal-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900">GP Information</h4>
+                    <p className="text-sm text-gray-600">Details of the General Practitioner</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative mb-3">
+                    <input
+                      type="text"
+                      name="gpName"
+                      value={formData.gpName}
+                      onChange={handleInputChange}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${formData.gpName
+                        ? 'border-teal-500 focus:border-teal-500 bg-white'
+                        : 'border-gray-300 focus:border-teal-500 bg-white'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      placeholder=" "
+                    />
+                    <label
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.gpName
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                    >
+                      GP Name
+                    </label>
+                  </div>
+
+                  <div className="relative mb-3">
+                    <input
+                      type="email"
+                      name="gpContact"
+                      value={formData.gpContact}
+                      onChange={handleInputChange}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.gpContact
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.gpContact
+                          ? 'border-teal-500 focus:border-teal-500 bg-white'
+                          : 'border-gray-300 focus:border-teal-500 bg-white'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      placeholder=" "
+                    />
+                    <label
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.gpContact
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.gpContact ? '!text-red-500' : ''}`}
+                    >
+                      GP Email <span className="text-red-500">*</span>
+                    </label>
+                    {errors.gpContact && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.gpContact}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1040,21 +1105,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="emergencyContactName"
                       value={formData.emergencyContactName}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.emergencyContactName
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.emergencyContactName
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.emergencyContactName
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.emergencyContactName
                           ? 'border-teal-500 focus:border-teal-500 bg-white'
                           : 'border-gray-300 focus:border-teal-500 bg-white'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.emergencyContactName
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.emergencyContactName
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Contact Name <span className="text-red-500">*</span>
                     </label>
@@ -1071,21 +1134,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="emergencyContactPhone"
                       value={formData.emergencyContactPhone}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.emergencyContactPhone
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.emergencyContactPhone
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.emergencyContactPhone
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.emergencyContactPhone
                           ? 'border-teal-500 focus:border-teal-500 bg-white'
                           : 'border-gray-300 focus:border-teal-500 bg-white'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.emergencyContactPhone
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.emergencyContactPhone ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.emergencyContactPhone
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.emergencyContactPhone ? '!text-red-500' : ''}`}
                     >
                       Contact Phone <span className="text-red-500">*</span>
                     </label>
@@ -1102,21 +1163,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="emergencyContactRelationship"
                       value={formData.emergencyContactRelationship}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.emergencyContactRelationship
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.emergencyContactRelationship
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.emergencyContactRelationship
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.emergencyContactRelationship
                           ? 'border-teal-500 focus:border-teal-500 bg-white'
                           : 'border-gray-300 focus:border-teal-500 bg-white'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.emergencyContactRelationship
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.emergencyContactRelationship ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.emergencyContactRelationship
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.emergencyContactRelationship ? '!text-red-500' : ''}`}
                     >
                       Relationship <span className="text-red-500">*</span>
                     </label>
@@ -1148,13 +1207,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.assignedUrologist}
                       onChange={handleInputChange}
                       disabled={loadingUrologists}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                        loadingUrologists 
-                          ? 'bg-gray-100 cursor-not-allowed border-gray-300' 
-                          : formData.assignedUrologist
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${loadingUrologists
+                        ? 'bg-gray-100 cursor-not-allowed border-gray-300'
+                        : formData.assignedUrologist
                           ? 'bg-gray-50 border-teal-500 focus:border-teal-500'
                           : 'bg-gray-50 border-gray-300 focus:border-teal-500'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                     >
                       <option value="" disabled hidden>{loadingUrologists ? 'Loading urologists...' : 'Select urologist'}</option>
                       {urologists.map((urologist) => (
@@ -1164,17 +1222,15 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       ))}
                     </select>
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out -translate-y-[0.9rem] scale-[0.8] bg-gray-50 px-1 ${
-                        formData.assignedUrologist
-                          ? 'text-teal-600'
-                          : 'text-gray-500'
-                      } peer-focus:text-teal-600 motion-reduce:transition-none ${loadingUrologists ? 'text-gray-400' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out -translate-y-[0.9rem] scale-[0.8] bg-gray-50 px-1 ${formData.assignedUrologist
+                        ? 'text-teal-600'
+                        : 'text-gray-500'
+                        } peer-focus:text-teal-600 motion-reduce:transition-none ${loadingUrologists ? 'text-gray-400' : ''}`}
                     >
                       {loadingUrologists ? 'Loading urologists...' : 'Assigned Urologist'}
                     </label>
-                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
-                      loadingUrologists ? 'text-gray-400' : formData.assignedUrologist ? 'text-teal-500' : 'text-gray-400'
-                    }`} />
+                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${loadingUrologists ? 'text-gray-400' : formData.assignedUrologist ? 'text-teal-500' : 'text-gray-400'
+                      }`} />
                     {urologists.length === 0 && !loadingUrologists && (
                       <p className="mt-1 text-sm text-gray-500">
                         No urologists available. Please contact administrator.
@@ -1188,18 +1244,16 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="referralDate"
                       value={formData.referralDate}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        formData.referralDate
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${formData.referralDate
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.referralDate
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.referralDate
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Referral Date
                     </label>
@@ -1213,11 +1267,10 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     <div
                       key={index}
                       onClick={() => handleSymptomCheckboxChange(index)}
-                      className={`border rounded-lg transition-all duration-200 cursor-pointer ${
-                        symptom.checked
-                          ? 'border-teal-500 bg-teal-50 shadow-sm'
-                          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                      } ${symptom.isCustom ? 'border-blue-300' : ''}`}
+                      className={`border rounded-lg transition-all duration-200 cursor-pointer ${symptom.checked
+                        ? 'border-teal-500 bg-teal-50 shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                        } ${symptom.isCustom ? 'border-blue-300' : ''}`}
                     >
                       <div className="flex items-center gap-3 p-4">
                         <input
@@ -1229,9 +1282,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                         />
                         <div className="flex-1 flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className={`text-sm font-medium ${
-                              symptom.checked ? 'text-teal-900' : 'text-gray-700'
-                            }`}>
+                            <span className={`text-sm font-medium ${symptom.checked ? 'text-teal-900' : 'text-gray-700'
+                              }`}>
                               {symptom.name}
                             </span>
                             {symptom.isCustom && (
@@ -1258,23 +1310,21 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       {symptom.checked && (
                         <div className="px-4 pb-4 pt-3 border-t border-gray-200" onClick={(e) => e.stopPropagation()}>
                           <div className="space-y-4">
-                            <div className={`grid gap-4 ${
-                              symptom.name === 'LUTS' || symptom.name === 'Nocturia'
-                                ? 'grid-cols-1 md:grid-cols-2' 
-                                : 'grid-cols-1'
-                            }`}>
+                            <div className={`grid gap-4 ${symptom.name === 'LUTS' || symptom.name === 'Nocturia'
+                              ? 'grid-cols-1 md:grid-cols-2'
+                              : 'grid-cols-1'
+                              }`}>
                               {(symptom.name === 'LUTS' || symptom.name === 'Nocturia') && (
                                 <div className="relative mb-3">
                                   <select
                                     value={symptom.ipssScore}
                                     onChange={(e) => handleSymptomFieldChange(index, 'ipssScore', e.target.value)}
-                                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                                      errors.symptoms && errors.symptoms[`${index}_ipss`]
-                                        ? 'border-red-500 focus:border-red-500 bg-red-50'
-                                        : symptom.ipssScore
+                                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${errors.symptoms && errors.symptoms[`${index}_ipss`]
+                                      ? 'border-red-500 focus:border-red-500 bg-red-50'
+                                      : symptom.ipssScore
                                         ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
                                         : 'border-gray-300 focus:border-teal-500 bg-teal-50'
-                                    } motion-reduce:transition-none`}
+                                      } motion-reduce:transition-none`}
                                   >
                                     <option value="" disabled>Select IPSS Score</option>
                                     <option value="Mild">Mild (0-7 points)</option>
@@ -1282,21 +1332,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                     <option value="Severe">Severe (20-35 points)</option>
                                   </select>
                                   <label
-                                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${
-                                      errors.symptoms && errors.symptoms[`${index}_ipss`]
-                                        ? 'text-red-500'
-                                        : symptom.ipssScore
+                                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${errors.symptoms && errors.symptoms[`${index}_ipss`]
+                                      ? 'text-red-500'
+                                      : symptom.ipssScore
                                         ? 'text-teal-600'
                                         : 'text-gray-500'
-                                    } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                                      } peer-focus:text-teal-600 motion-reduce:transition-none`}
                                   >
                                     IPSS Score <span className="text-red-500">*</span>
                                   </label>
-                                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${
-                                    errors.symptoms && errors.symptoms[`${index}_ipss`]
-                                      ? 'text-red-500'
-                                      : symptom.ipssScore ? 'text-teal-500' : 'text-gray-400'
-                                  }`} />
+                                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${errors.symptoms && errors.symptoms[`${index}_ipss`]
+                                    ? 'text-red-500'
+                                    : symptom.ipssScore ? 'text-teal-500' : 'text-gray-400'
+                                    }`} />
                                   {errors.symptoms && errors.symptoms[`${index}_ipss`] && (
                                     <p className="mt-1 text-xs text-red-600">
                                       {errors.symptoms[`${index}_ipss`]}
@@ -1313,19 +1361,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                       min="0"
                                       value={symptom.duration}
                                       onChange={(e) => handleSymptomFieldChange(index, 'duration', e.target.value)}
-                                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                                        symptom.duration
-                                          ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
-                                          : 'border-gray-300 focus:border-teal-500 bg-teal-50'
-                                      } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${symptom.duration
+                                        ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                        : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                        } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                                       placeholder=" "
                                     />
                                     <label
-                                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs ${
-                                        symptom.duration
-                                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-teal-50 px-1'
-                                          : 'text-gray-500'
-                                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-teal-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-teal-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs ${symptom.duration
+                                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-teal-50 px-1'
+                                        : 'text-gray-500'
+                                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-teal-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-teal-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                                     >
                                       Duration of Symptoms
                                     </label>
@@ -1334,33 +1380,30 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                     <select
                                       value={symptom.durationUnit}
                                       onChange={(e) => handleSymptomFieldChange(index, 'durationUnit', e.target.value)}
-                                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                                        symptom.durationUnit
-                                          ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
-                                          : 'border-gray-300 focus:border-teal-500 bg-teal-50'
-                                      } motion-reduce:transition-none`}
+                                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${symptom.durationUnit
+                                        ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                        : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                        } motion-reduce:transition-none`}
                                     >
                                       <option value="weeks">Weeks</option>
                                       <option value="months">Months</option>
                                       <option value="years">Years</option>
                                     </select>
                                     <label
-                                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${
-                                        symptom.durationUnit
-                                          ? 'text-teal-600'
-                                          : 'text-gray-500'
-                                      } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${symptom.durationUnit
+                                        ? 'text-teal-600'
+                                        : 'text-gray-500'
+                                        } peer-focus:text-teal-600 motion-reduce:transition-none`}
                                     >
                                       Unit
                                     </label>
-                                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${
-                                      symptom.durationUnit ? 'text-teal-500' : 'text-gray-400'
-                                    }`} />
+                                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${symptom.durationUnit ? 'text-teal-500' : 'text-gray-400'
+                                      }`} />
                                   </div>
                                 </div>
                               </div>
                             </div>
-                            
+
                             {/* Notes field for all symptoms */}
                             <div className={`grid gap-4 ${symptom.name === 'Nocturia' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                               {symptom.name === 'Nocturia' && (
@@ -1371,19 +1414,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                     step="1"
                                     value={symptom.frequency}
                                     onChange={(e) => handleSymptomFieldChange(index, 'frequency', e.target.value)}
-                                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                                      symptom.frequency
-                                        ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
-                                        : 'border-gray-300 focus:border-teal-500 bg-teal-50'
-                                    } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${symptom.frequency
+                                      ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                      : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                      } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                                     placeholder=" "
                                   />
                                   <label
-                                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs ${
-                                      symptom.frequency
-                                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-teal-50 px-1'
-                                        : 'text-gray-500'
-                                    } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-teal-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-teal-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs ${symptom.frequency
+                                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-teal-50 px-1'
+                                      : 'text-gray-500'
+                                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-teal-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-teal-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                                   >
                                     Frequency (times per night)
                                   </label>
@@ -1395,19 +1436,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                   value={symptom.notes}
                                   onChange={(e) => handleSymptomFieldChange(index, 'notes', e.target.value)}
                                   rows={3}
-                                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear resize-none ${
-                                    symptom.notes
-                                      ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
-                                      : 'border-gray-300 focus:border-teal-500 bg-teal-50'
-                                  } focus:placeholder:opacity-100 peer-focus:text-teal-600 motion-reduce:transition-none`}
+                                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] text-sm leading-[1.6] outline-none transition-all duration-200 ease-linear resize-none ${symptom.notes
+                                    ? 'border-teal-500 focus:border-teal-500 bg-teal-50'
+                                    : 'border-gray-300 focus:border-teal-500 bg-teal-50'
+                                    } focus:placeholder:opacity-100 peer-focus:text-teal-600 motion-reduce:transition-none`}
                                   placeholder=" "
                                 />
                                 <label
-                                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${
-                                    symptom.notes
-                                      ? 'text-teal-600'
-                                      : 'text-gray-500'
-                                  } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-teal-50 px-1 ${symptom.notes
+                                    ? 'text-teal-600'
+                                    : 'text-gray-500'
+                                    } peer-focus:text-teal-600 motion-reduce:transition-none`}
                                 >
                                   Notes
                                 </label>
@@ -1436,19 +1475,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     value={formData.medicalHistory}
                     onChange={handleInputChange}
                     rows={3}
-                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
-                      formData.medicalHistory
-                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                    } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${formData.medicalHistory
+                      ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                      : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                     placeholder=" "
                   />
                   <label
-                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                      formData.medicalHistory
-                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                        : 'text-gray-500'
-                    } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.medicalHistory
+                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                      : 'text-gray-500'
+                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                   >
                     Medical History
                   </label>
@@ -1461,19 +1498,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.currentMedications}
                       onChange={handleInputChange}
                       rows={3}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
-                        formData.currentMedications
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${formData.currentMedications
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.currentMedications
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.currentMedications
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Current Medications
                     </label>
@@ -1485,19 +1520,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.allergies}
                       onChange={handleInputChange}
                       rows={3}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
-                        formData.allergies
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${formData.allergies
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.allergies
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.allergies
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Allergies
                     </label>
@@ -1511,19 +1544,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.socialHistory}
                       onChange={handleInputChange}
                       rows={3}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
-                        formData.socialHistory
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${formData.socialHistory
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.socialHistory
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.socialHistory
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Social History
                     </label>
@@ -1535,19 +1566,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       value={formData.familyHistory}
                       onChange={handleInputChange}
                       rows={3}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
-                        formData.familyHistory
-                          ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                          : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${formData.familyHistory
+                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.familyHistory
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.familyHistory
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Family History
                     </label>
@@ -1576,21 +1605,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="initialPSA"
                       value={formData.initialPSA}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.initialPSA
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.initialPSA
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.initialPSA
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.initialPSA
                           ? 'border-teal-500 focus:border-teal-500 bg-white'
                           : 'border-gray-300 focus:border-teal-500 bg-white'
-                      } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.initialPSA
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.initialPSA ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.initialPSA
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.initialPSA ? '!text-red-500' : ''}`}
                     >
                       Initial PSA Level <span className="text-red-500">*</span>
                     </label>
@@ -1607,21 +1634,19 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       name="initialPSADate"
                       value={formData.initialPSADate}
                       onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        errors.initialPSADate
-                          ? 'border-red-500 focus:border-red-500 bg-red-50'
-                          : formData.initialPSADate
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.initialPSADate
+                        ? 'border-red-500 focus:border-red-500 bg-red-50'
+                        : formData.initialPSADate
                           ? 'border-teal-500 focus:border-teal-500 bg-white'
                           : 'border-gray-300 focus:border-teal-500 bg-white'
-                      } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                        } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        formData.initialPSADate
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.initialPSADate ? '!text-red-500' : ''}`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.initialPSADate
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.initialPSADate ? '!text-red-500' : ''}`}
                     >
                       PSA Test Date <span className="text-red-500">*</span>
                     </label>
@@ -1669,13 +1694,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                         </label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {['Normal', 'Enlarged', 'Nodule', 'Suspicious'].map((finding) => (
-                            <label 
-                              key={finding} 
-                              className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                formData.dreFindings.includes(finding)
-                                  ? 'border-teal-500 bg-teal-50 shadow-sm'
-                                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                              }`}
+                            <label
+                              key={finding}
+                              className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${formData.dreFindings.includes(finding)
+                                ? 'border-teal-500 bg-teal-50 shadow-sm'
+                                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                                }`}
                             >
                               <input
                                 type="checkbox"
@@ -1696,9 +1720,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                                 className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
                                 onClick={(e) => e.stopPropagation()}
                               />
-                              <span className={`text-sm font-medium ${
-                                formData.dreFindings.includes(finding) ? 'text-teal-900' : 'text-gray-700'
-                              }`}>
+                              <span className={`text-sm font-medium ${formData.dreFindings.includes(finding) ? 'text-teal-900' : 'text-gray-700'
+                                }`}>
                                 {finding}
                               </span>
                             </label>
@@ -1728,9 +1751,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                           onChange={handleInputChange}
                           className="w-5 h-5 text-teal-600 border-gray-300 focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
                         />
-                        <span className={`text-sm font-medium transition-colors ${
-                          formData.priorBiopsy === 'no' ? 'text-teal-700' : 'text-gray-700 group-hover:text-gray-900'
-                        }`}>
+                        <span className={`text-sm font-medium transition-colors ${formData.priorBiopsy === 'no' ? 'text-teal-700' : 'text-gray-700 group-hover:text-gray-900'
+                          }`}>
                           No
                         </span>
                       </label>
@@ -1743,9 +1765,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                           onChange={handleInputChange}
                           className="w-5 h-5 text-teal-600 border-gray-300 focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
                         />
-                        <span className={`text-sm font-medium transition-colors ${
-                          formData.priorBiopsy === 'yes' ? 'text-teal-700' : 'text-gray-700 group-hover:text-gray-900'
-                        }`}>
+                        <span className={`text-sm font-medium transition-colors ${formData.priorBiopsy === 'yes' ? 'text-teal-700' : 'text-gray-700 group-hover:text-gray-900'
+                          }`}>
                           Yes
                         </span>
                       </label>
@@ -1761,19 +1782,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                               value={formData.priorBiopsyDate}
                               onChange={handleInputChange}
                               max={new Date().toISOString().split('T')[0]}
-                              className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                                formData.priorBiopsyDate
-                                  ? 'border-teal-500 focus:border-teal-500 bg-white'
-                                  : 'border-gray-300 focus:border-teal-500 bg-white'
-                              } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                              className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${formData.priorBiopsyDate
+                                ? 'border-teal-500 focus:border-teal-500 bg-white'
+                                : 'border-gray-300 focus:border-teal-500 bg-white'
+                                } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                               placeholder=" "
                             />
                             <label
-                              className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                                formData.priorBiopsyDate
-                                  ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                                  : 'text-gray-500'
-                              } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                              className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.priorBiopsyDate
+                                ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                                : 'text-gray-500'
+                                } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                             >
                               Biopsy Date <span className="text-red-500">*</span>
                             </label>
@@ -1784,19 +1803,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                               name="gleasonScore"
                               value={formData.gleasonScore}
                               onChange={handleInputChange}
-                              className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                                formData.gleasonScore
-                                  ? 'border-teal-500 focus:border-teal-500 bg-white'
-                                  : 'border-gray-300 focus:border-teal-500 bg-white'
-                              } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                              className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${formData.gleasonScore
+                                ? 'border-teal-500 focus:border-teal-500 bg-white'
+                                : 'border-gray-300 focus:border-teal-500 bg-white'
+                                } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                               placeholder=" "
                             />
                             <label
-                              className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                                formData.gleasonScore
-                                  ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                                  : 'text-gray-500'
-                              } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                              className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.gleasonScore
+                                ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                                : 'text-gray-500'
+                                } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                             >
                               Gleason Score <span className="text-red-500">*</span>
                             </label>
@@ -1813,13 +1830,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       {['CVD', 'Diabetes', 'Smoking Status'].map((comorbidity) => (
-                        <label 
-                          key={comorbidity} 
-                          className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                            formData.comorbidities.includes(comorbidity)
-                              ? 'border-teal-500 bg-teal-50 shadow-sm'
-                              : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                          }`}
+                        <label
+                          key={comorbidity}
+                          className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${formData.comorbidities.includes(comorbidity)
+                            ? 'border-teal-500 bg-teal-50 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                            }`}
                         >
                           <input
                             type="checkbox"
@@ -1840,9 +1856,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                             className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:ring-offset-0 cursor-pointer"
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <span className={`text-sm font-medium ${
-                            formData.comorbidities.includes(comorbidity) ? 'text-teal-900' : 'text-gray-700'
-                          }`}>
+                          <span className={`text-sm font-medium ${formData.comorbidities.includes(comorbidity) ? 'text-teal-900' : 'text-gray-700'
+                            }`}>
                             {comorbidity}
                           </span>
                         </label>
@@ -1870,19 +1885,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     value={formData.notes}
                     onChange={handleInputChange}
                     rows={4}
-                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${
-                      formData.notes
-                        ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
-                        : 'border-gray-300 focus:border-teal-500 bg-gray-50'
-                    } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 resize-none ${formData.notes
+                      ? 'border-teal-500 focus:border-teal-500 bg-gray-50'
+                      : 'border-gray-300 focus:border-teal-500 bg-gray-50'
+                      } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                     placeholder=" "
                   />
                   <label
-                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                      formData.notes
-                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
-                        : 'text-gray-500'
-                    } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.notes
+                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-gray-50 px-1'
+                      : 'text-gray-500'
+                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-gray-50 peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-gray-50 peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                   >
                     Notes
                   </label>
@@ -1967,19 +1980,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   type="text"
                   value={customSymptomName}
                   onChange={(e) => setCustomSymptomName(e.target.value)}
-                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                    customSymptomName
-                      ? 'border-teal-500 focus:border-teal-500 bg-white'
-                      : 'border-gray-300 focus:border-teal-500 bg-white'
-                  } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${customSymptomName
+                    ? 'border-teal-500 focus:border-teal-500 bg-white'
+                    : 'border-gray-300 focus:border-teal-500 bg-white'
+                    } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                   placeholder=" "
                 />
                 <label
-                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                    customSymptomName
-                      ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                      : 'text-gray-500'
-                  } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${customSymptomName
+                    ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                    : 'text-gray-500'
+                    } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                 >
                   Symptom Name <span className="text-red-500">*</span>
                 </label>
@@ -1990,11 +2001,10 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   <select
                     value={customSymptomIpssScore}
                     onChange={(e) => setCustomSymptomIpssScore(e.target.value)}
-                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                      customSymptomIpssScore
-                        ? 'border-teal-500 focus:border-teal-500 bg-white'
-                        : 'border-gray-300 focus:border-teal-500 bg-white'
-                    } motion-reduce:transition-none`}
+                    className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${customSymptomIpssScore
+                      ? 'border-teal-500 focus:border-teal-500 bg-white'
+                      : 'border-gray-300 focus:border-teal-500 bg-white'
+                      } motion-reduce:transition-none`}
                   >
                     <option value="" disabled>Select IPSS Score</option>
                     <option value="Mild">Mild (0-7 points)</option>
@@ -2002,17 +2012,15 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     <option value="Severe">Severe (20-35 points)</option>
                   </select>
                   <label
-                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out -translate-y-[0.9rem] scale-[0.8] bg-white px-1 ${
-                      customSymptomIpssScore
-                        ? 'text-teal-600'
-                        : 'text-gray-500'
-                    } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                    className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out -translate-y-[0.9rem] scale-[0.8] bg-white px-1 ${customSymptomIpssScore
+                      ? 'text-teal-600'
+                      : 'text-gray-500'
+                      } peer-focus:text-teal-600 motion-reduce:transition-none`}
                   >
                     IPSS Score <span className="text-red-500">*</span>
                   </label>
-                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
-                    customSymptomIpssScore ? 'text-teal-500' : 'text-gray-400'
-                  }`} />
+                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${customSymptomIpssScore ? 'text-teal-500' : 'text-gray-400'
+                    }`} />
                 </div>
               )}
 
@@ -2024,19 +2032,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                       min="0"
                       value={customSymptomDuration}
                       onChange={(e) => setCustomSymptomDuration(e.target.value)}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${
-                        customSymptomDuration
-                          ? 'border-teal-500 focus:border-teal-500 bg-white'
-                          : 'border-gray-300 focus:border-teal-500 bg-white'
-                      } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${customSymptomDuration
+                        ? 'border-teal-500 focus:border-teal-500 bg-white'
+                        : 'border-gray-300 focus:border-teal-500 bg-white'
+                        } focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
                       placeholder=" "
                     />
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${
-                        customSymptomDuration
-                          ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                          : 'text-gray-500'
-                      } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${customSymptomDuration
+                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
+                        : 'text-gray-500'
+                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
                     >
                       Duration of Symptoms
                     </label>
@@ -2045,28 +2051,25 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     <select
                       value={customSymptomDurationUnit}
                       onChange={(e) => setCustomSymptomDurationUnit(e.target.value)}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${
-                        customSymptomDurationUnit
-                          ? 'border-teal-500 focus:border-teal-500 bg-white'
-                          : 'border-gray-300 focus:border-teal-500 bg-white'
-                      } motion-reduce:transition-none`}
+                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 appearance-none ${customSymptomDurationUnit
+                        ? 'border-teal-500 focus:border-teal-500 bg-white'
+                        : 'border-gray-300 focus:border-teal-500 bg-white'
+                        } motion-reduce:transition-none`}
                     >
                       <option value="weeks">Weeks</option>
                       <option value="months">Months</option>
                       <option value="years">Years</option>
                     </select>
                     <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out -translate-y-[0.9rem] scale-[0.8] bg-white px-1 ${
-                        customSymptomDurationUnit
-                          ? 'text-teal-600'
-                          : 'text-gray-500'
-                      } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out -translate-y-[0.9rem] scale-[0.8] bg-white px-1 ${customSymptomDurationUnit
+                        ? 'text-teal-600'
+                        : 'text-gray-500'
+                        } peer-focus:text-teal-600 motion-reduce:transition-none`}
                     >
                       Unit
                     </label>
-                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${
-                      customSymptomDurationUnit ? 'text-teal-500' : 'text-gray-400'
-                    }`} />
+                    <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${customSymptomDurationUnit ? 'text-teal-500' : 'text-gray-400'
+                      }`} />
                   </div>
                 </div>
               </div>
@@ -2077,19 +2080,17 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                   value={customSymptomNotes}
                   onChange={(e) => setCustomSymptomNotes(e.target.value)}
                   rows={3}
-                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear resize-none ${
-                    customSymptomNotes
-                      ? 'border-teal-500 focus:border-teal-500 bg-white'
-                      : 'border-gray-300 focus:border-teal-500 bg-white'
-                  } focus:placeholder:opacity-100 peer-focus:text-teal-600 motion-reduce:transition-none`}
+                  className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear resize-none ${customSymptomNotes
+                    ? 'border-teal-500 focus:border-teal-500 bg-white'
+                    : 'border-gray-300 focus:border-teal-500 bg-white'
+                    } focus:placeholder:opacity-100 peer-focus:text-teal-600 motion-reduce:transition-none`}
                   placeholder=" "
                 />
                 <label
-                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-white px-1 ${
-                    customSymptomNotes
-                      ? 'text-teal-600'
-                      : 'text-gray-500'
-                  } peer-focus:text-teal-600 motion-reduce:transition-none`}
+                  className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out text-xs -translate-y-[0.9rem] scale-[0.8] bg-white px-1 ${customSymptomNotes
+                    ? 'text-teal-600'
+                    : 'text-gray-500'
+                    } peer-focus:text-teal-600 motion-reduce:transition-none`}
                 >
                   Notes
                 </label>

@@ -320,6 +320,12 @@ const Calendar = ({
       return 'red';
     }
 
+    // Check for investigation appointments first (purple) - should take priority over automatic classification
+    const typeLabel = (appointment.type || '').toLowerCase();
+    if (appointment.typeColor === 'purple' || typeLabel.includes('investigation')) {
+      return 'purple';
+    }
+
     // Check for automatic/follow-up appointments (blue)
     if (isRecurringFollowup(appointment) ||
       appointment.typeColor === 'blue' ||
@@ -329,11 +335,7 @@ const Calendar = ({
     }
 
     // Preserve original typeColor if it exists
-    // This ensures investigation (purple), urologist consultation (teal), surgery (orange), and MDT (green) colors are maintained
-    if (appointment.typeColor === 'purple') {
-      return 'purple';
-    }
-
+    // This ensures urologist consultation (teal), surgery (orange), and MDT (green) colors are maintained
     if (appointment.typeColor === 'teal') {
       return 'teal';
     }
@@ -347,11 +349,6 @@ const Calendar = ({
     }
 
     // Fallback: determine color from appointment type if typeColor is not set
-    const typeLabel = (appointment.type || '').toLowerCase();
-    if (typeLabel.includes('investigation')) {
-      return 'purple';
-    }
-
     if (typeLabel.includes('surgery') || typeLabel.includes('surgical')) {
       return 'orange';
     }
@@ -364,17 +361,25 @@ const Calendar = ({
     return 'teal';
   };
 
-  // Separate automatic appointments from regular appointments
+  // Separate automatic appointments and appointments without time slots from regular appointments
+  // Automatic category includes:
+  // 1. Recurring follow-ups (automatic appointment type)
+  // 2. Any appointments without a time slot (including investigations)
   const separateAppointments = (appointments) => {
     const regular = [];
     const automatic = [];
 
     appointments.forEach(apt => {
+      // Check if appointment has no time slot
+      const hasNoTimeSlot = !apt.time && !apt.appointment_time;
+
       // Use the isRecurringFollowup helper to catch all automatic appointments
       // This includes appointments with typeColor='blue', type='automatic', 
       // appointment_type='automatic', or notes containing auto-booked/recurring patterns
       const isAutomatic = isRecurringFollowup(apt);
-      if (isAutomatic) {
+
+      // Categorize: appointments without time slots OR automatic appointments go to 'automatic' array
+      if (hasNoTimeSlot || isAutomatic) {
         automatic.push(apt);
       } else {
         regular.push(apt);
@@ -562,8 +567,8 @@ const Calendar = ({
               key={viewType}
               onClick={() => setView(viewType)}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors capitalize ${view === viewType
-                  ? 'bg-teal-600 text-white'
-                  : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-teal-600 text-white'
+                : 'text-gray-600 hover:text-gray-900'
                 }`}
             >
               {viewType}
@@ -773,37 +778,54 @@ const Calendar = ({
 
                       {/* Automatic Appointments (shown separately without time) */}
                       {sortedAutomaticAppointments.length > 0 ? (
-                        sortedAutomaticAppointments.map((appointment) => (
-                          <div
-                            key={appointment.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, appointment)}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAppointmentClick(appointment);
-                            }}
-                            className="p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity bg-blue-500 text-white border border-blue-600"
-                            title="Automatic Appointment (No time slot)"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate">
-                                  {appointment.patientName}
+                        sortedAutomaticAppointments.map((appointment) => {
+                          const color = getAppointmentColor(appointment);
+                          const colorClasses = color === 'purple'
+                            ? 'bg-purple-500 text-white border-purple-600'
+                            : color === 'blue'
+                              ? 'bg-blue-500 text-white border-blue-600'
+                              : color === 'teal'
+                                ? 'bg-teal-500 text-white border-teal-600'
+                                : color === 'orange'
+                                  ? 'bg-orange-500 text-white border-orange-600'
+                                  : color === 'green'
+                                    ? 'bg-green-500 text-white border-green-600'
+                                    : color === 'red'
+                                      ? 'bg-red-500 text-white border-red-600'
+                                      : 'bg-gray-500 text-white border-gray-600';
+
+                          return (
+                            <div
+                              key={appointment.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, appointment)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAppointmentClick(appointment);
+                              }}
+                              className={`p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity ${colorClasses}`}
+                              title={`${appointment.type || 'Appointment'} (No time slot)`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium truncate">
+                                    {appointment.patientName}
+                                  </div>
                                 </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAppointmentClick(appointment);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 hover:bg-white/20 rounded p-0.5"
+                                  title="View details"
+                                >
+                                  <FiMoreVertical className="w-3 h-3" />
+                                </button>
                               </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAppointmentClick(appointment);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 hover:bg-white/20 rounded p-0.5"
-                                title="View details"
-                              >
-                                <FiMoreVertical className="w-3 h-3" />
-                              </button>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : null}
 
                       {sortedRegularAppointments.length === 0 && sortedAutomaticAppointments.length === 0 && (
@@ -926,7 +948,7 @@ const Calendar = ({
               <div className="mt-4 border-t border-gray-200 pt-4">
                 <div className="mb-2 px-2">
                   <h3 className="text-sm font-semibold text-gray-700">
-                    Automatic Follow-up Appointments
+                    Appointments Without Time Slots
                   </h3>
                 </div>
                 <div className="grid grid-cols-8 gap-px bg-gray-200">
@@ -953,21 +975,38 @@ const Calendar = ({
                       >
                         {sortedAutomaticAppointments.length > 0 ? (
                           <div className="space-y-1">
-                            {sortedAutomaticAppointments.map((appointment) => (
-                              <div
-                                key={appointment.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAppointmentClick(appointment);
-                                }}
-                                className="p-1.5 rounded text-xs cursor-pointer bg-blue-500 text-white border border-blue-600 hover:opacity-90 transition-opacity"
-                                title={appointment.time ? `Automatic Appointment at ${convertTo12Hour(appointment.time)}` : "Automatic Appointment (No time slot)"}
-                              >
-                                <div className="font-medium truncate">
-                                  {appointment.time ? `${convertTo12Hour(appointment.time)} - ` : ''}{appointment.patientName}
+                            {sortedAutomaticAppointments.map((appointment) => {
+                              const color = getAppointmentColor(appointment);
+                              const colorClasses = color === 'purple'
+                                ? 'bg-purple-500 text-white border-purple-600'
+                                : color === 'blue'
+                                  ? 'bg-blue-500 text-white border-blue-600'
+                                  : color === 'teal'
+                                    ? 'bg-teal-500 text-white border-teal-600'
+                                    : color === 'orange'
+                                      ? 'bg-orange-500 text-white border-orange-600'
+                                      : color === 'green'
+                                        ? 'bg-green-500 text-white border-green-600'
+                                        : color === 'red'
+                                          ? 'bg-red-500 text-white border-red-600'
+                                          : 'bg-gray-500 text-white border-gray-600';
+
+                              return (
+                                <div
+                                  key={appointment.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAppointmentClick(appointment);
+                                  }}
+                                  className={`p-1.5 rounded text-xs cursor-pointer ${colorClasses} hover:opacity-90 transition-opacity`}
+                                  title={appointment.time ? `${appointment.type || 'Appointment'} at ${convertTo12Hour(appointment.time)}` : `${appointment.type || 'Appointment'} (No time slot)`}
+                                >
+                                  <div className="font-medium truncate">
+                                    {appointment.time ? `${convertTo12Hour(appointment.time)} - ` : ''}{appointment.patientName}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-xs text-gray-400 italic">None</div>
@@ -1083,9 +1122,9 @@ const Calendar = ({
             <div className="mt-6 border-t border-gray-200 pt-4">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-gray-700">
-                  Automatic Appointments (No Time Slots)
+                  Appointments Without Time Slots
                 </h3>
-                <p className="text-xs text-gray-500 mt-1">These appointments don't block time slots and can be managed separately</p>
+                <p className="text-xs text-gray-500 mt-1">These appointments don't require specific time slots</p>
               </div>
               <div className="space-y-2">
                 {(() => {
@@ -1109,39 +1148,56 @@ const Calendar = ({
                     );
                   }
 
-                  return sortedAutomaticAppointments.map((appointment) => (
-                    <div
-                      key={appointment.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAppointmentClick(appointment);
-                      }}
-                      className="p-4 rounded-lg cursor-pointer bg-blue-500 text-white border border-blue-600 hover:opacity-90 transition-opacity"
-                      title="Automatic Appointment (No time slot)"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="font-semibold text-base">
-                            {appointment.patientName}
+                  return sortedAutomaticAppointments.map((appointment) => {
+                    const color = getAppointmentColor(appointment);
+                    const colorClasses = color === 'purple'
+                      ? 'bg-purple-500 text-white border-purple-600'
+                      : color === 'blue'
+                        ? 'bg-blue-500 text-white border-blue-600'
+                        : color === 'teal'
+                          ? 'bg-teal-500 text-white border-teal-600'
+                          : color === 'orange'
+                            ? 'bg-orange-500 text-white border-orange-600'
+                            : color === 'green'
+                              ? 'bg-green-500 text-white border-green-600'
+                              : color === 'red'
+                                ? 'bg-red-500 text-white border-red-600'
+                                : 'bg-gray-500 text-white border-gray-600';
+
+                    return (
+                      <div
+                        key={appointment.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAppointmentClick(appointment);
+                        }}
+                        className={`p-4 rounded-lg cursor-pointer ${colorClasses} hover:opacity-90 transition-opacity`}
+                        title={`${appointment.type || 'Appointment'} (No specific time slot)`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-semibold text-base">
+                              {appointment.patientName}
+                            </div>
+                            <div className="text-xs opacity-90 mt-1">{appointment.type || 'Automatic Appointment'}</div>
+                            {appointment.notes && (
+                              <div className="text-xs opacity-80 mt-1">{appointment.notes}</div>
+                            )}
                           </div>
-                          <div className="text-xs opacity-90 mt-1">{appointment.type || 'Automatic Appointment'}</div>
-                          {appointment.notes && (
-                            <div className="text-xs opacity-80 mt-1">{appointment.notes}</div>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAppointmentClick(appointment);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20 rounded p-1"
+                            title="View details"
+                          >
+                            <FiMoreVertical className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAppointmentClick(appointment);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20 rounded p-1"
-                          title="View details"
-                        >
-                          <FiMoreVertical className="w-4 h-4" />
-                        </button>
                       </div>
-                    </div>
-                  ));
+                    );
+                  });
                 })()}
               </div>
             </div>

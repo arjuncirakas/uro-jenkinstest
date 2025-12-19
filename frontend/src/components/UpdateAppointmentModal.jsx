@@ -412,8 +412,19 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         setError('Cannot book or reschedule appointments for past time slots. Please select a future time.');
         return;
       }
+    } else if (appointmentTypeSelected === 'investigation') {
+      // For investigation appointments, time is optional - only doctor and date required
+      if (!selectedDoctorId || !selectedDate) {
+        setError('Please select a urologist and date');
+        return;
+      }
+      // If time is selected, validate it's not in the past
+      if (selectedTime && isTimeInPast(selectedDate, selectedTime)) {
+        setError('Cannot book or reschedule appointments for past time slots. Please select a future time.');
+        return;
+      }
     } else {
-      // For regular appointments, validate standard fields
+      // For regular urologist appointments, validate standard fields
       if (!selectedDoctorId || !selectedDate || !selectedTime) {
         setError('Please fill in all required fields');
         return;
@@ -496,7 +507,7 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
             investigationType: selectedDoctorData?.role || 'urologist',
             investigationName: selectedDoctor,
             scheduledDate: selectedDate,
-            scheduledTime: selectedTime,
+            scheduledTime: selectedTime || null, // Allow null for no timeslot
             notes: notes || ''
           });
 
@@ -926,6 +937,11 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                       <FiClock className="w-4 h-4 text-teal-600" />
                       Selected Time
+                      {appointmentTypeSelected === 'investigation' ? (
+                        <span className="text-gray-400 text-xs">(Optional)</span>
+                      ) : (
+                        <span className="text-red-500">*</span>
+                      )}
                     </label>
                     <div className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 flex items-center justify-between">
                       <span className={selectedTime ? 'font-medium text-teal-700' : 'text-gray-500'}>
@@ -1012,6 +1028,11 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
                       })
                     )}
                   </div>
+                  {appointmentTypeSelected === 'investigation' && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Time slot is optional for investigations. Leave blank if no specific time is needed.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1048,7 +1069,13 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
               <button
                 type="submit"
                 onClick={handleSubmit}
-                disabled={!selectedDoctorId || !selectedDate || !selectedTime || isSubmitting}
+                disabled={
+                  isSubmitting ||
+                  !selectedDoctorId ||
+                  !selectedDate ||
+                  // Time is only required for non-investigation appointments
+                  (appointmentTypeSelected !== 'investigation' && !selectedTime)
+                }
                 className="flex-1 bg-gradient-to-r from-teal-600 to-teal-500 text-white px-4 py-2.5 rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
               >
                 <FiCalendar className="w-4 h-4" />

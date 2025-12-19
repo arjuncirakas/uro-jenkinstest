@@ -51,7 +51,7 @@ export const testConnection = async () => {
 export const initializeDatabase = async () => {
   try {
     const client = await pool.connect();
-    
+
     // Check if users table exists and get its structure
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -60,11 +60,11 @@ export const initializeDatabase = async () => {
         AND table_name = 'users'
       );
     `);
-    
+
     if (tableExists.rows[0].exists) {
       // Table exists, check for new columns and add them if missing
       console.log('📋 Users table exists, checking for new columns...');
-      
+
       // Add new columns if they don't exist
       const newColumns = [
         { name: 'phone', type: 'VARCHAR(20) UNIQUE' },
@@ -77,7 +77,7 @@ export const initializeDatabase = async () => {
         { name: 'failed_login_attempts', type: 'INTEGER DEFAULT 0' },
         { name: 'locked_until', type: 'TIMESTAMP' }
       ];
-      
+
       for (const column of newColumns) {
         try {
           await client.query(`
@@ -88,7 +88,7 @@ export const initializeDatabase = async () => {
           console.log(`⚠️  Column ${column.name} might already exist: ${err.message}`);
         }
       }
-      
+
       // Update role constraint if needed
       try {
         await client.query(`
@@ -102,7 +102,7 @@ export const initializeDatabase = async () => {
       } catch (err) {
         console.log(`⚠️  Role constraint update: ${err.message}`);
       }
-      
+
     } else {
       // Table doesn't exist, create it with all columns
       console.log('📋 Creating users table with all columns...');
@@ -138,7 +138,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'refresh_tokens'
       );
     `);
-    
+
     if (!refreshTableExists.rows[0].exists) {
       console.log('📋 Creating refresh_tokens table...');
       await client.query(`
@@ -164,7 +164,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'otp_verifications'
       );
     `);
-    
+
     if (!otpTableExists.rows[0].exists) {
       console.log('📋 Creating otp_verifications table...');
       await client.query(`
@@ -210,7 +210,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'password_setup_tokens'
       );
     `);
-    
+
     if (!passwordSetupTableExists.rows[0].exists) {
       console.log('📋 Creating password_setup_tokens table...');
       await client.query(`
@@ -237,7 +237,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'password_reset_tokens'
       );
     `);
-    
+
     if (!passwordResetTableExists.rows[0].exists) {
       console.log('📋 Creating password_reset_tokens table...');
       await client.query(`
@@ -265,7 +265,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'password_history'
       );
     `);
-    
+
     if (!passwordHistoryTableExists.rows[0].exists) {
       console.log('📋 Creating password_history table...');
       await client.query(`
@@ -278,7 +278,7 @@ export const initializeDatabase = async () => {
         )
       `);
       console.log('✅ Password history table created successfully');
-      
+
       // Migrate existing user passwords to password history
       console.log('🔄 Migrating existing user passwords to history...');
       const result = await client.query(`
@@ -297,7 +297,7 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
     `);
@@ -362,7 +362,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'patients'
       );
     `);
-    
+
     if (!patientsTableExists.rows[0].exists) {
       console.log('📋 Creating patients table...');
       await client.query(`
@@ -463,6 +463,15 @@ export const initializeDatabase = async () => {
       console.log('⚠️  Ensuring referred_by_gp_id column:', e.message);
     }
 
+    // Ensure gp_name and gp_contact columns exist on patients (for external GPs)
+    try {
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS gp_name VARCHAR(100)`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS gp_contact VARCHAR(255)`);
+      console.log('✅ Ensured patients.gp_name and patients.gp_contact columns');
+    } catch (e) {
+      console.log('⚠️  Ensuring gp_name and gp_contact columns:', e.message);
+    }
+
     // Create patient_notes table
     const notesTableExists = await client.query(`
       SELECT EXISTS (
@@ -495,7 +504,7 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patients_upi ON patients(upi);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(first_name, last_name);
     `);
@@ -508,7 +517,7 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patient_notes_patient_id ON patient_notes(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patient_notes_created_at ON patient_notes(created_at);
     `);
@@ -552,11 +561,11 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_investigation_results_patient_id ON investigation_results(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_investigation_results_test_type ON investigation_results(test_type);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_investigation_results_test_date ON investigation_results(test_date);
     `);
@@ -607,7 +616,7 @@ export const initializeDatabase = async () => {
       console.log('✅ Appointments table created successfully');
     } else {
       console.log('✅ Appointments table already exists');
-      
+
       // Add surgery_type column if it doesn't exist
       try {
         await client.query(`
@@ -617,7 +626,7 @@ export const initializeDatabase = async () => {
       } catch (err) {
         console.log(`⚠️  Surgery_type column might already exist: ${err.message}`);
       }
-      
+
       // Add reminder_sent and reminder_sent_at columns if they don't exist
       try {
         await client.query(`
@@ -627,7 +636,7 @@ export const initializeDatabase = async () => {
       } catch (err) {
         console.log(`⚠️  reminder_sent column might already exist: ${err.message}`);
       }
-      
+
       try {
         await client.query(`
           ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;
@@ -636,7 +645,7 @@ export const initializeDatabase = async () => {
       } catch (err) {
         console.log(`⚠️  reminder_sent_at column might already exist: ${err.message}`);
       }
-      
+
       // Allow NULL for appointment_time to support automatic appointments without time slots
       try {
         await client.query(`
@@ -647,7 +656,7 @@ export const initializeDatabase = async () => {
       } catch (err) {
         console.log(`⚠️  appointment_time column might already allow NULL: ${err.message}`);
       }
-      
+
       // Try to update foreign key constraint to reference doctors(id) instead of users(id)
       // This is safe to run multiple times - it will only update if the constraint exists
       try {
@@ -668,23 +677,23 @@ export const initializeDatabase = async () => {
             AND kcu.column_name = 'urologist_id'
             AND ccu.table_name = 'users';
         `);
-        
+
         if (constraintCheck.rows.length > 0) {
           const constraintName = constraintCheck.rows[0].constraint_name;
           console.log(`🔄 Updating appointments.urologist_id foreign key constraint to reference doctors(id)...`);
-          
+
           // Drop old constraint
           await client.query(`
             ALTER TABLE appointments 
             DROP CONSTRAINT IF EXISTS ${constraintName};
           `);
-          
+
           // Make column nullable if not already
           await client.query(`
             ALTER TABLE appointments 
             ALTER COLUMN urologist_id DROP NOT NULL;
           `);
-          
+
           // Add new constraint pointing to doctors
           await client.query(`
             ALTER TABLE appointments 
@@ -693,7 +702,7 @@ export const initializeDatabase = async () => {
             REFERENCES doctors(id) 
             ON DELETE SET NULL;
           `);
-          
+
           console.log('✅ Updated appointments.urologist_id foreign key to reference doctors(id)');
         }
       } catch (err) {
@@ -749,15 +758,15 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_appointments_type ON appointments(appointment_type);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
     `);
@@ -766,15 +775,15 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_investigation_bookings_patient_id ON investigation_bookings(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_investigation_bookings_type ON investigation_bookings(investigation_type);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_investigation_bookings_date ON investigation_bookings(scheduled_date);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_investigation_bookings_status ON investigation_bookings(status);
     `);
@@ -915,7 +924,7 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_departments_is_active ON departments(is_active);
     `);
@@ -924,15 +933,15 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_doctors_name ON doctors(first_name, last_name);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_doctors_department_id ON doctors(department_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_doctors_email ON doctors(email);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_doctors_is_active ON doctors(is_active);
     `);
@@ -983,7 +992,7 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_discharge_summaries_patient_id ON discharge_summaries(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_discharge_summaries_discharge_date ON discharge_summaries(discharge_date);
     `);
@@ -1070,17 +1079,17 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patient_consent_forms_patient_id ON patient_consent_forms(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patient_consent_forms_consent_form_id ON patient_consent_forms(consent_form_id);
     `);
 
     console.log('✅ Database tables initialized successfully');
-    
+
     // Initialize audit logs table
     const { initializeAuditLogsTable } = await import('../services/auditLogger.js');
     await initializeAuditLogsTable();
-    
+
     // Create clinical_guidelines table
     const clinicalGuidelinesTableExists = await client.query(`
       SELECT EXISTS (
@@ -1089,7 +1098,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'clinical_guidelines'
       );
     `);
-    
+
     if (!clinicalGuidelinesTableExists.rows[0].exists) {
       console.log('📋 Creating clinical_guidelines table...');
       await client.query(`
@@ -1118,7 +1127,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'guideline_compliance_checks'
       );
     `);
-    
+
     if (!complianceChecksTableExists.rows[0].exists) {
       console.log('📋 Creating guideline_compliance_checks table...');
       await client.query(`
@@ -1146,7 +1155,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'decision_support_recommendations'
       );
     `);
-    
+
     if (!decisionSupportTableExists.rows[0].exists) {
       console.log('📋 Creating decision_support_recommendations table...');
       await client.query(`
@@ -1176,7 +1185,7 @@ export const initializeDatabase = async () => {
         AND table_name = 'pathway_validations'
       );
     `);
-    
+
     if (!pathwayValidationsTableExists.rows[0].exists) {
       console.log('📋 Creating pathway_validations table...');
       await client.query(`
@@ -1200,27 +1209,27 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_clinical_guidelines_category ON clinical_guidelines(category);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_compliance_checks_patient_id ON guideline_compliance_checks(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_compliance_checks_checked_at ON guideline_compliance_checks(checked_at);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_decision_support_patient_id ON decision_support_recommendations(patient_id);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_decision_support_status ON decision_support_recommendations(status);
     `);
-    
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_pathway_validations_patient_id ON pathway_validations(patient_id);
     `);
-    
+
     client.release();
     return true;
   } catch (err) {
