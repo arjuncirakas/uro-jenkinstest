@@ -4,7 +4,6 @@ import { IoNotificationsOutline, IoPersonCircleOutline } from 'react-icons/io5';
 import NotificationModal from '../../components/NotificationModal';
 import ProfileDropdown from '../../components/ProfileDropdown';
 import Calendar from '../../components/Calendar';
-import MissedAppointmentsList from '../../components/MissedAppointmentsList';
 import DailyAppointmentsList from '../../components/DailyAppointmentsList';
 import AppointmentDetailsModal from '../../components/AppointmentDetailsModal';
 import { bookingService } from '../../services/bookingService';
@@ -15,7 +14,7 @@ const Appointments = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileButtonRef = useRef(null);
 
-  const [currentView, setCurrentView] = useState('calendar'); // 'calendar', 'daily', or 'missed'
+  const [currentView, setCurrentView] = useState('calendar'); // 'calendar' or 'daily'
   const [selectedDate, setSelectedDate] = useState(null);
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, appointment: null });
   const [allAppointments, setAllAppointments] = useState([]);
@@ -74,11 +73,6 @@ const Appointments = () => {
   // NOTE: Include all appointments including 'missed'/'no_show' so they appear in the calendar
   const filteredAppointments = useMemo(() => {
     return allAppointments; // Show all appointments including missed/no-show
-  }, [allAppointments]);
-
-  // Filter missed appointments based on toggle state
-  const filteredMissedAppointments = useMemo(() => {
-    return allAppointments.filter(apt => apt.status === 'missed');
   }, [allAppointments]);
 
   // Get appointments for selected date (including both regular and missed appointments)
@@ -149,9 +143,7 @@ const Appointments = () => {
                 <p className="text-gray-500 text-sm mt-1">
                   {currentView === 'daily'
                     ? `Appointments for ${selectedDate?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`
-                    : currentView === 'missed'
-                      ? 'View and manage missed appointments'
-                      : 'Manage your appointments'
+                    : 'Manage your appointments'
                   }
                 </p>
               </div>
@@ -161,36 +153,6 @@ const Appointments = () => {
           {/* View Filters and Notification */}
           {currentView !== 'daily' && (
             <div className="w-full lg:w-auto flex flex-col lg:flex-row items-start lg:items-center gap-3">
-              {/* View Filter */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-700">View:</span>
-                <div className="flex bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setCurrentView('calendar')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${currentView === 'calendar'
-                      ? 'bg-white text-teal-600 shadow-sm border border-teal-200'
-                      : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${currentView === 'calendar' ? 'bg-teal-500' : 'bg-gray-400'}`}></div>
-                      Calendar
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setCurrentView('missed')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${currentView === 'missed'
-                      ? 'bg-white text-red-600 shadow-sm border border-red-200'
-                      : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${currentView === 'missed' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
-                      Missed Only
-                    </span>
-                  </button>
-                </div>
-              </div>
 
               {/* Notification and Profile Icons */}
               <div className="flex items-center gap-3">
@@ -293,11 +255,6 @@ const Appointments = () => {
               selectedDate={selectedDate}
               onDateChange={setSelectedDate}
               onAppointmentClick={handleAppointmentClick}
-            />
-          ) : currentView === 'missed' ? (
-            <MissedAppointmentsList
-              missedAppointments={filteredMissedAppointments}
-              onRefresh={fetchAppointments}
             />
           ) : (
             <Calendar

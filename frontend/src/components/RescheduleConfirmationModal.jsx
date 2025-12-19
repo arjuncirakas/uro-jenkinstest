@@ -19,7 +19,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
     if (isOpen && appointment) {
       // Use the date directly if it's already in YYYY-MM-DD format
       let formattedDate = newDate || '';
-      
+
       // If the date is not in the correct format, try to parse it
       if (formattedDate && !formattedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
         const dateObj = new Date(formattedDate);
@@ -30,12 +30,12 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
           formattedDate = `${year}-${month}-${day}`;
         }
       }
-      
+
       setSelectedDate(formattedDate);
       setSelectedTime(newTime || appointment.time);
       setIsConfirming(false);
       setError(null);
-      
+
       // Load doctors
       loadDoctors();
     }
@@ -46,7 +46,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
     setLoadingDoctors(true);
     setError(null);
     setDoctors([]); // Initialize as empty array
-    
+
     try {
       const result = await bookingService.getAvailableDoctors();
       console.log('Doctors result:', result); // Debug log
@@ -54,11 +54,11 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
         const doctorsData = result.data || [];
         console.log('Doctors data:', doctorsData); // Debug log
         setDoctors(doctorsData);
-        
+
         // Set default doctor if appointment has urologist info
         if (appointment.urologist && doctorsData.length > 0) {
-          const defaultDoctor = doctorsData.find(doctor => 
-            doctor.name === appointment.urologist || 
+          const defaultDoctor = doctorsData.find(doctor =>
+            doctor.name === appointment.urologist ||
             `${doctor.first_name} ${doctor.last_name}` === appointment.urologist
           );
           if (defaultDoctor) {
@@ -81,11 +81,11 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
   // Load available time slots when doctor or date changes
   const loadAvailableSlots = async (doctorId, date) => {
     if (!doctorId || !date) return;
-    
+
     setLoadingSlots(true);
     setError(null);
     setAvailableSlots([]); // Initialize as empty array
-    
+
     try {
       const result = await bookingService.getAvailableTimeSlots(doctorId, date, appointment?.type?.toLowerCase());
       if (result.success) {
@@ -116,7 +116,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
   const generateTimeSlots = () => {
     const slots = [];
     const slotsData = Array.isArray(availableSlots) ? availableSlots : [];
-    
+
     for (let hour = 8; hour <= 17; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
@@ -134,7 +134,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
 
   const handleConfirm = async () => {
     if (!selectedDoctor) {
-      setError('Please select a doctor');
+      setError('Please select a urologist');
       return;
     }
 
@@ -150,13 +150,13 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
 
     setIsConfirming(true);
     setError(null);
-    
+
     try {
       // Determine appointment type - preserve original type based on typeColor or type field
       // This ensures investigation appointments (purple) stay as investigation and 
       // urologist consultations (teal) stay as urologist when rescheduled
       let appointmentType = 'urologist'; // default
-      
+
       if (appointment.typeColor === 'purple') {
         appointmentType = 'investigation';
       } else if (appointment.typeColor === 'teal') {
@@ -170,7 +170,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
           appointmentType = 'urologist';
         }
       }
-      
+
       // Call the API to reschedule the appointment
       const result = await bookingService.rescheduleNoShowAppointment(appointment.id, {
         newDate: selectedDate,
@@ -200,11 +200,11 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
   };
 
@@ -220,7 +220,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] border border-gray-200 flex flex-col">
-        
+
         {/* Header */}
         <div className="bg-teal-600 px-6 py-5 flex items-center justify-between border-b border-teal-700">
           <div className="flex items-center gap-3">
@@ -242,7 +242,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          
+
           {/* Patient Information */}
           <div className="bg-gray-50 border border-gray-200 rounded p-4">
             <div className="flex items-center gap-3">
@@ -257,7 +257,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
 
           {/* Current vs New Appointment Comparison */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            
+
             {/* Current Appointment */}
             <div className="border-2 border-red-200 bg-red-50/50 rounded p-5">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-red-200">
@@ -280,9 +280,8 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className={`w-4 h-4 rounded mt-0.5 ${
-                    appointment.typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500'
-                  }`}></div>
+                  <div className={`w-4 h-4 rounded mt-0.5 ${appointment.typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500'
+                    }`}></div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Type</p>
                     <p className="text-sm font-medium text-gray-900">{appointment.type}</p>
@@ -310,9 +309,9 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                 <div className="flex items-start gap-3">
                   <FiUserCheck className="w-4 h-4 text-gray-600 mt-0.5" />
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Doctor</p>
+                    <p className="text-xs text-gray-500 mb-0.5">Urologist</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {selectedDoctor ? `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}` : 'Select doctor'}
+                      {selectedDoctor ? `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}` : 'Select urologist'}
                     </p>
                   </div>
                 </div>
@@ -324,9 +323,8 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className={`w-4 h-4 rounded mt-0.5 ${
-                    appointment.typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500'
-                  }`}></div>
+                  <div className={`w-4 h-4 rounded mt-0.5 ${appointment.typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500'
+                    }`}></div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Type</p>
                     <p className="text-sm font-medium text-gray-900">{appointment.type}</p>
@@ -346,17 +344,17 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
 
           {/* Date, Doctor and Time Selection */}
           <div className="border border-gray-200 rounded p-5 bg-white">
-            <h4 className="font-semibold text-gray-900 text-sm mb-4">Select New Date, Doctor & Time</h4>
-            
+            <h4 className="font-semibold text-gray-900 text-sm mb-4">Select New Date, Urologist & Time</h4>
+
             {/* Error Message */}
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
                 {error}
               </div>
             )}
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              
+
               {/* New Date */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-2">
@@ -372,7 +370,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                     today.setHours(0, 0, 0, 0);
                     const selectedDateObj = new Date(selected);
                     selectedDateObj.setHours(0, 0, 0, 0);
-                    
+
                     if (selectedDateObj < today) {
                       setError('Cannot reschedule appointments to a past date. Please select today or a future date.');
                       return;
@@ -383,9 +381,9 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                   className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   min={(() => {
                     const now = new Date();
-                    return now.getFullYear() + '-' + 
-                           String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                           String(now.getDate()).padStart(2, '0');
+                    return now.getFullYear() + '-' +
+                      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                      String(now.getDate()).padStart(2, '0');
                   })()}
                 />
               </div>
@@ -393,12 +391,12 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
               {/* Doctor Selection */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Doctor
+                  Urologist
                 </label>
                 {loadingDoctors ? (
                   <div className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm bg-gray-50 flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
-                    Loading doctors...
+                    Loading urologists...
                   </div>
                 ) : doctors && Array.isArray(doctors) && doctors.length > 0 ? (
                   <select
@@ -409,7 +407,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                     }}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   >
-                    <option value="">Select a doctor</option>
+                    <option value="">Select a urologist</option>
                     {doctors.map((doctor) => (
                       <option key={doctor.id} value={doctor.id}>
                         Dr. {doctor.first_name} {doctor.last_name}
@@ -418,7 +416,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                   </select>
                 ) : (
                   <div className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500">
-                    No doctors available
+                    No urologists available
                   </div>
                 )}
               </div>
@@ -451,19 +449,17 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                         }
                       }}
                       disabled={!slot.available}
-                      className={`px-3 py-2 text-xs rounded transition-colors ${
-                        selectedTime === slot.time
+                      className={`px-3 py-2 text-xs rounded transition-colors ${selectedTime === slot.time
                           ? 'bg-teal-600 text-white'
                           : slot.available
-                          ? 'bg-gray-100 text-gray-700 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300'
-                          : 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                      } border ${
-                        selectedTime === slot.time
+                            ? 'bg-gray-100 text-gray-700 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300'
+                            : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                        } border ${selectedTime === slot.time
                           ? 'border-teal-600'
                           : slot.available
-                          ? 'border-gray-200'
-                          : 'border-gray-100'
-                      }`}
+                            ? 'border-gray-200'
+                            : 'border-gray-100'
+                        }`}
                     >
                       {formatTime(slot.time)}
                     </button>
@@ -472,7 +468,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
               )}
               {!loadingSlots && allTimeSlots.length === 0 && (
                 <div className="text-center py-4 text-gray-500 text-sm">
-                  {!selectedDoctor ? 'Please select a doctor and date to view available time slots' : 'No time slots available for the selected date'}
+                  {!selectedDoctor ? 'Please select a urologist and date to view available time slots' : 'No time slots available for the selected date'}
                 </div>
               )}
             </div>
@@ -501,7 +497,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                 Ready to confirm
               </span>
             ) : (
-              <span>Please select date, doctor and time</span>
+              <span>Please select date, urologist and time</span>
             )}
           </div>
           <div className="flex items-center gap-3">

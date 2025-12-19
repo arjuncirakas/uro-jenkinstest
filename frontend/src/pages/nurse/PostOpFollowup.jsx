@@ -10,7 +10,7 @@ const PostOpFollowup = () => {
   const [isPatientDetailsModalOpen, setIsPatientDetailsModalOpen] = useState(false);
   const [isUpdateAppointmentModalOpen, setIsUpdateAppointmentModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
-  
+
   // API state
   const [postOpPatients, setPostOpPatients] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,7 +20,7 @@ const PostOpFollowup = () => {
   const fetchPostOpPatients = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       // Fetch both Active and Discharged patients to include discharged patients in post-op followup
       const [activeResult, dischargedResult] = await Promise.all([
@@ -35,13 +35,13 @@ const PostOpFollowup = () => {
           status: 'Discharged'
         })
       ]);
-      
+
       // Combine results from both statuses
       const allPatients = [
         ...(activeResult.success ? (activeResult.data || []) : []),
         ...(dischargedResult.success ? (dischargedResult.data || []) : [])
       ];
-      
+
       if (activeResult.success || dischargedResult.success) {
         // Filter patients by Post-op Transfer, Post-op Followup, or Discharge pathway
         // This ensures discharged patients are also listed in post-op followup
@@ -49,7 +49,7 @@ const PostOpFollowup = () => {
           const pathway = patient.carePathway || patient.care_pathway || patient.pathway || '';
           return pathway === 'Post-op Transfer' || pathway === 'Post-op Followup' || pathway === 'Discharge';
         });
-        
+
         // Transform to match expected format
         const transformedPatients = postOpPatientsList.map(patient => {
           const pathway = patient.carePathway || patient.care_pathway || patient.pathway || '';
@@ -68,7 +68,7 @@ const PostOpFollowup = () => {
             care_pathway: pathway // Include both formats
           };
         });
-        
+
         setPostOpPatients(transformedPatients);
       } else {
         // Handle error if both requests failed
@@ -98,7 +98,7 @@ const PostOpFollowup = () => {
     if (isNaN(psaValue)) {
       return { textColor: 'text-gray-900', dotColor: 'bg-gray-400' };
     }
-    
+
     if (psaValue > 4.0) {
       return { textColor: 'text-gray-900', dotColor: 'bg-red-500' };
     } else {
@@ -148,7 +148,7 @@ const PostOpFollowup = () => {
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-4 sm:p-6 lg:p-8">
-        <NurseHeader 
+        <NurseHeader
           title="Post-Op Follow-up"
           subtitle="Patients recovering from surgical procedures"
           hideSearch={true}
@@ -175,7 +175,7 @@ const PostOpFollowup = () => {
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PATIENT</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">DOCTOR</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">UROLOGIST</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">LATEST PSA</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">VIEW</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">ACTIONS</th>
@@ -235,7 +235,7 @@ const PostOpFollowup = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <button 
+                          <button
                             onClick={() => handleViewDetails(patient)}
                             className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors flex items-center space-x-1"
                           >
@@ -244,7 +244,7 @@ const PostOpFollowup = () => {
                           </button>
                         </td>
                         <td className="py-4 px-4">
-                          <button 
+                          <button
                             onClick={() => handleUpdateAppointment(patient)}
                             className="px-3 py-1 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center space-x-1"
                           >
@@ -263,14 +263,14 @@ const PostOpFollowup = () => {
       </div>
 
       {/* Nurse Patient Details Modal */}
-      <NursePatientDetailsModal 
+      <NursePatientDetailsModal
         isOpen={isPatientDetailsModalOpen}
         onClose={() => setIsPatientDetailsModalOpen(false)}
         patient={selectedPatient}
       />
 
       {/* Update Appointment Modal */}
-      <UpdateAppointmentModal 
+      <UpdateAppointmentModal
         isOpen={isUpdateAppointmentModalOpen}
         onClose={() => setIsUpdateAppointmentModalOpen(false)}
         patient={selectedPatient}

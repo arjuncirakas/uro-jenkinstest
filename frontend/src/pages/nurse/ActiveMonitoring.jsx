@@ -214,16 +214,16 @@ const ActiveMonitoring = () => {
   // Filter patients based on search query and selected urologist
   const filteredPatients = monitoringPatients.filter(patient => {
     // Filter by urologist if one is selected
-    const matchesUrologist = selectedUrologistFilter === 'all' || 
+    const matchesUrologist = selectedUrologistFilter === 'all' ||
       patient.currentDoctor === selectedUrologistFilter ||
       patient.currentDoctor?.toLowerCase() === selectedUrologistFilter.toLowerCase();
-    
+
     // Filter by search query
     const matchesSearch = patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       patient.upi.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (patient.pathway && patient.pathway.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (patient.monitoringStatus && patient.monitoringStatus.toLowerCase().includes(searchQuery.toLowerCase()));
-    
+
     return matchesUrologist && matchesSearch;
   });
 
@@ -281,23 +281,23 @@ const ActiveMonitoring = () => {
 
           {/* Filter Dropdown - Right side */}
           <div className="flex items-center gap-4">
-          <label htmlFor="urologistFilter" className="text-sm font-medium text-gray-700">
-            Filter by Urologist:
-          </label>
-          <select
-            id="urologistFilter"
-            value={selectedUrologistFilter}
-            onChange={(e) => setSelectedUrologistFilter(e.target.value)}
-            disabled={loadingUrologists}
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <option value="all">All Urologists</option>
-            {urologists.map((urologist) => (
-              <option key={urologist.id || urologist.name} value={urologist.name}>
-                {urologist.name}
-              </option>
-            ))}
-          </select>
+            <label htmlFor="urologistFilter" className="text-sm font-medium text-gray-700">
+              Filter by Urologist:
+            </label>
+            <select
+              id="urologistFilter"
+              value={selectedUrologistFilter}
+              onChange={(e) => setSelectedUrologistFilter(e.target.value)}
+              disabled={loadingUrologists}
+              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="all">All Urologists</option>
+              {urologists.map((urologist) => (
+                <option key={urologist.id || urologist.name} value={urologist.name}>
+                  {urologist.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -310,7 +310,7 @@ const ActiveMonitoring = () => {
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">PATIENT</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">LATEST PSA</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">NEXT APPOINTMENT</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">DOCTOR</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">UROLOGIST</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">BOOK APPOINTMENT</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-600 text-sm">ACTIONS</th>
                 </tr>

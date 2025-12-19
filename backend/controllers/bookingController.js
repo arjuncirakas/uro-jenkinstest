@@ -267,7 +267,7 @@ export const bookInvestigation = async (req, res) => {
     // Automatically attach consent forms for MRI, TRUS, and Biopsy
     try {
       const testNames = ['MRI', 'TRUS', 'Biopsy'];
-      
+
       for (const testName of testNames) {
         // Find consent form template for this test
         // Check both test_name and procedure_name since templates can be created as either type
@@ -281,7 +281,7 @@ export const bookInvestigation = async (req, res) => {
 
         if (templateQuery.rows.length > 0) {
           const template = templateQuery.rows[0];
-          
+
           // Check if patient already has this consent form
           const existingConsent = await client.query(
             `SELECT id FROM patient_consent_forms 
@@ -1458,7 +1458,7 @@ export const getUpcomingAppointments = async (req, res) => {
           `SELECT id FROM doctors WHERE user_id = $1 AND is_active = true`,
           [userId]
         );
-        
+
         // If not found, try by email
         if (doctorCheck.rows.length === 0 && userEmail) {
           doctorCheck = await client.query(
@@ -1466,7 +1466,7 @@ export const getUpcomingAppointments = async (req, res) => {
             [userEmail]
           );
         }
-        
+
         if (doctorCheck.rows.length > 0) {
           doctorId = doctorCheck.rows[0].id;
           console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
@@ -1483,7 +1483,7 @@ export const getUpcomingAppointments = async (req, res) => {
     const today = now.getFullYear() + '-' +
       String(now.getMonth() + 1).padStart(2, '0') + '-' +
       String(now.getDate()).padStart(2, '0');
-    
+
     // Calculate tomorrow's date (to exclude today)
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1510,7 +1510,7 @@ export const getUpcomingAppointments = async (req, res) => {
     // Build query with doctor filter for urologists/doctors
     let query;
     let queryParams = [];
-    
+
     if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
       // For urologists/doctors, include their urologist appointments (filtered by doctor)
       // plus ALL investigation bookings in the date range.
@@ -1768,13 +1768,13 @@ export const getUpcomingAppointments = async (req, res) => {
     // Calculate summary by care pathway
     const summary = {
       total: formattedAppointments.length,
-      postOpFollowup: formattedAppointments.filter(apt => 
+      postOpFollowup: formattedAppointments.filter(apt =>
         apt.carePathway === 'Post-op Transfer' || apt.carePathway === 'Post-op Followup'
       ).length,
-      investigation: formattedAppointments.filter(apt => 
+      investigation: formattedAppointments.filter(apt =>
         apt.type === 'Investigation Appointment' || apt.type === 'investigation'
       ).length,
-      surgical: formattedAppointments.filter(apt => 
+      surgical: formattedAppointments.filter(apt =>
         apt.type === 'Surgery Appointment' || apt.type === 'surgery' || apt.type === 'Surgery'
       ).length
     };
@@ -3084,7 +3084,7 @@ export const getAllAppointments = async (req, res) => {
     // Note: Surgery appointments are stored in the appointments table with appointment_type = 'surgery'
     // They are already included in the first part of the UNION query
 
-    // Build query to get both urologist appointments and investigation bookings
+    // Build query to get urologist appointments, investigation bookings, and MDT meetings
     // IMPORTANT: Using INNER JOINs ensures only patients with appointments are returned
     // This guarantees that search results will only include patients who have booked appointments
     let query = `
@@ -3147,6 +3147,37 @@ export const getAllAppointments = async (req, res) => {
         AND ib.scheduled_date IS NOT NULL
         AND ib.scheduled_time IS NOT NULL
         AND ib.status NOT IN ('requested', 'requested_urgent')
+      
+      UNION ALL
+      
+      SELECT 
+        m.id,
+        m.patient_id,
+        p.first_name,
+        p.last_name,
+        p.upi,
+        p.phone,
+        p.email,
+        EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+        p.gender,
+        p.initial_psa as psa,
+        m.meeting_date as appointment_date,
+        m.meeting_time as appointment_time,
+        m.status,
+        m.notes,
+        'mdt' as type,
+        NULL as urologist_id,
+        'MDT' as urologist_first_name,
+        'Meeting' as urologist_last_name,
+        false as reminder_sent,
+        NULL as reminder_sent_at,
+        m.created_at,
+        m.updated_at
+      FROM mdt_meetings m
+      INNER JOIN patients p ON m.patient_id = p.id
+      WHERE m.status != 'cancelled'
+        AND m.meeting_date IS NOT NULL
+        AND m.meeting_time IS NOT NULL
     `;
 
     // Combine inner query params with date params for final query
@@ -3249,6 +3280,9 @@ export const getAllAppointments = async (req, res) => {
       } else if (aptType === 'surgery' || aptType === 'surgical') {
         typeColor = 'orange'; // Orange for surgery appointments
         appointmentType = 'Surgery Appointment';
+      } else if (aptType === 'mdt') {
+        typeColor = 'green'; // Green for MDT appointments
+        appointmentType = 'MDT Meeting';
       }
 
       // Determine status - treat no_show as missed

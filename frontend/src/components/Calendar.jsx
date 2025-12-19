@@ -5,9 +5,9 @@ import RescheduleConfirmationModal from './RescheduleConfirmationModal';
 import AppointmentDetailsModal from './AppointmentDetailsModal';
 import SuccessErrorModal from './SuccessErrorModal';
 
-const Calendar = ({ 
-  appointments = null, 
-  showAllPatients = false, 
+const Calendar = ({
+  appointments = null,
+  showAllPatients = false,
   onTogglePatients = null,
   onDayClick = null,
   loadingAppointments: externalLoading = false,
@@ -35,12 +35,12 @@ const Calendar = ({
   const fetchAppointments = async () => {
     setLoadingAppointments(true);
     setAppointmentsError(null);
-    
+
     try {
       // Calculate date range for the current view
       const startDate = new Date(currentDate);
       const endDate = new Date(currentDate);
-      
+
       if (view === 'month') {
         startDate.setDate(1);
         endDate.setMonth(endDate.getMonth() + 1);
@@ -51,14 +51,14 @@ const Calendar = ({
       } else { // day view
         // No change needed for day view
       }
-      
+
       const filters = {
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0]
       };
-      
+
       const result = await bookingService.getAllAppointments(filters);
-      
+
       if (result.success) {
         setAllAppointments(result.data.appointments || []);
       } else {
@@ -92,12 +92,12 @@ const Calendar = ({
     const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
     const previousMonth = previousMonthRef.current;
-    
+
     // Check if month/year has changed
     if (onMonthChange && (currentMonth !== previousMonth.month || currentYear !== previousMonth.year)) {
       onMonthChange(currentDate);
     }
-    
+
     // Update the ref
     previousMonthRef.current = { month: currentMonth, year: currentYear };
   }, [currentDate, onMonthChange]);
@@ -107,19 +107,19 @@ const Calendar = ({
   const appointmentsToUse = useMemo(() => {
     return appointments || allAppointments;
   }, [appointments, allAppointments]);
-  
+
   // Force re-render when appointments prop changes (for external appointments)
   useEffect(() => {
     // When external appointments change, force a re-render
     setRefreshKey(prev => prev + 1);
   }, [appointments, allAppointments]);
-  
+
   // Debug logging
   console.log('Calendar Debug - appointments:', appointments);
   console.log('Calendar Debug - allAppointments:', allAppointments);
   console.log('Calendar Debug - appointmentsToUse:', appointmentsToUse);
   console.log('Calendar Debug - appointmentsToUse length:', appointmentsToUse?.length);
-  
+
   // Use external loading/error states if provided, otherwise use internal states
   const isLoading = externalLoading || loadingAppointments;
   const hasError = externalError || appointmentsError;
@@ -136,7 +136,7 @@ const Calendar = ({
     startOfWeek.setDate(date.getDate() - date.getDay());
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
-    
+
     return `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   };
 
@@ -149,7 +149,7 @@ const Calendar = ({
   const getWeekDays = (date) => {
     const startOfWeek = new Date(date);
     startOfWeek.setDate(date.getDate() - date.getDay());
-    
+
     const days = [];
     for (let i = 0; i < 7; i++) {
       const day = new Date(startOfWeek);
@@ -192,7 +192,7 @@ const Calendar = ({
     const slotPeriod = slotTime.split(' ')[1];
     const convertedHour = convertedTime.split(':')[0];
     const convertedPeriod = convertedTime.split(' ')[1];
-    
+
     return slotHour === convertedHour && slotPeriod === convertedPeriod;
   };
 
@@ -206,7 +206,7 @@ const Calendar = ({
     const startingDayOfWeek = firstDay.getDay();
 
     const days = [];
-    
+
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
       const prevMonthDay = new Date(year, month, -startingDayOfWeek + i + 1);
@@ -274,40 +274,40 @@ const Calendar = ({
     if (appointment.typeColor === 'blue') {
       return true;
     }
-    
+
     // Check appointment_type or type fields (raw database values)
-    if (appointment.appointment_type === 'automatic' || 
-        appointment.type === 'automatic' ||
-        appointment.appointmentType === 'automatic') {
+    if (appointment.appointment_type === 'automatic' ||
+      appointment.type === 'automatic' ||
+      appointment.appointmentType === 'automatic') {
       return true;
     }
-    
+
     // Check type label (backend sets this to 'Follow-up Appointment' for automatic)
     const typeLabel = (appointment.type || '').toLowerCase();
-    if (typeLabel === 'follow-up appointment' || 
-        typeLabel === 'followup appointment' ||
-        typeLabel.includes('follow-up')) {
+    if (typeLabel === 'follow-up appointment' ||
+      typeLabel === 'followup appointment' ||
+      typeLabel.includes('follow-up')) {
       return true;
     }
-    
+
     // Check if notes contain auto-booked or recurring followup patterns
     const notes = appointment.notes || '';
     const lowerNotes = notes.toLowerCase();
-    
+
     // Check for auto-booked patterns
-    if (lowerNotes.includes('auto-booked') || 
-        lowerNotes.includes('auto booked') ||
-        lowerNotes.includes('automatic appointment')) {
+    if (lowerNotes.includes('auto-booked') ||
+      lowerNotes.includes('auto booked') ||
+      lowerNotes.includes('automatic appointment')) {
       return true;
     }
-    
+
     // Check for recurring followup patterns
-    if (lowerNotes.includes('recurring follow-up') || 
-        lowerNotes.includes('recurring followup') ||
-        lowerNotes.includes('recurring follow up')) {
+    if (lowerNotes.includes('recurring follow-up') ||
+      lowerNotes.includes('recurring followup') ||
+      lowerNotes.includes('recurring follow up')) {
       return true;
     }
-    
+
     return false;
   };
 
@@ -319,31 +319,47 @@ const Calendar = ({
     if (appointment.status === 'missed' || appointment.status === 'no_show' || appointment.status === 'no-show') {
       return 'red';
     }
-    
+
     // Check for automatic/follow-up appointments (blue)
-    if (isRecurringFollowup(appointment) || 
-        appointment.typeColor === 'blue' || 
-        appointment.appointment_type === 'automatic' || 
-        appointment.type === 'automatic') {
+    if (isRecurringFollowup(appointment) ||
+      appointment.typeColor === 'blue' ||
+      appointment.appointment_type === 'automatic' ||
+      appointment.type === 'automatic') {
       return 'blue';
     }
-    
+
     // Preserve original typeColor if it exists
-    // This ensures investigation (purple) and urologist consultation (teal) colors are maintained
+    // This ensures investigation (purple), urologist consultation (teal), surgery (orange), and MDT (green) colors are maintained
     if (appointment.typeColor === 'purple') {
       return 'purple';
     }
-    
+
     if (appointment.typeColor === 'teal') {
       return 'teal';
     }
-    
+
+    if (appointment.typeColor === 'orange') {
+      return 'orange';
+    }
+
+    if (appointment.typeColor === 'green') {
+      return 'green';
+    }
+
     // Fallback: determine color from appointment type if typeColor is not set
     const typeLabel = (appointment.type || '').toLowerCase();
     if (typeLabel.includes('investigation')) {
       return 'purple';
     }
-    
+
+    if (typeLabel.includes('surgery') || typeLabel.includes('surgical')) {
+      return 'orange';
+    }
+
+    if (typeLabel.includes('mdt')) {
+      return 'green';
+    }
+
     // Default to teal for urologist consultations
     return 'teal';
   };
@@ -352,7 +368,7 @@ const Calendar = ({
   const separateAppointments = (appointments) => {
     const regular = [];
     const automatic = [];
-    
+
     appointments.forEach(apt => {
       // Use the isRecurringFollowup helper to catch all automatic appointments
       // This includes appointments with typeColor='blue', type='automatic', 
@@ -364,7 +380,7 @@ const Calendar = ({
         regular.push(apt);
       }
     });
-    
+
     return { regular, automatic };
   };
 
@@ -399,14 +415,14 @@ const Calendar = ({
   // Handle drop
   const handleDrop = (e, targetDate) => {
     e.preventDefault();
-    
+
     if (draggedAppointment) {
       // Validate that target date is not in the past
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
       const targetDateOnly = new Date(targetDate);
       targetDateOnly.setHours(0, 0, 0, 0);
-      
+
       if (targetDateOnly < today) {
         setErrorModal({
           isOpen: true,
@@ -415,26 +431,26 @@ const Calendar = ({
         setDraggedAppointment(null);
         return;
       }
-      
+
       // Get the date components directly from the target date
       const year = targetDate.getFullYear();
       const month = targetDate.getMonth() + 1; // getMonth() returns 0-11, we need 1-12
       const day = targetDate.getDate();
-      
+
       // Create the date string in YYYY-MM-DD format directly
       const newDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const newTime = draggedAppointment.time; // Keep same time for now
-      
+
       console.log('=== CALENDAR DEBUG ===');
       console.log('Target date object:', targetDate);
       console.log('Year:', year, 'Month:', month, 'Day:', day);
       console.log('Formatted newDate being passed:', newDate);
       console.log('=== END CALENDAR DEBUG ===');
-      
+
       // Store the dragged appointment before clearing it
       const appointmentToReschedule = draggedAppointment;
       setDraggedAppointment(null);
-      
+
       setRescheduleModal({
         isOpen: true,
         appointment: appointmentToReschedule,
@@ -455,13 +471,13 @@ const Calendar = ({
     console.log('New Date:', newDate);
     console.log('New Time:', newTime);
     console.log('Selected Doctor:', selectedDoctor);
-    
+
     // The API call was already made by RescheduleConfirmationModal
     // We just need to refresh the appointments and close the modal
-    
+
     // Close modal first
     setRescheduleModal({ isOpen: false, appointment: null, newDate: null, newTime: null });
-    
+
     // Refresh appointments data - prioritize onRefresh if available (for external appointments)
     if (onRefresh) {
       console.log('Calling onRefresh callback...');
@@ -473,16 +489,16 @@ const Calendar = ({
       await fetchAppointments();
       console.log('fetchAppointments completed');
     }
-    
+
     // Force re-render to show updated appointments - do this after refresh
     console.log('Forcing calendar re-render...');
     setRefreshKey(prev => prev + 1);
-    
+
     // Small delay to ensure state updates propagate
     setTimeout(() => {
       setRefreshKey(prev => prev + 1);
     }, 100);
-    
+
     console.log('=== END CONFIRMATION DEBUG ===');
   };
 
@@ -545,11 +561,10 @@ const Calendar = ({
             <button
               key={viewType}
               onClick={() => setView(viewType)}
-              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors capitalize ${
-                view === viewType
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors capitalize ${view === viewType
                   ? 'bg-teal-600 text-white'
                   : 'text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               {viewType}
             </button>
@@ -558,61 +573,63 @@ const Calendar = ({
       </div>
 
       {/* Legend and Patient Filter */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-purple-500 rounded"></div>
-                <span className="text-sm text-gray-600">Investigation Appointments</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-teal-500 rounded"></div>
-                <span className="text-sm text-gray-600">Urologist Consultations</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded"></div>
-                <span className="text-sm text-gray-600">Missed Appointments</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                <span className="text-sm text-gray-600">Follow-up Appointments</span>
-              </div>
-            </div>
-          
-          {/* Patient Filter Toggle */}
-          {onTogglePatients && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-700">Display:</span>
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => onTogglePatients(false)}
-                  className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                    !showAllPatients
-                      ? 'bg-white text-teal-600 shadow-sm border border-teal-200'
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${!showAllPatients ? 'bg-teal-500' : 'bg-gray-400'}`}></div>
-                    My Patients Only
-                  </span>
-                </button>
-                <button
-                  onClick={() => onTogglePatients(true)}
-                  className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                    showAllPatients
-                      ? 'bg-white text-blue-600 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${showAllPatients ? 'bg-blue-500' : 'bg-gray-400'}`}></div>
-                    All Patients
-                  </span>
-                </button>
-              </div>
-            </div>
-          )}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-teal-500 rounded"></div>
+            <span className="text-sm text-gray-600">Urologist Appointments</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-purple-500 rounded"></div>
+            <span className="text-sm text-gray-600">Investigation</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-orange-500 rounded"></div>
+            <span className="text-sm text-gray-600">Surgery</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-green-500 rounded"></div>
+            <span className="text-sm text-gray-600">MDT</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-blue-500 rounded"></div>
+            <span className="text-sm text-gray-600">Follow-up</span>
+          </div>
         </div>
+
+        {/* Patient Filter Toggle */}
+        {onTogglePatients && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">Display:</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => onTogglePatients(false)}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${!showAllPatients
+                  ? 'bg-white text-teal-600 shadow-sm border border-teal-200'
+                  : 'text-gray-600 hover:text-gray-800'
+                  }`}
+              >
+                <span className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${!showAllPatients ? 'bg-teal-500' : 'bg-gray-400'}`}></div>
+                  My Patients Only
+                </span>
+              </button>
+              <button
+                onClick={() => onTogglePatients(true)}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${showAllPatients
+                  ? 'bg-white text-blue-600 shadow-sm border border-blue-200'
+                  : 'text-gray-600 hover:text-gray-800'
+                  }`}
+              >
+                <span className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${showAllPatients ? 'bg-blue-500' : 'bg-gray-400'}`}></div>
+                  All Patients
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Calendar Grid */}
       <div className="p-4">
@@ -658,7 +675,7 @@ const Calendar = ({
               {days.map((day, index) => {
                 const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
                 const { regular, automatic } = separateAppointments(dayAppointments);
-                
+
                 // Sort regular appointments: upcoming first (confirmed, pending), then completed/missed
                 const sortedRegularAppointments = [...regular].sort((a, b) => {
                   // First sort by status priority: confirmed/pending first, then missed
@@ -667,16 +684,16 @@ const Calendar = ({
                     if (status === 'missed') return 1;
                     return 2;
                   };
-                  
+
                   const statusDiff = statusPriority(a.status) - statusPriority(b.status);
                   if (statusDiff !== 0) return statusDiff;
-                  
+
                   // Then sort by time within each status group
                   const timeA = a.time ? a.time.split(':').map(Number) : [0, 0];
                   const timeB = b.time ? b.time.split(':').map(Number) : [0, 0];
                   return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
                 });
-                
+
                 // Sort automatic appointments (no time-based sorting needed)
                 const sortedAutomaticAppointments = [...automatic].sort((a, b) => {
                   const statusPriority = (status) => {
@@ -686,27 +703,23 @@ const Calendar = ({
                   };
                   return statusPriority(a.status) - statusPriority(b.status);
                 });
-                
+
                 const hasAppointments = sortedRegularAppointments.length > 0 || sortedAutomaticAppointments.length > 0;
 
                 return (
                   <div
                     key={index}
-                    className={`min-h-[120px] border border-gray-200 rounded-lg p-2 cursor-pointer hover:bg-gray-50 transition-colors ${
-                      day.isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-                    } ${
-                      day.isToday ? 'ring-2 ring-teal-500' : ''
-                    } ${
-                      hasAppointments ? 'bg-teal-50' : ''
-                    }`}
+                    className={`min-h-[120px] border border-gray-200 rounded-lg p-2 cursor-pointer hover:bg-gray-50 transition-colors ${day.isCurrentMonth ? 'bg-white' : 'bg-gray-50'
+                      } ${day.isToday ? 'ring-2 ring-teal-500' : ''
+                      } ${hasAppointments ? 'bg-teal-50' : ''
+                      }`}
                     onClick={() => handleDayClick(day)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, day.fullDate)}
                   >
                     {/* Date number */}
-                    <div className={`text-sm font-medium mb-1 ${
-                      day.isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
-                    }`}>
+                    <div className={`text-sm font-medium mb-1 ${day.isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                      }`}>
                       {day.date}
                     </div>
 
@@ -722,15 +735,20 @@ const Calendar = ({
                               e.stopPropagation();
                               handleAppointmentClick(appointment);
                             }}
-                            className={`p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity ${
-                              getAppointmentColor(appointment) === 'red'
-                                ? 'bg-red-500 text-white'
-                                : getAppointmentColor(appointment) === 'blue'
-                                  ? 'bg-blue-500 text-white'
-                                  : getAppointmentColor(appointment) === 'teal'
-                                    ? 'bg-teal-500 text-white'
-                                    : 'bg-purple-500 text-white'
-                            }`}
+                            className={`p-1 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity ${getAppointmentColor(appointment) === 'red'
+                              ? 'bg-red-500 text-white'
+                              : getAppointmentColor(appointment) === 'blue'
+                                ? 'bg-blue-500 text-white'
+                                : getAppointmentColor(appointment) === 'teal'
+                                  ? 'bg-teal-500 text-white'
+                                  : getAppointmentColor(appointment) === 'purple'
+                                    ? 'bg-purple-500 text-white'
+                                    : getAppointmentColor(appointment) === 'orange'
+                                      ? 'bg-orange-500 text-white'
+                                      : getAppointmentColor(appointment) === 'green'
+                                        ? 'bg-green-500 text-white'
+                                        : 'bg-gray-500 text-white'
+                              }`}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex-1 min-w-0">
@@ -738,7 +756,7 @@ const Calendar = ({
                                   {appointment.time ? convertTo12Hour(appointment.time) + ' ' : ''}{appointment.patientName}
                                 </div>
                               </div>
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleAppointmentClick(appointment);
@@ -752,7 +770,7 @@ const Calendar = ({
                           </div>
                         ))
                       ) : null}
-                      
+
                       {/* Automatic Appointments (shown separately without time) */}
                       {sortedAutomaticAppointments.length > 0 ? (
                         sortedAutomaticAppointments.map((appointment) => (
@@ -773,7 +791,7 @@ const Calendar = ({
                                   {appointment.patientName}
                                 </div>
                               </div>
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleAppointmentClick(appointment);
@@ -787,7 +805,7 @@ const Calendar = ({
                           </div>
                         ))
                       ) : null}
-                      
+
                       {sortedRegularAppointments.length === 0 && sortedAutomaticAppointments.length === 0 && (
                         <div className="text-xs text-gray-400">No appointments</div>
                       )}
@@ -809,14 +827,12 @@ const Calendar = ({
                 {getWeekDays(currentDate).map((day, index) => (
                   <div
                     key={index}
-                    className={`bg-white p-2 text-center ${
-                      day.isToday ? 'bg-teal-50' : ''
-                    }`}
+                    className={`bg-white p-2 text-center ${day.isToday ? 'bg-teal-50' : ''
+                      }`}
                   >
                     <div className="text-xs text-gray-500">{day.dayName}</div>
-                    <div className={`text-lg font-semibold ${
-                      day.isToday ? 'text-teal-600' : 'text-gray-900'
-                    }`}>
+                    <div className={`text-lg font-semibold ${day.isToday ? 'text-teal-600' : 'text-gray-900'
+                      }`}>
                       {day.date}
                     </div>
                     <div className="text-xs text-gray-500">{day.monthName}</div>
@@ -832,12 +848,12 @@ const Calendar = ({
                     <div className="bg-white p-2 text-xs text-gray-500 font-medium border-r border-gray-200">
                       {time}
                     </div>
-                    
+
                     {/* Day columns */}
                     {getWeekDays(currentDate).map((day, dayIndex) => {
                       const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
                       const { regular, automatic } = separateAppointments(dayAppointments);
-                      
+
                       // Sort regular appointments: upcoming first (confirmed, pending), then completed/missed
                       const sortedRegularAppointments = [...regular].sort((a, b) => {
                         const statusPriority = (status) => {
@@ -845,29 +861,28 @@ const Calendar = ({
                           if (status === 'missed') return 1;
                           return 2;
                         };
-                        
+
                         const statusDiff = statusPriority(a.status) - statusPriority(b.status);
                         if (statusDiff !== 0) return statusDiff;
-                        
+
                         const timeA = a.time ? a.time.split(':').map(Number) : [0, 0];
                         const timeB = b.time ? b.time.split(':').map(Number) : [0, 0];
                         return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
                       });
-                      
+
                       // Filter regular appointments by time slot
                       // Note: Automatic appointments with time slots will be shown in their time slot AND in the automatic section below
                       const timeAppointments = sortedRegularAppointments.filter(apt => apt.time && isTimeInSlot(apt.time, time));
-                      
+
                       // Also include automatic appointments that have a time slot in this time slot
                       const automaticWithTime = automatic.filter(apt => apt.time && isTimeInSlot(apt.time, time));
                       const allTimeAppointments = [...timeAppointments, ...automaticWithTime];
-                      
+
                       return (
                         <div
                           key={dayIndex}
-                          className={`bg-white p-1 min-h-[60px] relative ${
-                            day.isToday ? 'bg-teal-50' : ''
-                          }`}
+                          className={`bg-white p-1 min-h-[60px] relative ${day.isToday ? 'bg-teal-50' : ''
+                            }`}
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, day.fullDate)}
                         >
@@ -880,15 +895,20 @@ const Calendar = ({
                                 e.stopPropagation();
                                 handleAppointmentClick(appointment);
                               }}
-                              className={`p-2 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity mb-1 ${
-                                getAppointmentColor(appointment) === 'red'
-                                  ? 'bg-red-500 text-white'
-                                  : getAppointmentColor(appointment) === 'blue'
-                                    ? 'bg-blue-500 text-white'
-                                    : getAppointmentColor(appointment) === 'teal'
-                                      ? 'bg-teal-500 text-white'
-                                      : 'bg-purple-500 text-white'
-                              }`}
+                              className={`p-2 rounded text-xs cursor-pointer group hover:opacity-90 transition-opacity mb-1 ${getAppointmentColor(appointment) === 'red'
+                                ? 'bg-red-500 text-white'
+                                : getAppointmentColor(appointment) === 'blue'
+                                  ? 'bg-blue-500 text-white'
+                                  : getAppointmentColor(appointment) === 'teal'
+                                    ? 'bg-teal-500 text-white'
+                                    : getAppointmentColor(appointment) === 'purple'
+                                      ? 'bg-purple-500 text-white'
+                                      : getAppointmentColor(appointment) === 'orange'
+                                        ? 'bg-orange-500 text-white'
+                                        : getAppointmentColor(appointment) === 'green'
+                                          ? 'bg-green-500 text-white'
+                                          : 'bg-gray-500 text-white'
+                                }`}
                             >
                               <div className="font-medium">{convertTo12Hour(appointment.time)}</div>
                               <div className="text-[10px] opacity-90">{appointment.patientName}</div>
@@ -901,7 +921,7 @@ const Calendar = ({
                   </React.Fragment>
                 ))}
               </div>
-              
+
               {/* Automatic Appointments Section (Week View) */}
               <div className="mt-4 border-t border-gray-200 pt-4">
                 <div className="mb-2 px-2">
@@ -914,7 +934,7 @@ const Calendar = ({
                   {getWeekDays(currentDate).map((day, dayIndex) => {
                     const dayAppointments = getAppointmentsByDate(formatDate(day.fullDate), appointmentsToUse);
                     const { automatic } = separateAppointments(dayAppointments);
-                    
+
                     // Show ALL automatic appointments (both with and without time slots)
                     const sortedAutomaticAppointments = [...automatic].sort((a, b) => {
                       const statusPriority = (status) => {
@@ -924,13 +944,12 @@ const Calendar = ({
                       };
                       return statusPriority(a.status) - statusPriority(b.status);
                     });
-                    
+
                     return (
                       <div
                         key={dayIndex}
-                        className={`bg-white p-2 min-h-[60px] ${
-                          day.isToday ? 'bg-blue-50' : ''
-                        }`}
+                        className={`bg-white p-2 min-h-[60px] ${day.isToday ? 'bg-blue-50' : ''
+                          }`}
                       >
                         {sortedAutomaticAppointments.length > 0 ? (
                           <div className="space-y-1">
@@ -969,7 +988,7 @@ const Calendar = ({
             {timeSlots.map((time, timeIndex) => {
               const dayAppointments = getAppointmentsByDate(formatDate(currentDate), appointmentsToUse);
               const { regular } = separateAppointments(dayAppointments);
-              
+
               // Sort regular appointments: upcoming first (confirmed, pending), then completed/missed
               const sortedRegularAppointments = [...regular].sort((a, b) => {
                 const statusPriority = (status) => {
@@ -977,16 +996,16 @@ const Calendar = ({
                   if (status === 'missed') return 1;
                   return 2;
                 };
-                
+
                 const statusDiff = statusPriority(a.status) - statusPriority(b.status);
                 if (statusDiff !== 0) return statusDiff;
-                
+
                 const timeA = a.time ? a.time.split(':').map(Number) : [0, 0];
                 const timeB = b.time ? b.time.split(':').map(Number) : [0, 0];
                 return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
               });
               const timeAppointments = sortedRegularAppointments.filter(apt => apt.time && isTimeInSlot(apt.time, time));
-              
+
               return (
                 <div
                   key={timeIndex}
@@ -998,7 +1017,7 @@ const Calendar = ({
                   <div className="w-24 p-3 text-sm text-gray-500 font-medium border-r border-gray-200">
                     {time}
                   </div>
-                  
+
                   {/* Appointments */}
                   <div className="flex-1 p-2 min-h-[70px]">
                     {timeAppointments.length > 0 ? (
@@ -1012,15 +1031,20 @@ const Calendar = ({
                               e.stopPropagation();
                               handleAppointmentClick(appointment);
                             }}
-                            className={`p-3 rounded-lg cursor-pointer group hover:opacity-90 transition-opacity ${
-                              getAppointmentColor(appointment) === 'red'
-                                ? 'bg-red-500 text-white'
-                                : getAppointmentColor(appointment) === 'blue'
-                                  ? 'bg-blue-500 text-white'
-                                  : getAppointmentColor(appointment) === 'teal'
-                                    ? 'bg-teal-500 text-white'
-                                    : 'bg-purple-500 text-white'
-                            }`}
+                            className={`p-3 rounded-lg cursor-pointer group hover:opacity-90 transition-opacity ${getAppointmentColor(appointment) === 'red'
+                              ? 'bg-red-500 text-white'
+                              : getAppointmentColor(appointment) === 'blue'
+                                ? 'bg-blue-500 text-white'
+                                : getAppointmentColor(appointment) === 'teal'
+                                  ? 'bg-teal-500 text-white'
+                                  : getAppointmentColor(appointment) === 'purple'
+                                    ? 'bg-purple-500 text-white'
+                                    : getAppointmentColor(appointment) === 'orange'
+                                      ? 'bg-orange-500 text-white'
+                                      : getAppointmentColor(appointment) === 'green'
+                                        ? 'bg-green-500 text-white'
+                                        : 'bg-gray-500 text-white'
+                              }`}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
@@ -1033,7 +1057,7 @@ const Calendar = ({
                                   <div className="text-xs opacity-80 mt-1">{appointment.notes}</div>
                                 )}
                               </div>
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleAppointmentClick(appointment);
@@ -1054,7 +1078,7 @@ const Calendar = ({
                 </div>
               );
             })}
-            
+
             {/* Automatic Appointments Section (Day View) */}
             <div className="mt-6 border-t border-gray-200 pt-4">
               <div className="mb-3">
@@ -1067,7 +1091,7 @@ const Calendar = ({
                 {(() => {
                   const dayAppointments = getAppointmentsByDate(formatDate(currentDate), appointmentsToUse);
                   const { automatic } = separateAppointments(dayAppointments);
-                  
+
                   const sortedAutomaticAppointments = [...automatic].sort((a, b) => {
                     const statusPriority = (status) => {
                       if (status === 'confirmed' || status === 'pending') return 0;
@@ -1076,7 +1100,7 @@ const Calendar = ({
                     };
                     return statusPriority(a.status) - statusPriority(b.status);
                   });
-                  
+
                   if (sortedAutomaticAppointments.length === 0) {
                     return (
                       <div className="text-sm text-gray-400 italic p-4 bg-gray-50 rounded-lg">
@@ -1084,7 +1108,7 @@ const Calendar = ({
                       </div>
                     );
                   }
-                  
+
                   return sortedAutomaticAppointments.map((appointment) => (
                     <div
                       key={appointment.id}
@@ -1105,7 +1129,7 @@ const Calendar = ({
                             <div className="text-xs opacity-80 mt-1">{appointment.notes}</div>
                           )}
                         </div>
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleAppointmentClick(appointment);
