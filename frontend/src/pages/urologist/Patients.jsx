@@ -14,7 +14,7 @@ const Patients = () => {
   const profileButtonRef = useRef(null);
   const patientDetailsModalRef = useRef();
   const [notificationCount, setNotificationCount] = useState(0);
-  
+
   // Memoized callback to close profile dropdown
   const handleProfileClose = useCallback(() => {
     setIsProfileOpen(false);
@@ -216,27 +216,27 @@ const Patients = () => {
     if (!searchQuery.trim()) {
       return patientList;
     }
-    
+
     const query = searchQuery.toLowerCase().trim();
     // Normalize query by removing spaces for better matching
     const normalizedQuery = query.replace(/\s+/g, '');
-    
+
     return patientList.filter(patient => {
       // Get patient name components
       const name = (patient.name || '').toLowerCase();
       const firstName = (patient.firstName || '').toLowerCase();
       const lastName = (patient.lastName || '').toLowerCase();
-      
+
       // Normalize name by removing spaces for matching without spaces
       const normalizedName = name.replace(/\s+/g, '');
       // Also create a combined name from firstName + lastName (in case name field is different)
       const combinedName = `${firstName}${lastName}`;
-      
+
       // Search in UPI
       const upi = (patient.upi || '').toLowerCase();
       // Search in care pathway
       const carePathway = (patient.carePathway || '').toLowerCase();
-      
+
       // Check all possible matches:
       // 1. Full name with spaces: "steve parker"
       // 2. Full name without spaces: "steveparker"
@@ -245,13 +245,13 @@ const Patients = () => {
       // 5. First name separately: "steve"
       // 6. Last name separately: "parker"
       // 7. UPI and care pathway
-      return name.includes(query) || 
-             normalizedName.includes(normalizedQuery) ||
-             combinedName.includes(normalizedQuery) ||
-             firstName.includes(query) || 
-             lastName.includes(query) || 
-             upi.includes(query) || 
-             carePathway.includes(query);
+      return name.includes(query) ||
+        normalizedName.includes(normalizedQuery) ||
+        combinedName.includes(normalizedQuery) ||
+        firstName.includes(query) ||
+        lastName.includes(query) ||
+        upi.includes(query) ||
+        carePathway.includes(query);
     });
   };
 
@@ -263,10 +263,10 @@ const Patients = () => {
     if (!searchQueryNewPatients.trim()) {
       return newPatients;
     }
-    
+
     const query = searchQueryNewPatients.toLowerCase().trim();
     const normalizedQuery = query.replace(/\s+/g, '');
-    
+
     return newPatients.filter(patient => {
       const name = (patient.name || '').toLowerCase();
       const firstName = (patient.firstName || '').toLowerCase();
@@ -275,14 +275,14 @@ const Patients = () => {
       const combinedName = `${firstName}${lastName}`;
       const upi = (patient.upi || '').toLowerCase();
       const carePathway = (patient.carePathway || '').toLowerCase();
-      
-      return name.includes(query) || 
-             normalizedName.includes(normalizedQuery) ||
-             combinedName.includes(normalizedQuery) ||
-             firstName.includes(query) || 
-             lastName.includes(query) || 
-             upi.includes(query) || 
-             carePathway.includes(query);
+
+      return name.includes(query) ||
+        normalizedName.includes(normalizedQuery) ||
+        combinedName.includes(normalizedQuery) ||
+        firstName.includes(query) ||
+        lastName.includes(query) ||
+        upi.includes(query) ||
+        carePathway.includes(query);
     });
   }, [newPatients, searchQueryNewPatients]);
 
@@ -290,10 +290,10 @@ const Patients = () => {
     if (!searchQueryMyPatients.trim()) {
       return myPatients;
     }
-    
+
     const query = searchQueryMyPatients.toLowerCase().trim();
     const normalizedQuery = query.replace(/\s+/g, '');
-    
+
     return myPatients.filter(patient => {
       const name = (patient.name || '').toLowerCase();
       const firstName = (patient.firstName || '').toLowerCase();
@@ -302,14 +302,14 @@ const Patients = () => {
       const combinedName = `${firstName}${lastName}`;
       const upi = (patient.upi || '').toLowerCase();
       const carePathway = (patient.carePathway || '').toLowerCase();
-      
-      return name.includes(query) || 
-             normalizedName.includes(normalizedQuery) ||
-             combinedName.includes(normalizedQuery) ||
-             firstName.includes(query) || 
-             lastName.includes(query) || 
-             upi.includes(query) || 
-             carePathway.includes(query);
+
+      return name.includes(query) ||
+        normalizedName.includes(normalizedQuery) ||
+        combinedName.includes(normalizedQuery) ||
+        firstName.includes(query) ||
+        lastName.includes(query) ||
+        upi.includes(query) ||
+        carePathway.includes(query);
     });
   }, [myPatients, searchQueryMyPatients]);
 

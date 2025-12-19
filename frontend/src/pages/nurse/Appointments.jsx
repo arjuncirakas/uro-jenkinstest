@@ -12,10 +12,10 @@ const Appointments = () => {
   const fetchAppointments = async () => {
     setLoadingAppointments(true);
     setAppointmentsError(null);
-    
+
     try {
       const result = await bookingService.getAllAppointments();
-      
+
       if (result.success) {
         // Create a new array reference to ensure React detects the change
         const newAppointments = result.data.appointments || [];
@@ -43,7 +43,7 @@ const Appointments = () => {
       {/* Main Content Area */}
       <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <NurseHeader 
+        <NurseHeader
           title="Appointments"
           subtitle="Schedule and manage patient appointments"
           hideSearch={true}
@@ -51,7 +51,7 @@ const Appointments = () => {
 
         {/* Calendar Section */}
         <div className="mt-6">
-          <Calendar 
+          <Calendar
             appointments={appointments}
             loadingAppointments={loadingAppointments}
             appointmentsError={appointmentsError}

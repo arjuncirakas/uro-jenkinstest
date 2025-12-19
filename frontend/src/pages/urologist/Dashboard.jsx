@@ -189,7 +189,7 @@ const UrologistDashboard = () => {
         const normalizedAppointments = allAppointments.map(appointment => {
           // Normalize time field - map appointmentTime to time for consistency
           const time = appointment.time || appointment.appointmentTime || appointment.appointment_time || appointment.scheduledTime || '';
-          
+
           // Normalize type field - handle both "investigation" and "Investigation Appointment"
           let type = appointment.type || appointment.appointment_type || '';
           if (type.toLowerCase() === 'investigation') {
@@ -204,9 +204,9 @@ const UrologistDashboard = () => {
             appointmentTime: time, // Keep both for compatibility
             type: type,
             // Ensure patientName exists
-            patientName: appointment.patientName || 
-              (appointment.first_name && appointment.last_name 
-                ? `${appointment.first_name} ${appointment.last_name}` 
+            patientName: appointment.patientName ||
+              (appointment.first_name && appointment.last_name
+                ? `${appointment.first_name} ${appointment.last_name}`
                 : 'Unknown Patient')
           };
         });
@@ -328,10 +328,10 @@ const UrologistDashboard = () => {
             const hasSurgeryType = aptSurgeryType && aptSurgeryType.length > 0;
 
             // Exclude completed, cancelled, or other terminal statuses
-            const isTerminalStatus = aptStatus === 'completed' || 
-              aptStatus === 'cancelled' || 
-              aptStatus === 'done' || 
-              aptStatus === 'finished' || 
+            const isTerminalStatus = aptStatus === 'completed' ||
+              aptStatus === 'cancelled' ||
+              aptStatus === 'done' ||
+              aptStatus === 'finished' ||
               aptStatus === 'closed';
 
             // Include surgery appointments that are scheduled or confirmed (not completed/cancelled)
@@ -355,7 +355,7 @@ const UrologistDashboard = () => {
             // Parse the appointment date and time
             try {
               const appointmentDateTime = new Date(`${appointmentDate} ${appointmentTime || '00:00'}`);
-              
+
               // Exclude if the appointment time has passed
               if (appointmentDateTime < now) {
                 return false;
@@ -749,23 +749,23 @@ const UrologistDashboard = () => {
         const meetings = result.data?.meetings || [];
         // Get current date/time for filtering
         const now = new Date();
-        
+
         // Map API meetings to dashboard card structure and filter out past meetings
         const palette = ['teal', 'blue', 'purple', 'orange'];
         const mapped = meetings.map(m => {
           // Parse meeting date and time to create a datetime object
           const meetingDate = new Date(m.meetingDate);
           const timeStr = m.meetingTime || '00:00';
-          
+
           // Parse time string (expected format: "HH:MM" or "HH:MM:SS")
           const timeParts = timeStr.split(':');
           const hours = parseInt(timeParts[0] || '0', 10);
           const minutes = parseInt(timeParts[1] || '0', 10);
-          
+
           // Set the time on the meeting date
           const meetingDateTime = new Date(meetingDate);
           meetingDateTime.setHours(hours, minutes, 0, 0);
-          
+
           return {
             id: m.id,
             date: m.meetingDate,
@@ -785,7 +785,7 @@ const UrologistDashboard = () => {
             _dt: meetingDateTime.getTime() // Store timestamp for sorting and filtering
           };
         });
-        
+
         // Filter out past meetings and completed meetings (only keep upcoming ones)
         const upcomingMeetings = mapped.filter(item => {
           // Exclude if meeting time has passed
@@ -799,10 +799,10 @@ const UrologistDashboard = () => {
           }
           return true;
         });
-        
+
         // Sort by datetime (ascending - earliest first)
         upcomingMeetings.sort((a, b) => a._dt - b._dt);
-        
+
         // Remove the temporary _dt field
         setMdtSchedules(upcomingMeetings.map(({ _dt, ...rest }) => rest));
       } else {
@@ -1268,8 +1268,8 @@ const UrologistDashboard = () => {
                     <button
                       onClick={() => setActiveTab('appointments')}
                       className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'appointments'
-                          ? 'bg-teal-600 text-white'
-                          : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-teal-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
                       Appointments
@@ -1277,8 +1277,8 @@ const UrologistDashboard = () => {
                     <button
                       onClick={() => setActiveTab('surgicalQueue')}
                       className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'surgicalQueue'
-                          ? 'bg-teal-600 text-white'
-                          : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-teal-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
                       Surgical Queue
@@ -1286,8 +1286,8 @@ const UrologistDashboard = () => {
                     <button
                       onClick={() => setActiveTab('recentPatients')}
                       className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'recentPatients'
-                          ? 'bg-teal-600 text-white'
-                          : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-teal-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
                       Recent Patients
@@ -1434,8 +1434,8 @@ const UrologistDashboard = () => {
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{formatDate(patient.scheduledDate)}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${patient.priorityColor === 'red' ? 'bg-red-100 text-red-700' :
-                                    patient.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
-                                      'bg-green-100 text-green-700'
+                                  patient.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-green-100 text-green-700'
                                   }`} aria-label={`Priority: ${patient.priority}`}>
                                   {patient.priority}
                                 </span>
@@ -1670,8 +1670,8 @@ const UrologistDashboard = () => {
                     <button
                       onClick={() => setMdtView('day')}
                       className={`px-4 py-2 text-sm transition-colors ${mdtView === 'day'
-                          ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                          : 'text-gray-600 hover:text-gray-900'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                        : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
                       Day
@@ -1679,8 +1679,8 @@ const UrologistDashboard = () => {
                     <button
                       onClick={() => setMdtView('week')}
                       className={`px-4 py-2 text-sm transition-colors ${mdtView === 'week'
-                          ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                          : 'text-gray-600 hover:text-gray-900'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                        : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
                       Week
@@ -1688,8 +1688,8 @@ const UrologistDashboard = () => {
                     <button
                       onClick={() => setMdtView('month')}
                       className={`px-4 py-2 text-sm transition-colors ${mdtView === 'month'
-                          ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                          : 'text-gray-600 hover:text-gray-900'
+                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                        : 'text-gray-600 hover:text-gray-900'
                         }`}
                     >
                       Month
@@ -1784,8 +1784,8 @@ const UrologistDashboard = () => {
                   <button
                     onClick={() => setSurgeryView('today')}
                     className={`px-4 py-2 text-sm transition-colors ${surgeryView === 'today'
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                        : 'text-gray-600 hover:text-gray-900'
+                      ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                      : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     Today
@@ -1793,8 +1793,8 @@ const UrologistDashboard = () => {
                   <button
                     onClick={() => setSurgeryView('week')}
                     className={`px-4 py-2 text-sm transition-colors ${surgeryView === 'week'
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                        : 'text-gray-600 hover:text-gray-900'
+                      ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                      : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     This Week
@@ -1802,8 +1802,8 @@ const UrologistDashboard = () => {
                   <button
                     onClick={() => setSurgeryView('month')}
                     className={`px-4 py-2 text-sm transition-colors ${surgeryView === 'month'
-                        ? 'text-teal-600 font-medium border-b-2 border-teal-600'
-                        : 'text-gray-600 hover:text-gray-900'
+                      ? 'text-teal-600 font-medium border-b-2 border-teal-600'
+                      : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     This Month
@@ -1841,8 +1841,8 @@ const UrologistDashboard = () => {
                                 {surgery.scheduledTime}
                               </span>
                               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${surgery.priorityColor === 'red' ? 'bg-red-100 text-red-700' :
-                                  surgery.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
-                                    'bg-green-100 text-green-700'
+                                surgery.priorityColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-green-100 text-green-700'
                                 }`}>
                                 {surgery.priority}
                               </span>
@@ -1866,8 +1866,8 @@ const UrologistDashboard = () => {
                               {surgery.age ? `${surgery.age} years old` : 'N/A'}
                             </div>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${surgery.statusColor === 'blue' ? 'bg-blue-100 text-blue-700' :
-                                surgery.statusColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
-                                  'bg-green-100 text-green-700'
+                              surgery.statusColor === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
                               }`}>
                               {surgery.status}
                             </span>
