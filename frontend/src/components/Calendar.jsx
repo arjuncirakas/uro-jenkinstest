@@ -376,10 +376,15 @@ const Calendar = ({
       // Use the isRecurringFollowup helper to catch all automatic appointments
       // This includes appointments with typeColor='blue', type='automatic', 
       // appointment_type='automatic', or notes containing auto-booked/recurring patterns
-      const isAutomatic = isRecurringFollowup(apt);
+      // const isAutomatic = isRecurringFollowup(apt); // Unused now meant for color coding only
 
-      // Categorize: appointments without time slots OR automatic appointments go to 'automatic' array
-      if (hasNoTimeSlot || isAutomatic) {
+      // Catch all appointments without a time slot
+      // Previously this also included automatic/recurring appointments regardless of time,
+      // but now we show them in time slots if they have one.
+
+      // Categorize: appointments without time slots go to 'automatic' array
+      // Everything else (appointments with time slots) goes to 'regular' array
+      if (hasNoTimeSlot) {
         automatic.push(apt);
       } else {
         regular.push(apt);
