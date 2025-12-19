@@ -263,14 +263,18 @@ const OPDManagement = () => {
 
   // Listen for appointment booking events to refresh new patients list
   // When an appointment is booked, the patient should be removed from new patients list
+  // Listen for appointment booking events to refresh new patients list
+  // When an appointment is booked, the patient should be removed from new patients list
   useEffect(() => {
     const handleAppointmentBooked = (event) => {
       console.log('Appointment booked event received in OPD Management:', event.detail);
       // Refresh new patients list to remove patients who now have appointments
-      // Add a small delay to ensure backend has processed the appointment
+      // Refresh appointments to show the new booking
+      // Add a delay to ensure backend has processed the appointment
       setTimeout(() => {
         fetchNewPatients();
-      }, 500);
+        fetchTodaysAppointments(activeAppointmentTab);
+      }, 800);
     };
 
     window.addEventListener('appointment:updated', handleAppointmentBooked);
@@ -282,7 +286,7 @@ const OPDManagement = () => {
       window.removeEventListener('appointment:booked', handleAppointmentBooked);
       window.removeEventListener('investigationBooked', handleAppointmentBooked);
     };
-  }, []);
+  }, [activeAppointmentTab]);
 
   // Listen for test result added events to refresh appointments data
   useEffect(() => {
@@ -1213,7 +1217,7 @@ const OPDManagement = () => {
           // Add small delay to ensure backend has processed the appointment
           setTimeout(() => {
             refreshAllData();
-          }, 300);
+          }, 800);
         }}
       />
 
@@ -1229,7 +1233,7 @@ const OPDManagement = () => {
           // Add small delay to ensure backend has processed the appointment
           setTimeout(() => {
             refreshAllData();
-          }, 300);
+          }, 800);
         }}
       />
 
