@@ -708,36 +708,64 @@ const UrologistDashboard = () => {
       const result = await mdtService.getMyMDTMeetings();
       if (result.success) {
         const meetings = result.data?.meetings || [];
-        // Map API meetings to dashboard card structure
+        // Get current date/time for filtering
+        const now = new Date();
+        
+        // Map API meetings to dashboard card structure and filter out past meetings
         const palette = ['teal', 'blue', 'purple', 'orange'];
-        const mapped = meetings.map(m => ({
-          id: m.id,
-          date: m.meetingDate,
-          time: formatTime(m.meetingTime),
-          department: 'MDT',
-          location: 'Clinic',
-          patientId: m.patient?.id,
-          patientName: m.patient?.name,
-          attendees: (m.teamMembers || []).slice(0, 5).map((tm, idx) => ({
-            name: tm.name,
-            initials: (tm.name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-            color: palette[idx % palette.length]
-          })),
-          patientsCount: 1,
-          chair: m.createdBy?.name || '—'
-        }));
-        // Sort ascending by meeting datetime and ensure the first is the next upcoming
-        const withSortKey = mapped.map(item => ({
-          ...item,
-          _dt: new Date(item.date).setHours(
-            parseInt((item.time || '00:00').split(':')[0], 10),
-            parseInt((item.time || '00:00').split(':')[1], 10),
-            0,
-            0
-          )
-        }));
-        withSortKey.sort((a, b) => a._dt - b._dt);
-        setMdtSchedules(withSortKey.map(({ _dt, ...rest }) => rest));
+        const mapped = meetings.map(m => {
+          // Parse meeting date and time to create a datetime object
+          const meetingDate = new Date(m.meetingDate);
+          const timeStr = m.meetingTime || '00:00';
+          
+          // Parse time string (expected format: "HH:MM" or "HH:MM:SS")
+          const timeParts = timeStr.split(':');
+          const hours = parseInt(timeParts[0] || '0', 10);
+          const minutes = parseInt(timeParts[1] || '0', 10);
+          
+          // Set the time on the meeting date
+          const meetingDateTime = new Date(meetingDate);
+          meetingDateTime.setHours(hours, minutes, 0, 0);
+          
+          return {
+            id: m.id,
+            date: m.meetingDate,
+            time: formatTime(m.meetingTime), // Formatted time for display
+            department: 'MDT',
+            location: 'Clinic',
+            patientId: m.patient?.id,
+            patientName: m.patient?.name,
+            attendees: (m.teamMembers || []).slice(0, 5).map((tm, idx) => ({
+              name: tm.name,
+              initials: (tm.name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
+              color: palette[idx % palette.length]
+            })),
+            patientsCount: 1,
+            chair: m.createdBy?.name || '—',
+            status: m.status, // Store status for filtering
+            _dt: meetingDateTime.getTime() // Store timestamp for sorting and filtering
+          };
+        });
+        
+        // Filter out past meetings and completed meetings (only keep upcoming ones)
+        const upcomingMeetings = mapped.filter(item => {
+          // Exclude if meeting time has passed
+          if (item._dt < now.getTime()) {
+            return false;
+          }
+          // Exclude if status indicates completion (case-insensitive check)
+          const status = (item.status || '').toLowerCase();
+          if (status === 'completed' || status === 'done' || status === 'finished' || status === 'closed') {
+            return false;
+          }
+          return true;
+        });
+        
+        // Sort by datetime (ascending - earliest first)
+        upcomingMeetings.sort((a, b) => a._dt - b._dt);
+        
+        // Remove the temporary _dt field
+        setMdtSchedules(upcomingMeetings.map(({ _dt, ...rest }) => rest));
       } else {
         setMdtSchedulesError(result.error || 'Failed to fetch MDT schedules');
         setMdtSchedules([]);
