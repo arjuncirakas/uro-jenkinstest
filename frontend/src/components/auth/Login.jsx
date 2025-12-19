@@ -19,7 +19,7 @@ const Login = () => {
     userId: null,
     email: ''
   });
-  
+
   // Modal states
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -28,17 +28,17 @@ const Login = () => {
   const [modalMessage, setModalMessage] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState(null);
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  
+
   // Field-specific validation errors
   const [fieldErrors, setFieldErrors] = useState({
     email: '',
     password: ''
   });
-  
+
   // Track if fields have been touched
   const [touched, setTouched] = useState({
     email: false,
@@ -50,12 +50,12 @@ const Login = () => {
     if (!email || email.trim() === '') {
       return 'Email is required';
     }
-    
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return 'Please enter a valid email address';
     }
-    
+
     return '';
   };
 
@@ -63,23 +63,23 @@ const Login = () => {
     if (!password || password.trim() === '') {
       return 'Password is required';
     }
-    
+
     if (password.length < 6) {
       return 'Password must be at least 6 characters long';
     }
-    
+
     return '';
   };
 
   const validateForm = () => {
     const emailError = validateEmail(formData.email);
     const passwordError = validatePassword(formData.password);
-    
+
     setFieldErrors({
       email: emailError,
       password: passwordError
     });
-    
+
     return !emailError && !passwordError;
   };
 
@@ -104,28 +104,28 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Mark all fields as touched
     setTouched({
       email: true,
       password: true
     });
-    
+
     // Validate form
     if (!validateForm()) {
       setError('Please fix the errors below before submitting');
       return;
     }
-    
+
     // Clear any existing tokens before login attempt (prevent auto-redirect from old tokens)
     authService.logout().catch(() => {
       // Ignore errors if logout fails (user might not be logged in)
     });
-    
+
     setIsLoading(true);
     setError('');
     setSuccessMessage('');
-    
+
     try {
       // Call login API (may require OTP based on role)
       const response = await authService.login(formData.email, formData.password);
@@ -135,14 +135,14 @@ const Login = () => {
       console.log('🔍 requiresOTPVerification:', response.data?.requiresOTPVerification);
       console.log('🔍 has accessToken:', !!response.data?.accessToken);
       console.log('🔍 has user:', !!response.data?.user);
-      
+
       if (response.success) {
-        // PRIORITY 1: Check if OTP verification is required (for nurses, urologists, doctors, gp)
+        // PRIORITY 1: Check if OTP verification is required (for all roles including superadmin and department_admin)
         // This must be checked FIRST before checking for direct login
         if (response.data && response.data.requiresOTPVerification === true) {
           console.log('📧 OTP verification required - showing OTP modal');
           console.log('📧 OTP Data - userId:', response.data.userId, 'email:', response.data.email);
-          
+
           // Show OTP modal for verification
           setOtpData({
             userId: response.data.userId,
@@ -151,20 +151,20 @@ const Login = () => {
           setShowOTPModal(true);
           setSuccessMessage(response.message || 'Please check your email for OTP verification.');
           setIsLoading(false); // Stop loading since we're showing OTP modal
-          
+
           // CRITICAL: Return early to prevent any redirect
           return;
-        } 
-        // PRIORITY 2: Check if direct login (for superadmin - tokens already returned)
-        // Only check this if requiresOTPVerification is NOT true
+        }
+        // PRIORITY 2: Check if direct login (tokens already returned)
+        // Only check this if requiresOTPVerification is NOT true (legacy support)
         else if (response.data && response.data.user && response.data.accessToken) {
           console.log('✅ Direct login successful, user role:', response.data.user.role);
-          
+
           // Verify tokens are set before navigation
           const token = authService.isAuthenticated();
           const user = authService.getCurrentUser();
           console.log('🔐 Token set:', !!token, 'User loaded:', !!user);
-          
+
           if (!token || !user) {
             console.error('❌ Tokens not properly set, retrying...');
             // Wait a bit more for token to be set
@@ -183,13 +183,13 @@ const Login = () => {
             }, 500);
             return;
           }
-          
+
           setSuccessMessage('Login successful! Redirecting to your dashboard...');
-          
+
           // Use authService to get the correct route for the user's role
           const dashboardRoute = authService.getRoleRoutes();
           console.log('📍 Navigating to:', dashboardRoute);
-          
+
           // Navigate to appropriate dashboard based on user role
           // Small delay to ensure token is fully set in localStorage
           setTimeout(() => {
@@ -225,7 +225,7 @@ const Login = () => {
     try {
       // Call login OTP verification API
       const response = await authService.verifyLoginOTP(otpData.email, otp);
-      
+
       if (response.success) {
         // Close OTP modal
         setShowOTPModal(false);
@@ -235,7 +235,7 @@ const Login = () => {
         const token = authService.isAuthenticated();
         const user = authService.getCurrentUser();
         console.log('🔐 OTP - Token set:', !!token, 'User loaded:', !!user);
-        
+
         if (!token || !user) {
           console.error('❌ OTP - Tokens not properly set, retrying...');
           // Wait a bit more for token to be set
@@ -283,10 +283,10 @@ const Login = () => {
     try {
       setOtpLoading(true);
       setOtpError(null);
-      
+
       // Call resend login OTP API
       const response = await authService.resendLoginOTP(otpData.email);
-      
+
       if (response.success) {
         setSuccessMessage(response.message);
       } else {
@@ -310,12 +310,12 @@ const Login = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     setFormData({
       ...formData,
       [name]: value
     });
-    
+
     // Validate field if it has been touched
     if (touched[name]) {
       let error = '';
@@ -324,7 +324,7 @@ const Login = () => {
       } else if (name === 'password') {
         error = validatePassword(value);
       }
-      
+
       setFieldErrors({
         ...fieldErrors,
         [name]: error
@@ -334,13 +334,13 @@ const Login = () => {
 
   const handleBlur = (e) => {
     const { name, value } = e.target;
-    
+
     // Mark field as touched
     setTouched({
       ...touched,
       [name]: true
     });
-    
+
     // Validate on blur
     let error = '';
     if (name === 'email') {
@@ -348,7 +348,7 @@ const Login = () => {
     } else if (name === 'password') {
       error = validatePassword(value);
     }
-    
+
     setFieldErrors({
       ...fieldErrors,
       [name]: error
@@ -361,9 +361,9 @@ const Login = () => {
         {/* Logo and Header */}
         <div className="text-center mb-6">
           <div className="mx-auto flex items-center justify-center mb-4">
-            <img 
-              src="/rdshgdsr.png" 
-              alt="Uro - Urology Care System" 
+            <img
+              src="/rdshgdsr.png"
+              alt="Uro - Urology Care System"
               className="h-20 w-auto object-contain"
             />
           </div>
@@ -378,19 +378,19 @@ const Login = () => {
         {/* Login Form Card */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
 
-        {/* Success Message */}
-        {successMessage && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-600 text-sm">{successMessage}</p>
-          </div>
-        )}
+          {/* Success Message */}
+          {successMessage && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-600 text-sm">{successMessage}</p>
+            </div>
+          )}
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-600 text-sm">{error}</p>
-          </div>
-        )}
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
 
           <form className="space-y-4" onSubmit={handleSubmit} method="post">
             {/* Email Input */}
@@ -411,11 +411,10 @@ const Login = () => {
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 transition-colors ${
-                    fieldErrors.email && touched.email
+                  className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 transition-colors ${fieldErrors.email && touched.email
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                       : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
-                  }`}
+                    }`}
                   placeholder="Enter your email address"
                 />
               </div>
@@ -447,11 +446,10 @@ const Login = () => {
                   value={formData.password}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 transition-colors ${
-                    fieldErrors.password && touched.password
+                  className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 transition-colors ${fieldErrors.password && touched.password
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                       : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
-                  }`}
+                    }`}
                   placeholder="Enter your password"
                 />
                 <button

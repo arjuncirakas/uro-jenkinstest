@@ -8,7 +8,7 @@ import { checkAccountLockout, incrementFailedAttempts, resetFailedAttempts } fro
 // Register a new user (Step 1: Send OTP)
 export const register = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { email, password, firstName, lastName, phone, organization, role } = req.body;
 
@@ -36,7 +36,7 @@ export const register = async (req, res) => {
         'SELECT id FROM users WHERE phone = $1',
         [phone]
       );
-      
+
       if (existingPhone.rows.length > 0) {
         return res.status(409).json({
           success: false,
@@ -64,7 +64,7 @@ export const register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: otpResult.emailSent 
+      message: otpResult.emailSent
         ? 'Registration initiated. Please check your email for OTP verification.'
         : 'Registration initiated. OTP stored but email sending failed. Please contact support.',
       data: {
@@ -89,17 +89,17 @@ export const register = async (req, res) => {
 // Verify OTP and complete registration
 export const verifyRegistrationOTP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { email, otp } = req.body;
 
     // Verify OTP
     const otpResult = await verifyOTP(email, otp, 'registration');
-    
+
     if (!otpResult.success) {
       // Increment attempt count
       await incrementOTPAttempts(email, otp, 'registration');
-      
+
       return res.status(400).json({
         success: false,
         message: otpResult.message
@@ -167,7 +167,7 @@ export const verifyRegistrationOTP = async (req, res) => {
 // Resend OTP for registration
 export const resendRegistrationOTP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { email } = req.body;
 
@@ -196,7 +196,7 @@ export const resendRegistrationOTP = async (req, res) => {
 
     res.json({
       success: true,
-      message: otpResult.emailSent 
+      message: otpResult.emailSent
         ? 'OTP resent successfully. Please check your email.'
         : 'OTP resent but email sending failed. Please contact support.',
       emailSent: otpResult.emailSent
@@ -222,20 +222,20 @@ export const login = async (req, res) => {
       resolve();
     };
     const originalJson = res.json.bind(res);
-    res.json = function(data) {
+    res.json = function (data) {
       lockoutBlocked = true;
       return originalJson(data);
     };
     checkAccountLockout(req, res, mockNext);
   });
-  
+
   // If lockout check blocked the request, it already sent a response
   if (lockoutBlocked || res.headersSent) {
     return;
   }
-  
+
   const client = await pool.connect();
-  
+
   try {
     const { email, password } = req.body;
 
@@ -283,7 +283,7 @@ export const login = async (req, res) => {
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    
+
     if (!isPasswordValid) {
       console.log(`❌ Login failed: Invalid password - ${email}`);
       await logFailedAccess(req, 'Invalid password');
@@ -293,62 +293,25 @@ export const login = async (req, res) => {
         message: 'Invalid email or password'
       });
     }
-    
+
     // Password is valid - reset failed attempts and log success
     await resetFailedAttempts(user.id);
     await logAuthEvent(req, 'login.password_verified', 'success');
 
     console.log(`✅ Password verified for: ${email}, role: ${user.role}`);
 
-    // Check if user is superadmin or department_admin - skip OTP verification
-    if (user.role === 'superadmin' || user.role === 'department_admin') {
-      console.log(`🔓 ${user.role} login - skipping OTP verification for: ${email}`);
-      
-      // Generate tokens directly
-      const tokens = generateTokens(user);
-
-      // Store refresh token in database
-      await client.query(
-        'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-        [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
-      );
-
-      // Set secure HTTP-only cookie for refresh token
-      res.cookie('refreshToken', tokens.refreshToken, getCookieOptions());
-
-      // Return tokens directly
-      res.json({
-        success: true,
-        message: 'Login successful',
-        data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.first_name,
-            lastName: user.last_name,
-            role: user.role,
-            isActive: user.is_active,
-            isVerified: user.is_verified
-          },
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken
-        }
-      });
-      return;
-    }
-
-    // For all other roles (nurse, urologist, doctor, gp), require OTP verification
+    // All roles now require OTP verification (including superadmin and department_admin)
     console.log(`📧 OTP required for role: ${user.role} - ${email}`);
-    
+
     try {
       // Generate and store OTP for login verification
       const otpResult = await storeOTP(user.id, email, 'login_verification');
-      
+
       console.log(`✅ OTP stored for ${email}, email sent: ${otpResult.emailSent}`);
 
       res.json({
         success: true,
-        message: otpResult.emailSent 
+        message: otpResult.emailSent
           ? 'Login initiated. Please check your email for OTP verification.'
           : 'Login initiated. OTP stored but email sending failed. Please contact support.',
         data: {
@@ -381,17 +344,17 @@ export const login = async (req, res) => {
 // Verify login OTP and complete login
 export const verifyLoginOTP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { email, otp } = req.body;
 
     // Verify OTP
     const otpResult = await verifyOTP(email, otp, 'login_verification');
-    
+
     if (!otpResult.success) {
       // Increment attempt count
       await incrementOTPAttempts(email, otp, 'login_verification');
-      
+
       return res.status(400).json({
         success: false,
         message: otpResult.message
@@ -468,7 +431,7 @@ export const verifyLoginOTP = async (req, res) => {
 // Resend login OTP
 export const resendLoginOTP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { email } = req.body;
 
@@ -506,7 +469,7 @@ export const resendLoginOTP = async (req, res) => {
 
     res.json({
       success: true,
-      message: otpResult.emailSent 
+      message: otpResult.emailSent
         ? 'Login OTP resent successfully. Please check your email.'
         : 'Login OTP resent but email sending failed. Please contact support.',
       emailSent: otpResult.emailSent
@@ -526,10 +489,10 @@ export const resendLoginOTP = async (req, res) => {
 // Refresh access token
 export const refreshToken = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { refreshToken } = req.body;
-    
+
     console.log('🔄 Token refresh attempt received');
 
     // Verify refresh token
@@ -553,7 +516,7 @@ export const refreshToken = async (req, res) => {
     }
 
     const tokenData = result.rows[0];
-    
+
     if (!tokenData.is_active) {
       return res.status(401).json({
         success: false,
@@ -596,7 +559,7 @@ export const refreshToken = async (req, res) => {
   } catch (error) {
     console.error('❌ Refresh token error:', error.message);
     console.error('Error type:', error.name);
-    
+
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,
@@ -616,7 +579,7 @@ export const refreshToken = async (req, res) => {
 // Logout user
 export const logout = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { refreshToken } = req.body;
 
@@ -648,7 +611,7 @@ export const logout = async (req, res) => {
 export const getProfile = async (req, res) => {
   try {
     const { password_hash, ...userWithoutPassword } = req.user;
-    
+
     res.json({
       success: true,
       data: {
@@ -667,7 +630,7 @@ export const getProfile = async (req, res) => {
 // Request password reset (Step 1: Send OTP)
 export const requestPasswordReset = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { email } = req.body;
 
@@ -722,17 +685,17 @@ export const requestPasswordReset = async (req, res) => {
 // Verify password reset OTP (Step 2: Verify OTP)
 export const verifyPasswordResetOTP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { email, otp } = req.body;
 
     // Verify OTP
     const otpResult = await verifyOTP(email, otp, 'password_reset');
-    
+
     if (!otpResult.success) {
       // Increment attempt count
       await incrementOTPAttempts(email, otp, 'password_reset');
-      
+
       return res.status(400).json({
         success: false,
         message: otpResult.message
@@ -772,7 +735,7 @@ export const verifyPasswordResetOTP = async (req, res) => {
 // Reset password (Step 3: Set new password)
 export const resetPassword = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { resetToken, newPassword } = req.body;
 

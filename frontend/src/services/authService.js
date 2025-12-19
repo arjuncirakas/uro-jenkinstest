@@ -49,7 +49,7 @@ class AuthService {
     }
   }
 
-  // Login user (Step 1: Send OTP or direct login for superadmin)
+  // Login user (Step 1: Send OTP for all roles)
   async login(email, password) {
     try {
       const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, {
@@ -57,16 +57,16 @@ class AuthService {
         password
       });
 
-      // Only store tokens if it's a direct login (superadmin) - NOT if OTP is required
+      // Only store tokens if it's a direct login (legacy support) - NOT if OTP is required
       if (response.data.success &&
         response.data.data &&
         response.data.data.accessToken &&
         !response.data.data.requiresOTPVerification) {
-        // Direct login successful (superadmin) - store tokens and user data
+        // Direct login successful (legacy support) - store tokens and user data
         const { user, accessToken, refreshToken } = response.data.data;
         tokenService.setTokens(accessToken, refreshToken);
         tokenService.setUser(user);
-        console.log('✅ Tokens stored for direct login (superadmin)');
+        console.log('✅ Tokens stored for direct login (legacy support)');
       } else if (response.data.success && response.data.data && response.data.data.requiresOTPVerification) {
         // OTP required - do NOT store tokens
         console.log('📧 OTP verification required - tokens NOT stored');
