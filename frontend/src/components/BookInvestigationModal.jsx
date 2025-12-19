@@ -33,6 +33,11 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     trus: false,
     biopsy: false
   });
+  const [templateAvailability, setTemplateAvailability] = useState({
+    mri: null, // null = checking, true = available, false = not available
+    trus: null,
+    biopsy: null
+  });
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -84,9 +89,99 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     }
   }, [isOpen]);
 
+  // Check if template file URL is accessible
+  // Returns: true if available, false if definitely not available, null if uncertain (CORS/network issues)
+  const checkTemplateAvailability = async (template) => {
+    if (!template || template.is_auto_generated) {
+      // Auto-generated templates don't need file checks
+      return true;
+    }
+
+    if (!template.template_file_url) {
+      return false;
+    }
+
+    try {
+      // Create an AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      try {
+        const response = await fetch(template.template_file_url, {
+          method: 'HEAD',
+          signal: controller.signal,
+          cache: 'no-cache'
+        });
+
+        clearTimeout(timeoutId);
+        
+        // If we get a 404, it's definitely not available
+        if (response.status === 404) {
+          return false;
+        }
+        
+        // If we get any other response, consider it available (even if it's an error, might be CORS)
+        return response.ok;
+      } catch (headError) {
+        // If HEAD fails (CORS or network error), try GET with range request
+        clearTimeout(timeoutId);
+        
+        // If it's an abort (timeout), assume it might still be available (network issue)
+        if (headError.name === 'AbortError') {
+          console.warn('Template availability check timed out:', template.template_file_url);
+          return null; // Uncertain - don't block printing
+        }
+        
+        const getController = new AbortController();
+        const getTimeoutId = setTimeout(() => getController.abort(), 5000);
+
+        try {
+          const response = await fetch(template.template_file_url, {
+            method: 'GET',
+            headers: { 'Range': 'bytes=0-1' }, // Only fetch first 2 bytes
+            signal: getController.signal,
+            cache: 'no-cache'
+          });
+
+          clearTimeout(getTimeoutId);
+          
+          // If we get a 404, it's definitely not available
+          if (response.status === 404) {
+            return false;
+          }
+          
+          return response.ok || response.status === 206; // 206 is Partial Content, which is fine
+        } catch (getError) {
+          clearTimeout(getTimeoutId);
+          
+          // If it's a network/CORS error, don't mark as unavailable - might still work
+          if (getError.name === 'AbortError' || getError.message?.includes('CORS') || getError.message?.includes('Failed to fetch')) {
+            console.warn('Template availability check failed (network/CORS issue):', template.template_file_url);
+            return null; // Uncertain - don't block printing
+          }
+          
+          console.warn(`Template file not accessible: ${template.template_file_url}`, getError);
+          return false;
+        }
+      }
+    } catch (error) {
+      // If it's a network/CORS error, don't mark as unavailable
+      if (error.message?.includes('CORS') || error.message?.includes('Failed to fetch')) {
+        console.warn('Template availability check failed (network/CORS issue):', template.template_file_url);
+        return null; // Uncertain - don't block printing
+      }
+      
+      console.warn(`Template file not accessible: ${template.template_file_url}`, error);
+      return false;
+    }
+  };
+
   // Fetch consent form templates
   const fetchConsentFormTemplates = async () => {
     setLoadingConsentForms(true);
+    // Reset availability status
+    setTemplateAvailability({ mri: null, trus: null, biopsy: null });
+    
     try {
       const response = await consentFormService.getConsentFormTemplates();
       if (response.success) {
@@ -111,6 +206,31 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         setMriConsentForm(mriTemplate);
         setTrusConsentForm(trusTemplate);
         setBiopsyConsentForm(biopsyTemplate);
+
+        // Check availability for each template
+        if (mriTemplate) {
+          checkTemplateAvailability(mriTemplate, 'mri').then(isAvailable => {
+            setTemplateAvailability(prev => ({ ...prev, mri: isAvailable }));
+          });
+        } else {
+          setTemplateAvailability(prev => ({ ...prev, mri: false }));
+        }
+
+        if (trusTemplate) {
+          checkTemplateAvailability(trusTemplate, 'trus').then(isAvailable => {
+            setTemplateAvailability(prev => ({ ...prev, trus: isAvailable }));
+          });
+        } else {
+          setTemplateAvailability(prev => ({ ...prev, trus: false }));
+        }
+
+        if (biopsyTemplate) {
+          checkTemplateAvailability(biopsyTemplate, 'biopsy').then(isAvailable => {
+            setTemplateAvailability(prev => ({ ...prev, biopsy: isAvailable }));
+          });
+        } else {
+          setTemplateAvailability(prev => ({ ...prev, biopsy: false }));
+        }
       }
     } catch (error) {
       console.error('Error fetching consent form templates:', error);
@@ -263,6 +383,21 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const handlePrintConsentForm = async (template, testName) => {
     if (!template || !patient) return;
 
+    // Only block if we're CERTAIN the template is not available
+    // Allow printing if availability is null (still checking) or true (available)
+    if (!template.is_auto_generated && template.template_file_url) {
+      const testType = testName.toLowerCase();
+      const availability = templateAvailability[testType];
+      
+      // Only block if explicitly marked as unavailable
+      if (availability === false) {
+        alert(`Template file appears to be unavailable for ${testName}. The file may have been moved or deleted. Please contact the administrator.`);
+        return;
+      }
+      
+      // If still checking or available, proceed - let the browser handle any errors
+    }
+
     try {
       if (template.is_auto_generated) {
         // For auto-generated forms, create a printable HTML version with patient details
@@ -404,12 +539,45 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         // For uploaded PDF templates, open for printing
         const printWindow = window.open(template.template_file_url, '_blank');
         if (printWindow) {
+          // Handle both onload and error cases
           printWindow.onload = () => {
             setTimeout(() => {
-              printWindow.print();
+              try {
+                printWindow.print();
+              } catch (printError) {
+                console.error('Error triggering print:', printError);
+                // If print fails, at least the PDF is open for manual printing
+              }
             }, 500);
           };
+          
+          // If the window fails to load (e.g., 404), show an error after a delay
+          setTimeout(() => {
+            try {
+              // Check if window is still accessible and has content
+              if (printWindow && !printWindow.closed) {
+                // Try to access the document - if it fails, the file might not be available
+                try {
+                  const hasContent = printWindow.document && printWindow.document.body;
+                  if (!hasContent) {
+                    printWindow.close();
+                    alert(`Unable to load the template file for ${testName}. The file may have been moved or deleted. Please contact the administrator.`);
+                  }
+                } catch (accessError) {
+                  // CORS or other access error - file might still be loading or might not exist
+                  console.warn('Could not access print window content:', accessError);
+                }
+              }
+            } catch (checkError) {
+              console.warn('Error checking print window:', checkError);
+            }
+          }, 2000);
+        } else {
+          // Popup blocked or failed to open
+          alert(`Unable to open the template file. Please check your popup blocker settings or try opening the file manually: ${template.template_file_url}`);
         }
+      } else {
+        alert(`No template file URL available for ${testName}. Please contact the administrator.`);
       }
     } catch (error) {
       console.error('Error printing consent form:', error);
@@ -802,8 +970,16 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <div>
                           <div className="text-sm font-medium text-gray-900">MRI Consent Form</div>
                           {mriConsentForm ? (
-                            <div className="text-xs text-gray-600">
-                              {mriConsentForm.is_auto_generated ? 'Auto-generated' : 'Template available'}
+                            <div className="text-xs">
+                              {mriConsentForm.is_auto_generated ? (
+                                <span className="text-gray-600">Auto-generated</span>
+                              ) : templateAvailability.mri === null ? (
+                                <span className="text-gray-600">Template available</span>
+                              ) : templateAvailability.mri ? (
+                                <span className="text-gray-600">Template available</span>
+                              ) : (
+                                <span className="text-red-600 font-medium">Template not available</span>
+                              )}
                             </div>
                           ) : (
                             <div className="text-xs text-yellow-600">No template found</div>
@@ -811,10 +987,22 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         </div>
                       </div>
                       {mriConsentForm && (
-                        <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                          templateAvailability.mri === false 
+                            ? 'bg-red-500' 
+                            : templateAvailability.mri === true 
+                              ? 'bg-teal-500' 
+                              : 'bg-gray-400'
+                        }`}>
+                          {templateAvailability.mri === false ? (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
                         </div>
                       )}
                     </div>
@@ -823,7 +1011,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(mriConsentForm, 'MRI')}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                          disabled={!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            !mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false
+                              ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
+                              : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
+                          }`}
                         >
                           <IoPrint className="h-4 w-4 mr-2" />
                           Print
@@ -861,8 +1054,16 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <div>
                           <div className="text-sm font-medium text-gray-900">TRUS Consent Form</div>
                           {trusConsentForm ? (
-                            <div className="text-xs text-gray-600">
-                              {trusConsentForm.is_auto_generated ? 'Auto-generated' : 'Template available'}
+                            <div className="text-xs">
+                              {trusConsentForm.is_auto_generated ? (
+                                <span className="text-gray-600">Auto-generated</span>
+                              ) : templateAvailability.trus === null ? (
+                                <span className="text-gray-600">Template available</span>
+                              ) : templateAvailability.trus ? (
+                                <span className="text-gray-600">Template available</span>
+                              ) : (
+                                <span className="text-red-600 font-medium">Template not available</span>
+                              )}
                             </div>
                           ) : (
                             <div className="text-xs text-yellow-600">No template found</div>
@@ -870,10 +1071,22 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         </div>
                       </div>
                       {trusConsentForm && (
-                        <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                          templateAvailability.trus === false 
+                            ? 'bg-red-500' 
+                            : templateAvailability.trus === true 
+                              ? 'bg-teal-500' 
+                              : 'bg-gray-400'
+                        }`}>
+                          {templateAvailability.trus === false ? (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
                         </div>
                       )}
                     </div>
@@ -882,7 +1095,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(trusConsentForm, 'TRUS')}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                          disabled={!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            !trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false
+                              ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
+                              : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
+                          }`}
                         >
                           <IoPrint className="h-4 w-4 mr-2" />
                           Print
@@ -920,8 +1138,16 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <div>
                           <div className="text-sm font-medium text-gray-900">Biopsy Consent Form</div>
                           {biopsyConsentForm ? (
-                            <div className="text-xs text-gray-600">
-                              {biopsyConsentForm.is_auto_generated ? 'Auto-generated' : 'Template available'}
+                            <div className="text-xs">
+                              {biopsyConsentForm.is_auto_generated ? (
+                                <span className="text-gray-600">Auto-generated</span>
+                              ) : templateAvailability.biopsy === null ? (
+                                <span className="text-gray-600">Template available</span>
+                              ) : templateAvailability.biopsy ? (
+                                <span className="text-gray-600">Template available</span>
+                              ) : (
+                                <span className="text-red-600 font-medium">Template not available</span>
+                              )}
                             </div>
                           ) : (
                             <div className="text-xs text-yellow-600">No template found</div>
@@ -929,10 +1155,22 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         </div>
                       </div>
                       {biopsyConsentForm && (
-                        <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                          templateAvailability.biopsy === false 
+                            ? 'bg-red-500' 
+                            : templateAvailability.biopsy === true 
+                              ? 'bg-teal-500' 
+                              : 'bg-gray-400'
+                        }`}>
+                          {templateAvailability.biopsy === false ? (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
                         </div>
                       )}
                     </div>
@@ -941,7 +1179,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(biopsyConsentForm, 'Biopsy')}
-                          className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                          disabled={!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            !biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false
+                              ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
+                              : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
+                          }`}
                         >
                           <IoPrint className="h-4 w-4 mr-2" />
                           Print

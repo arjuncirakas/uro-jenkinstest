@@ -68,14 +68,17 @@ const Appointments = () => {
     return () => clearTimeout(timeoutId);
   }, [fetchAppointments, searchQuery]);
 
-  // Filter appointments based on toggle state
-  // NOTE: Search is now handled server-side, so we just use the appointments as-is
-  // NOTE: Include all appointments including 'missed'/'no_show' so they appear in the calendar
+  // Filter appointments - exclude missed and no-show appointments from urologist view
+  // NOTE: Search is now handled server-side, so we just filter the status client-side
   const filteredAppointments = useMemo(() => {
-    return allAppointments; // Show all appointments including missed/no-show
+    return allAppointments.filter(apt =>
+      apt.status !== 'missed' &&
+      apt.status !== 'no_show' &&
+      apt.status !== 'no-show'
+    );
   }, [allAppointments]);
 
-  // Get appointments for selected date (including both regular and missed appointments)
+  // Get appointments for selected date (excluding missed and no-show appointments)
   const dailyAppointments = useMemo(() => {
     if (!selectedDate) return [];
 
@@ -85,11 +88,14 @@ const Appointments = () => {
     const day = String(selectedDate.getDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${day}`;
 
-    // Filter appointments for the selected date
-    // Note: Search is handled server-side, so appointments are already filtered
+    // Filter appointments for the selected date, excluding missed and no-show
     const dayAppointments = allAppointments.filter(apt => {
       const aptDate = apt.date || apt.appointment_date;
-      return aptDate === dateString;
+      const isDateMatch = aptDate === dateString;
+      const isNotMissed = apt.status !== 'missed' &&
+        apt.status !== 'no_show' &&
+        apt.status !== 'no-show';
+      return isDateMatch && isNotMissed;
     });
 
     // Sort by time
