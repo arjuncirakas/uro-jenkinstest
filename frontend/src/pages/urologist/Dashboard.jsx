@@ -180,9 +180,36 @@ const UrologistDashboard = () => {
             patientName: allAppointments[0].patientName,
             urologist: allAppointments[0].urologist,
             time: allAppointments[0].time,
+            appointmentTime: allAppointments[0].appointmentTime,
             type: allAppointments[0].type
           });
         }
+
+        // Normalize appointment data to ensure consistent field names
+        const normalizedAppointments = allAppointments.map(appointment => {
+          // Normalize time field - map appointmentTime to time for consistency
+          const time = appointment.time || appointment.appointmentTime || appointment.appointment_time || appointment.scheduledTime || '';
+          
+          // Normalize type field - handle both "investigation" and "Investigation Appointment"
+          let type = appointment.type || appointment.appointment_type || '';
+          if (type.toLowerCase() === 'investigation') {
+            type = 'Investigation Appointment';
+          } else if (type.toLowerCase() === 'urologist' || type.toLowerCase() === 'surgery') {
+            type = type === 'surgery' ? 'Surgery Appointment' : 'Urologist Consultation';
+          }
+
+          return {
+            ...appointment,
+            time: time,
+            appointmentTime: time, // Keep both for compatibility
+            type: type,
+            // Ensure patientName exists
+            patientName: appointment.patientName || 
+              (appointment.first_name && appointment.last_name 
+                ? `${appointment.first_name} ${appointment.last_name}` 
+                : 'Unknown Patient')
+          };
+        });
 
         // Filter appointments to only show those for the logged-in urologist
         // Match against the "urologist" field in the response
@@ -191,9 +218,9 @@ const UrologistDashboard = () => {
         if (!normalizedCurrentName) {
           // If we don't have the urologist name, show all appointments as fallback
           console.warn('⚠️ Cannot filter appointments: urologist name not available. Showing all appointments.');
-          filteredAppointments = allAppointments;
+          filteredAppointments = normalizedAppointments;
         } else {
-          filteredAppointments = allAppointments.filter(appointment => {
+          filteredAppointments = normalizedAppointments.filter(appointment => {
             const appointmentUrologistName = appointment.urologist ||
               appointment.urologist_name ||
               appointment.urologistName ||
@@ -201,6 +228,7 @@ const UrologistDashboard = () => {
 
             // If appointment has no urologist name, exclude it
             if (!appointmentUrologistName) {
+              console.log(`⚠️ Appointment ${appointment.id} has no urologist name, excluding`);
               return false;
             }
 
@@ -225,6 +253,8 @@ const UrologistDashboard = () => {
         if (filteredAppointments.length === 0 && allAppointments.length > 0) {
           console.warn('⚠️ No appointments matched! Check name matching logic.');
           console.log('Available urologists in appointments:', [...new Set(allAppointments.map(apt => apt.urologist))]);
+          console.log('Current urologist name:', currentUrologistName);
+          console.log('Normalized current name:', normalizedCurrentName);
         }
 
         setAppointments(filteredAppointments);
@@ -1256,17 +1286,17 @@ const UrologistDashboard = () => {
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
                                 {appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
                                   ? 'Flexible'
-                                  : formatTime(appointment.time || appointment.appointmentTime || appointment.scheduledTime) || 'N/A'}
+                                  : formatTime(appointment.time || appointment.appointmentTime || appointment.scheduledTime || appointment.appointment_time) || 'N/A'}
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-900 text-xs sm:text-sm font-medium">
                                 <div className="flex items-center space-x-2">
-                                  <span>{appointment.patientName}</span>
-                                  {appointment.type === 'Investigation Appointment' && (
+                                  <span>{appointment.patientName || 'Unknown Patient'}</span>
+                                  {(appointment.type === 'Investigation Appointment' || appointment.type === 'investigation' || (appointment.type && appointment.type.toLowerCase() === 'investigation')) && (
                                     <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded font-medium">
                                       Investigation
                                     </span>
                                   )}
-                                  {appointment.type === 'Surgery Appointment' && (
+                                  {(appointment.type === 'Surgery Appointment' || appointment.type === 'surgery' || (appointment.type && appointment.type.toLowerCase() === 'surgery')) && (
                                     <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded font-medium">
                                       Surgery
                                     </span>
