@@ -1022,7 +1022,7 @@ export const getTodaysAppointments = async (req, res) => {
           WHERE a.appointment_date = $1 
           AND a.appointment_type = 'urologist'
           AND a.urologist_id = $2
-          AND a.status != 'cancelled'
+          AND a.status != 'cancelled'  -- Includes: scheduled, confirmed, no_show, missed, etc.
           ORDER BY a.appointment_time
         `;
         queryParams.push(doctorId);
@@ -1056,7 +1056,7 @@ export const getTodaysAppointments = async (req, res) => {
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date = $1 
           AND a.appointment_type = 'urologist'
-          AND a.status != 'cancelled'
+          AND a.status != 'cancelled'  -- Includes: scheduled, confirmed, no_show, missed, etc.
           ORDER BY a.appointment_time
         `;
       }
@@ -1095,7 +1095,7 @@ export const getTodaysAppointments = async (req, res) => {
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date = $1
           AND a.urologist_id = $2
-          AND a.status != 'cancelled'
+          AND a.status != 'cancelled'  -- Includes: scheduled, confirmed, no_show, missed, etc.
           
           UNION ALL
           
@@ -1159,7 +1159,7 @@ export const getTodaysAppointments = async (req, res) => {
           FROM appointments a
           JOIN patients p ON a.patient_id = p.id
           WHERE a.appointment_date = $1
-          AND a.status != 'cancelled'
+          AND a.status != 'cancelled'  -- Includes: scheduled, confirmed, no_show, missed, etc.
           
           UNION ALL
           
