@@ -14,7 +14,7 @@ const Appointments = () => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileButtonRef = useRef(null);
-  const [showAllPatients, setShowAllPatients] = useState(false);
+
   const [currentView, setCurrentView] = useState('calendar'); // 'calendar', 'daily', or 'missed'
   const [selectedDate, setSelectedDate] = useState(null);
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, appointment: null });
@@ -23,26 +23,26 @@ const Appointments = () => {
   const [appointmentsError, setAppointmentsError] = useState(null);
   const [notificationCount, setNotificationCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Get current urologist ID from authentication
   const currentUrologistId = tokenService.getUserId();
-  
+
   // Memoized callback to close profile dropdown
   const handleProfileClose = useCallback(() => {
     setIsProfileOpen(false);
   }, []);
-  
+
   // Fetch appointments from API
   const fetchAppointments = useCallback(async () => {
     setLoadingAppointments(true);
     setAppointmentsError(null);
-    
+
     try {
       const result = await bookingService.getAllAppointments({
-        urologistId: showAllPatients ? null : currentUrologistId,
+        urologistId: currentUrologistId, // Always filter by logged-in doctor
         search: searchQuery
       });
-      
+
       if (result.success) {
         // Create a new array reference to ensure React detects the change
         const newAppointments = result.data.appointments || [];
@@ -58,14 +58,14 @@ const Appointments = () => {
     } finally {
       setLoadingAppointments(false);
     }
-  }, [showAllPatients, currentUrologistId, searchQuery]);
+  }, [currentUrologistId, searchQuery]);
 
   useEffect(() => {
     // Debounce search to avoid too many API calls
     const timeoutId = setTimeout(() => {
       fetchAppointments();
     }, searchQuery ? 300 : 0); // 300ms delay when searching, immediate when clearing
-    
+
     return () => clearTimeout(timeoutId);
   }, [fetchAppointments, searchQuery]);
 
@@ -84,20 +84,20 @@ const Appointments = () => {
   // Get appointments for selected date (including both regular and missed appointments)
   const dailyAppointments = useMemo(() => {
     if (!selectedDate) return [];
-    
+
     // Format date as YYYY-MM-DD to match the data format
     const year = selectedDate.getFullYear();
     const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
     const day = String(selectedDate.getDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${day}`;
-    
+
     // Filter appointments for the selected date
     // Note: Search is handled server-side, so appointments are already filtered
     const dayAppointments = allAppointments.filter(apt => {
       const aptDate = apt.date || apt.appointment_date;
       return aptDate === dateString;
     });
-    
+
     // Sort by time
     return dayAppointments.sort((a, b) => {
       const timeA = (a.time || a.appointment_time).split(':').map(Number);
@@ -147,17 +147,17 @@ const Appointments = () => {
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Appointments</h1>
                 <p className="text-gray-500 text-sm mt-1">
-                  {currentView === 'daily' 
+                  {currentView === 'daily'
                     ? `Appointments for ${selectedDate?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`
                     : currentView === 'missed'
-                    ? 'View and manage missed appointments'
-                    : 'Manage your appointments'
+                      ? 'View and manage missed appointments'
+                      : 'Manage your appointments'
                   }
                 </p>
               </div>
             </div>
           </div>
-          
+
           {/* View Filters and Notification */}
           {currentView !== 'daily' && (
             <div className="w-full lg:w-auto flex flex-col lg:flex-row items-start lg:items-center gap-3">
@@ -167,11 +167,10 @@ const Appointments = () => {
                 <div className="flex bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setCurrentView('calendar')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      currentView === 'calendar'
-                        ? 'bg-white text-teal-600 shadow-sm border border-teal-200'
-                        : 'text-gray-600 hover:text-gray-800'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${currentView === 'calendar'
+                      ? 'bg-white text-teal-600 shadow-sm border border-teal-200'
+                      : 'text-gray-600 hover:text-gray-800'
+                      }`}
                   >
                     <span className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${currentView === 'calendar' ? 'bg-teal-500' : 'bg-gray-400'}`}></div>
@@ -180,11 +179,10 @@ const Appointments = () => {
                   </button>
                   <button
                     onClick={() => setCurrentView('missed')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      currentView === 'missed'
-                        ? 'bg-white text-red-600 shadow-sm border border-red-200'
-                        : 'text-gray-600 hover:text-gray-800'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${currentView === 'missed'
+                      ? 'bg-white text-red-600 shadow-sm border border-red-200'
+                      : 'text-gray-600 hover:text-gray-800'
+                      }`}
                   >
                     <span className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${currentView === 'missed' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
@@ -198,7 +196,7 @@ const Appointments = () => {
               <div className="flex items-center gap-3">
                 {/* Notification Icon */}
                 <div className="relative">
-                  <button 
+                  <button
                     onClick={() => setIsNotificationOpen(true)}
                     className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                   >
@@ -236,7 +234,7 @@ const Appointments = () => {
             <div className="flex items-center gap-3">
               {/* Notification Icon */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setIsNotificationOpen(true)}
                   className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                 >
@@ -290,26 +288,22 @@ const Appointments = () => {
         {/* Content Section */}
         <div className="mt-6">
           {currentView === 'daily' ? (
-            <DailyAppointmentsList 
+            <DailyAppointmentsList
               appointments={dailyAppointments}
               selectedDate={selectedDate}
               onDateChange={setSelectedDate}
               onAppointmentClick={handleAppointmentClick}
             />
           ) : currentView === 'missed' ? (
-            <MissedAppointmentsList 
+            <MissedAppointmentsList
               missedAppointments={filteredMissedAppointments}
-              showAllPatients={showAllPatients}
-              onTogglePatients={setShowAllPatients}
               onRefresh={fetchAppointments}
             />
           ) : (
-            <Calendar 
+            <Calendar
               appointments={filteredAppointments}
               loadingAppointments={loadingAppointments}
               appointmentsError={appointmentsError}
-              showAllPatients={showAllPatients}
-              onTogglePatients={setShowAllPatients}
               onDayClick={handleDayClick}
               onRefresh={fetchAppointments}
             />
@@ -318,7 +312,7 @@ const Appointments = () => {
       </div>
 
       {/* Notification Modal */}
-      <NotificationModal 
+      <NotificationModal
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}
         onPatientClick={(patientName) => {
