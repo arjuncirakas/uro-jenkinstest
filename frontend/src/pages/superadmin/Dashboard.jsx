@@ -91,7 +91,7 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* Modals */}
+      {/* Modalss */}
       <AddNurseModal
         isOpen={showNurseModal}
         onClose={() => setShowNurseModal(false)}
