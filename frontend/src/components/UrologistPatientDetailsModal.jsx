@@ -691,13 +691,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   // Get consent form template for a test
   const getConsentFormTemplate = (testName) => {
     if (!testName) return null;
-    
+
     // Normalize test name - remove "CUSTOM:" prefix if present
     let normalizedTestName = testName.toUpperCase().trim();
     if (normalizedTestName.startsWith('CUSTOM:')) {
       normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
     }
-    
+
     // Try exact match first (with whitespace normalization)
     const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
     let template = consentFormTemplates.find(t => {
@@ -706,9 +706,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
       const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
       return (templateTestName && (templateTestName === normalizedTestName || templateTestNameNoSpaces === normalizedTestNameNoSpaces)) ||
-             (templateProcName && (templateProcName === normalizedTestName || templateProcNameNoSpaces === normalizedTestNameNoSpaces));
+        (templateProcName && (templateProcName === normalizedTestName || templateProcNameNoSpaces === normalizedTestNameNoSpaces));
     });
-    
+
     // If no exact match, try partial match (for cases where names might have slight variations)
     if (!template) {
       template = consentFormTemplates.find(t => {
@@ -717,20 +717,20 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         // Check if either name contains the other (bidirectional matching)
         // Also check for case-insensitive equality (handles variations in spacing/casing)
         return (templateTestName && (
-                 normalizedTestName === templateTestName ||
-                 normalizedTestName.includes(templateTestName) || 
-                 templateTestName.includes(normalizedTestName) ||
-                 normalizedTestName.replace(/\s+/g, '') === templateTestName.replace(/\s+/g, '')
-               )) ||
-               (templateProcName && (
-                 normalizedTestName === templateProcName ||
-                 normalizedTestName.includes(templateProcName) || 
-                 templateProcName.includes(normalizedTestName) ||
-                 normalizedTestName.replace(/\s+/g, '') === templateProcName.replace(/\s+/g, '')
-               ));
+          normalizedTestName === templateTestName ||
+          normalizedTestName.includes(templateTestName) ||
+          templateTestName.includes(normalizedTestName) ||
+          normalizedTestName.replace(/\s+/g, '') === templateTestName.replace(/\s+/g, '')
+        )) ||
+          (templateProcName && (
+            normalizedTestName === templateProcName ||
+            normalizedTestName.includes(templateProcName) ||
+            templateProcName.includes(normalizedTestName) ||
+            normalizedTestName.replace(/\s+/g, '') === templateProcName.replace(/\s+/g, '')
+          ));
       });
     }
-    
+
     // Debug logging for custom tests
     if (normalizedTestName && !normalizedTestName.match(/^(MRI|TRUS|BIOPSY|PSA)/i)) {
       console.log(`[Consent Form] Looking for template for custom test: "${normalizedTestName}"`, {
@@ -745,44 +745,44 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         }))
       });
     }
-    
+
     return template;
   };
 
   // Get patient consent form for a test
   const getPatientConsentForm = (testName) => {
     if (!testName) return null;
-    
+
     // Normalize test name - remove "CUSTOM:" prefix if present
     let normalizedTestName = testName.toUpperCase().trim();
     if (normalizedTestName.startsWith('CUSTOM:')) {
       normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
     }
-    
+
     return patientConsentForms.find(cf => {
       // First, try matching by consent_form_name (from API response)
       if (cf.consent_form_name) {
         const consentFormName = cf.consent_form_name.toUpperCase().trim();
-        if (consentFormName === normalizedTestName || 
-            consentFormName.includes(normalizedTestName) || 
-            normalizedTestName.includes(consentFormName)) {
+        if (consentFormName === normalizedTestName ||
+          consentFormName.includes(normalizedTestName) ||
+          normalizedTestName.includes(consentFormName)) {
           return true;
         }
       }
-      
+
       // Second, try matching by template
       const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
       if (template) {
         const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
         const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
         return (templateTestName === normalizedTestName) ||
-               (templateProcName === normalizedTestName) ||
-               (templateTestName && normalizedTestName.includes(templateTestName)) ||
-               (templateProcName && normalizedTestName.includes(templateProcName)) ||
-               (templateTestName && templateTestName.includes(normalizedTestName)) ||
-               (templateProcName && templateProcName.includes(normalizedTestName));
+          (templateProcName === normalizedTestName) ||
+          (templateTestName && normalizedTestName.includes(templateTestName)) ||
+          (templateProcName && normalizedTestName.includes(templateProcName)) ||
+          (templateTestName && templateTestName.includes(normalizedTestName)) ||
+          (templateProcName && templateProcName.includes(normalizedTestName));
       }
-      
+
       return false;
     });
   };
@@ -798,7 +798,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         const type = template.procedure_name ? 'Procedure' : 'Test';
         const dateOfBirth = patient.dateOfBirth || patient.date_of_birth || '';
         const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
-        
+
         const htmlContent = `
           <!DOCTYPE html>
           <html>
@@ -919,7 +919,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           </body>
           </html>
         `;
-        
+
         printWindow.document.write(htmlContent);
         printWindow.document.close();
         printWindow.onload = () => {
@@ -982,31 +982,31 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       console.error('No consent form provided to handleViewConsentForm');
       return;
     }
-    
+
     // Try multiple field name variations
-    const filePath = consentForm.file_path || 
-                     consentForm.filePath || 
-                     consentForm.signed_file_path || 
-                     consentForm.signed_filePath;
-    
+    const filePath = consentForm.file_path ||
+      consentForm.filePath ||
+      consentForm.signed_file_path ||
+      consentForm.signed_filePath;
+
     if (!filePath) {
       console.error('No file path found in consent form:', consentForm);
       return;
     }
-    
+
     // Normalize Windows paths (replace backslashes with forward slashes)
     const normalizedPath = filePath.replace(/\\/g, '/');
-    
+
     // Remove 'uploads/' prefix if present, as the endpoint expects relative path
     let relativePath = normalizedPath;
     if (relativePath.startsWith('uploads/')) {
       relativePath = relativePath.replace(/^uploads\//, '');
     }
-    
+
     // Check if it's a PDF or image
     const fileExtension = normalizedPath.split('.').pop().toLowerCase();
     const fileName = consentForm.file_name || consentForm.fileName || 'Consent Form';
-    
+
     try {
       // Use apiClient to fetch the file as a blob with proper authentication
       const response = await consentFormService.getConsentFormFile(relativePath);
@@ -1017,7 +1017,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
       const blob = response.data;
       const blobUrl = URL.createObjectURL(blob);
-      
+
       if (fileExtension === 'pdf') {
         setPdfViewerUrl(blobUrl);
         setPdfViewerFileName(fileName);
@@ -3221,8 +3221,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               return (
                                 <div className="text-center py-8">
                                   <p className="text-gray-500 text-sm">
-                                    {investigationRequests.length > 0 
-                                      ? "No test investigations found. All requests may have been filtered out." 
+                                    {investigationRequests.length > 0
+                                      ? "No test investigations found. All requests may have been filtered out."
                                       : "No test investigations have been recorded for this patient yet."}
                                   </p>
                                 </div>
@@ -3414,19 +3414,18 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                       month: '2-digit',
                                                       year: 'numeric'
                                                     }) : 'N/A';
-                                                    
+
                                                     return (
                                                       <div key={result.id || idx} className="bg-white rounded-md p-3 border border-gray-200">
                                                         <div className="flex items-start justify-between mb-2">
                                                           <div className="flex items-center gap-2">
                                                             <span className="text-xs font-semibold text-gray-600">Result #{sortedResults.length - idx}</span>
                                                             {result.status && (
-                                                              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                                                                result.status.toLowerCase() === 'normal' ? 'bg-green-100 text-green-700' :
+                                                              <span className={`px-2 py-0.5 text-xs font-medium rounded ${result.status.toLowerCase() === 'normal' ? 'bg-green-100 text-green-700' :
                                                                 result.status.toLowerCase() === 'high' || result.status.toLowerCase() === 'elevated' ? 'bg-red-100 text-red-700' :
-                                                                result.status.toLowerCase() === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
-                                                                'bg-blue-100 text-blue-700'
-                                                              }`}>
+                                                                  result.status.toLowerCase() === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
+                                                                    'bg-blue-100 text-blue-700'
+                                                                }`}>
                                                                 {result.status}
                                                               </span>
                                                             )}
@@ -3434,8 +3433,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                           {result.filePath && (
                                                             <button
                                                               onClick={() => {
-                                                                const fileUrl = result.filePath.startsWith('http') 
-                                                                  ? result.filePath 
+                                                                const fileUrl = result.filePath.startsWith('http')
+                                                                  ? result.filePath
                                                                   : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${result.filePath}`;
                                                                 window.open(fileUrl, '_blank');
                                                               }}
@@ -3447,13 +3446,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                             </button>
                                                           )}
                                                         </div>
-                                                        
+
                                                         <div className="space-y-1.5">
                                                           <div className="text-xs text-gray-600">
                                                             <span className="font-medium">Date: </span>
                                                             <span className="text-gray-900">{resultDate}</span>
                                                           </div>
-                                                          
+
                                                           {result.authorName && (
                                                             <div className="text-xs text-gray-600">
                                                               <span className="font-medium">Added by: </span>
@@ -3463,21 +3462,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                               )}
                                                             </div>
                                                           )}
-                                                          
+
                                                           {result.result && (
                                                             <div className="text-sm text-gray-700">
                                                               <span className="font-medium text-gray-600">Result Value: </span>
                                                               <span className="text-lg font-semibold text-gray-900">{result.result}</span>
                                                             </div>
                                                           )}
-                                                          
+
                                                           {result.referenceRange && result.referenceRange !== 'N/A' && (
                                                             <div className="text-xs text-gray-600">
                                                               <span className="font-medium">Reference Range: </span>
                                                               <span className="text-gray-900">{result.referenceRange}</span>
                                                             </div>
                                                           )}
-                                                          
+
                                                           {result.notes && (
                                                             <div className="text-xs text-gray-600 pt-1 border-t border-gray-100">
                                                               <span className="font-medium">Notes: </span>
@@ -3517,24 +3516,24 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                               {/* Consent Form Section - Skip for PSA tests */}
                                               {(() => {
                                                 const normalizedName = investigationName.toUpperCase().trim();
-                                                
+
                                                 // Skip consent form for PSA tests
-                                                const isPSATest = normalizedName.includes('PSA') || 
-                                                                  normalizedName.startsWith('PSA') ||
-                                                                  normalizedName === 'PSA TOTAL' ||
-                                                                  normalizedName === 'PSA FREE' ||
-                                                                  normalizedName === 'PSA RATIO' ||
-                                                                  normalizedName === 'PSA VELOCITY' ||
-                                                                  normalizedName === 'PSA DENSITY';
-                                                
+                                                const isPSATest = normalizedName.includes('PSA') ||
+                                                  normalizedName.startsWith('PSA') ||
+                                                  normalizedName === 'PSA TOTAL' ||
+                                                  normalizedName === 'PSA FREE' ||
+                                                  normalizedName === 'PSA RATIO' ||
+                                                  normalizedName === 'PSA VELOCITY' ||
+                                                  normalizedName === 'PSA DENSITY';
+
                                                 // Don't show consent form section for PSA tests
                                                 if (isPSATest) {
                                                   return null;
                                                 }
-                                                
+
                                                 // Get consent form template for this test
                                                 const consentTemplate = getConsentFormTemplate(investigationName);
-                                                
+
                                                 // Also check ALL templates to see if any match (for custom tests)
                                                 // This handles cases where the template name might not exactly match
                                                 // Only search if consentTemplate wasn't found
@@ -3542,35 +3541,35 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                   const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
                                                   const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
                                                   return (templateTestName && (templateTestName === normalizedName || normalizedName.includes(templateTestName) || templateTestName.includes(normalizedName))) ||
-                                                         (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
+                                                    (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
                                                 });
-                                                
+
                                                 // Also check if there's a patient consent form (which indicates a template exists)
                                                 const patientConsentFormCheck = getPatientConsentForm(investigationName);
-                                                
+
                                                 // Use the template if found - prioritize direct match, then matching template, then from patient consent form
-                                                const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ? 
-                                                  consentFormTemplates.find(t => 
-                                                    t.id === patientConsentFormCheck.template_id || 
+                                                const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ?
+                                                  consentFormTemplates.find(t =>
+                                                    t.id === patientConsentFormCheck.template_id ||
                                                     t.id === patientConsentFormCheck.consent_form_id
                                                   ) : null);
 
                                                 const patientConsentForm = patientConsentFormCheck || getPatientConsentForm(investigationName);
-                                                
+
                                                 // Check for uploaded signed form - only consider it signed if it's manually uploaded
                                                 // Auto-attached forms have file_path set to template paths, which should not be considered "signed"
-                                                const filePath = patientConsentForm?.file_path || 
-                                                                 patientConsentForm?.filePath ||
-                                                                 patientConsentForm?.signed_file_path ||
-                                                                 patientConsentForm?.signed_filePath;
-                                                
+                                                const filePath = patientConsentForm?.file_path ||
+                                                  patientConsentForm?.filePath ||
+                                                  patientConsentForm?.signed_file_path ||
+                                                  patientConsentForm?.signed_filePath;
+
                                                 // Only consider it signed if the file path indicates a manually uploaded file
                                                 // (starts with 'uploads/consent-forms/patients/') and not a template reference
-                                                const hasUploadedForm = filePath && 
+                                                const hasUploadedForm = filePath &&
                                                   filePath.startsWith('uploads/consent-forms/patients/') &&
                                                   !filePath.includes('templates/') &&
                                                   !filePath.includes('auto-generated');
-                                                
+
                                                 // ALWAYS show consent form section for ALL tests - if no template, show "Template Not Available" tag
 
                                                 return (
@@ -3588,32 +3587,30 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                         </span>
                                                       )}
                                                     </div>
-                                                    
+
                                                     {/* Print and Upload Section */}
                                                     <div className="flex items-center gap-2 flex-wrap mb-2">
                                                       <button
                                                         type="button"
                                                         onClick={() => templateToUse && handlePrintConsentForm(templateToUse, investigationName)}
                                                         disabled={!templateToUse}
-                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                                                          templateToUse
-                                                            ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
-                                                            : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                                        }`}
+                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse
+                                                          ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
+                                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                          }`}
                                                         title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
                                                       >
                                                         <IoPrint className="w-3 h-3" />
                                                         Print
                                                       </button>
-                                                      <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${
-                                                        templateToUse
-                                                          ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
-                                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                                      }`}
-                                                      title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+                                                      <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${templateToUse
+                                                        ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                                                        : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                        }`}
+                                                        title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
                                                       >
                                                         <IoCloudUpload className="w-3 h-3" />
-                                                        {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
+                                                        {hasUploadedForm ? `Re-upload Signed ${investigationName}` : `Upload Signed ${investigationName}`}
                                                         <input
                                                           type="file"
                                                           accept=".pdf,image/*"
@@ -3657,8 +3654,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                 uploadedResult && uploadedResult.filePath ? (
                                                   <button
                                                     onClick={() => {
-                                                      const fileUrl = uploadedResult.filePath.startsWith('http') 
-                                                        ? uploadedResult.filePath 
+                                                      const fileUrl = uploadedResult.filePath.startsWith('http')
+                                                        ? uploadedResult.filePath
                                                         : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${uploadedResult.filePath}`;
                                                       window.open(fileUrl, '_blank');
                                                     }}
@@ -4573,9 +4570,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   </span>
                                 </div>
                                 <div>
-                                  <span className="text-gray-600">Referring GP:</span>
+                                  <span className="text-gray-600">GP Name:</span>
                                   <span className="ml-2 font-medium text-gray-900">
-                                    {displayPatient.referredByGP || displayPatient.referred_by_gp || 'N/A'}
+                                    {displayPatient.gpName || displayPatient.gp_name || displayPatient.referredByGP || displayPatient.referred_by_gp || 'N/A'}
                                   </span>
                                 </div>
                                 <div>
@@ -6513,12 +6510,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             onChange={(e) => {
                               const selectedDate = e.target.value;
                               setPostOpFollowupScheduler(prev => ({ ...prev, appointmentDate: selectedDate }));
-                              
+
                               // Auto-calculate date based on frequency if frequency is selected
                               if (postOpFollowupScheduler.checkupFrequency && !selectedDate) {
                                 const today = new Date();
                                 let targetDate = new Date();
-                                
+
                                 if (postOpFollowupScheduler.checkupFrequency === '1 week') {
                                   // Next week (7 days from today)
                                   targetDate.setDate(today.getDate() + 7);
@@ -6532,7 +6529,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   // After 1 month
                                   targetDate.setMonth(today.getMonth() + 1);
                                 }
-                                
+
                                 const dateStr = targetDate.toISOString().split('T')[0];
                                 setPostOpFollowupScheduler(prev => ({ ...prev, appointmentDate: dateStr }));
                               }
@@ -6550,12 +6547,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             onChange={(e) => {
                               const frequency = e.target.value;
                               setPostOpFollowupScheduler(prev => ({ ...prev, checkupFrequency: frequency }));
-                              
+
                               // Auto-calculate date based on frequency
                               if (frequency) {
                                 const today = new Date();
                                 let targetDate = new Date();
-                                
+
                                 if (frequency === '1 week') {
                                   // Next week (7 days from today)
                                   targetDate.setDate(today.getDate() + 7);
@@ -6569,7 +6566,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   // After 1 month
                                   targetDate.setMonth(today.getMonth() + 1);
                                 }
-                                
+
                                 const dateStr = targetDate.toISOString().split('T')[0];
                                 setPostOpFollowupScheduler(prev => ({ ...prev, appointmentDate: dateStr }));
                               }
@@ -6595,7 +6592,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               {postOpFollowupScheduler.checkupFrequency === '1 month' && 'Monthly Follow-up'}
                             </p>
                             <p className="text-xs text-gray-600">
-                              {postOpFollowupScheduler.appointmentDate 
+                              {postOpFollowupScheduler.appointmentDate
                                 ? `Appointment will be automatically scheduled for ${new Date(postOpFollowupScheduler.appointmentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
                                 : 'Follow-up appointment will be automatically scheduled'}
                             </p>

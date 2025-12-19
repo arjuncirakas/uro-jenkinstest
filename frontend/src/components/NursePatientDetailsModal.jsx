@@ -158,7 +158,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     try {
       // Handle ISO date strings (e.g., "2025-12-16T00:00:00.000Z")
       const dateStr = dateString.split('T')[0];
-      
+
       // Parse date components to avoid timezone conversion issues
       // Split "YYYY-MM-DD" and create Date in local timezone
       const dateParts = dateStr.split('-');
@@ -166,15 +166,15 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         const year = parseInt(dateParts[0], 10);
         const month = parseInt(dateParts[1], 10) - 1; // Month is 0-indexed
         const day = parseInt(dateParts[2], 10);
-        
+
         // Create date in local timezone (no UTC conversion)
         const date = new Date(year, month, day);
-        
+
         // Validate the date
-        if (!isNaN(date.getTime()) && 
-            date.getFullYear() === year && 
-            date.getMonth() === month && 
-            date.getDate() === day) {
+        if (!isNaN(date.getTime()) &&
+          date.getFullYear() === year &&
+          date.getMonth() === month &&
+          date.getDate() === day) {
           return date.toLocaleDateString('en-GB', {
             day: '2-digit',
             month: 'short',
@@ -182,7 +182,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
           });
         }
       }
-      
+
       // Fallback: try standard Date parsing if format doesn't match expected pattern
       const date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
@@ -192,7 +192,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
           year: 'numeric'
         });
       }
-      
+
       return dateString;
     } catch {
       return dateString;
@@ -948,7 +948,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     // Also check if investigation requests already exist for these tests
     const hasInvestigationData = patient.mri || patient.trus || patient.biopsy ||
       patient.mriStatus || patient.trusStatus || patient.biopsyStatus;
-    
+
     // Check if MRI, TRUS, or Biopsy requests already exist
     const hasExistingRequests = existingRequests && existingRequests.some(req => {
       const name = (req.investigationName || req.investigation_name || '').toUpperCase();
@@ -1126,13 +1126,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   // Get consent form template for a test
   const getConsentFormTemplate = (testName) => {
     if (!testName) return null;
-    
+
     // Normalize test name - remove "CUSTOM:" prefix if present
     let normalizedTestName = testName.toUpperCase().trim();
     if (normalizedTestName.startsWith('CUSTOM:')) {
       normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
     }
-    
+
     // Try exact match first (with whitespace normalization)
     const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
     let template = consentFormTemplates.find(t => {
@@ -1141,9 +1141,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
       const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
       return (templateTestName && (templateTestName === normalizedTestName || templateTestNameNoSpaces === normalizedTestNameNoSpaces)) ||
-             (templateProcName && (templateProcName === normalizedTestName || templateProcNameNoSpaces === normalizedTestNameNoSpaces));
+        (templateProcName && (templateProcName === normalizedTestName || templateProcNameNoSpaces === normalizedTestNameNoSpaces));
     });
-    
+
     // If no exact match, try partial match (for cases where names might have slight variations)
     if (!template) {
       template = consentFormTemplates.find(t => {
@@ -1152,57 +1152,57 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         // Check if either name contains the other (bidirectional matching)
         // Also check for case-insensitive equality (handles variations in spacing/casing)
         return (templateTestName && (
-                 normalizedTestName === templateTestName ||
-                 normalizedTestName.includes(templateTestName) || 
-                 templateTestName.includes(normalizedTestName) ||
-                 normalizedTestName.replace(/\s+/g, '') === templateTestName.replace(/\s+/g, '')
-               )) ||
-               (templateProcName && (
-                 normalizedTestName === templateProcName ||
-                 normalizedTestName.includes(templateProcName) || 
-                 templateProcName.includes(normalizedTestName) ||
-                 normalizedTestName.replace(/\s+/g, '') === templateProcName.replace(/\s+/g, '')
-               ));
+          normalizedTestName === templateTestName ||
+          normalizedTestName.includes(templateTestName) ||
+          templateTestName.includes(normalizedTestName) ||
+          normalizedTestName.replace(/\s+/g, '') === templateTestName.replace(/\s+/g, '')
+        )) ||
+          (templateProcName && (
+            normalizedTestName === templateProcName ||
+            normalizedTestName.includes(templateProcName) ||
+            templateProcName.includes(normalizedTestName) ||
+            normalizedTestName.replace(/\s+/g, '') === templateProcName.replace(/\s+/g, '')
+          ));
       });
     }
-    
+
     return template;
   };
 
   // Get patient consent form for a test
   const getPatientConsentForm = (testName) => {
     if (!testName) return null;
-    
+
     // Normalize test name - remove "CUSTOM:" prefix if present
     let normalizedTestName = testName.toUpperCase().trim();
     if (normalizedTestName.startsWith('CUSTOM:')) {
       normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
     }
-    
+
     return patientConsentForms.find(cf => {
       // First, try matching by consent_form_name (from API response)
       if (cf.consent_form_name) {
         const consentFormName = cf.consent_form_name.toUpperCase().trim();
-        if (consentFormName === normalizedTestName || 
-            consentFormName.includes(normalizedTestName) || 
-            normalizedTestName.includes(consentFormName)) {
+        if (consentFormName === normalizedTestName ||
+          consentFormName.includes(normalizedTestName) ||
+          normalizedTestName.includes(consentFormName)) {
           return true;
         }
       }
-      
+
       // Second, try matching by template
       const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
       if (template) {
         const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
         const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
         return (templateTestName === normalizedTestName) ||
-               (templateProcName === normalizedTestName) ||
-               (templateTestName && normalizedTestName.includes(templateTestName)) ||
-               (templateProcName && normalizedTestName.includes(templateProcName)) ||
-               (templateTestName && templateTestName.includes(normalizedTestName)) ||
-               (templateProcName && templateProcName.includes(normalizedTestName));
+          (templateProcName === normalizedTestName) ||
+          (templateTestName && normalizedTestName.includes(templateTestName)) ||
+          (templateProcName && normalizedTestName.includes(templateProcName)) ||
+          (templateTestName && templateTestName.includes(normalizedTestName)) ||
+          (templateProcName && templateProcName.includes(normalizedTestName));
       }
-      
+
       return false;
     });
   };
@@ -1218,7 +1218,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         const type = template.procedure_name ? 'Procedure' : 'Test';
         const dateOfBirth = patient.dateOfBirth || patient.date_of_birth || '';
         const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
-        
+
         const htmlContent = `
           <!DOCTYPE html>
           <html>
@@ -1339,7 +1339,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
           </body>
           </html>
         `;
-        
+
         printWindow.document.write(htmlContent);
         printWindow.document.close();
         printWindow.onload = () => {
@@ -1400,33 +1400,33 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       console.error('No consent form provided to handleViewConsentForm');
       return;
     }
-    
+
     // Try multiple field name variations
-    const filePath = consentForm.file_path || 
-                     consentForm.filePath || 
-                     consentForm.signed_file_path || 
-                     consentForm.signed_filePath;
-    
+    const filePath = consentForm.file_path ||
+      consentForm.filePath ||
+      consentForm.signed_file_path ||
+      consentForm.signed_filePath;
+
     if (!filePath) {
       console.error('No file path found in consent form:', consentForm);
       return;
     }
-    
+
     // Normalize Windows paths (replace backslashes with forward slashes)
     const normalizedPath = filePath.replace(/\\/g, '/');
-    
+
     // Remove 'uploads/' prefix if present, as the endpoint expects relative path
     let relativePath = normalizedPath;
     if (relativePath.startsWith('uploads/')) {
       relativePath = relativePath.replace(/^uploads\//, '');
     }
-    
+
     console.log('Viewing consent form:', { filePath, normalizedPath, relativePath, consentForm });
-    
+
     // Check if it's a PDF or image
     const fileExtension = normalizedPath.split('.').pop().toLowerCase();
     const fileName = consentForm.file_name || consentForm.fileName || 'Consent Form';
-    
+
     try {
       // Use apiClient to fetch the file as a blob with proper authentication
       const response = await consentFormService.getConsentFormFile(relativePath);
@@ -1437,7 +1437,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
       const blob = response.data;
       const blobUrl = URL.createObjectURL(blob);
-      
+
       if (fileExtension === 'pdf') {
         setPdfViewerUrl(blobUrl);
         setPdfViewerFileName(fileName);
@@ -1464,10 +1464,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     }
     fetchInvestigations(); // Refresh data
     fetchInvestigationRequests(); // Also refresh investigation requests
-    
+
     // Refresh full patient data to get updated PSA values
     await fetchFullPatientData();
-    
+
     // Fetch updated patient data to notify parent
     let updatedPatientData = null;
     if (patient?.id) {
@@ -1489,12 +1489,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         console.error('Error fetching updated patient data:', error);
       }
     }
-    
+
     // Notify parent component to refresh patient list
     if (onPatientUpdated) {
       onPatientUpdated(updatedPatientData || fullPatientData || patient);
     }
-    
+
     // Dispatch event to refresh patient list (for other components that might be listening)
     window.dispatchEvent(new CustomEvent('patient:updated', {
       detail: { patient: updatedPatientData || fullPatientData || patient }
@@ -1974,7 +1974,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     // Get patient ID from various possible field names
     const patientId = patient?.id || patient?.patientId || patient?.patient_id;
     console.log('🔍 NursePatientDetailsModal: Patient ID extracted:', patientId, 'from patient object:', patient);
-    
+
     if (isOpen && patientId) {
       console.log('✅ NursePatientDetailsModal: Fetching notes and investigations for patient ID:', patientId);
       fetchFullPatientData();
@@ -2000,38 +2000,38 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       const scrollY = window.scrollY || window.pageYOffset;
       // Get the scrollbar width to prevent layout shift
       const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-      
+
       // Lock the html and body scroll
       document.documentElement.style.position = 'fixed';
       document.documentElement.style.top = `-${scrollY}px`;
       document.documentElement.style.width = '100%';
       document.documentElement.style.overflow = 'hidden';
       document.documentElement.style.paddingRight = `${scrollbarWidth}px`;
-      
+
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
       document.body.style.paddingRight = `${scrollbarWidth}px`;
-      
+
       return () => {
         // Restore scroll position when modal closes
         const scrollYValue = document.body.style.top;
-        
+
         // Restore html element
         document.documentElement.style.position = '';
         document.documentElement.style.top = '';
         document.documentElement.style.width = '';
         document.documentElement.style.overflow = '';
         document.documentElement.style.paddingRight = '';
-        
+
         // Restore body element
         document.body.style.position = '';
         document.body.style.top = '';
         document.body.style.width = '';
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
-        
+
         // Restore scroll position
         if (scrollYValue) {
           const savedScrollY = parseInt(scrollYValue.replace('px', '').replace('-', ''), 10);
@@ -2397,7 +2397,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
   return (
     <>
-      <div 
+      <div
         className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-hidden"
         onWheel={(e) => {
           e.preventDefault();
@@ -3267,13 +3267,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
                                       // Check if test name contains MRI, TRUS, or Biopsy keywords (case-insensitive)
                                       const normalizedName = investigationName.toUpperCase();
-                                      const isConsentRequiredTest = normalizedName.includes('MRI') || 
-                                                                    normalizedName.includes('TRUS') || 
-                                                                    normalizedName.includes('BIOPSY');
-                                      
+                                      const isConsentRequiredTest = normalizedName.includes('MRI') ||
+                                        normalizedName.includes('TRUS') ||
+                                        normalizedName.includes('BIOPSY');
+
                                       // Get consent form template for this test
                                       const consentTemplateForCheck = getConsentFormTemplate(investigationName);
-                                      
+
                                       // Determine if consent form section should be shown:
                                       // 1. Test has a consent form template, OR
                                       // 2. Test typically requires consent (MRI, TRUS, Biopsy)
@@ -3338,7 +3338,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                       month: '2-digit',
                                                       year: 'numeric'
                                                     }) : 'N/A';
-                                                    
+
                                                     return (
                                                       <div key={result.id || idx} className="bg-white rounded-md p-3 border border-gray-200">
                                                         <div className="flex items-start justify-between mb-2">
@@ -3351,13 +3351,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                             )}
                                                           </div>
                                                         </div>
-                                                        
+
                                                         <div className="space-y-1.5">
                                                           <div className="text-xs text-gray-600">
                                                             <span className="font-medium">Date: </span>
                                                             <span className="text-gray-900">{resultDate}</span>
                                                           </div>
-                                                          
+
                                                           {result.authorName && (
                                                             <div className="text-xs text-gray-600">
                                                               <span className="font-medium">Added by: </span>
@@ -3367,21 +3367,21 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                               )}
                                                             </div>
                                                           )}
-                                                          
+
                                                           {result.result && (
                                                             <div className="text-sm text-gray-700">
                                                               <span className="font-medium text-gray-600">Result Value: </span>
                                                               <span className="text-lg font-semibold text-gray-900">{result.result}</span>
                                                             </div>
                                                           )}
-                                                          
+
                                                           {result.referenceRange && result.referenceRange !== 'N/A' && (
                                                             <div className="text-xs text-gray-600">
                                                               <span className="font-medium">Reference Range: </span>
                                                               <span className="text-gray-900">{result.referenceRange}</span>
                                                             </div>
                                                           )}
-                                                          
+
                                                           {result.notes && (
                                                             <div className="text-xs text-gray-600 pt-1 border-t border-gray-100">
                                                               <span className="font-medium">Notes: </span>
@@ -3414,24 +3414,24 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                               {/* Consent Form Section - Skip for PSA tests */}
                                               {(() => {
                                                 const normalizedName = investigationName.toUpperCase().trim();
-                                                
+
                                                 // Skip consent form for PSA tests
-                                                const isPSATest = normalizedName.includes('PSA') || 
-                                                                  normalizedName.startsWith('PSA') ||
-                                                                  normalizedName === 'PSA TOTAL' ||
-                                                                  normalizedName === 'PSA FREE' ||
-                                                                  normalizedName === 'PSA RATIO' ||
-                                                                  normalizedName === 'PSA VELOCITY' ||
-                                                                  normalizedName === 'PSA DENSITY';
-                                                
+                                                const isPSATest = normalizedName.includes('PSA') ||
+                                                  normalizedName.startsWith('PSA') ||
+                                                  normalizedName === 'PSA TOTAL' ||
+                                                  normalizedName === 'PSA FREE' ||
+                                                  normalizedName === 'PSA RATIO' ||
+                                                  normalizedName === 'PSA VELOCITY' ||
+                                                  normalizedName === 'PSA DENSITY';
+
                                                 // Don't show consent form section for PSA tests
                                                 if (isPSATest) {
                                                   return null;
                                                 }
-                                                
+
                                                 // Get consent form template for this test
                                                 const consentTemplate = getConsentFormTemplate(investigationName);
-                                                
+
                                                 // Also check ALL templates to see if any match (for custom tests)
                                                 // This handles cases where the template name might not exactly match
                                                 // Only search if consentTemplate wasn't found
@@ -3439,30 +3439,30 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                   const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
                                                   const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
                                                   return (templateTestName && (templateTestName === normalizedName || normalizedName.includes(templateTestName) || templateTestName.includes(normalizedName))) ||
-                                                         (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
+                                                    (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
                                                 });
-                                                
+
                                                 const patientConsentFormCheck = getPatientConsentForm(investigationName);
-                                                
+
                                                 // Use the template if found - prioritize direct match, then matching template, then from patient consent form
-                                                const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ? 
-                                                  consentFormTemplates.find(t => 
-                                                    t.id === patientConsentFormCheck.template_id || 
+                                                const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ?
+                                                  consentFormTemplates.find(t =>
+                                                    t.id === patientConsentFormCheck.template_id ||
                                                     t.id === patientConsentFormCheck.consent_form_id
                                                   ) : null);
-                                                
+
                                                 const patientConsentForm = patientConsentFormCheck || getPatientConsentForm(investigationName);
-                                                
+
                                                 // Check for uploaded signed form - only consider it signed if it's manually uploaded
                                                 // Auto-attached forms have file_path set to template paths, which should not be considered "signed"
-                                                const filePath = patientConsentForm?.file_path || 
-                                                                 patientConsentForm?.filePath ||
-                                                                 patientConsentForm?.signed_file_path ||
-                                                                 patientConsentForm?.signed_filePath;
-                                                
+                                                const filePath = patientConsentForm?.file_path ||
+                                                  patientConsentForm?.filePath ||
+                                                  patientConsentForm?.signed_file_path ||
+                                                  patientConsentForm?.signed_filePath;
+
                                                 // Only consider it signed if the file path indicates a manually uploaded file
                                                 // (starts with 'uploads/consent-forms/patients/') and not a template reference
-                                                const hasUploadedForm = filePath && 
+                                                const hasUploadedForm = filePath &&
                                                   filePath.startsWith('uploads/consent-forms/patients/') &&
                                                   !filePath.includes('templates/') &&
                                                   !filePath.includes('auto-generated');
@@ -3482,32 +3482,30 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                                         </span>
                                                       )}
                                                     </div>
-                                                    
+
                                                     {/* Print and Upload Section */}
                                                     <div className="flex items-center gap-2 flex-wrap mb-2">
                                                       <button
                                                         type="button"
                                                         onClick={() => templateToUse && handlePrintConsentForm(templateToUse, investigationName)}
                                                         disabled={!templateToUse}
-                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-                                                          templateToUse
-                                                            ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
-                                                            : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                                        }`}
+                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse
+                                                          ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
+                                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                          }`}
                                                         title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
                                                       >
                                                         <IoPrint className="w-3 h-3" />
                                                         Print
                                                       </button>
-                                                      <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${
-                                                        templateToUse
-                                                          ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
-                                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                                      }`}
-                                                      title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+                                                      <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${templateToUse
+                                                        ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                                                        : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                                        }`}
+                                                        title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
                                                       >
                                                         <IoCloudUpload className="w-3 h-3" />
-                                                        {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
+                                                        {hasUploadedForm ? `Re-upload Signed ${investigationName}` : `Upload Signed ${investigationName}`}
                                                         <input
                                                           type="file"
                                                           accept=".pdf,image/*"
@@ -4520,9 +4518,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                   </span>
                                 </div>
                                 <div>
-                                  <span className="text-gray-600">Referring GP:</span>
+                                  <span className="text-gray-600">GP Name:</span>
                                   <span className="ml-2 font-medium text-gray-900">
-                                    {displayPatient.referredByGP || displayPatient.referred_by_gp || 'N/A'}
+                                    {displayPatient.gpName || displayPatient.gp_name || displayPatient.referredByGP || displayPatient.referred_by_gp || 'N/A'}
                                   </span>
                                 </div>
                                 <div>
