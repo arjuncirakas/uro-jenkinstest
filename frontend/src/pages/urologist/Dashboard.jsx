@@ -304,7 +304,10 @@ const UrologistDashboard = () => {
           return;
         }
 
-        // Filter for surgery appointments that are scheduled or confirmed
+        // Get current date/time for filtering out past surgeries
+        const now = new Date();
+
+        // Filter for surgery appointments that are scheduled or confirmed, and not completed/past
         const surgicalAppointments = appointments
           .filter(apt => {
             const aptType = (apt.type || apt.appointmentType || '').toLowerCase();
@@ -324,9 +327,45 @@ const UrologistDashboard = () => {
             // Check for surgeryType field
             const hasSurgeryType = aptSurgeryType && aptSurgeryType.length > 0;
 
-            // Include surgery appointments that are scheduled or confirmed
-            return (isSurgeryType || hasSurgeryInNotes || hasSurgeryType) &&
-              (aptStatus === 'scheduled' || aptStatus === 'confirmed');
+            // Exclude completed, cancelled, or other terminal statuses
+            const isTerminalStatus = aptStatus === 'completed' || 
+              aptStatus === 'cancelled' || 
+              aptStatus === 'done' || 
+              aptStatus === 'finished' || 
+              aptStatus === 'closed';
+
+            // Include surgery appointments that are scheduled or confirmed (not completed/cancelled)
+            const isSurgery = (isSurgeryType || hasSurgeryInNotes || hasSurgeryType) &&
+              (aptStatus === 'scheduled' || aptStatus === 'confirmed') &&
+              !isTerminalStatus;
+
+            if (!isSurgery) {
+              return false;
+            }
+
+            // Check if the scheduled date has passed
+            const appointmentDate = apt.date || apt.appointmentDate || apt.appointment_date || '';
+            const appointmentTime = apt.time || apt.appointmentTime || apt.appointment_time || '';
+
+            if (!appointmentDate) {
+              // If no date, include it (shouldn't happen, but handle gracefully)
+              return true;
+            }
+
+            // Parse the appointment date and time
+            try {
+              const appointmentDateTime = new Date(`${appointmentDate} ${appointmentTime || '00:00'}`);
+              
+              // Exclude if the appointment time has passed
+              if (appointmentDateTime < now) {
+                return false;
+              }
+            } catch (error) {
+              console.warn('Error parsing appointment date/time:', appointmentDate, appointmentTime, error);
+              // If we can't parse the date, include it to be safe
+            }
+
+            return true;
           })
           .map(apt => {
             // Handle patient name
@@ -361,7 +400,7 @@ const UrologistDashboard = () => {
                 apt.status === 'confirmed' ? 'Confirmed' : 'Scheduled'
             };
           })
-          // Sort by date and time (most recent first)
+          // Sort by date and time (earliest first)
           .sort((a, b) => {
             const dateA = new Date(`${a.scheduledDate} ${a.scheduledTime}`);
             const dateB = new Date(`${b.scheduledDate} ${b.scheduledTime}`);
