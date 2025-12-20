@@ -12,6 +12,18 @@ package-lock.json
 .env.local
 .env.*.local
 
+*.md
+*.sh
+*.ps1
+*.txt
+*.pdf
+*.docx
+*.doc
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
 # Logs
 logs/
 *.log
