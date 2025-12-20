@@ -362,7 +362,7 @@ const Login = () => {
         <div className="text-center mb-6">
           <div className="mx-auto flex items-center justify-center mb-4">
             <img
-              src="/rdshgdsr.png"
+              src="/logo-uroprep.png"
               alt="Uro - Urology Care System"
               className="h-20 w-auto object-contain"
             />
@@ -412,8 +412,8 @@ const Login = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   className={`block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 transition-colors ${fieldErrors.email && touched.email
-                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
                     }`}
                   placeholder="Enter your email address"
                 />
@@ -447,8 +447,8 @@ const Login = () => {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 transition-colors ${fieldErrors.password && touched.password
-                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                      : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-300 focus:ring-teal-500 focus:border-transparent'
                     }`}
                   placeholder="Enter your password"
                 />

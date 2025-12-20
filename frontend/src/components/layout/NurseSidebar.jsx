@@ -49,7 +49,7 @@ const NurseSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <img
-              src={isCollapsed ? "/qwe.png" : "/rdshgdsr.png"}
+              src="/logo-uroprep.png"
               alt="Urology Care System Logo"
               className={`${isCollapsed ? 'w-10 h-10' : 'w-32 h-auto'} flex-shrink-0 transition-all duration-300`}
             />
@@ -80,8 +80,8 @@ const NurseSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                   to={item.path}
                   onClick={handleLinkClick}
                   className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${item.active
-                      ? 'bg-teal-50 text-teal-700'
-                      : 'text-gray-600 hover:bg-gray-50'
+                    ? 'bg-teal-50 text-teal-700'
+                    : 'text-gray-600 hover:bg-gray-50'
                     }`}
                   title={isCollapsed ? item.name : ''}
                 >

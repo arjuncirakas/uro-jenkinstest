@@ -45,9 +45,9 @@ const GPSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
       <div className="p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img 
-              src={isCollapsed ? "/qwe.png" : "/rdshgdsr.png"}
-              alt="Urology Care System Logo" 
+            <img
+              src="/logo-uroprep.png"
+              alt="Urology Care System Logo"
               className={`${isCollapsed ? 'w-10 h-10' : 'w-32 h-auto'} flex-shrink-0 transition-all duration-300`}
             />
           </div>
@@ -76,11 +76,10 @@ const GPSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                 <Link
                   to={item.path}
                   onClick={handleLinkClick}
-                  className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${
-                    item.active
+                  className={`flex items-center ${isCollapsed ? 'justify-center' : ''} px-4 py-3 rounded-lg transition-all ${item.active
                       ? 'bg-teal-50 text-teal-700'
                       : 'text-gray-600 hover:bg-gray-50'
-                  }`}
+                    }`}
                   title={isCollapsed ? item.name : ''}
                 >
                   <IconComponent className={`text-xl ${isCollapsed ? '' : 'mr-4'} ${item.active ? 'text-teal-600' : 'text-gray-500'}`} />
@@ -94,7 +93,7 @@ const GPSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
 
       {/* Bottom Section */}
       <div className="p-4 space-y-4">
-        <button 
+        <button
           onClick={onOpenAddPatient}
           className={`w-full bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors flex items-center justify-center ${isCollapsed ? 'text-2xl' : ''}`}
           title={isCollapsed ? "New Patient" : ""}
@@ -102,7 +101,7 @@ const GPSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
           <span className={`${isCollapsed ? '' : 'text-xl mr-2'}`}>+</span>
           {!isCollapsed && 'New Patient'}
         </button>
-        
+
         <button
           onClick={handleLogout}
           className={`flex items-center ${isCollapsed ? 'justify-center' : ''} w-full px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors`}
@@ -111,7 +110,7 @@ const GPSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
           <IoLogOutOutline className={`text-xl ${isCollapsed ? '' : 'mr-3'}`} />
           {!isCollapsed && <span className="font-medium">Logout</span>}
         </button>
-        
+
         {/* Powered by AhimsaGlobal */}
         {!isCollapsed && (
           <div className="text-center pt-4 border-t border-gray-100">

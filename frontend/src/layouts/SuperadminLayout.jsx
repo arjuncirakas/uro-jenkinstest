@@ -94,7 +94,7 @@ const SuperadminLayout = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <img
-                src={isCollapsed ? "/qwe.png" : "/rdshgdsr.png"}
+                src="/logo-uroprep.png"
                 alt="Urology Care System Logo"
                 className={`${isCollapsed ? 'w-10 h-10' : 'w-32 h-auto'} flex-shrink-0 transition-all duration-300`}
               />

@@ -7,7 +7,7 @@ const SetupPassword = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [token, setToken] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: ''
@@ -25,12 +25,12 @@ const SetupPassword = () => {
   useEffect(() => {
     const urlToken = searchParams.get('token');
     const storedToken = sessionStorage.getItem('setupToken');
-    
+
     if (urlToken) {
       // Store token in sessionStorage
       sessionStorage.setItem('setupToken', urlToken);
       setToken(urlToken);
-      
+
       // Clear token from URL to hide it from address bar
       console.log('🔒 Token received and stored securely, clearing from URL...');
       navigate('/setup-password', { replace: true });
@@ -67,17 +67,17 @@ const SetupPassword = () => {
       noSpaces: !/\s/.test(password),
       minLength: password.length >= 14
     };
-    
+
     Object.values(requirements).forEach(met => {
       if (met) strength++;
     });
-    
+
     return { strength, requirements };
   };
 
   const validateField = (name, value) => {
     let error = '';
-    
+
     switch (name) {
       case 'password':
         if (!value) {
@@ -106,18 +106,18 @@ const SetupPassword = () => {
       default:
         break;
     }
-    
+
     return error;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     setFormData({
       ...formData,
       [name]: value
     });
-    
+
     // Validate field and update errors
     const error = validateField(name, value);
     setErrors(prev => ({
@@ -128,7 +128,7 @@ const SetupPassword = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     // Validate all fields
     Object.keys(formData).forEach(key => {
       const error = validateField(key, formData[key]);
@@ -136,14 +136,14 @@ const SetupPassword = () => {
         newErrors[key] = error;
       }
     });
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate form
     if (!validateForm()) {
       return;
@@ -156,7 +156,7 @@ const SetupPassword = () => {
       // Call password setup API
       const response = await authService.setupPassword(token, formData.password);
       console.log('Password setup response:', response);
-      
+
       if (response.success) {
         setShowSuccessModal(true);
         setShowErrorModal(false); // Ensure error modal is closed
@@ -166,8 +166,8 @@ const SetupPassword = () => {
         // Be very specific - only mark as token error if message explicitly mentions both "invalid/expired" AND "token"
         const errorMsg = (response.message || '').toLowerCase();
         const isInvalidToken = (errorMsg.includes('invalid') && errorMsg.includes('token')) ||
-                              (errorMsg.includes('expired') && errorMsg.includes('token'));
-        
+          (errorMsg.includes('expired') && errorMsg.includes('token'));
+
         // Default to false - only set true if we're certain it's a token error
         setIsTokenInvalid(isInvalidToken);
         setErrorMessage(response.message || 'Failed to setup password. Please try again.');
@@ -181,7 +181,7 @@ const SetupPassword = () => {
         response: error.response?.data,
         status: error.response?.status
       });
-      
+
       // Extract error message from different error formats
       // handleApiError returns { message, type, ... }
       let errorMessage = 'Failed to setup password. Please try again.';
@@ -190,20 +190,20 @@ const SetupPassword = () => {
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
+
       // Check if error is due to invalid/expired token
       // Backend returns: "Invalid or expired token" for token errors
       const errorMsgLower = errorMessage.toLowerCase();
       const responseMsg = error.response?.data?.message?.toLowerCase() || '';
-      
+
       // More comprehensive check for token errors
       // Be VERY conservative - only mark as token error if message explicitly mentions both "invalid/expired" AND "token"
-      const isInvalidToken = 
+      const isInvalidToken =
         (errorMsgLower.includes('invalid') && errorMsgLower.includes('token')) ||
         (errorMsgLower.includes('expired') && errorMsgLower.includes('token')) ||
         (responseMsg.includes('invalid') && responseMsg.includes('token')) ||
         (responseMsg.includes('expired') && responseMsg.includes('token'));
-      
+
       console.log('Error analysis:', {
         errorMessage,
         errorMsgLower,
@@ -212,7 +212,7 @@ const SetupPassword = () => {
         hasToken: !!token,
         willNavigate: isInvalidToken || !token
       });
-      
+
       // CRITICAL: Only set isTokenInvalid to true if we're 100% certain it's a token error
       // For ALL other errors (validation, network, server, password reuse, etc.), keep it false
       // This ensures user stays on page for retry unless token is definitely invalid
@@ -238,7 +238,7 @@ const SetupPassword = () => {
       hasToken: !!token,
       willNavigate: isTokenInvalid || !token
     });
-    
+
     // Only navigate to login if token is invalid/expired or missing
     // For other errors (validation, network, etc.), keep user on page to retry
     if (isTokenInvalid || !token) {
@@ -269,9 +269,9 @@ const SetupPassword = () => {
         {/* Logo and Header */}
         <div className="text-center mb-6">
           <div className="mx-auto flex items-center justify-center mb-4">
-            <img 
-              src="/rdshgdsr.png" 
-              alt="Uro - Urology Care System" 
+            <img
+              src="/logo-uroprep.png"
+              alt="Uro - Urology Care System"
               className="h-20 w-auto object-contain"
             />
           </div>
@@ -301,9 +301,8 @@ const SetupPassword = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={handleChange}
-                  className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
-                    errors.password ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                  }`}
+                  className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${errors.password ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                   placeholder="Enter your password"
                 />
                 <button
@@ -321,7 +320,7 @@ const SetupPassword = () => {
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password}</p>
               )}
-              
+
               {/* Password Requirements Tooltip */}
               <div className="absolute bottom-full left-0 mb-2 w-80 p-4 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all duration-200 z-50">
                 <div className="mb-3">
@@ -332,24 +331,24 @@ const SetupPassword = () => {
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
+                    <div
                       className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full transition-all duration-300 ease-out"
                       style={{ width: `${(passwordStrength.strength / 6) * 100}%` }}
                     ></div>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 gap-2">
                   {Object.entries(passwordStrength.requirements).map(([key, met]) => {
                     const labels = {
                       lowercase: 'Lowercase letter',
-                      uppercase: 'Uppercase letter', 
+                      uppercase: 'Uppercase letter',
                       number: 'Number',
                       special: 'Special character',
                       noSpaces: 'No spaces',
                       minLength: 'At least 14 characters'
                     };
-                  
+
                     return (
                       <div key={key} className="flex items-center space-x-2">
                         <div className={`w-4 h-4 rounded-full flex items-center justify-center ${met ? 'bg-teal-100' : 'bg-gray-100'}`}>
@@ -366,7 +365,7 @@ const SetupPassword = () => {
                     );
                   })}
                 </div>
-                
+
                 {passwordStrength.strength === 6 && (
                   <div className="mt-3 p-2 bg-teal-50 border border-teal-200 rounded-md">
                     <div className="flex items-center space-x-2">
@@ -393,9 +392,8 @@ const SetupPassword = () => {
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${
-                    errors.confirmPassword ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                  }`}
+                  className={`block w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors ${errors.confirmPassword ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                   placeholder="Confirm your password"
                 />
                 <button
@@ -473,8 +471,8 @@ const SetupPassword = () => {
       {showErrorModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
-            <div 
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" 
+            <div
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
               onClick={() => {
                 // Only allow closing by clicking outside if token is invalid
                 // For other errors, user must click the button to stay on page
