@@ -56,13 +56,58 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
         setDoctors(doctorsData);
 
         // Set default doctor if appointment has urologist info
-        if (appointment.urologist && doctorsData.length > 0) {
-          const defaultDoctor = doctorsData.find(doctor =>
-            doctor.name === appointment.urologist ||
-            `${doctor.first_name} ${doctor.last_name}` === appointment.urologist
-          );
+        if (doctorsData.length > 0) {
+          let defaultDoctor = null;
+          
+          // First, try to match by urologist_id if available (most reliable)
+          if (appointment.urologist_id || appointment.urologistId || appointment.doctor_id || appointment.doctorId) {
+            const urologistId = appointment.urologist_id || appointment.urologistId || appointment.doctor_id || appointment.doctorId;
+            defaultDoctor = doctorsData.find(doctor => doctor.id === parseInt(urologistId));
+          }
+          
+          // If no match by ID, try to match by name
+          if (!defaultDoctor) {
+            // Get urologist name from appointment (try multiple possible fields)
+            const appointmentUrologist = appointment.urologist || 
+                                        appointment.doctorName || 
+                                        appointment.doctor_name || 
+                                        appointment.urologist_name || 
+                                        '';
+            
+            if (appointmentUrologist) {
+              // Normalize the appointment urologist name (remove "Dr." prefix and trim)
+              const normalizedAppointmentUrologist = appointmentUrologist
+                .replace(/^Dr\.\s*/i, '')
+                .trim()
+                .toLowerCase();
+              
+              // Find matching doctor
+              defaultDoctor = doctorsData.find(doctor => {
+                // Try different name formats from doctor object
+                const doctorFullName = `${doctor.first_name || ''} ${doctor.last_name || ''}`.trim();
+                const doctorName = doctor.name || doctorFullName;
+                
+                // Normalize doctor names
+                const normalizedDoctorFullName = doctorFullName.toLowerCase();
+                const normalizedDoctorName = doctorName.replace(/^Dr\.\s*/i, '').trim().toLowerCase();
+                
+                // Check for exact matches or partial matches
+                return normalizedDoctorFullName === normalizedAppointmentUrologist ||
+                       normalizedDoctorName === normalizedAppointmentUrologist ||
+                       normalizedAppointmentUrologist.includes(normalizedDoctorFullName) ||
+                       normalizedDoctorFullName.includes(normalizedAppointmentUrologist) ||
+                       // Check if first name or last name matches individually
+                       (doctor.first_name && normalizedAppointmentUrologist.includes(doctor.first_name.toLowerCase())) ||
+                       (doctor.last_name && normalizedAppointmentUrologist.includes(doctor.last_name.toLowerCase()));
+              });
+            }
+          }
+          
           if (defaultDoctor) {
+            console.log('Default doctor found:', defaultDoctor); // Debug log
             setSelectedDoctor(defaultDoctor);
+          } else {
+            console.log('No matching doctor found for appointment:', appointment); // Debug log
           }
         }
       } else {
@@ -143,7 +188,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
     if (!selectedSlot || !selectedSlot.available) {
       setErrorModal({
         isOpen: true,
-        message: `The selected time slot (${formatTime(selectedTime)}) is already booked. Please select an available time slot.`
+        message: `The selected time slot (${formatTime(selectedTime)}) is already booked. Appointments must never overlap. Please select an available time slot to avoid scheduling conflicts.`
       });
       return;
     }
@@ -187,7 +232,16 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
           onCancel();
         }, 1000);
       } else {
-        setError(result.error || 'Failed to reschedule appointment');
+        // Show error message - backend will return 409 for conflicts
+        const errorMessage = result.error || 'Failed to reschedule appointment';
+        if (errorMessage.includes('already booked') || errorMessage.includes('overlapping')) {
+          setErrorModal({
+            isOpen: true,
+            message: errorMessage
+          });
+        } else {
+          setError(errorMessage);
+        }
       }
     } catch (error) {
       console.error('Error rescheduling appointment:', error);
@@ -444,7 +498,7 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                         } else {
                           setErrorModal({
                             isOpen: true,
-                            message: `The time slot ${formatTime(slot.time)} is already booked. Please select an available time slot.`
+                            message: `The time slot ${formatTime(slot.time)} is already booked. Appointments must never overlap. Please select an available time slot to avoid scheduling conflicts.`
                           });
                         }
                       }}

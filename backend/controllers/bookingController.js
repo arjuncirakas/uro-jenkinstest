@@ -2436,6 +2436,41 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       // Create new appointment in the other table
       const notesText = req.body.notes || '';
 
+      // Check for conflicts before creating new appointment
+      const conflictCheckBeforeCreate = await client.query(
+        `SELECT appointments.id, appointment_date, appointment_time,
+                p.first_name || ' ' || p.last_name as patient_name
+         FROM appointments
+         JOIN patients p ON appointments.patient_id = p.id
+         WHERE urologist_id = $1
+         AND appointment_date = $2
+         AND appointment_time = $3
+         AND appointments.status NOT IN ('cancelled', 'no_show', 'missed')
+         AND appointment_type != 'automatic'`,
+        [finalDoctorId, newDate, newTime]
+      );
+
+      const investigationConflictCheckBeforeCreate = await client.query(
+        `SELECT investigation_bookings.id, scheduled_date, scheduled_time,
+                p.first_name || ' ' || p.last_name as patient_name
+         FROM investigation_bookings
+         JOIN patients p ON investigation_bookings.patient_id = p.id
+         WHERE investigation_name = $1
+         AND scheduled_date = $2
+         AND scheduled_time = $3
+         AND investigation_bookings.status NOT IN ('cancelled', 'no_show')`,
+        [doctorName, newDate, newTime]
+      );
+
+      if (conflictCheckBeforeCreate.rows.length > 0 || investigationConflictCheckBeforeCreate.rows.length > 0) {
+        await client.query('ROLLBACK');
+        const conflictingPatient = conflictCheckBeforeCreate.rows[0]?.patient_name || investigationConflictCheckBeforeCreate.rows[0]?.patient_name;
+        return res.status(409).json({
+          success: false,
+          message: `This time slot is already booked. The urologist has an appointment at ${newTime} on ${newDate}${conflictingPatient ? ` with ${conflictingPatient}` : ''}. Please select a different time slot to avoid overlapping appointments.`
+        });
+      }
+
       if (appointmentType === 'investigation') {
         // Create new investigation booking
         const newInvestigationQuery = `
@@ -2559,6 +2594,44 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       const currentStatus = getCurrentInvestigation.rows[0].status;
       const patientIdForTimeline = getCurrentInvestigation.rows[0].patient_id;
 
+      // Check for appointment conflicts - ensure no overlapping appointments
+      // Exclude the current investigation booking being rescheduled from the conflict check
+      const investigationConflictCheck = await client.query(
+        `SELECT investigation_bookings.id, scheduled_date, scheduled_time,
+                p.first_name || ' ' || p.last_name as patient_name
+         FROM investigation_bookings
+         JOIN patients p ON investigation_bookings.patient_id = p.id
+         WHERE investigation_name = $1
+         AND scheduled_date = $2
+         AND scheduled_time = $3
+         AND investigation_bookings.id != $4
+         AND investigation_bookings.status NOT IN ('cancelled', 'no_show')`,
+        [doctorName, newDate, newTime, appointmentId]
+      );
+
+      // Also check urologist appointments for the same doctor, date, and time
+      const urologistConflictCheck = await client.query(
+        `SELECT appointments.id, appointment_date, appointment_time,
+                p.first_name || ' ' || p.last_name as patient_name
+         FROM appointments
+         JOIN patients p ON appointments.patient_id = p.id
+         WHERE urologist_id = $1
+         AND appointment_date = $2
+         AND appointment_time = $3
+         AND appointments.status NOT IN ('cancelled', 'no_show', 'missed')
+         AND appointment_type != 'automatic'`,
+        [finalDoctorId, newDate, newTime]
+      );
+
+      if (investigationConflictCheck.rows.length > 0 || urologistConflictCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        const conflictingPatient = investigationConflictCheck.rows[0]?.patient_name || urologistConflictCheck.rows[0]?.patient_name;
+        return res.status(409).json({
+          success: false,
+          message: `This time slot is already booked. The urologist has an appointment at ${newTime} on ${newDate}${conflictingPatient ? ` with ${conflictingPatient}` : ''}. Please select a different time slot to avoid overlapping appointments.`
+        });
+      }
+
       // Build notes update - append new notes if provided
       const notesText = req.body.notes || '';
 
@@ -2626,7 +2699,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
       // Update urologist appointment (for both no-show and regular appointments)
       // First get the current appointment status
       const getCurrentAppointment = await client.query(
-        'SELECT status, patient_id FROM appointments WHERE id = $1',
+        'SELECT status, patient_id, appointment_date, appointment_time FROM appointments WHERE id = $1',
         [appointmentId]
       );
 
@@ -2640,6 +2713,44 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
       const currentStatus = getCurrentAppointment.rows[0].status;
       const patientIdForTimeline = getCurrentAppointment.rows[0].patient_id;
+
+      // Check for appointment conflicts - ensure no overlapping appointments
+      // Exclude the current appointment being rescheduled from the conflict check
+      const conflictCheck = await client.query(
+        `SELECT appointments.id, appointment_date, appointment_time, 
+                p.first_name || ' ' || p.last_name as patient_name
+         FROM appointments 
+         JOIN patients p ON appointments.patient_id = p.id
+         WHERE urologist_id = $1 
+         AND appointment_date = $2 
+         AND appointment_time = $3
+         AND appointments.id != $4
+         AND appointments.status NOT IN ('cancelled', 'no_show', 'missed')
+         AND appointment_type != 'automatic'`,
+        [finalDoctorId, newDate, newTime, appointmentId]
+      );
+
+      // Also check investigation bookings for the same doctor, date, and time
+      const investigationConflictCheck = await client.query(
+        `SELECT investigation_bookings.id, scheduled_date, scheduled_time,
+                p.first_name || ' ' || p.last_name as patient_name
+         FROM investigation_bookings
+         JOIN patients p ON investigation_bookings.patient_id = p.id
+         WHERE investigation_name = $1
+         AND scheduled_date = $2
+         AND scheduled_time = $3
+         AND investigation_bookings.status NOT IN ('cancelled', 'no_show')`,
+        [doctorName, newDate, newTime]
+      );
+
+      if (conflictCheck.rows.length > 0 || investigationConflictCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        const conflictingPatient = conflictCheck.rows[0]?.patient_name || investigationConflictCheck.rows[0]?.patient_name;
+        return res.status(409).json({
+          success: false,
+          message: `This time slot is already booked. The urologist has an appointment at ${newTime} on ${newDate}${conflictingPatient ? ` with ${conflictingPatient}` : ''}. Please select a different time slot to avoid overlapping appointments.`
+        });
+      }
 
       // Build notes update - append new notes if provided
       const notesText = req.body.notes || '';

@@ -122,10 +122,10 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-200">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col border border-gray-200">
         
         {/* Header */}
-        <div className="bg-teal-600 px-6 py-5 flex items-center justify-between border-b border-teal-700">
+        <div className="bg-teal-600 px-6 py-5 flex items-center justify-between border-b border-teal-700 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/10 rounded flex items-center justify-center">
               <FiCalendar className="w-5 h-5 text-white" />
@@ -143,8 +143,8 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
+        {/* Content - Scrollable */}
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           
           {/* Patient Information */}
           <div className="bg-gray-50 border border-gray-200 rounded p-4">
@@ -278,12 +278,18 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
                 <span className="text-gray-600">Appointment ID:</span>
                 <span className="ml-2 font-medium text-gray-900">#{appointment.id || appointment.appointment_id || 'N/A'}</span>
               </div>
+              <div>
+                <span className="text-gray-600">Urologist:</span>
+                <span className="ml-2 font-medium text-gray-900">
+                  {appointment.urologist || appointment.doctorName || appointment.doctor_name || appointment.urologist_name || 'Unassigned'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+        {/* Footer - Fixed */}
+        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
           <button
             onClick={handleReschedule}
             className="px-6 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded transition-colors flex items-center gap-2"
