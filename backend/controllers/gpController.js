@@ -193,29 +193,43 @@ export const createGP = async (req, res) => {
     // Send password email with auto-generated password
     let emailSent = false;
     let emailError = null;
+    let emailDetails = null;
     try {
-      console.log(`📧 Attempting to send password email to ${email} for GP ${first_name} ${last_name}`);
+      console.log(`📧 ========== Starting email send process ==========`);
+      console.log(`📧 Recipient: ${email}`);
+      console.log(`📧 GP Name: ${first_name} ${last_name}`);
+      console.log(`📧 Password length: ${tempPassword.length} characters`);
+      
       const emailResult = await sendPasswordEmail(email, first_name, tempPassword);
       emailSent = emailResult.success;
+      emailDetails = {
+        messageId: emailResult.messageId,
+        accepted: emailResult.accepted,
+        rejected: emailResult.rejected,
+        response: emailResult.response
+      };
       
       if (emailResult.success) {
-        console.log(`✅ Password email sent successfully to ${email}`);
-        console.log(`📧 Email details:`, {
-          messageId: emailResult.messageId,
-          accepted: emailResult.accepted,
-          rejected: emailResult.rejected
-        });
+        console.log(`✅ ========== Email sent successfully ==========`);
+        console.log(`✅ Message ID: ${emailResult.messageId}`);
+        console.log(`✅ Accepted recipients:`, emailResult.accepted);
+        console.log(`✅ SMTP Response:`, emailResult.response);
       } else {
-        console.error(`❌ Failed to send password email to ${email}:`, emailResult.error || emailResult.message);
-        console.error(`❌ Email rejection details:`, {
-          accepted: emailResult.accepted,
-          rejected: emailResult.rejected,
-          error: emailResult.error
-        });
+        console.error(`❌ ========== Email send failed ==========`);
+        console.error(`❌ Error:`, emailResult.error || emailResult.message);
+        console.error(`❌ Accepted:`, emailResult.accepted);
+        console.error(`❌ Rejected:`, emailResult.rejected);
+        console.error(`❌ Response:`, emailResult.response);
         emailError = emailResult.error || emailResult.message;
       }
     } catch (emailError) {
-      console.error('❌ Exception while sending password email:', emailError);
+      console.error('❌ ========== Exception during email send ==========');
+      console.error('❌ Exception type:', emailError.constructor.name);
+      console.error('❌ Exception message:', emailError.message);
+      console.error('❌ Exception code:', emailError.code);
+      console.error('❌ Exception command:', emailError.command);
+      console.error('❌ Exception response:', emailError.response);
+      console.error('❌ Exception responseCode:', emailError.responseCode);
       console.error('❌ Error stack:', emailError.stack);
       emailError = emailError.message || 'Unknown error';
     }

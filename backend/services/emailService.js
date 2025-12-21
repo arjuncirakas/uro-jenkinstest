@@ -37,8 +37,16 @@ const createTransporter = () => {
   
   console.log(`📧 Creating SMTP transporter with config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT} (secure: ${config.secure})`);
   console.log(`📧 SMTP User: ${process.env.SMTP_USER}`);
+  console.log(`📧 SMTP Pass: ${process.env.SMTP_PASS ? '***' + process.env.SMTP_PASS.slice(-4) : 'NOT SET'}`);
   
-  return nodemailer.createTransport(config);
+  const transporter = nodemailer.createTransport(config);
+  
+  // Add event listeners for debugging
+  transporter.on('token', (token) => {
+    console.log('📧 OAuth2 token received:', token);
+  });
+  
+  return transporter;
 };
 
 // Verify SMTP connection
@@ -396,25 +404,53 @@ export const sendPasswordEmail = async (to, firstName, password) => {
     };
 
     console.log(`📧 Sending email to ${to}...`);
-    const result = await transporter.sendMail(mailOptions);
+    console.log(`📧 Email details:`, {
+      from: mailOptions.from,
+      to: mailOptions.to,
+      subject: mailOptions.subject,
+      hasHtml: !!mailOptions.html,
+      hasText: !!mailOptions.text
+    });
+    
+    let result;
+    try {
+      result = await transporter.sendMail(mailOptions);
+      console.log(`📧 Email sendMail completed, checking response...`);
+    } catch (sendError) {
+      console.error(`❌ Error during sendMail:`, sendError);
+      console.error(`❌ Send error details:`, {
+        message: sendError.message,
+        code: sendError.code,
+        command: sendError.command,
+        response: sendError.response,
+        responseCode: sendError.responseCode,
+        stack: sendError.stack
+      });
+      throw sendError;
+    }
     
     // Check if email was actually accepted by SMTP server
-    const wasAccepted = result.accepted && result.accepted.length > 0 && result.accepted.includes(to);
-    const wasRejected = result.rejected && result.rejected.length > 0 && result.rejected.includes(to);
+    const wasAccepted = result.accepted && result.accepted.length > 0;
+    const wasRejected = result.rejected && result.rejected.length > 0;
+    const recipientAccepted = wasAccepted && result.accepted.includes(to);
     
-    console.log(`📧 Email response:`, {
+    console.log(`📧 Email response details:`, {
       messageId: result.messageId,
       accepted: result.accepted,
       rejected: result.rejected,
       response: result.response,
+      pending: result.pending,
       wasAccepted,
-      wasRejected
+      wasRejected,
+      recipientAccepted,
+      responseCode: result.responseCode
     });
     
     // If email was rejected, it's a failure
-    if (wasRejected || !wasAccepted) {
-      const rejectionReason = result.response || 'Email was rejected by SMTP server';
+    if (wasRejected) {
+      const rejectionReason = result.response || result.rejected.join(', ') || 'Email was rejected by SMTP server';
       console.error(`❌ Email was rejected by SMTP server for ${to}:`, rejectionReason);
+      console.error(`❌ Rejected recipients:`, result.rejected);
       return {
         success: false,
         error: rejectionReason,
@@ -425,13 +461,25 @@ export const sendPasswordEmail = async (to, firstName, password) => {
       };
     }
     
+    // Check if recipient is in accepted list
+    if (!recipientAccepted && wasAccepted) {
+      console.warn(`⚠️ Email accepted but recipient ${to} not in accepted list. Accepted:`, result.accepted);
+      // This might still be okay if the server accepted it but formatted differently
+    }
+    
+    if (!wasAccepted && !wasRejected) {
+      console.warn(`⚠️ Email send completed but no accepted/rejected status. Response:`, result.response);
+    }
+    
     console.log(`✅ Password email sent successfully to ${to} (Message ID: ${result.messageId})`);
+    console.log(`✅ Email accepted by:`, result.accepted);
     
     return {
       success: true,
       messageId: result.messageId,
       accepted: result.accepted,
       rejected: result.rejected,
+      response: result.response,
       message: 'Password email sent successfully'
     };
 
