@@ -229,9 +229,20 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     }
   };
 
-  const handleGPAdded = () => {
+  const handleGPAdded = (newGPData) => {
     // Refresh GP list after adding new GP
-    fetchGPs();
+    fetchGPs().then(() => {
+      // Auto-select the newly added GP if data is provided
+      if (newGPData && newGPData.userId) {
+        // Wait a bit for the list to update, then select the new GP
+        setTimeout(() => {
+          setFormData(prev => ({
+            ...prev,
+            referringGP: newGPData.userId?.toString() || String(newGPData.userId)
+          }));
+        }, 300);
+      }
+    });
     setIsAddGPModalOpen(false);
   };
 

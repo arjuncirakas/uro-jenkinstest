@@ -275,6 +275,14 @@ const AddGPModal = ({ isOpen, onClose, onSuccess }) => {
       const result = await gpService.createGP(submitData);
 
       if (result.success) {
+        const newGPData = {
+          userId: result.data.userId,
+          email: result.data.email,
+          firstName: result.data.firstName,
+          lastName: result.data.lastName,
+          emailSent: result.data.emailSent
+        };
+
         setCreatedUser({
           ...formData,
           id: result.data.userId,
@@ -288,6 +296,12 @@ const AddGPModal = ({ isOpen, onClose, onSuccess }) => {
         setSuccessMessage(message);
         setShowSuccessModal(true);
         setShowErrorModal(false);
+        
+        // Call onSuccess immediately with the new GP data (before closing modal)
+        // This allows the parent to refresh the list and select the new GP
+        if (onSuccess) {
+          onSuccess(newGPData);
+        }
       } else {
         const message = result.error || result.message || 'GP creation failed. Please check all fields and try again.';
         setErrorMessage(message);
@@ -307,10 +321,8 @@ const AddGPModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
-    // Close the modal
-    if (onSuccess) {
-      onSuccess();
-    }
+    // onSuccess was already called when GP was created successfully
+    // Just close the modal
     onClose();
   };
 

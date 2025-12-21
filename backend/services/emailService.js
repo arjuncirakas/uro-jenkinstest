@@ -334,7 +334,29 @@ export const sendPasswordSetupEmail = async (to, firstName, token) => {
 // Send password email (with auto-generated password)
 export const sendPasswordEmail = async (to, firstName, password) => {
   try {
+    // Validate inputs
+    if (!to || !firstName || !password) {
+      throw new Error('Missing required parameters: to, firstName, or password');
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to)) {
+      throw new Error(`Invalid email address: ${to}`);
+    }
+
+    console.log(`📧 Preparing to send password email to ${to} for ${firstName}`);
+    
     const transporter = createTransporter();
+    
+    // Verify SMTP connection before sending
+    try {
+      await transporter.verify();
+      console.log('✅ SMTP connection verified');
+    } catch (verifyError) {
+      console.error('❌ SMTP verification failed:', verifyError.message);
+      throw new Error(`SMTP connection failed: ${verifyError.message}`);
+    }
     
     const mailOptions = {
       from: {
@@ -373,8 +395,15 @@ export const sendPasswordEmail = async (to, firstName, password) => {
       text: `Welcome to UroPrep, ${firstName}! Your account has been created. Email: ${to}, Temporary Password: ${password}. Please log in and change your password after first login.`
     };
 
+    console.log(`📧 Sending email to ${to}...`);
     const result = await transporter.sendMail(mailOptions);
-    console.log(`📧 Password email sent successfully to ${to} (Message ID: ${result.messageId})`);
+    console.log(`✅ Password email sent successfully to ${to} (Message ID: ${result.messageId})`);
+    console.log(`📧 Email response:`, {
+      messageId: result.messageId,
+      accepted: result.accepted,
+      rejected: result.rejected,
+      response: result.response
+    });
     
     return {
       success: true,
@@ -389,7 +418,8 @@ export const sendPasswordEmail = async (to, firstName, password) => {
       code: error.code,
       command: error.command,
       response: error.response,
-      responseCode: error.responseCode
+      responseCode: error.responseCode,
+      stack: error.stack
     });
     return {
       success: false,

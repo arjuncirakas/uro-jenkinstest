@@ -11,6 +11,8 @@ export const getAllGPs = async (req, res) => {
   try {
     const { is_active = true } = req.query;
     
+    // When fetching for dropdown, we want all active GPs (regardless of verification status)
+    // This ensures newly created GPs appear immediately
     const query = `
       SELECT 
         id, email, first_name, last_name, phone, organization, role,
@@ -37,6 +39,8 @@ export const getAllGPs = async (req, res) => {
       createdAt: gp.created_at,
       lastLoginAt: gp.last_login_at
     }));
+    
+    console.log(`📋 Returning ${gps.length} active GPs`);
     
     res.json({
       success: true,
@@ -157,27 +161,47 @@ export const createGP = async (req, res) => {
     
     // Send password email with auto-generated password
     let emailSent = false;
+    let emailError = null;
     try {
+      console.log(`📧 Attempting to send password email to ${email} for GP ${first_name} ${last_name}`);
       const emailResult = await sendPasswordEmail(email, first_name, tempPassword);
       emailSent = emailResult.success;
+      
+      if (emailResult.success) {
+        console.log(`✅ Password email sent successfully to ${email}`);
+      } else {
+        console.error(`❌ Failed to send password email to ${email}:`, emailResult.error || emailResult.message);
+        emailError = emailResult.error || emailResult.message;
+      }
     } catch (emailError) {
-      console.error('Error sending password email:', emailError);
+      console.error('❌ Exception while sending password email:', emailError);
+      console.error('❌ Error stack:', emailError.stack);
+      emailError = emailError.message || 'Unknown error';
     }
     
     await client.query('COMMIT');
+    
+    // Log the result
+    if (emailSent) {
+      console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), email sent to ${email}`);
+    } else {
+      console.warn(`⚠️ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), but email failed: ${emailError || 'Unknown error'}`);
+      console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
+    }
     
     res.status(201).json({
       success: true,
       message: emailSent 
         ? 'GP created successfully. Login credentials have been sent to the email address.'
-        : 'GP created successfully but email sending failed. Please contact support.',
+        : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
       data: {
         userId: newGP.id,
         email: newGP.email,
         firstName: newGP.first_name,
         lastName: newGP.last_name,
         role: newGP.role,
-        emailSent
+        emailSent,
+        emailError: emailError || null
       }
     });
   } catch (error) {
