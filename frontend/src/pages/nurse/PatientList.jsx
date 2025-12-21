@@ -9,6 +9,7 @@ import ErrorModal from '../../components/modals/ErrorModal';
 import { patientService } from '../../services/patientService';
 import { investigationService } from '../../services/investigationService';
 import { bookingService } from '../../services/bookingService';
+import { getPSAStatusByAge } from '../../utils/psaStatusByAge';
 
 const PatientList = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -224,18 +225,26 @@ const PatientList = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  // Get PSA indicator color based on threshold
-  const getPSAColor = (psaValue) => {
+  // Get PSA indicator color based on age-adjusted threshold
+  const getPSAColor = (psaValue, patientAge) => {
     const psa = parseFloat(psaValue);
     if (isNaN(psa)) {
       return { textColor: 'text-gray-900', dotColor: 'bg-gray-400' };
     }
     
-    // PSA threshold: >4 ng/mL is typically considered elevated
-    if (psa > 4) {
-      return { textColor: 'text-gray-900', dotColor: 'bg-red-500' }; // High risk - above threshold
+    // Use age-based status determination
+    const statusResult = getPSAStatusByAge(psa, patientAge);
+    const status = statusResult.status;
+    
+    // Determine color based on status
+    if (status === 'High') {
+      return { textColor: 'text-gray-900', dotColor: 'bg-red-500' }; // High risk
+    } else if (status === 'Elevated') {
+      return { textColor: 'text-gray-900', dotColor: 'bg-orange-500' }; // Elevated
+    } else if (status === 'Low') {
+      return { textColor: 'text-gray-900', dotColor: 'bg-yellow-500' }; // Low
     } else {
-      return { textColor: 'text-gray-900', dotColor: 'bg-green-500' }; // Normal - below threshold
+      return { textColor: 'text-gray-900', dotColor: 'bg-green-500' }; // Normal
     }
   };
 
@@ -595,7 +604,8 @@ const PatientList = () => {
                               // Only use fallback to 0 if we actually have a PSA value, otherwise use null/undefined to indicate "no data"
                               const psaValue = patient.displayPSA || patient.latestPSA || patient.latest_psa || patient.initialPSA || patient.initial_psa || null;
                               const hasPSAData = psaValue !== null && psaValue !== undefined && psaValue !== '';
-                              const psaColor = getPSAColor(hasPSAData ? psaValue : null);
+                              const patientAge = patient.age || null;
+                              const psaColor = getPSAColor(hasPSAData ? psaValue : null, patientAge);
                               return (
                                 <>
                                   <div className={`w-2 h-2 ${psaColor.dotColor} rounded-full mr-2`}></div>

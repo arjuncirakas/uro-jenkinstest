@@ -8,6 +8,7 @@ import NoShowPatientModal from '../../components/NoShowPatientModal';
 import NurseHeader from '../../components/layout/NurseHeader';
 import { patientService } from '../../services/patientService';
 import { bookingService } from '../../services/bookingService';
+import { getPSAStatusByAge } from '../../utils/psaStatusByAge';
 
 const OPDManagement = () => {
   // State for tracking active tabs
@@ -356,13 +357,22 @@ const OPDManagement = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  // Get PSA color based on threshold
-  const getPSAColor = (psaValue) => {
+  // Get PSA color based on age-adjusted threshold
+  const getPSAColor = (psaValue, patientAge) => {
     const psa = parseFloat(psaValue);
     if (isNaN(psa)) return { dotColor: 'bg-gray-400', textColor: 'text-gray-900' };
 
-    if (psa > 4) {
+    // Use age-based status determination
+    const statusResult = getPSAStatusByAge(psa, patientAge);
+    const status = statusResult.status;
+    
+    // Determine color based on status
+    if (status === 'High') {
       return { dotColor: 'bg-red-500', textColor: 'text-gray-900' };
+    } else if (status === 'Elevated') {
+      return { dotColor: 'bg-orange-500', textColor: 'text-gray-900' };
+    } else if (status === 'Low') {
+      return { dotColor: 'bg-yellow-500', textColor: 'text-gray-900' };
     } else {
       return { dotColor: 'bg-green-500', textColor: 'text-gray-900' };
     }
@@ -801,8 +811,8 @@ const OPDManagement = () => {
                                           {appointment.age} years old
                                         </div>
                                         <div className="flex items-center mt-0.5">
-                                          <div className={`w-1 h-1 ${getPSAColor(appointment.psa).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
-                                          <span className={`text-xs ${getPSAColor(appointment.psa).textColor}`}>PSA: {appointment.psa}</span>
+                                          <div className={`w-1 h-1 ${getPSAColor(appointment.psa, appointment.age).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
+                                          <span className={`text-xs ${getPSAColor(appointment.psa, appointment.age).textColor}`}>PSA: {appointment.psa}</span>
                                         </div>
                                       </div>
                                     </div>
@@ -1035,8 +1045,8 @@ const OPDManagement = () => {
                               </div>
                             )}
                             <div className="flex items-center mb-1">
-                              <div className={`w-2 h-2 ${getPSAColor(patient.psa).dotColor} rounded-full mr-2 flex-shrink-0`}></div>
-                              <span className={`text-xs ${getPSAColor(patient.psa).textColor}`}>PSA: {patient.psa} ng/mL</span>
+                              <div className={`w-2 h-2 ${getPSAColor(patient.psa, patient.age).dotColor} rounded-full mr-2 flex-shrink-0`}></div>
+                              <span className={`text-xs ${getPSAColor(patient.psa, patient.age).textColor}`}>PSA: {patient.psa} ng/mL</span>
                             </div>
                             <div className="text-xs text-gray-500">
                               Entry: {patient.dateOfEntry}

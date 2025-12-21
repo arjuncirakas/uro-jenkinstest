@@ -212,6 +212,28 @@ export const investigationService = {
     }
   },
 
+  // Parse PSA file and extract values automatically
+  parsePSAFile: async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await apiClient.post('/parse-psa-file', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error parsing PSA file:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
+  },
+
   // View/download investigation file
   viewFile: async (filePath) => {
     if (filePath) {

@@ -6,6 +6,7 @@ import AddInvestigationResultModal from '../../components/AddInvestigationResult
 import PDFViewerModal from '../../components/PDFViewerModal';
 import { investigationService } from '../../services/investigationService';
 import { patientService } from '../../services/patientService';
+import { getPSAStatusByAge } from '../../utils/psaStatusByAge';
 
 const InvestigationManagement = () => {
   // State for search and modals
@@ -373,13 +374,22 @@ const InvestigationManagement = () => {
     }
   };
 
-  // Get PSA color based on threshold
-  const getPSAColor = (psaValue) => {
+  // Get PSA color based on age-adjusted threshold
+  const getPSAColor = (psaValue, patientAge) => {
     const psa = parseFloat(psaValue);
     if (isNaN(psa)) return { dotColor: 'bg-gray-400', textColor: 'text-gray-900' };
     
-    if (psa > 4) {
+    // Use age-based status determination
+    const statusResult = getPSAStatusByAge(psa, patientAge);
+    const status = statusResult.status;
+    
+    // Determine color based on status
+    if (status === 'High') {
       return { dotColor: 'bg-red-500', textColor: 'text-gray-900' };
+    } else if (status === 'Elevated') {
+      return { dotColor: 'bg-orange-500', textColor: 'text-gray-900' };
+    } else if (status === 'Low') {
+      return { dotColor: 'bg-yellow-500', textColor: 'text-gray-900' };
     } else {
       return { dotColor: 'bg-green-500', textColor: 'text-gray-900' };
     }
@@ -714,8 +724,8 @@ const InvestigationManagement = () => {
                               UPI: {investigation.upi} • {investigation.age} years old
                             </div>
                             <div className="flex items-center mt-0.5">
-                              <div className={`w-1.5 h-1.5 ${getPSAColor(investigation.psa).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
-                              <span className={`text-xs ${getPSAColor(investigation.psa).textColor}`}>PSA: {investigation.psa}</span>
+                              <div className={`w-1.5 h-1.5 ${getPSAColor(investigation.psa, investigation.age).dotColor} rounded-full mr-1 flex-shrink-0`}></div>
+                              <span className={`text-xs ${getPSAColor(investigation.psa, investigation.age).textColor}`}>PSA: {investigation.psa}</span>
                             </div>
                           </div>
                         </div>

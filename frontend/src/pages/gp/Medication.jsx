@@ -4,6 +4,7 @@ import { FaPills } from 'react-icons/fa';
 import GPHeader from '../../components/layout/GPHeader';
 import GPPatientDetailsModal from '../../components/GPPatientDetailsModal';
 import { gpService } from '../../services/gpService';
+import { getPSAStatusByAge } from '../../utils/psaStatusByAge';
 
 const Medication = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,10 +76,24 @@ const Medication = () => {
     return 'bg-blue-100 text-blue-800';
   };
 
-  // Get PSA styling and dot color
-  const getPsaStyle = (psa) => {
-    if (psa > 4.0) {
+  // Get PSA styling and dot color based on age-adjusted threshold
+  const getPsaStyle = (psa, patientAge) => {
+    const psaValue = parseFloat(psa);
+    if (isNaN(psaValue)) {
+      return { textColor: 'text-gray-600', dotColor: 'bg-gray-400' };
+    }
+
+    // Use age-based status determination
+    const statusResult = getPSAStatusByAge(psaValue, patientAge);
+    const status = statusResult.status;
+    
+    // Determine color based on status
+    if (status === 'High') {
+      return { textColor: 'text-red-600', dotColor: 'bg-red-500' };
+    } else if (status === 'Elevated') {
       return { textColor: 'text-orange-600', dotColor: 'bg-orange-500' };
+    } else if (status === 'Low') {
+      return { textColor: 'text-yellow-600', dotColor: 'bg-yellow-500' };
     } else {
       return { textColor: 'text-green-600', dotColor: 'bg-green-500' };
     }
@@ -163,7 +178,7 @@ const Medication = () => {
                   </tr>
                 ) : (
                   filteredPatients.map((patient) => {
-                    const psaStyle = getPsaStyle(patient.latestPsa);
+                    const psaStyle = getPsaStyle(patient.latestPsa, patient.age);
                     return (
                       <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="py-3 px-4">

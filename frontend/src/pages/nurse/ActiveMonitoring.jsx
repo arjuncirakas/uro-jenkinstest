@@ -6,6 +6,7 @@ import NursePatientDetailsModal from '../../components/NursePatientDetailsModal'
 import UpdateAppointmentModal from '../../components/UpdateAppointmentModal';
 import { patientService } from '../../services/patientService';
 import { bookingService } from '../../services/bookingService';
+import { getPSAStatusByAge } from '../../utils/psaStatusByAge';
 
 const ActiveMonitoring = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,15 +198,24 @@ const ActiveMonitoring = () => {
     }
   };
 
-  // Get PSA styling and dot color
-  const getPsaStyle = (psa) => {
+  // Get PSA styling and dot color based on age-adjusted threshold
+  const getPsaStyle = (psa, patientAge) => {
     const psaValue = parseFloat(psa);
     if (isNaN(psaValue)) {
       return { textColor: 'text-gray-900', dotColor: 'bg-gray-400' };
     }
 
-    if (psaValue > 4.0) {
+    // Use age-based status determination
+    const statusResult = getPSAStatusByAge(psaValue, patientAge);
+    const status = statusResult.status;
+    
+    // Determine color based on status
+    if (status === 'High') {
       return { textColor: 'text-gray-900', dotColor: 'bg-red-500' };
+    } else if (status === 'Elevated') {
+      return { textColor: 'text-gray-900', dotColor: 'bg-orange-500' };
+    } else if (status === 'Low') {
+      return { textColor: 'text-gray-900', dotColor: 'bg-yellow-500' };
     } else {
       return { textColor: 'text-gray-900', dotColor: 'bg-green-500' };
     }
@@ -336,7 +346,7 @@ const ActiveMonitoring = () => {
                   </tr>
                 ) : (
                   filteredPatients.map((patient) => {
-                    const psaStyle = getPsaStyle(patient.latestPsa);
+                    const psaStyle = getPsaStyle(patient.latestPsa, patient.age);
                     return (
                       <tr key={patient.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors bg-gray-50">
                         <td className="py-4 px-4">

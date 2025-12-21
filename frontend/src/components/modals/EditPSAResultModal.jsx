@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { IoClose, IoCalendar, IoFlask, IoCloudUpload, IoDocument, IoCheckmarkCircle, IoCloseCircle } from 'react-icons/io5';
 import { investigationService } from '../../services/investigationService';
+import { getPSAStatusByAge, getPSAThresholdByAge } from '../../utils/psaStatusByAge';
 
 const EditPSAResultModal = ({ isOpen, onClose, patient, psaResult, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -42,18 +43,15 @@ const EditPSAResultModal = ({ isOpen, onClose, patient, psaResult, onSuccess }) 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
-    // Auto-determine status based on PSA result
+    // Auto-determine status based on PSA result and patient age
     let newStatus = 'Normal';
     if (name === 'result' && value) {
       const psaValue = parseFloat(value);
       if (!isNaN(psaValue)) {
-        if (psaValue > 4.0) {
-          newStatus = 'High';
-        } else if (psaValue < 0.0) {
-          newStatus = 'Low';
-        } else {
-          newStatus = 'Normal';
-        }
+        // Get patient age for age-based status determination
+        const patientAge = patient?.age || patient?.patientAge || null;
+        const statusResult = getPSAStatusByAge(psaValue, patientAge);
+        newStatus = statusResult.status;
       }
     }
     
@@ -261,26 +259,39 @@ const EditPSAResultModal = ({ isOpen, onClose, patient, psaResult, onSuccess }) 
             {/* Status - Auto-determined */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status (Auto-determined)
+                Status (Auto-determined based on age)
               </label>
-              <div className={`w-full px-3 py-2 border rounded-lg bg-gray-50 ${
-                formData.status === 'High' ? 'border-red-300 bg-red-50' :
-                formData.status === 'Low' ? 'border-yellow-300 bg-yellow-50' :
-                'border-green-300 bg-green-50'
-              }`}>
-                <span className={`font-medium ${
-                  formData.status === 'High' ? 'text-red-700' :
-                  formData.status === 'Low' ? 'text-yellow-700' :
-                  'text-green-700'
-                }`}>
-                  {formData.status}
-                </span>
-                <span className="text-sm text-gray-600 ml-2">
-                  {formData.status === 'High' ? '(PSA > 4.0 ng/mL)' :
-                   formData.status === 'Low' ? '(PSA < 0.0 ng/mL)' :
-                   '(PSA 0.0 - 4.0 ng/mL)'}
-                </span>
-              </div>
+              {(() => {
+                const patientAge = patient?.age || patient?.patientAge || null;
+                const psaValue = parseFloat(formData.result);
+                const statusInfo = !isNaN(psaValue) ? getPSAStatusByAge(psaValue, patientAge) : { status: 'Normal', message: 'Enter PSA value' };
+                const threshold = patientAge ? getPSAThresholdByAge(patientAge) : 4.0;
+                
+                return (
+                  <div className={`w-full px-3 py-2 border rounded-lg ${
+                    statusInfo.status === 'High' ? 'border-red-300 bg-red-50' :
+                    statusInfo.status === 'Elevated' ? 'border-orange-300 bg-orange-50' :
+                    statusInfo.status === 'Low' ? 'border-yellow-300 bg-yellow-50' :
+                    'border-green-300 bg-green-50'
+                  }`}>
+                    <span className={`font-medium ${
+                      statusInfo.status === 'High' ? 'text-red-700' :
+                      statusInfo.status === 'Elevated' ? 'text-orange-700' :
+                      statusInfo.status === 'Low' ? 'text-yellow-700' :
+                      'text-green-700'
+                    }`}>
+                      {statusInfo.status}
+                    </span>
+                    <div className="text-xs text-gray-600 mt-1">
+                      {patientAge ? (
+                        <span>Age {patientAge}: {statusInfo.message || `Threshold: ${threshold} ng/mL`}</span>
+                      ) : (
+                        <span>Age not available: Using standard threshold (4.0 ng/mL)</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* File Upload */}

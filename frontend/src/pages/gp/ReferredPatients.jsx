@@ -3,6 +3,7 @@ import { FiEye, FiCalendar } from 'react-icons/fi';
 import GPHeader from '../../components/layout/GPHeader';
 import GPPatientDetailsModal from '../../components/GPPatientDetailsModal';
 import { gpService } from '../../services/gpService';
+import { getPSAStatusByAge } from '../../utils/psaStatusByAge';
 
 const ReferredPatients = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -105,12 +106,26 @@ const ReferredPatients = () => {
     );
   };
 
-  // Get PSA styling
-  const getPsaStyle = (psa) => {
-    if (psa > 4.0) {
-      return 'text-red-600';  // Red for high values
+  // Get PSA styling based on age-adjusted threshold
+  const getPsaStyle = (psa, patientAge) => {
+    const psaValue = parseFloat(psa);
+    if (isNaN(psaValue)) {
+      return 'text-gray-600';
+    }
+
+    // Use age-based status determination
+    const statusResult = getPSAStatusByAge(psaValue, patientAge);
+    const status = statusResult.status;
+    
+    // Determine color based on status
+    if (status === 'High') {
+      return 'text-red-600';
+    } else if (status === 'Elevated') {
+      return 'text-orange-600';
+    } else if (status === 'Low') {
+      return 'text-yellow-600';
     } else {
-      return 'text-gray-900'; // Black for normal values
+      return 'text-gray-900';
     }
   };
 
@@ -212,7 +227,7 @@ const ReferredPatients = () => {
                         </div>
                       </td>
                       <td className="py-4 px-4">
-                        <span className={`text-sm font-medium ${getPsaStyle(patient.psa)}`}>
+                        <span className={`text-sm font-medium ${getPsaStyle(patient.psa, patient.age)}`}>
                           {patient.psa} ng/mL
                         </span>
                       </td>

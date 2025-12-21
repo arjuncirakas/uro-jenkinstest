@@ -11,7 +11,8 @@ import {
   updateInvestigationRequestStatus,
   deleteInvestigationRequest,
   upload,
-  serveFile
+  serveFile,
+  parsePSAFile
 } from '../controllers/investigationController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
@@ -61,6 +62,15 @@ router.delete('/investigation-requests/:requestId',
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   deleteInvestigationRequest
+);
+
+// Parse PSA file and extract values
+router.post('/parse-psa-file',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
+  upload.single('file'),
+  parsePSAFile
 );
 
 // Add PSA result for a patient

@@ -9,6 +9,7 @@ import ErrorModal from './modals/ErrorModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddClinicalInvestigationModal from './AddClinicalInvestigationModal';
 import AddPSAResultModal from './modals/AddPSAResultModal';
+import BulkPSAUploadModal from './modals/BulkPSAUploadModal';
 import AddInvestigationResultModal from './AddInvestigationResultModal';
 import DischargeSummaryModal from './DischargeSummaryModal';
 import EditSurgeryAppointmentModal from './EditSurgeryAppointmentModal';
@@ -45,6 +46,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [isMDTSchedulingModalOpen, setIsMDTSchedulingModalOpen] = useState(false);
   const [isAddInvestigationModalOpen, setIsAddInvestigationModalOpen] = useState(false);
   const [isAddPSAModalOpen, setIsAddPSAModalOpen] = useState(false);
+  const [isBulkPSAUploadModalOpen, setIsBulkPSAUploadModalOpen] = useState(false);
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
   const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
   const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
@@ -2235,6 +2237,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           {/* Tab Navigation */}
           <div className="border-b border-gray-200">
             <div className="flex px-6">
+              {/* General Info tab - first in order */}
+              <button
+                onClick={() => setActiveTab('generalInfo')}
+                className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'generalInfo'
+                  ? 'text-teal-600'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                <IoDocument className="mr-2" />
+                General Info
+                {activeTab === 'generalInfo' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600"></div>
+                )}
+              </button>
+
               <button
                 onClick={() => setActiveTab('clinicalNotes')}
                 className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'clinicalNotes'
@@ -2314,21 +2331,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     )}
                   </button>
                 )}
-
-              {/* General Info tab - always last */}
-              <button
-                onClick={() => setActiveTab('generalInfo')}
-                className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'generalInfo'
-                  ? 'text-teal-600'
-                  : 'text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                <IoDocument className="mr-2" />
-                General Info
-                {activeTab === 'generalInfo' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-600"></div>
-                )}
-              </button>
             </div>
           </div>
 
@@ -2898,7 +2900,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             <Plus className="w-3 h-3" />
                             <span>Add PSA</span>
                           </button>
-                          {psaResults.length > 0 && (
+                          <button
+                            onClick={() => setIsBulkPSAUploadModalOpen(true)}
+                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-1"
+                          >
+                            <Upload className="w-3 h-3" />
+                            <span>Upload File</span>
+                          </button>
+                          {psaResults.length > 1 && (
                             <button
                               onClick={() => setIsPSAPlotModalOpen(true)}
                               className="px-3 py-1 bg-teal-50 border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-sm font-medium"
@@ -5764,6 +5773,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           onSuccess={handleInvestigationSuccess}
         />
 
+        {/* Bulk PSA Upload Modal */}
+        <BulkPSAUploadModal
+          isOpen={isBulkPSAUploadModalOpen}
+          onClose={() => setIsBulkPSAUploadModalOpen(false)}
+          patient={patient}
+          onSuccess={handleInvestigationSuccess}
+        />
 
         {/* Add Investigation Result Modal */}
         <AddInvestigationResultModal

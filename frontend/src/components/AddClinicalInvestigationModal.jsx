@@ -249,8 +249,8 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
   const customType = investigationTypes.find(t => t.value === 'custom');
 
   const commonTests = {
-    psa: ['PSA Total', 'PSA Free', 'PSA Ratio', 'PSA Velocity', 'PSA Density'],
-    trus: ['TRUS Prostate', 'TRUS Guided Biopsy', 'TRUS Volume Assessment'],
+    psa: ['PSA Total', 'PSA Free', 'PSA Ratio', 'PSA Density'],
+    trus: ['TRUS Guided Biopsy', 'TRUS Volume Assessment'],
     mri: ['MRI Prostate', 'MRI Pelvis', 'MRI Abdomen', 'Multi-parametric MRI'],
     biopsy: ['Prostate Biopsy', 'Transperineal Biopsy', 'Transrectal Biopsy', 'Fusion Biopsy', 'Template Biopsy'],
     custom: ['Custom Test'],

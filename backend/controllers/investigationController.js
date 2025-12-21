@@ -3,6 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { validateFilePath } from '../utils/ssrfProtection.js';
+import { extractPSADataFromFile } from '../utils/psaFileParser.js';
+import { getPSAStatusByAge, getPSAThresholdByAge } from '../utils/psaStatusByAge.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -20,15 +22,18 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // Allow PDF, DOC, DOCX, JPG, PNG files
-  const allowedTypes = /jpeg|jpg|png|pdf|doc|docx/;
+  // Allow PDF, DOC, DOCX, XLS, XLSX, CSV files
+  const allowedTypes = /pdf|doc|docx|xls|xlsx|csv/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  const mimetype = allowedTypes.test(file.mimetype) || 
+                   file.mimetype === 'application/vnd.ms-excel' ||
+                   file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                   file.mimetype === 'text/csv';
 
-  if (mimetype && extname) {
+  if ((mimetype || extname) && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only PDF, DOC, DOCX, JPG, and PNG files are allowed'));
+    cb(new Error('Only PDF, DOC, DOCX, XLS, XLSX, and CSV files are allowed'));
   }
 };
 
@@ -64,9 +69,9 @@ export const addPSAResult = async (req, res) => {
       });
     }
 
-    // Check if patient exists
+    // Check if patient exists and get age
     const patientCheck = await client.query(
-      'SELECT id, first_name, last_name FROM patients WHERE id = $1',
+      'SELECT id, first_name, last_name, date_of_birth FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -75,6 +80,18 @@ export const addPSAResult = async (req, res) => {
         success: false,
         message: 'Patient not found'
       });
+    }
+
+    // Calculate patient age
+    let patientAge = null;
+    if (patientCheck.rows[0].date_of_birth) {
+      const birthDate = new Date(patientCheck.rows[0].date_of_birth);
+      const today = new Date();
+      patientAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        patientAge--;
+      }
     }
 
     // Get user details
@@ -95,6 +112,16 @@ export const addPSAResult = async (req, res) => {
       fileName = req.file.originalname;
     }
 
+    // Auto-determine status based on age if not provided
+    let finalStatus = status;
+    if (!finalStatus && result) {
+      finalStatus = getPSAStatusByAge(parseFloat(result), patientAge);
+    }
+
+    // Get age-adjusted reference range
+    const threshold = getPSAThresholdByAge(patientAge);
+    const ageAdjustedReferenceRange = `0.0 - ${threshold}`;
+
     // Insert PSA result
     const result_query = await client.query(
       `INSERT INTO investigation_results (
@@ -108,8 +135,8 @@ export const addPSAResult = async (req, res) => {
         'PSA (Prostate Specific Antigen)', 
         testDate, 
         result, 
-        '0.0 - 4.0', // Default reference range
-        status, 
+        referenceRange || ageAdjustedReferenceRange, 
+        finalStatus, 
         notes || '', 
         filePath, 
         fileName, 
@@ -187,9 +214,12 @@ export const updatePSAResult = async (req, res) => {
       });
     }
 
-    // Check if result exists
+    // Check if result exists and get patient info
     const resultCheck = await client.query(
-      'SELECT id, patient_id, file_path FROM investigation_results WHERE id = $1',
+      `SELECT ir.id, ir.patient_id, ir.file_path, p.date_of_birth 
+       FROM investigation_results ir
+       JOIN patients p ON ir.patient_id = p.id
+       WHERE ir.id = $1`,
       [parsedResultId]
     );
 
@@ -201,6 +231,18 @@ export const updatePSAResult = async (req, res) => {
     }
 
     const existingResult = resultCheck.rows[0];
+
+    // Calculate patient age
+    let patientAge = null;
+    if (existingResult.date_of_birth) {
+      const birthDate = new Date(existingResult.date_of_birth);
+      const today = new Date();
+      patientAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        patientAge--;
+      }
+    }
 
     // Handle file upload - if new file is uploaded, replace old one
     let filePath = existingResult.file_path;
@@ -219,20 +261,15 @@ export const updatePSAResult = async (req, res) => {
       fileName = req.file.originalname;
     }
 
-    // Auto-determine status if not provided
+    // Auto-determine status based on age if not provided
     let finalStatus = status;
     if (!finalStatus && result) {
-      const psaValue = parseFloat(result);
-      if (!isNaN(psaValue)) {
-        if (psaValue > 4.0) {
-          finalStatus = 'High';
-        } else if (psaValue < 1.0) {
-          finalStatus = 'Low';
-        } else {
-          finalStatus = 'Normal';
-        }
-      }
+      finalStatus = getPSAStatusByAge(parseFloat(result), patientAge);
     }
+
+    // Get age-adjusted reference range
+    const threshold = getPSAThresholdByAge(patientAge);
+    const ageAdjustedReferenceRange = `0.0 - ${threshold}`;
 
     // Ensure result is a string for database
     const resultString = result ? String(result) : null;
@@ -241,7 +278,7 @@ export const updatePSAResult = async (req, res) => {
     const updateParams = [
       testDate, 
       resultString, 
-      referenceRange || null, // Use null instead of default to let COALESCE work properly
+      referenceRange || ageAdjustedReferenceRange || null, // Use age-adjusted range if not provided
       finalStatus || null, 
       notes || null, 
       filePath !== existingResult.file_path ? filePath : null,
@@ -438,7 +475,7 @@ export const getInvestigationResults = async (req, res) => {
 
     // Check if patient exists and get initial PSA if available
     const patientCheck = await client.query(
-      'SELECT id, first_name, last_name, initial_psa, initial_psa_date FROM patients WHERE id = $1',
+      'SELECT id, first_name, last_name, initial_psa, initial_psa_date, date_of_birth FROM patients WHERE id = $1',
       [patientId]
     );
 
@@ -450,6 +487,18 @@ export const getInvestigationResults = async (req, res) => {
     }
 
     const patient = patientCheck.rows[0];
+
+    // Calculate patient age
+    let patientAge = null;
+    if (patient.date_of_birth) {
+      const birthDate = new Date(patient.date_of_birth);
+      const today = new Date();
+      patientAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        patientAge--;
+      }
+    }
 
     // Build query with optional test type filter
     let query = `
@@ -508,14 +557,11 @@ export const getInvestigationResults = async (req, res) => {
 
     // If no PSA results exist and patient has initial PSA, include it as a PSA result
     if ((!testType || testType.toLowerCase() === 'psa') && formattedResults.length === 0 && patient.initial_psa && patient.initial_psa_date) {
-      // Determine status based on PSA value
+      // Determine status based on age-adjusted PSA value
       const psaValue = parseFloat(patient.initial_psa);
-      let status = 'Normal';
-      if (psaValue > 4.0) {
-        status = 'High';
-      } else if (psaValue > 2.5) {
-        status = 'Elevated';
-      }
+      const status = getPSAStatusByAge(psaValue, patientAge);
+      const threshold = getPSAThresholdByAge(patientAge);
+      const referenceRange = `0.0 - ${threshold}`;
 
       // Add initial PSA as a result
       formattedResults.push({
@@ -524,7 +570,7 @@ export const getInvestigationResults = async (req, res) => {
         testName: 'PSA (Prostate Specific Antigen)',
         testDate: patient.initial_psa_date,
         result: patient.initial_psa.toString(),
-        referenceRange: '0.0 - 4.0',
+        referenceRange: referenceRange,
         status: status,
         notes: 'Initial PSA value from patient registration',
         filePath: null,
@@ -551,12 +597,9 @@ export const getInvestigationResults = async (req, res) => {
       // If initial PSA is not in results, add it
       if (!hasInitialPSA) {
         const psaValue = parseFloat(patient.initial_psa);
-        let status = 'Normal';
-        if (psaValue > 4.0) {
-          status = 'High';
-        } else if (psaValue > 2.5) {
-          status = 'Elevated';
-        }
+        const status = getPSAStatusByAge(psaValue, patientAge);
+        const threshold = getPSAThresholdByAge(patientAge);
+        const referenceRange = `0.0 - ${threshold}`;
 
         formattedResults.push({
           id: null,
@@ -564,7 +607,7 @@ export const getInvestigationResults = async (req, res) => {
           testName: 'PSA (Prostate Specific Antigen)',
           testDate: patient.initial_psa_date,
           result: patient.initial_psa.toString(),
-          referenceRange: '0.0 - 4.0',
+          referenceRange: referenceRange,
           status: status,
           notes: 'Initial PSA value from patient registration',
           filePath: null,
@@ -1465,6 +1508,57 @@ export const serveFile = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error serving file'
+    });
+  }
+};
+
+// Parse PSA file and extract values
+export const parsePSAFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    const filePath = req.file.path;
+    const fileType = path.extname(req.file.originalname).toLowerCase();
+
+    console.log('Parsing PSA file:', req.file.originalname, 'Type:', fileType);
+
+    // Extract PSA data from file
+    const result = await extractPSADataFromFile(filePath, fileType);
+
+    // Clean up uploaded file after parsing (optional - you might want to keep it)
+    // fs.unlinkSync(filePath);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Extracted ${result.count} PSA result(s) from file`,
+        data: {
+          psaEntries: result.psaEntries,
+          count: result.count,
+          extractedText: result.text // For debugging
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.error || 'Failed to parse file',
+        data: {
+          psaEntries: [],
+          count: 0
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Parse PSA file error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error parsing PSA file',
+      error: error.message
     });
   }
 };
