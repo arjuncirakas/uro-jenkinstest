@@ -144,8 +144,39 @@ export const createGP = async (req, res) => {
       }
     }
     
-    // Generate a temporary password
-    const tempPassword = crypto.randomBytes(12).toString('hex');
+    // Generate a temporary password that meets validation requirements:
+    // - Minimum 14 characters
+    // - At least one lowercase letter (a-z)
+    // - At least one uppercase letter (A-Z)
+    // - At least one number (0-9)
+    // - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+    // - No spaces
+    const generateSecurePassword = () => {
+      const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+      const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const numbers = '0123456789';
+      const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+      const allChars = lowercase + uppercase + numbers + special;
+      
+      // Ensure at least one of each required character type
+      let password = '';
+      password += lowercase[Math.floor(Math.random() * lowercase.length)];
+      password += uppercase[Math.floor(Math.random() * uppercase.length)];
+      password += numbers[Math.floor(Math.random() * numbers.length)];
+      password += special[Math.floor(Math.random() * special.length)];
+      
+      // Fill the rest to meet minimum 14 characters requirement
+      // We already have 4 characters, so we need at least 10 more
+      const remainingLength = 10 + Math.floor(Math.random() * 6); // 10-15 more chars = 14-19 total
+      for (let i = 0; i < remainingLength; i++) {
+        password += allChars[Math.floor(Math.random() * allChars.length)];
+      }
+      
+      // Shuffle the password to randomize character positions
+      return password.split('').sort(() => Math.random() - 0.5).join('');
+    };
+    
+    const tempPassword = generateSecurePassword();
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
     
