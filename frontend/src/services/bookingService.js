@@ -107,14 +107,17 @@ export const bookingService = {
   // Get available GPs
   getAvailableGPs: async () => {
     try {
-      const response = await apiClient.get('/doctors/gps');
+      const response = await apiClient.get('/gp');
       console.log('GPs API response:', response.data); // Debug log
-      return { success: true, data: response.data.data?.gps || response.data.data || [] };
+      // Handle both response formats: { success: true, data: [...] } or { success: true, data: { gps: [...] } }
+      const gpsData = response.data.data;
+      const gpsList = Array.isArray(gpsData) ? gpsData : (gpsData?.gps || []);
+      return { success: true, data: gpsList };
     } catch (error) {
       console.error('Error fetching GPs:', error);
       return {
         success: false,
-        error: error.response?.data?.message || error.message,
+        error: error.response?.data?.error || error.response?.data?.message || error.message,
         details: error.response?.data?.errors
       };
     }

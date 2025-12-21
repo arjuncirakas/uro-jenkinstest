@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import pool from '../config/database.js';
-import { sendPasswordSetupEmail } from '../services/emailService.js';
+import { sendPasswordEmail } from '../services/emailService.js';
 import { validationResult } from 'express-validator';
 
 // Get all GPs
@@ -22,10 +22,26 @@ export const getAllGPs = async (req, res) => {
     
     const result = await client.query(query, [is_active === 'true']);
     
+    // Transform to camelCase format for frontend consistency
+    const gps = result.rows.map(gp => ({
+      id: gp.id,
+      email: gp.email,
+      firstName: gp.first_name,
+      lastName: gp.last_name,
+      fullName: `${gp.first_name} ${gp.last_name}`,
+      phone: gp.phone,
+      organization: gp.organization,
+      role: gp.role,
+      isActive: gp.is_active,
+      isVerified: gp.is_verified,
+      createdAt: gp.created_at,
+      lastLoginAt: gp.last_login_at
+    }));
+    
     res.json({
       success: true,
-      data: result.rows,
-      count: result.rows.length
+      data: gps,
+      count: gps.length
     });
   } catch (error) {
     console.error('Error fetching GPs:', error);
@@ -129,33 +145,23 @@ export const createGP = async (req, res) => {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
     
-    // Insert new GP (not verified yet, will be activated after password setup)
+    // Insert new GP (active and verified by default when created via Add GP modal)
     const result = await client.query(
       `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-      [email, passwordHash, first_name, last_name, phone, organization || null, 'gp', false, false]
+      [email, passwordHash, first_name, last_name, phone, organization || null, 'gp', true, true]
     );
     
     const newGP = result.rows[0];
     
-    // Generate password setup token
-    const setupToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    // Store password setup token
-    await client.query(
-      'INSERT INTO password_setup_tokens (user_id, email, token, expires_at) VALUES ($1, $2, $3, $4)',
-      [newGP.id, email, setupToken, expiresAt]
-    );
-    
-    // Send password setup email
+    // Send password email with auto-generated password
     let emailSent = false;
     try {
-      const emailResult = await sendPasswordSetupEmail(email, first_name, setupToken);
+      const emailResult = await sendPasswordEmail(email, first_name, tempPassword);
       emailSent = emailResult.success;
     } catch (emailError) {
-      console.error('Error sending password setup email:', emailError);
+      console.error('Error sending password email:', emailError);
     }
     
     await client.query('COMMIT');
@@ -163,7 +169,7 @@ export const createGP = async (req, res) => {
     res.status(201).json({
       success: true,
       message: emailSent 
-        ? 'GP created successfully. Password setup email sent.'
+        ? 'GP created successfully. Login credentials have been sent to the email address.'
         : 'GP created successfully but email sending failed. Please contact support.',
       data: {
         userId: newGP.id,

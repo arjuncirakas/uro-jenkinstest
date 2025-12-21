@@ -23,8 +23,10 @@ import {
 } from 'lucide-react';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
+import AddGPModal from './modals/AddGPModal';
 import { patientService } from '../services/patientService.js';
 import { bookingService } from '../services/bookingService.js';
+import authService from '../services/authService.js';
 import {
   validateNameInput,
   validatePhoneInput,
@@ -59,8 +61,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     familyHistory: '',
     assignedUrologist: '',
     referringGP: '',
-    gpName: '',
-    gpContact: '',
 
     // Emergency Contact
     emergencyContactName: '',
@@ -117,22 +117,49 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
   const [urologists, setUrologists] = useState([]);
   const [loadingUrologists, setLoadingUrologists] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState('');
+  const [gps, setGps] = useState([]);
+  const [loadingGPs, setLoadingGPs] = useState(false);
+  const [isAddGPModalOpen, setIsAddGPModalOpen] = useState(false);
 
 
 
-  // Fetch urologists when modal opens
+  // Fetch urologists and GPs when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchUrologists();
-      // Get current user role
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      fetchGPs();
+      // Get current user info
+      const user = authService.getCurrentUser() || JSON.parse(localStorage.getItem('user') || '{}');
       setCurrentUserRole(user.role || '');
-      // If user is GP, auto-set referring GP to current user
+      
+      // If user is GP, auto-fill GP details after GPs are loaded
       if (user.role === 'gp') {
-        setFormData(prev => ({ ...prev, referringGP: user.id?.toString() || '' }));
+        setFormData(prev => ({ 
+          ...prev, 
+          referringGP: user.id?.toString() || ''
+        }));
       }
     }
   }, [isOpen]);
+
+  // Auto-fill GP details when GPs are loaded and user is GP
+  useEffect(() => {
+    if (gps.length > 0 && currentUserRole === 'gp' && isOpen) {
+      const user = authService.getCurrentUser() || JSON.parse(localStorage.getItem('user') || '{}');
+      const userGP = gps.find(gp => {
+        const gpId = gp.id?.toString() || String(gp.id);
+        const userId = user.id?.toString() || String(user.id);
+        return gpId === userId;
+      });
+      
+      if (userGP && !formData.referringGP) {
+        setFormData(prev => ({
+          ...prev,
+          referringGP: userGP.id?.toString() || String(userGP.id)
+        }));
+      }
+    }
+  }, [gps, currentUserRole, isOpen]);
 
   const fetchUrologists = async () => {
     setLoadingUrologists(true);
@@ -154,6 +181,58 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     } finally {
       setLoadingUrologists(false);
     }
+  };
+
+  const fetchGPs = async () => {
+    setLoadingGPs(true);
+    try {
+      const result = await bookingService.getAvailableGPs();
+      console.log('📋 Fetched GPs:', result);
+      if (result.success) {
+        // The service returns GPs in data.gps or data array
+        const gpsList = Array.isArray(result.data?.gps) 
+          ? result.data.gps 
+          : (Array.isArray(result.data) ? result.data : []);
+        console.log('📋 GPs list:', gpsList);
+        setGps(gpsList);
+      } else {
+        console.error('Failed to fetch GPs:', result.error);
+        setGps([]);
+      }
+    } catch (error) {
+      console.error('Error fetching GPs:', error);
+      setGps([]);
+    } finally {
+      setLoadingGPs(false);
+    }
+  };
+
+  const handleGPSelect = (e) => {
+    const selectedGPId = e.target.value;
+    if (selectedGPId) {
+      setFormData(prev => ({
+        ...prev,
+        referringGP: selectedGPId
+      }));
+      // Clear any errors
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.referringGP;
+        return newErrors;
+      });
+    } else {
+      // Clear GP field if "Select GP" is selected
+      setFormData(prev => ({
+        ...prev,
+        referringGP: ''
+      }));
+    }
+  };
+
+  const handleGPAdded = () => {
+    // Refresh GP list after adding new GP
+    fetchGPs();
+    setIsAddGPModalOpen(false);
   };
 
 
@@ -298,17 +377,9 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       }
     });
 
-    // Validate GP Contact - must be valid email if provided
-    if (formData.gpContact && formData.gpContact.trim() !== '') {
-      // Basic email regex
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.gpContact)) {
-        newErrors.gpContact = 'Please enter a valid email address';
-      }
-    } else if (formData.gpName && formData.gpName.trim() !== '') {
-      // If GP Name is provided, GP Contact (Email) is required as per user request
-      // "just email is required for the gp contact"
-      newErrors.gpContact = 'GP Email is required when GP Name is provided';
+    // Validate GP selection - required
+    if (!formData.referringGP || formData.referringGP.trim() === '') {
+      newErrors.referringGP = 'Please select a GP';
     }
 
     setErrors(newErrors);
@@ -412,9 +483,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         dreFindings: Array.isArray(formData.dreFindings) ? formData.dreFindings.join(', ') : (formData.dreFindings || ''),
         priorBiopsy: formData.priorBiopsy || 'no',
         gleasonScore: formData.gleasonScore || '',
-        comorbidities: formData.comorbidities || [],
-        gpName: formData.gpName.trim(),
-        gpContact: formData.gpContact.trim()
+        comorbidities: formData.comorbidities || []
       };
 
       // Only include priorBiopsyDate in payload if priorBiopsy is 'yes' and date is provided
@@ -520,8 +589,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       familyHistory: '',
       familyHistory: '',
       assignedUrologist: '',
-      gpName: '',
-      gpContact: '',
+      referringGP: '',
       emergencyContactName: '',
       emergencyContactPhone: '',
       emergencyContactRelationship: '',
@@ -1033,53 +1101,55 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="relative mb-3">
-                    <input
-                      type="text"
-                      name="gpName"
-                      value={formData.gpName}
-                      onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${formData.gpName
-                        ? 'border-teal-500 focus:border-teal-500 bg-white'
-                        : 'border-gray-300 focus:border-teal-500 bg-white'
-                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
-                      placeholder=" "
-                    />
-                    <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.gpName
-                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                        : 'text-gray-500'
-                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none`}
-                    >
-                      GP Name
+                  {/* GP Dropdown */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select GP <span className="text-red-500">*</span>
                     </label>
-                  </div>
-
-                  <div className="relative mb-3">
-                    <input
-                      type="email"
-                      name="gpContact"
-                      value={formData.gpContact}
-                      onChange={handleInputChange}
-                      className={`peer block min-h-[auto] w-full rounded border px-3 py-[0.32rem] leading-[1.6] outline-none transition-all duration-200 ease-linear pr-10 ${errors.gpContact
-                        ? 'border-red-500 focus:border-red-500 bg-red-50'
-                        : formData.gpContact
-                          ? 'border-teal-500 focus:border-teal-500 bg-white'
-                          : 'border-gray-300 focus:border-teal-500 bg-white'
-                        } border focus:placeholder:opacity-100 peer-focus:text-teal-600 [&:not(:placeholder-shown)]:placeholder:opacity-0 motion-reduce:transition-none`}
-                      placeholder=" "
-                    />
-                    <label
-                      className={`pointer-events-none absolute left-3 top-0 mb-0 max-w-[90%] origin-[0_0] truncate pt-[0.37rem] leading-[1.6] transition-all duration-200 ease-out ${formData.gpContact
-                        ? '-translate-y-[0.9rem] scale-[0.8] text-teal-600 bg-white px-1'
-                        : 'text-gray-500'
-                        } peer-focus:-translate-y-[0.9rem] peer-focus:scale-[0.8] peer-focus:text-teal-600 peer-focus:bg-white peer-focus:px-1 peer-[&:not(:placeholder-shown)]:-translate-y-[0.9rem] peer-[&:not(:placeholder-shown)]:scale-[0.8] peer-[&:not(:placeholder-shown)]:bg-white peer-[&:not(:placeholder-shown)]:px-1 motion-reduce:transition-none ${errors.gpContact ? '!text-red-500' : ''}`}
-                    >
-                      GP Email <span className="text-red-500">*</span>
-                    </label>
-                    {errors.gpContact && (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <select
+                          name="selectedGP"
+                          value={formData.referringGP || ''}
+                          onChange={handleGPSelect}
+                          disabled={loadingGPs || currentUserRole === 'gp'}
+                          required
+                          className={`block w-full rounded border px-3 py-2 leading-[1.6] outline-none transition-all duration-200 ease-linear appearance-none pr-10 ${formData.referringGP
+                            ? 'border-teal-500 focus:border-teal-500 bg-white'
+                            : 'border-gray-300 focus:border-teal-500 bg-white'
+                            } border focus:ring-2 focus:ring-teal-500 disabled:bg-gray-100 disabled:cursor-not-allowed`}
+                        >
+                          <option value="">Select GP</option>
+                          {gps.map((gp) => {
+                            const gpName = gp.fullName || 
+                              (gp.firstName && gp.lastName ? `${gp.firstName} ${gp.lastName}`.trim() : '') ||
+                              (gp.first_name && gp.last_name ? `${gp.first_name} ${gp.last_name}`.trim() : '') ||
+                              gp.name || 'Unknown';
+                            return (
+                              <option key={gp.id} value={gp.id?.toString() || gp.id}>
+                                {gpName}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${formData.referringGP ? 'text-teal-500' : 'text-gray-400'
+                          }`} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddGPModalOpen(true)}
+                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add GP
+                      </button>
+                    </div>
+                    {loadingGPs && (
+                      <p className="mt-1 text-sm text-gray-500">Loading GPs...</p>
+                    )}
+                    {errors.referringGP && (
                       <p className="mt-1 text-sm text-red-600">
-                        {errors.gpContact}
+                        {errors.referringGP}
                       </p>
                     )}
                   </div>
@@ -1951,6 +2021,13 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
         onCancel={() => setShowConfirmModal(false)}
         title="Unsaved Changes"
         message="You have unsaved changes. Do you want to save before closing?"
+      />
+
+      {/* Add GP Modal */}
+      <AddGPModal
+        isOpen={isAddGPModalOpen}
+        onClose={() => setIsAddGPModalOpen(false)}
+        onSuccess={handleGPAdded}
       />
 
       {/* Custom Symptom Modal */}

@@ -19,13 +19,14 @@ router.use(xssProtection);
 // Apply authentication to all routes
 router.use(authenticateToken);
 
-// Require superadmin role
-router.use(requireRole(['superadmin']));
+// Get all GPs - accessible to all authenticated users
+// Create GP - accessible to superadmin, urologist, and nurse
+// Other operations - require superadmin role
 
-// Get all GPs
+// Get all GPs - accessible to all authenticated users
 router.get('/', generalLimiter, getAllGPs);
 
-// Get GP by ID
+// Get GP by ID - accessible to all authenticated users
 router.get('/:id', 
   generalLimiter,
   [
@@ -34,9 +35,10 @@ router.get('/:id',
   getGPById
 );
 
-// Create new GP
+// Create new GP - accessible to superadmin, urologist, and nurse
 router.post('/', 
   generalLimiter,
+  requireRole(['superadmin', 'urologist', 'doctor', 'urology_nurse']),
   [
     body('first_name').trim().isLength({ min: 1, max: 100 }).withMessage('First name must be 1-100 characters'),
     body('last_name').trim().isLength({ min: 1, max: 100 }).withMessage('Last name must be 1-100 characters'),
@@ -47,7 +49,10 @@ router.post('/',
   createGP
 );
 
-// Update GP
+// Require superadmin role for update and delete operations
+router.use(requireRole(['superadmin']));
+
+// Update GP - superadmin only
 router.put('/:id', 
   generalLimiter,
   [
@@ -61,7 +66,7 @@ router.put('/:id',
   updateGP
 );
 
-// Delete GP
+// Delete GP - superadmin only
 router.delete('/:id', 
   generalLimiter,
   [

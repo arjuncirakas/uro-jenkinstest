@@ -331,6 +331,76 @@ export const sendPasswordSetupEmail = async (to, firstName, token) => {
   }
 };
 
+// Send password email (with auto-generated password)
+export const sendPasswordEmail = async (to, firstName, password) => {
+  try {
+    const transporter = createTransporter();
+    
+    const mailOptions = {
+      from: {
+        name: 'Urology Patient Management System',
+        address: process.env.SMTP_USER
+      },
+      to: to,
+      subject: 'Your Account Credentials - Urology Patient Management System',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px; text-align: center;">
+            <h2 style="color: #2c3e50; margin-bottom: 20px;">Welcome to UroPrep, ${firstName}!</h2>
+            <p style="color: #555; font-size: 16px; margin-bottom: 20px;">
+              Your account has been created successfully. Below are your login credentials:
+            </p>
+            <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #14b8a6;">
+              <p style="color: #333; font-size: 14px; margin-bottom: 10px;"><strong>Email:</strong> ${to}</p>
+              <p style="color: #333; font-size: 14px; margin-bottom: 15px;"><strong>Temporary Password:</strong></p>
+              <div style="background-color: #f0f0f0; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 18px; font-weight: bold; color: #14b8a6; letter-spacing: 2px;">
+                ${password}
+              </div>
+            </div>
+            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+              <strong>Important:</strong> Please log in with these credentials and change your password after your first login for security purposes.
+            </p>
+            <p style="color: #666; font-size: 14px; margin-top: 10px;">
+              If you did not expect this email, please contact support immediately.
+            </p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px;">
+              This is an automated message. Please do not reply to this email.
+            </p>
+          </div>
+        </div>
+      `,
+      text: `Welcome to UroPrep, ${firstName}! Your account has been created. Email: ${to}, Temporary Password: ${password}. Please log in and change your password after first login.`
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log(`📧 Password email sent successfully to ${to} (Message ID: ${result.messageId})`);
+    
+    return {
+      success: true,
+      messageId: result.messageId,
+      message: 'Password email sent successfully'
+    };
+
+  } catch (error) {
+    console.error('❌ Error sending password email:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
+    return {
+      success: false,
+      error: error.message,
+      errorCode: error.code,
+      errorResponse: error.response,
+      message: 'Failed to send password email'
+    };
+  }
+};
+
 // Send appointment reminder email
 export const sendAppointmentReminderEmail = async (reminderData) => {
   try {
