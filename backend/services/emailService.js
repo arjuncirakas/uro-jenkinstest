@@ -397,17 +397,41 @@ export const sendPasswordEmail = async (to, firstName, password) => {
 
     console.log(`📧 Sending email to ${to}...`);
     const result = await transporter.sendMail(mailOptions);
-    console.log(`✅ Password email sent successfully to ${to} (Message ID: ${result.messageId})`);
+    
+    // Check if email was actually accepted by SMTP server
+    const wasAccepted = result.accepted && result.accepted.length > 0 && result.accepted.includes(to);
+    const wasRejected = result.rejected && result.rejected.length > 0 && result.rejected.includes(to);
+    
     console.log(`📧 Email response:`, {
       messageId: result.messageId,
       accepted: result.accepted,
       rejected: result.rejected,
-      response: result.response
+      response: result.response,
+      wasAccepted,
+      wasRejected
     });
+    
+    // If email was rejected, it's a failure
+    if (wasRejected || !wasAccepted) {
+      const rejectionReason = result.response || 'Email was rejected by SMTP server';
+      console.error(`❌ Email was rejected by SMTP server for ${to}:`, rejectionReason);
+      return {
+        success: false,
+        error: rejectionReason,
+        messageId: result.messageId,
+        accepted: result.accepted,
+        rejected: result.rejected,
+        message: 'Email was rejected by SMTP server'
+      };
+    }
+    
+    console.log(`✅ Password email sent successfully to ${to} (Message ID: ${result.messageId})`);
     
     return {
       success: true,
       messageId: result.messageId,
+      accepted: result.accepted,
+      rejected: result.rejected,
       message: 'Password email sent successfully'
     };
 

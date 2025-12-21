@@ -169,8 +169,18 @@ export const createGP = async (req, res) => {
       
       if (emailResult.success) {
         console.log(`✅ Password email sent successfully to ${email}`);
+        console.log(`📧 Email details:`, {
+          messageId: emailResult.messageId,
+          accepted: emailResult.accepted,
+          rejected: emailResult.rejected
+        });
       } else {
         console.error(`❌ Failed to send password email to ${email}:`, emailResult.error || emailResult.message);
+        console.error(`❌ Email rejection details:`, {
+          accepted: emailResult.accepted,
+          rejected: emailResult.rejected,
+          error: emailResult.error
+        });
         emailError = emailResult.error || emailResult.message;
       }
     } catch (emailError) {
@@ -192,7 +202,7 @@ export const createGP = async (req, res) => {
     res.status(201).json({
       success: true,
       message: emailSent 
-        ? 'GP created successfully. Login credentials have been sent to the email address.'
+        ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
         : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
       data: {
         userId: newGP.id,
@@ -201,7 +211,9 @@ export const createGP = async (req, res) => {
         lastName: newGP.last_name,
         role: newGP.role,
         emailSent,
-        emailError: emailError || null
+        emailError: emailError || null,
+        // Include password in response for debugging/admin purposes (only if email failed)
+        ...(emailSent ? {} : { tempPassword: tempPassword })
       }
     });
   } catch (error) {
