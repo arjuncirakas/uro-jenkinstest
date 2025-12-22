@@ -114,16 +114,21 @@ const formatDateFromExcel = (cellValue) => {
   return null;
 };
 
+// Global variable to store structured data from Excel (for use in extractPSADataFromFile)
+let excelStructuredData = null;
+
 /**
  * Extract text from Excel file
  * Improved to preserve column structure for better PSA data extraction
  * Uses direct cell access to ensure correct pairing
+ * Returns both structured data and text for compatibility
  */
 const extractTextFromExcel = async (filePath) => {
   try {
     const workbook = XLSX.readFile(filePath);
     let text = '';
     let structuredData = [];
+    excelStructuredData = null; // Reset global variable
     
     // Extract text from all sheets
     workbook.SheetNames.forEach(sheetName => {
@@ -353,9 +358,13 @@ const extractTextFromExcel = async (filePath) => {
         console.log(`[PSA Excel Parser] ===== EXTRACTION COMPLETE =====`);
         console.log(`[PSA Excel Parser] Total entries extracted: ${structuredData.length}`);
         console.log(`[PSA Excel Parser] Extracted data:`, JSON.stringify(structuredData, null, 2));
+        
+        // Store structured data globally so extractPSADataFromFile can use it
+        excelStructuredData = structuredData;
       } else {
         console.log(`[PSA Excel Parser] ERROR: Could not identify date and value columns`);
         console.log(`[PSA Excel Parser] Date column: ${dateColumnIndex}, Value column: ${valueColumnIndex}`);
+        excelStructuredData = null;
       }
       
       // If we found structured data, format it for parsing
@@ -965,6 +974,7 @@ const getPSAStatus = (value) => {
 export const extractPSADataFromFile = async (filePath, fileType) => {
   try {
     let text = '';
+    let psaData = [];
     
     // Extract text based on file type
     const ext = path.extname(filePath).toLowerCase();
@@ -973,6 +983,32 @@ export const extractPSADataFromFile = async (filePath, fileType) => {
       text = await extractTextFromPDF(filePath);
     } else if (['.xls', '.xlsx'].includes(ext)) {
       text = await extractTextFromExcel(filePath);
+      
+      // If we have structured data from Excel, use it directly instead of re-parsing
+      if (excelStructuredData && excelStructuredData.length > 0) {
+        console.log('[PSA Parser] Using structured data from Excel directly (avoiding re-parsing)');
+        console.log('[PSA Parser] Structured data entries:', excelStructuredData.length);
+        
+        // Convert structured data to the format expected by the API
+        psaData = excelStructuredData.map(entry => ({
+          testDate: entry.date,
+          result: entry.value, // This preserves decimals like "7.5"
+          status: getPSAStatus(parseFloat(entry.value)),
+          notes: 'Extracted from file'
+        }));
+        
+        console.log('[PSA Parser] Converted to psaData format:', JSON.stringify(psaData, null, 2));
+        
+        // Reset global variable
+        excelStructuredData = null;
+        
+        return {
+          success: true,
+          text: text.substring(0, 1000), // Return first 1000 chars for debugging
+          psaEntries: psaData,
+          count: psaData.length
+        };
+      }
     } else if (['.doc', '.docx'].includes(ext)) {
       text = await extractTextFromWord(filePath);
     } else if (['.csv'].includes(ext)) {
@@ -981,8 +1017,11 @@ export const extractPSADataFromFile = async (filePath, fileType) => {
       throw new Error(`Unsupported file type: ${ext}. Only PDF, Excel (.xls, .xlsx), Word (.doc, .docx), and CSV files are supported.`);
     }
     
-    // Parse PSA data from extracted text
-    const psaData = parsePSAData(text);
+    // Parse PSA data from extracted text (for non-Excel files or if structured data wasn't available)
+    if (psaData.length === 0) {
+      console.log('[PSA Parser] Parsing text data (no structured data available)');
+      psaData = parsePSAData(text);
+    }
     
     return {
       success: true,
@@ -992,6 +1031,7 @@ export const extractPSADataFromFile = async (filePath, fileType) => {
     };
   } catch (error) {
     console.error('Error extracting PSA data from file:', error);
+    excelStructuredData = null; // Reset on error
     return {
       success: false,
       error: error.message,
