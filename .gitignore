@@ -3,6 +3,10 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Test Coverage Reports (HTML files)
+coverage/
+**/coverage/
+
 # Dependencies
 node_modules/
 package-lock.json
