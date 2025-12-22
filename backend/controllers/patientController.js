@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import { sendNotificationEmail } from '../services/emailService.js';
 import { createPathwayTransferNotification } from '../services/notificationService.js';
+import crypto from 'crypto';
 
 /**
  * Check if patient has 3 consecutive no-shows without profile changes
@@ -132,6 +133,42 @@ const generateUPI = () => {
   const year = new Date().getFullYear();
   const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
   return `URP${year}${randomNum}`;
+};
+
+// Helper function to handle unique constraint violations
+const handleUniqueConstraintError = (error, res) => {
+  if (error.code === '23505') {
+    if (error.constraint === 'patients_email_key') {
+      return res.status(409).json({
+        success: false,
+        message: 'Patient with this email already exists'
+      });
+    }
+    if (error.constraint === 'patients_phone_key') {
+      return res.status(409).json({
+        success: false,
+        message: 'Patient with this phone number already exists'
+      });
+    }
+    if (error.constraint === 'patients_upi_key') {
+      return res.status(409).json({
+        success: false,
+        message: 'Patient with this UPI already exists'
+      });
+    }
+  }
+  return null; // Not a handled constraint
+};
+
+// Helper function to safely parse JSON field
+const parseJsonField = (jsonString, defaultValue = null) => {
+  if (!jsonString) return defaultValue;
+  try {
+    return JSON.parse(jsonString);
+  } catch (e) {
+    console.error('Error parsing JSON field:', e);
+    return defaultValue;
+  }
 };
 
 // Helper function to format date as YYYY-MM-DD without timezone conversion
@@ -556,27 +593,13 @@ export const addPatient = async (req, res) => {
           createdAt: newPatient.created_at,
           updatedAt: newPatient.updated_at,
           // Triage and Exam & Prior Tests
-          triageSymptoms: newPatient.triage_symptoms ? (() => {
-            try {
-              return JSON.parse(newPatient.triage_symptoms);
-            } catch (e) {
-              console.error('Error parsing triage_symptoms:', e);
-              return null;
-            }
-          })() : null,
+          triageSymptoms: parseJsonField(newPatient.triage_symptoms, null),
           dreDone: newPatient.dre_done || false,
           dreFindings: newPatient.dre_findings || null,
           priorBiopsy: newPatient.prior_biopsy || 'no',
           priorBiopsyDate: responsePriorBiopsyDate,
           gleasonScore: newPatient.gleason_score || null,
-          comorbidities: newPatient.comorbidities ? (() => {
-            try {
-              return JSON.parse(newPatient.comorbidities);
-            } catch (e) {
-              console.error('Error parsing comorbidities:', e);
-              return [];
-            }
-          })() : [],
+          comorbidities: parseJsonField(newPatient.comorbidities, []),
           gpName: newPatient.gp_name,
           gpContact: newPatient.gp_contact
         }
@@ -608,26 +631,8 @@ export const addPatient = async (req, res) => {
     }
 
     // Handle unique constraint violations
-    if (error.code === '23505') {
-      if (error.constraint === 'patients_email_key') {
-        return res.status(409).json({
-          success: false,
-          message: 'Patient with this email already exists'
-        });
-      }
-      if (error.constraint === 'patients_phone_key') {
-        return res.status(409).json({
-          success: false,
-          message: 'Patient with this phone number already exists'
-        });
-      }
-      if (error.constraint === 'patients_upi_key') {
-        return res.status(409).json({
-          success: false,
-          message: 'Patient with this UPI already exists'
-        });
-      }
-    }
+    const constraintError = handleUniqueConstraintError(error, res);
+    if (constraintError) return constraintError;
 
     res.status(500).json({
       success: false,
@@ -948,27 +953,13 @@ export const getPatients = async (req, res) => {
         hasAppointment, // Boolean flag to easily check if patient has an appointment
         monitoringStatus,
         // Triage and Exam & Prior Tests
-        triageSymptoms: patient.triage_symptoms ? (() => {
-          try {
-            return JSON.parse(patient.triage_symptoms);
-          } catch (e) {
-            console.error('Error parsing triage_symptoms:', e);
-            return null;
-          }
-        })() : null,
+        triageSymptoms: parseJsonField(patient.triage_symptoms, null),
         dreDone: patient.dre_done || false,
         dreFindings: patient.dre_findings || null,
         priorBiopsy: patient.prior_biopsy || 'no',
         priorBiopsyDate: patient.prior_biopsy_date_formatted || null,
         gleasonScore: patient.gleason_score || null,
-        comorbidities: patient.comorbidities ? (() => {
-          try {
-            return JSON.parse(patient.comorbidities);
-          } catch (e) {
-            console.error('Error parsing comorbidities:', e);
-            return [];
-          }
-        })() : []
+        comorbidities: parseJsonField(patient.comorbidities, [])
       };
     });
 
@@ -998,7 +989,7 @@ export const getPatients = async (req, res) => {
 
 // Get new patients (recently added, status = 'Active')
 export const getNewPatients = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  const requestId = `${Date.now()}-${crypto.randomBytes(5).toString('hex')}`;
   console.log(`\n👥 [getNewPatients ${requestId}] Starting`);
   console.log(`👥 [getNewPatients ${requestId}] User:`, req.user?.id, req.user?.role);
 
@@ -1445,27 +1436,13 @@ export const getPatientById = async (req, res) => {
           latest_psa: latestPSA,
           latest_psa_date: latestPSADate,
           // Triage and Exam & Prior Tests
-          triageSymptoms: patient.triage_symptoms ? (() => {
-            try {
-              return JSON.parse(patient.triage_symptoms);
-            } catch (e) {
-              console.error('Error parsing triage_symptoms:', e);
-              return null;
-            }
-          })() : null,
+          triageSymptoms: parseJsonField(patient.triage_symptoms, null),
           dreDone: patient.dre_done || false,
           dreFindings: patient.dre_findings || null,
           priorBiopsy: patient.prior_biopsy || 'no',
           priorBiopsyDate: patient.prior_biopsy_date_formatted || null,
           gleasonScore: patient.gleason_score || null,
-          comorbidities: patient.comorbidities ? (() => {
-            try {
-              return JSON.parse(patient.comorbidities);
-            } catch (e) {
-              console.error('Error parsing comorbidities:', e);
-              return [];
-            }
-          })() : []
+          comorbidities: parseJsonField(patient.comorbidities, [])
         }
       }
     });
@@ -1681,27 +1658,13 @@ export const updatePatient = async (req, res) => {
           createdAt: updatedPatient.created_at,
           updatedAt: updatedPatient.updated_at,
           // Triage and Exam & Prior Tests
-          triageSymptoms: updatedPatient.triage_symptoms ? (() => {
-            try {
-              return JSON.parse(updatedPatient.triage_symptoms);
-            } catch (e) {
-              console.error('Error parsing triage_symptoms:', e);
-              return null;
-            }
-          })() : null,
+          triageSymptoms: parseJsonField(updatedPatient.triage_symptoms, null),
           dreDone: updatedPatient.dre_done || false,
           dreFindings: updatedPatient.dre_findings || null,
           priorBiopsy: updatedPatient.prior_biopsy || 'no',
           priorBiopsyDate: updatedPatient.prior_biopsy_date_formatted || null,
           gleasonScore: updatedPatient.gleason_score || null,
-          comorbidities: updatedPatient.comorbidities ? (() => {
-            try {
-              return JSON.parse(updatedPatient.comorbidities);
-            } catch (e) {
-              console.error('Error parsing comorbidities:', e);
-              return [];
-            }
-          })() : []
+          comorbidities: parseJsonField(updatedPatient.comorbidities, [])
         }
       }
     });
@@ -1710,20 +1673,8 @@ export const updatePatient = async (req, res) => {
     console.error('Update patient error:', error);
 
     // Handle unique constraint violations
-    if (error.code === '23505') {
-      if (error.constraint === 'patients_email_key') {
-        return res.status(409).json({
-          success: false,
-          message: 'Patient with this email already exists'
-        });
-      }
-      if (error.constraint === 'patients_phone_key') {
-        return res.status(409).json({
-          success: false,
-          message: 'Patient with this phone number already exists'
-        });
-      }
-    }
+    const constraintError = handleUniqueConstraintError(error, res);
+    if (constraintError) return constraintError;
 
     res.status(500).json({
       success: false,
@@ -2942,7 +2893,7 @@ export const searchPatients = async (req, res) => {
 
 // Get patients due for review (7-14 days window)
 export const getPatientsDueForReview = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  const requestId = `${Date.now()}-${crypto.randomBytes(5).toString('hex')}`;
   console.log(`\n👥 [getPatientsDueForReview ${requestId}] Starting`);
   console.log(`👥 [getPatientsDueForReview ${requestId}] User:`, req.user?.id, req.user?.role);
 

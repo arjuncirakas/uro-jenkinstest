@@ -50,7 +50,6 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
     if (isOpen && patient?.id) {
       fetchConsentForms();
     }
-    // NOSONAR: patient.id is validated in PropTypes.shape()
   }, [isOpen, patient?.id]);
 
   const fetchConsentForms = async () => {
@@ -629,7 +628,6 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                             const file = e.target.files[0];
                                             // NOSONAR: patient.id is validated in PropTypes.shape()
                                             if (file && consentTemplate && patient?.id) {
-                                              // NOSONAR: patient.id is validated in PropTypes.shape()
                                               const result = await consentFormService.uploadConsentForm(patient.id, consentTemplate.id, file);
                                               if (result.success) {
                                                 await fetchConsentForms();

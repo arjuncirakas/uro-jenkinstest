@@ -1,6 +1,42 @@
 import pool from '../config/database.js';
 import { sendAppointmentReminderEmail } from '../services/emailService.js';
 
+// Helper function to validate patient exists and is not expired
+const validatePatientForBooking = async (client, patientId, errorContext = 'booking') => {
+  const patientCheck = await client.query(
+    'SELECT id, first_name, last_name, status FROM patients WHERE id = $1',
+    [patientId]
+  );
+
+  if (patientCheck.rows.length === 0) {
+    return {
+      isValid: false,
+      error: {
+        status: 404,
+        message: 'Patient not found'
+      }
+    };
+  }
+
+  if (patientCheck.rows[0].status === 'Expired') {
+    const contextMessage = errorContext === 'appointment' 
+      ? 'Cannot book appointment for an expired patient'
+      : 'Cannot book investigation for an expired patient';
+    return {
+      isValid: false,
+      error: {
+        status: 400,
+        message: contextMessage
+      }
+    };
+  }
+
+  return {
+    isValid: true,
+    patient: patientCheck.rows[0]
+  };
+};
+
 // Book urologist appointment
 export const bookUrologistAppointment = async (req, res) => {
   const client = await pool.connect();
@@ -36,22 +72,11 @@ export const bookUrologistAppointment = async (req, res) => {
     }
 
     // Check if patient exists and is not expired
-    const patientCheck = await client.query(
-      'SELECT id, first_name, last_name, status FROM patients WHERE id = $1',
-      [patientId]
-    );
-
-    if (patientCheck.rows.length === 0) {
-      return res.status(404).json({
+    const patientValidation = await validatePatientForBooking(client, patientId, 'appointment');
+    if (!patientValidation.isValid) {
+      return res.status(patientValidation.error.status).json({
         success: false,
-        message: 'Patient not found'
-      });
-    }
-
-    if (patientCheck.rows[0].status === 'Expired') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot book appointment for an expired patient'
+        message: patientValidation.error.message
       });
     }
 
@@ -206,22 +231,11 @@ export const bookInvestigation = async (req, res) => {
     }
 
     // Check if patient exists and is not expired
-    const patientCheck = await client.query(
-      'SELECT id, first_name, last_name, status FROM patients WHERE id = $1',
-      [patientId]
-    );
-
-    if (patientCheck.rows.length === 0) {
-      return res.status(404).json({
+    const patientValidation = await validatePatientForBooking(client, patientId, 'investigation');
+    if (!patientValidation.isValid) {
+      return res.status(patientValidation.error.status).json({
         success: false,
-        message: 'Patient not found'
-      });
-    }
-
-    if (patientCheck.rows[0].status === 'Expired') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot book investigation for an expired patient'
+        message: patientValidation.error.message
       });
     }
 
