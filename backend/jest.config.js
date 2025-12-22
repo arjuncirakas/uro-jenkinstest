@@ -9,6 +9,9 @@ export default {
   testMatch: ['**/tests/**/*.test.js'],
   collectCoverageFrom: [
     'controllers/**/*.js',
+    'schedulers/**/*.js',
+    'middleware/**/*.js',
+    'utils/**/*.js',
     '!controllers/**/*.test.js',
     '!**/node_modules/**',
     '!**/coverage/**'
