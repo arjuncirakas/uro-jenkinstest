@@ -1,3 +1,6 @@
+# Nginx config files
+*.conf
+
 # Playwright
 test-results/
 playwright-report/
