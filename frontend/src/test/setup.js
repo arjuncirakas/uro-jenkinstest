@@ -1,4 +1,4 @@
-import { expect, afterEach } from 'vitest';
+import { afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
@@ -23,13 +23,25 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock IntersectionObserver
+// These methods are intentionally empty stubs for testing mocks
 global.IntersectionObserver = class IntersectionObserver {
-  constructor() {}
-  disconnect() {}
-  observe() {}
+  // eslint-disable-next-line no-useless-constructor
+  constructor(_callback, _options) {
+    // Constructor required for class instantiation - intentionally empty mock
+  }
+  disconnect() {
+    // Mock method - no implementation needed for tests
+    return undefined;
+  }
+  observe(_target) {
+    // Mock method - no implementation needed for tests
+    return undefined;
+  }
   takeRecords() {
     return [];
   }
-  unobserve() {}
+  unobserve(_target) {
+    // Mock method - no implementation needed for tests
+    return undefined;
+  }
 };
-
