@@ -171,6 +171,44 @@ const parseJsonField = (jsonString, defaultValue = null) => {
   }
 };
 
+// Helper function to check if patient email already exists
+const checkExistingEmail = async (client, email) => {
+  if (!email) return null;
+  const existingEmail = await client.query(
+    'SELECT id FROM patients WHERE email = $1',
+    [email]
+  );
+  if (existingEmail.rows.length > 0) {
+    return {
+      exists: true,
+      error: {
+        status: 409,
+        message: 'Patient with this email already exists'
+      }
+    };
+  }
+  return { exists: false };
+};
+
+// Helper function to check if patient phone already exists
+const checkExistingPhone = async (client, phone) => {
+  if (!phone) return null;
+  const existingPhone = await client.query(
+    'SELECT id FROM patients WHERE phone = $1',
+    [phone]
+  );
+  if (existingPhone.rows.length > 0) {
+    return {
+      exists: true,
+      error: {
+        status: 409,
+        message: 'Patient with this phone number already exists'
+      }
+    };
+  }
+  return { exists: false };
+};
+
 // Helper function to format date as YYYY-MM-DD without timezone conversion
 const formatDateOnly = (dateString) => {
   // Return null for empty, null, undefined, or "no" values
@@ -307,33 +345,21 @@ export const addPatient = async (req, res) => {
     }
 
     // Check if email already exists (if provided)
-    if (email) {
-      const existingEmail = await client.query(
-        'SELECT id FROM patients WHERE email = $1',
-        [email]
-      );
-
-      if (existingEmail.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: 'Patient with this email already exists'
-        });
-      }
+    const emailCheck = await checkExistingEmail(client, email);
+    if (emailCheck?.exists) {
+      return res.status(emailCheck.error.status).json({
+        success: false,
+        message: emailCheck.error.message
+      });
     }
 
     // Check if phone already exists (if provided)
-    if (phone) {
-      const existingPhone = await client.query(
-        'SELECT id FROM patients WHERE phone = $1',
-        [phone]
-      );
-
-      if (existingPhone.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: 'Patient with this phone number already exists'
-        });
-      }
+    const phoneCheck = await checkExistingPhone(client, phone);
+    if (phoneCheck?.exists) {
+      return res.status(phoneCheck.error.status).json({
+        success: false,
+        message: phoneCheck.error.message
+      });
     }
 
     // Generate unique UPI

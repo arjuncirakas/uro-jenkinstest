@@ -44,6 +44,12 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
   const [patientConsentForms, setPatientConsentForms] = useState([]);
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
 
+  // Helper function to handle validation errors
+  const handleValidationError = (errorMessage) => {
+    setError(errorMessage);
+    setIsSubmitting(false);
+  };
+
   // Fetch consent forms when modal opens
   useEffect(() => {
     // NOSONAR: patient.id is validated in PropTypes.shape()
@@ -299,15 +305,13 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
       // Validate patient ID
       // NOSONAR: patient.id is validated in PropTypes.shape()
       if (!patient || !patient.id) {
-        setError('Patient information is missing');
-        setIsSubmitting(false);
+        handleValidationError('Patient information is missing');
         return;
       }
 
       // Validate required fields
       if (selectedInvestigationTypes.length === 0) {
-        setError('Please select at least one investigation type');
-        setIsSubmitting(false);
+        handleValidationError('Please select at least one investigation type');
         return;
       }
 
@@ -335,8 +339,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
       });
       
       if (allTests.length === 0) {
-        setError('Please select at least one test/procedure for the selected investigation type(s)');
-        setIsSubmitting(false);
+        handleValidationError('Please select at least one test/procedure for the selected investigation type(s)');
         return;
       }
 
