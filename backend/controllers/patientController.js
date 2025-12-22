@@ -135,26 +135,26 @@ const generateUPI = () => {
   return `URP${year}${randomNum}`;
 };
 
+// Helper function to send error response
+const sendErrorResponse = (res, status, message) => {
+  return res.status(status).json({
+    success: false,
+    message
+  });
+};
+
 // Helper function to handle unique constraint violations
 const handleUniqueConstraintError = (error, res) => {
   if (error.code === '23505') {
-    if (error.constraint === 'patients_email_key') {
-      return res.status(409).json({
-        success: false,
-        message: 'Patient with this email already exists'
-      });
-    }
-    if (error.constraint === 'patients_phone_key') {
-      return res.status(409).json({
-        success: false,
-        message: 'Patient with this phone number already exists'
-      });
-    }
-    if (error.constraint === 'patients_upi_key') {
-      return res.status(409).json({
-        success: false,
-        message: 'Patient with this UPI already exists'
-      });
+    const constraintMessages = {
+      'patients_email_key': 'Patient with this email already exists',
+      'patients_phone_key': 'Patient with this phone number already exists',
+      'patients_upi_key': 'Patient with this UPI already exists'
+    };
+    
+    const message = constraintMessages[error.constraint];
+    if (message) {
+      return sendErrorResponse(res, 409, message);
     }
   }
   return null; // Not a handled constraint
@@ -312,18 +312,12 @@ export const addPatient = async (req, res) => {
 
     // Validate required fields - either dateOfBirth or age must be provided
     if (!firstName || !lastName || (!finalDateOfBirth && !age) || !phone || !initialPSA) {
-      return res.status(400).json({
-        success: false,
-        message: 'First name, last name, date of birth (or age), phone, and initial PSA are required'
-      });
+      return sendErrorResponse(res, 400, 'First name, last name, date of birth (or age), phone, and initial PSA are required');
     }
 
     // Validate priority
     if (priority && !['Low', 'Normal', 'High', 'Urgent'].includes(priority)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Priority must be Low, Normal, High, or Urgent'
-      });
+      return sendErrorResponse(res, 400, 'Priority must be Low, Normal, High, or Urgent');
     }
 
     // Validate GP Contact Email if GP Name is provided
@@ -347,19 +341,13 @@ export const addPatient = async (req, res) => {
     // Check if email already exists (if provided)
     const emailCheck = await checkExistingEmail(client, email);
     if (emailCheck?.exists) {
-      return res.status(emailCheck.error.status).json({
-        success: false,
-        message: emailCheck.error.message
-      });
+      return sendErrorResponse(res, emailCheck.error.status, emailCheck.error.message);
     }
 
     // Check if phone already exists (if provided)
     const phoneCheck = await checkExistingPhone(client, phone);
     if (phoneCheck?.exists) {
-      return res.status(phoneCheck.error.status).json({
-        success: false,
-        message: phoneCheck.error.message
-      });
+      return sendErrorResponse(res, phoneCheck.error.status, phoneCheck.error.message);
     }
 
     // Generate unique UPI
@@ -382,10 +370,7 @@ export const addPatient = async (req, res) => {
     }
 
     if (!isUnique) {
-      return res.status(500).json({
-        success: false,
-        message: 'Unable to generate unique patient ID. Please try again.'
-      });
+      return sendErrorResponse(res, 500, 'Unable to generate unique patient ID. Please try again.');
     }
 
     // Determine referred_by_gp_id
@@ -1388,10 +1373,7 @@ export const getPatientById = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Patient not found'
-      });
+      return sendErrorResponse(res, 404, 'Patient not found');
     }
 
     const patient = result.rows[0];
@@ -1846,7 +1828,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     // Get user info first
     const userQ = await client.query('SELECT first_name, last_name, role, email FROM users WHERE id = $1', [userId]);
     if (userQ.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return sendErrorResponse(res, 404, 'User not found');
     }
 
     const user = userQ.rows[0];
@@ -2185,7 +2167,7 @@ export const updatePatientPathway = async (req, res) => {
 
     const allowed = ['Active Monitoring', 'Surgery Pathway', 'Medication', 'Radiotherapy', 'Post-op Transfer', 'Post-op Followup', 'Discharge'];
     if (!pathway || !allowed.includes(pathway)) {
-      return res.status(400).json({ success: false, message: 'Invalid pathway' });
+      return sendErrorResponse(res, 400, 'Invalid pathway');
     }
 
     // Ensure patient exists and get patient details including assigned urologist and referring GP
@@ -2198,7 +2180,7 @@ export const updatePatientPathway = async (req, res) => {
       [id]
     );
     if (existing.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Patient not found' });
+      return sendErrorResponse(res, 404, 'Patient not found');
     }
 
     const patientData = existing.rows[0];
@@ -2671,7 +2653,7 @@ export const updatePatientPathway = async (req, res) => {
     });
   } catch (error) {
     console.error('Update patient pathway error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    return sendErrorResponse(res, 500, 'Internal server error');
   } finally {
     client.release();
   }

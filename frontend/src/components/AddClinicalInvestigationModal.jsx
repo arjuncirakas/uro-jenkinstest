@@ -412,13 +412,11 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
         handleClose();
       } else {
         console.error('❌ Failed to create clinical investigation note:', result.error);
-        setError(result.error || 'Failed to add clinical investigation');
-        setIsSubmitting(false);
+        handleValidationError(result.error || 'Failed to add clinical investigation');
       }
     } catch (err) {
       console.error('❌ Error creating clinical investigation note:', err);
-      setError('An unexpected error occurred');
-      setIsSubmitting(false);
+      handleValidationError('An unexpected error occurred');
     }
   };
 
