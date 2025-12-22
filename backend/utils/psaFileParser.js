@@ -20,29 +20,390 @@ const extractTextFromPDF = async (filePath) => {
 };
 
 /**
+ * Convert Excel serial date to YYYY-MM-DD format
+ */
+const excelDateToJSDate = (serial) => {
+  const excelEpoch = new Date(1899, 11, 30);
+  const jsDate = new Date(excelEpoch.getTime() + serial * 86400000);
+  const year = jsDate.getFullYear();
+  const month = String(jsDate.getMonth() + 1).padStart(2, '0');
+  const day = String(jsDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Check if a value is an Excel date serial number
+ */
+const isExcelDateSerial = (value) => {
+  // Excel dates are typically between 1 (Jan 1, 1900) and ~50000 (year 2037+)
+  if (typeof value === 'number') {
+    return value >= 1 && value <= 100000;
+  }
+  return false;
+};
+
+/**
+ * Format date from various Excel formats to string
+ */
+const formatDateFromExcel = (cellValue) => {
+  if (!cellValue) return null;
+  
+  // If it's already a string with date pattern, parse it properly
+  const cellStr = String(cellValue).trim();
+  const datePattern = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/;
+  const dateMatch = cellStr.match(datePattern);
+  
+  if (dateMatch) {
+    let day, month, year;
+    const part1 = parseInt(dateMatch[1]);
+    const part2 = parseInt(dateMatch[2]);
+    const part3 = parseInt(dateMatch[3]);
+    
+    // Determine format: DD/MM/YYYY or MM/DD/YYYY
+    // Strategy: 
+    // - If part1 > 12, it MUST be day in DD/MM/YYYY (can't be month)
+    // - If part2 > 12, it MUST be day in MM/DD/YYYY (can't be day in DD/MM)
+    // - If both <= 12, it's ambiguous - default to DD/MM/YYYY for international format
+    //   (which is common in many regions and matches the pattern when days > 12)
+    
+    if (part1 > 12) {
+      // First part > 12, must be day in DD/MM/YYYY format
+      day = part1;
+      month = part2;
+      year = part3;
+    } else if (part2 > 12) {
+      // Second part > 12, must be day in MM/DD/YYYY format
+      month = part1;
+      day = part2;
+      year = part3;
+    } else {
+      // Both <= 12, ambiguous - default to DD/MM/YYYY (international format)
+      // This matches the pattern we see in the file (29/8, 25/10, 21/12)
+      day = part1;
+      month = part2;
+      year = part3;
+    }
+    
+    // Handle 2-digit years
+    if (year < 100) {
+      year += year < 50 ? 2000 : 1900;
+    }
+    
+    // Validate and format
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+  
+  // If it's a number, check if it's an Excel date serial
+  if (typeof cellValue === 'number') {
+    if (isExcelDateSerial(cellValue)) {
+      return excelDateToJSDate(cellValue);
+    }
+  }
+  
+  // Try to parse as Date object
+  const dateObj = new Date(cellValue);
+  if (!isNaN(dateObj.getTime())) {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  return null;
+};
+
+/**
  * Extract text from Excel file
+ * Improved to preserve column structure for better PSA data extraction
+ * Uses direct cell access to ensure correct pairing
  */
 const extractTextFromExcel = async (filePath) => {
   try {
     const workbook = XLSX.readFile(filePath);
     let text = '';
+    let structuredData = [];
     
     // Extract text from all sheets
     workbook.SheetNames.forEach(sheetName => {
       const worksheet = workbook.Sheets[sheetName];
-      // Try to get data as array of arrays first
-      const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
       
-      // Convert to text format
-      sheetData.forEach(row => {
-        if (Array.isArray(row)) {
-          // Filter out empty cells and join with space
-          const rowText = row.filter(cell => cell !== null && cell !== undefined && cell !== '').join(' ');
-          if (rowText.trim()) {
-            text += rowText + '\n';
+      // Get the range of the sheet
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+      
+      // First, find the header row and column indices
+      let dateColumnIndex = -1;
+      let valueColumnIndex = -1;
+      let headerRowIndex = -1;
+      
+      console.log(`[PSA Excel Parser] ===== HEADER DETECTION START =====`);
+      console.log(`[PSA Excel Parser] Sheet: ${sheetName}, Range: ${worksheet['!ref']}`);
+      
+      // Scan first 10 rows to find headers
+      for (let row = 0; row <= Math.min(10, range.e.r); row++) {
+        for (let col = 0; col <= Math.min(10, range.e.c); col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+          const cell = worksheet[cellAddress];
+          if (!cell) continue;
+          
+          const cellValue = cell.v || cell.w || '';
+          const cellStr = String(cellValue).trim().toLowerCase();
+          
+          console.log(`[PSA Excel Parser] Checking cell ${cellAddress} (row ${row}, col ${col}): "${cellStr}"`);
+          
+          if (cellStr.includes('date') && dateColumnIndex === -1) {
+            dateColumnIndex = col;
+            headerRowIndex = row;
+            console.log(`[PSA Excel Parser]   → Found DATE header at column ${col}, row ${row}`);
+          }
+          if ((cellStr.includes('psa') || cellStr.includes('value')) && valueColumnIndex === -1) {
+            valueColumnIndex = col;
+            if (headerRowIndex === -1) headerRowIndex = row;
+            console.log(`[PSA Excel Parser]   → Found PSA/VALUE header at column ${col}, row ${row}`);
           }
         }
-      });
+        if (dateColumnIndex >= 0 && valueColumnIndex >= 0) {
+          console.log(`[PSA Excel Parser] Headers found! Breaking search.`);
+          break;
+        }
+      }
+      
+      console.log(`[PSA Excel Parser] ===== HEADER DETECTION COMPLETE =====`);
+      console.log(`[PSA Excel Parser] Date column: ${dateColumnIndex}, Value column: ${valueColumnIndex}, Header row: ${headerRowIndex}`);
+      
+      // If headers not found, try to detect by content
+      if (dateColumnIndex === -1 || valueColumnIndex === -1) {
+        for (let row = 0; row <= Math.min(20, range.e.r); row++) {
+          for (let col = 0; col <= Math.min(10, range.e.c); col++) {
+            const cellAddress1 = XLSX.utils.encode_cell({ r: row, c: col });
+            const cellAddress2 = XLSX.utils.encode_cell({ r: row, c: col + 1 });
+            const cell1 = worksheet[cellAddress1];
+            const cell2 = worksheet[cellAddress2];
+            
+            if (!cell1 || !cell2) continue;
+            
+            const val1 = String(cell1.v || cell1.w || '').trim();
+            const val2 = String(cell2.v || cell2.w || '').trim();
+            
+            const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/;
+            const numPattern = /^\d+\.?\d*$/;
+            
+            if (datePattern.test(val1) && numPattern.test(val2)) {
+              const numVal = parseFloat(val2);
+              if (!isNaN(numVal) && numVal >= 0.1 && numVal <= 100) {
+                if (dateColumnIndex === -1) dateColumnIndex = col;
+                if (valueColumnIndex === -1) valueColumnIndex = col + 1;
+                break;
+              }
+            }
+          }
+          if (dateColumnIndex >= 0 && valueColumnIndex >= 0) break;
+        }
+      }
+      
+      // Get data as array of arrays - use raw: true to get actual values, not formatted strings
+      const sheetDataRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null, raw: true, dateNF: 'yyyy-mm-dd' });
+      // Also get formatted version for date strings
+      const sheetDataFormatted = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
+      
+      // If we identified columns, extract data directly from cells
+      if (dateColumnIndex >= 0 && valueColumnIndex >= 0) {
+        console.log(`[PSA Excel Parser] ===== EXTRACTION START =====`);
+        console.log(`[PSA Excel Parser] Found columns - Date: ${dateColumnIndex}, Value: ${valueColumnIndex}, Header row: ${headerRowIndex}`);
+        console.log(`[PSA Excel Parser] Sheet range: ${worksheet['!ref']}`);
+        console.log(`[PSA Excel Parser] Range object:`, range);
+        
+        // Start from after the header row (if found) or from row 0
+        const startRow = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
+        console.log(`[PSA Excel Parser] Starting extraction from row: ${startRow} to ${range.e.r}`);
+        
+        // Extract data row by row using direct cell access
+        for (let rowIndex = startRow; rowIndex <= range.e.r; rowIndex++) {
+          // Get date cell directly
+          const dateCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: dateColumnIndex });
+          const dateCell = worksheet[dateCellAddress];
+          
+          // Get value cell directly
+          const valueCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: valueColumnIndex });
+          const valueCell = worksheet[valueCellAddress];
+          
+          console.log(`[PSA Excel Parser] Row ${rowIndex}: Checking cells ${dateCellAddress} and ${valueCellAddress}`);
+          console.log(`[PSA Excel Parser]   Date cell exists: ${!!dateCell}, Value cell exists: ${!!valueCell}`);
+          
+          // Skip if either cell is missing
+          if (!dateCell || !valueCell) {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - missing cells`);
+            continue;
+          }
+          
+          // Get raw values
+          const dateCellRaw = dateCell.v;
+          const valueCellRaw = valueCell.v;
+          
+          // Get formatted values (for dates that might be formatted)
+          const dateCellFormatted = dateCell.w || dateCell.v;
+          const valueCellFormatted = valueCell.w || valueCell.v;
+          
+          console.log(`[PSA Excel Parser]   Date cell - raw: ${dateCellRaw} (type: ${typeof dateCellRaw}), formatted: ${dateCellFormatted}`);
+          console.log(`[PSA Excel Parser]   Value cell - raw: ${valueCellRaw} (type: ${typeof valueCellRaw}), formatted: ${valueCellFormatted}`);
+          console.log(`[PSA Excel Parser]   Date cell object:`, JSON.stringify({
+            v: dateCell.v,
+            w: dateCell.w,
+            t: dateCell.t,
+            z: dateCell.z
+          }));
+          console.log(`[PSA Excel Parser]   Value cell object:`, JSON.stringify({
+            v: valueCell.v,
+            w: valueCell.w,
+            t: valueCell.t,
+            z: valueCell.z
+          }));
+          
+          // Skip if both date values are empty
+          if ((dateCellRaw === null || dateCellRaw === undefined || dateCellRaw === '') &&
+              (dateCellFormatted === null || dateCellFormatted === undefined || dateCellFormatted === '')) {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - empty date`);
+            continue;
+          }
+          
+          // Skip if both value values are empty
+          if ((valueCellRaw === null || valueCellRaw === undefined || valueCellRaw === '') &&
+              (valueCellFormatted === null || valueCellFormatted === undefined || valueCellFormatted === '')) {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - empty value`);
+            continue;
+          }
+          
+          // Format date - try raw first, then formatted
+          let dateStr = null;
+          if (dateCellRaw !== null && dateCellRaw !== undefined && dateCellRaw !== '') {
+            dateStr = formatDateFromExcel(dateCellRaw);
+            console.log(`[PSA Excel Parser]   Date from raw (${dateCellRaw}): ${dateStr}`);
+          }
+          if (!dateStr && dateCellFormatted !== null && dateCellFormatted !== undefined && dateCellFormatted !== '') {
+            dateStr = formatDateFromExcel(dateCellFormatted);
+            console.log(`[PSA Excel Parser]   Date from formatted (${dateCellFormatted}): ${dateStr}`);
+          }
+          
+          if (!dateStr) {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - could not parse date`);
+            continue;
+          }
+          
+          // Get value - prefer raw to preserve decimals exactly
+          let valueStr = null;
+          
+          // Try raw value first (preserves decimals exactly)
+          if (valueCellRaw !== null && valueCellRaw !== undefined && valueCellRaw !== '') {
+            if (typeof valueCellRaw === 'number') {
+              // For numbers, preserve exact decimal representation
+              // Check if it has decimal part
+              if (valueCellRaw % 1 !== 0) {
+                // Has decimals - use toFixed with enough precision, then remove trailing zeros
+                valueStr = valueCellRaw.toFixed(10).replace(/\.?0+$/, '');
+                console.log(`[PSA Excel Parser]   Value from raw number (${valueCellRaw}): ${valueStr} (has decimals)`);
+              } else {
+                // Integer - convert to string
+                valueStr = valueCellRaw.toString();
+                console.log(`[PSA Excel Parser]   Value from raw number (${valueCellRaw}): ${valueStr} (integer)`);
+              }
+            } else {
+              // Already a string - use as is
+              valueStr = String(valueCellRaw).trim();
+              console.log(`[PSA Excel Parser]   Value from raw string (${valueCellRaw}): ${valueStr}`);
+            }
+          }
+          
+          // If raw didn't work, try formatted (but this might lose decimals)
+          if (!valueStr || valueStr === '') {
+            if (valueCellFormatted !== null && valueCellFormatted !== undefined && valueCellFormatted !== '') {
+              valueStr = String(valueCellFormatted).trim();
+              console.log(`[PSA Excel Parser]   Value from formatted (${valueCellFormatted}): ${valueStr}`);
+            }
+          }
+          
+          if (!valueStr || valueStr === '') {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - empty value string`);
+            continue;
+          }
+          
+          // Validate number pattern - allow decimals
+          const numPattern = /^\d+\.?\d*$/;
+          if (!numPattern.test(valueStr)) {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - value "${valueStr}" doesn't match number pattern`);
+            continue;
+          }
+          
+          const numVal = parseFloat(valueStr);
+          console.log(`[PSA Excel Parser]   Parsed value: ${numVal}`);
+          
+          // PSA values are typically 0.1 to 100
+          if (!isNaN(numVal) && numVal >= 0.1 && numVal <= 100) {
+            console.log(`[PSA Excel Parser]   ✓ VALID PAIR - Row ${rowIndex}: Date=${dateStr}, Value=${valueStr}`);
+            structuredData.push({
+              date: dateStr,
+              value: valueStr,
+              row: rowIndex
+            });
+          } else {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - value ${numVal} out of range (0.1-100)`);
+          }
+        }
+        
+        console.log(`[PSA Excel Parser] ===== EXTRACTION COMPLETE =====`);
+        console.log(`[PSA Excel Parser] Total entries extracted: ${structuredData.length}`);
+        console.log(`[PSA Excel Parser] Extracted data:`, JSON.stringify(structuredData, null, 2));
+      } else {
+        console.log(`[PSA Excel Parser] ERROR: Could not identify date and value columns`);
+        console.log(`[PSA Excel Parser] Date column: ${dateColumnIndex}, Value column: ${valueColumnIndex}`);
+      }
+      
+      // If we found structured data, format it for parsing
+      if (structuredData.length > 0) {
+        structuredData.forEach(item => {
+          text += `${item.date} ${item.value}\n`;
+        });
+      } else {
+        // Fallback: try to find date-value pairs in same row
+        sheetDataFormatted.forEach((row, rowIndex) => {
+          if (Array.isArray(row) && row.length > 0) {
+            let dateValue = null;
+            let numberValue = null;
+            
+            row.forEach((cell) => {
+              if (cell !== null && cell !== undefined && cell !== '') {
+                const cellStr = String(cell).trim();
+                
+                // Check if cell contains a date pattern
+                const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/;
+                if (datePattern.test(cellStr) && !dateValue) {
+                  dateValue = cellStr;
+                }
+                
+                // Check if cell is a number (PSA value)
+                const numPattern = /^\d+\.?\d*$/;
+                if (numPattern.test(cellStr)) {
+                  const numVal = parseFloat(cellStr);
+                  if (!isNaN(numVal) && numVal >= 0.1 && numVal <= 100 && !numberValue) {
+                    numberValue = cellStr;
+                  }
+                }
+              }
+            });
+            
+            // If we found both date and number in the same row, add to text
+            if (dateValue && numberValue) {
+              text += `${dateValue} ${numberValue}\n`;
+            } else {
+              // Otherwise, join all cells with space (original behavior)
+              const rowText = row.filter(cell => cell !== null && cell !== undefined && cell !== '').join(' ');
+              if (rowText.trim()) {
+                text += rowText + '\n';
+              }
+            }
+          }
+        });
+      }
     });
     
     return text;

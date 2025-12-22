@@ -67,16 +67,46 @@ const BulkPSAUploadModal = ({ isOpen, onClose, patient, onSuccess }) => {
     setSubmitError('');
     setFilePreview(null); // No preview for PDF/DOC/Excel files
 
+    console.log('[Frontend PSA Upload] ===== FILE UPLOAD START =====');
+    console.log('[Frontend PSA Upload] File name:', file.name);
+    console.log('[Frontend PSA Upload] File size:', file.size, 'bytes');
+    console.log('[Frontend PSA Upload] File type:', file.type);
+    console.log('[Frontend PSA Upload] File last modified:', new Date(file.lastModified));
+
     // Automatically parse the file
     setIsParsing(true);
     try {
+      console.log('[Frontend PSA Upload] Calling parsePSAFile API...');
       const result = await investigationService.parsePSAFile(file);
       
+      console.log('[Frontend PSA Upload] ===== API RESPONSE =====');
+      console.log('[Frontend PSA Upload] Success:', result.success);
+      console.log('[Frontend PSA Upload] Full response:', JSON.stringify(result, null, 2));
+      
       if (result.success && result.data && result.data.psaEntries && result.data.psaEntries.length > 0) {
+        console.log('[Frontend PSA Upload] ===== EXTRACTED DATA =====');
+        console.log('[Frontend PSA Upload] Number of entries:', result.data.psaEntries.length);
+        console.log('[Frontend PSA Upload] Extracted entries:', JSON.stringify(result.data.psaEntries, null, 2));
+        
+        // Log each entry individually
+        result.data.psaEntries.forEach((entry, index) => {
+          console.log(`[Frontend PSA Upload] Entry ${index + 1}:`, {
+            date: entry.testDate,
+            value: entry.result,
+            status: entry.status,
+            notes: entry.notes
+          });
+        });
+        
         // Auto-populate the table with extracted PSA entries
         setPsaEntries(result.data.psaEntries);
         setSubmitError('');
+        console.log('[Frontend PSA Upload] ✓ Successfully populated table with', result.data.psaEntries.length, 'entries');
       } else {
+        console.log('[Frontend PSA Upload] ✗ No entries extracted');
+        console.log('[Frontend PSA Upload] Error:', result.error);
+        console.log('[Frontend PSA Upload] Data:', result.data);
+        
         // If parsing failed or no entries found, keep one empty entry
         if (result.error) {
           setSubmitError(`Could not automatically extract PSA values: ${result.error}. Please enter them manually.`);
@@ -94,7 +124,10 @@ const BulkPSAUploadModal = ({ isOpen, onClose, patient, onSuccess }) => {
         }
       }
     } catch (error) {
-      console.error('Error parsing file:', error);
+      console.error('[Frontend PSA Upload] ===== ERROR =====');
+      console.error('[Frontend PSA Upload] Error parsing file:', error);
+      console.error('[Frontend PSA Upload] Error message:', error.message);
+      console.error('[Frontend PSA Upload] Error stack:', error.stack);
       setSubmitError('Failed to parse file. Please enter PSA values manually.');
       // Keep at least one empty entry for manual entry
       if (psaEntries.length === 0) {
@@ -107,6 +140,7 @@ const BulkPSAUploadModal = ({ isOpen, onClose, patient, onSuccess }) => {
       }
     } finally {
       setIsParsing(false);
+      console.log('[Frontend PSA Upload] ===== FILE UPLOAD COMPLETE =====');
     }
   };
 

@@ -215,17 +215,48 @@ export const investigationService = {
   // Parse PSA file and extract values automatically
   parsePSAFile: async (file) => {
     try {
+      console.log('[Frontend PSA Service] ===== API REQUEST START =====');
+      console.log('[Frontend PSA Service] File name:', file.name);
+      console.log('[Frontend PSA Service] File size:', file.size, 'bytes');
+      console.log('[Frontend PSA Service] File type:', file.type);
+      
       const formData = new FormData();
       formData.append('file', file);
+      console.log('[Frontend PSA Service] FormData created, sending POST to /parse-psa-file');
 
       const response = await apiClient.post('/parse-psa-file', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
+      
+      console.log('[Frontend PSA Service] ===== API RESPONSE RECEIVED =====');
+      console.log('[Frontend PSA Service] Response status:', response.status);
+      console.log('[Frontend PSA Service] Full response:', JSON.stringify(response.data, null, 2));
+      console.log('[Frontend PSA Service] Response data:', response.data);
+      console.log('[Frontend PSA Service] Response data.data:', response.data?.data);
+      console.log('[Frontend PSA Service] PSA entries count:', response.data?.data?.psaEntries?.length || 0);
+      
+      if (response.data?.data?.psaEntries) {
+        console.log('[Frontend PSA Service] PSA entries:', JSON.stringify(response.data.data.psaEntries, null, 2));
+        response.data.data.psaEntries.forEach((entry, index) => {
+          console.log(`[Frontend PSA Service] Entry ${index + 1}:`, {
+            testDate: entry.testDate,
+            result: entry.result,
+            status: entry.status,
+            notes: entry.notes
+          });
+        });
+      }
+      
       return { success: true, data: response.data.data };
     } catch (error) {
-      console.error('Error parsing PSA file:', error);
+      console.error('[Frontend PSA Service] ===== API ERROR =====');
+      console.error('[Frontend PSA Service] Error parsing PSA file:', error);
+      console.error('[Frontend PSA Service] Error message:', error.message);
+      console.error('[Frontend PSA Service] Error response:', error.response);
+      console.error('[Frontend PSA Service] Error response data:', error.response?.data);
+      console.error('[Frontend PSA Service] Error response status:', error.response?.status);
       return {
         success: false,
         error: error.response?.data?.message || error.message,
