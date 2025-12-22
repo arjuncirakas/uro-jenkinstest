@@ -55,7 +55,7 @@ export const corsOptions = {
     }
     
     // If allowedOrigins is false, only allow same-origin requests
-    if (allowedOrigins === false) {
+    if (!allowedOrigins) {
       console.warn(`⚠️  CORS: Rejecting origin ${origin} - no allowed origins configured`);
       return callback(new Error('Not allowed by CORS'));
     }

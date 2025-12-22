@@ -598,7 +598,6 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       allergies: '',
       socialHistory: '',
       familyHistory: '',
-      familyHistory: '',
       assignedUrologist: '',
       referringGP: '',
       emergencyContactName: '',

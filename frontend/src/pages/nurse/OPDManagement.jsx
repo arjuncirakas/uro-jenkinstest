@@ -770,7 +770,13 @@ const OPDManagement = () => {
                             </button>
                           </td>
                         </tr>
-                      ) : appointments.filter(apt => apt.type === activeAppointmentTab && apt.status !== 'no_show').length === 0 ? (
+                      ) : appointments.filter(apt => {
+                        // Include appointments matching the active tab
+                        // Also include automatic appointments (without timeslots) in the urologist tab
+                        const matchesType = apt.type === activeAppointmentTab || 
+                          (apt.type === 'automatic' && activeAppointmentTab === 'urologist');
+                        return matchesType && apt.status !== 'no_show';
+                      }).length === 0 ? (
                         <tr>
                           <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8 text-gray-500 text-sm">
                             No {activeAppointmentTab} appointments found
@@ -778,7 +784,13 @@ const OPDManagement = () => {
                         </tr>
                       ) : (
                         appointments
-                          .filter(apt => apt.type === activeAppointmentTab && apt.status !== 'no_show')
+                          .filter(apt => {
+                            // Include appointments matching the active tab
+                            // Also include automatic appointments (without timeslots) in the urologist tab
+                            const matchesType = apt.type === activeAppointmentTab || 
+                              (apt.type === 'automatic' && activeAppointmentTab === 'urologist');
+                            return matchesType && apt.status !== 'no_show';
+                          })
                           .sort((a, b) => {
                             if (a.appointmentTime && !b.appointmentTime) return -1;
                             if (!a.appointmentTime && b.appointmentTime) return 1;

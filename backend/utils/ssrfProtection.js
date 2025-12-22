@@ -249,7 +249,7 @@ export const sanitizeFilePath = (filePath) => {
   let sanitized = filePath.replace(/\0/g, '');
 
   // Remove control characters
-  sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '');
+  sanitized = sanitized.replace(/[\x01-\x1F\x7F]/g, '');
 
   // Normalize path separators
   sanitized = path.normalize(sanitized);
