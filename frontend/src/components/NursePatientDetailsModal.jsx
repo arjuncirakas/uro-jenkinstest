@@ -1999,7 +1999,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   useEffect(() => {
     if (isOpen) {
       // Save the current scroll position
-      const scrollY = window.scrollY || window.pageYOffset;
+      const scrollY = window.scrollY;
       // Get the scrollbar width to prevent layout shift
       const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 

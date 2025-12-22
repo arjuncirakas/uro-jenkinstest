@@ -218,8 +218,7 @@ const processAutomaticAppointments = async () => {
         const appointmentIntervals = [3, 6, 9, 12];
         let appointmentsBooked = 0;
         
-        for (let i = 0; i < appointmentIntervals.length; i++) {
-          const monthsAhead = appointmentIntervals[i];
+        for (const monthsAhead of appointmentIntervals) {
           const appointmentDate = new Date();
           appointmentDate.setMonth(appointmentDate.getMonth() + monthsAhead);
           const dateStr = appointmentDate.toISOString().split('T')[0];

@@ -866,7 +866,7 @@ export const getAvailableDoctors = async (req, res) => {
 
 // Get today's appointments
 export const getTodaysAppointments = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   console.log(`\n📅 [getTodaysAppointments ${requestId}] Starting`);
   console.log(`📅 [getTodaysAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
 
@@ -1425,7 +1425,7 @@ export const getTodaysAppointments = async (req, res) => {
 
 // Get upcoming appointments (week/month view with pagination)
 export const getUpcomingAppointments = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   console.log(`\n📅 [getUpcomingAppointments ${requestId}] Starting`);
   console.log(`📅 [getUpcomingAppointments ${requestId}] Query params:`, req.query);
   console.log(`📅 [getUpcomingAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
@@ -2324,7 +2324,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
     }
 
     // Validate time format
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    const timeRegex = /^([0-1]?\d|2[0-3]):[0-5]\d$/;
     if (!timeRegex.test(newTime)) {
       return res.status(400).json({
         success: false,
@@ -3086,7 +3086,7 @@ export const getAvailableTimeSlots = async (req, res) => {
 
 // Get all appointments for calendar view
 export const getAllAppointments = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   console.log(`\n📅 [getAllAppointments ${requestId}] Starting`);
   console.log(`📅 [getAllAppointments ${requestId}] Query params:`, req.query);
   console.log(`📅 [getAllAppointments ${requestId}] User:`, req.user?.id, req.user?.role);
@@ -3463,7 +3463,7 @@ export const getAllAppointments = async (req, res) => {
 
 // Send appointment reminder email
 export const sendAppointmentReminder = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   console.log(`\n📧 [sendAppointmentReminder ${requestId}] Starting`);
   console.log(`📧 [sendAppointmentReminder ${requestId}] Request body:`, req.body);
 
@@ -3559,7 +3559,7 @@ export const sendAppointmentReminder = async (req, res) => {
 
 // Send bulk appointment reminders
 export const sendBulkAppointmentReminders = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   console.log(`\n📧 [sendBulkAppointmentReminders ${requestId}] Starting`);
   console.log(`📧 [sendBulkAppointmentReminders ${requestId}] Request body:`, req.body);
 

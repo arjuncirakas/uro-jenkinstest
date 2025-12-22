@@ -998,7 +998,7 @@ export const getPatients = async (req, res) => {
 
 // Get new patients (recently added, status = 'Active')
 export const getNewPatients = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   console.log(`\n👥 [getNewPatients ${requestId}] Starting`);
   console.log(`👥 [getNewPatients ${requestId}] User:`, req.user?.id, req.user?.role);
 
@@ -2327,8 +2327,7 @@ export const updatePatientPathway = async (req, res) => {
                 startDate = new Date();
               }
 
-              for (let i = 0; i < appointmentIntervals.length; i++) {
-                const monthsAhead = appointmentIntervals[i];
+              for (const monthsAhead of appointmentIntervals) {
                 const followUpDate = new Date(startDate);
                 followUpDate.setMonth(followUpDate.getMonth() + monthsAhead);
                 const appointmentDate = followUpDate.toISOString().split('T')[0];
@@ -2943,7 +2942,7 @@ export const searchPatients = async (req, res) => {
 
 // Get patients due for review (7-14 days window)
 export const getPatientsDueForReview = async (req, res) => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   console.log(`\n👥 [getPatientsDueForReview ${requestId}] Starting`);
   console.log(`👥 [getPatientsDueForReview ${requestId}] User:`, req.user?.id, req.user?.role);
 
