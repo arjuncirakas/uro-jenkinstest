@@ -335,6 +335,41 @@ const extractTextFromExcel = async (filePath) => {
             continue;
           }
           
+          // Normalize value string - fix common Excel formatting issues
+          // Handle cases like ".6.9" -> "6.9", "6.9." -> "6.9", "6..9" -> "6.9"
+          let normalizedValue = valueStr.trim();
+          const originalValue = normalizedValue;
+          
+          // Fix multiple dots issue (like ".6.9" -> "6.9")
+          // If it starts with a dot and has another dot, it's likely ".6.9" format
+          if (normalizedValue.startsWith('.') && normalizedValue.split('.').length > 2) {
+            // Remove the leading dot
+            normalizedValue = normalizedValue.substring(1);
+            console.log(`[PSA Excel Parser]   Fixed leading dot: "${originalValue}" -> "${normalizedValue}"`);
+          }
+          
+          // Remove leading dots (for cases like ".6" -> "6" or we might want "0.6", but let's try "6" first)
+          if (normalizedValue.startsWith('.')) {
+            normalizedValue = normalizedValue.replace(/^\.+/, '');
+          }
+          
+          // Remove trailing dots
+          normalizedValue = normalizedValue.replace(/\.+$/, '');
+          
+          // Fix multiple consecutive dots (like "6..9" -> "6.9")
+          normalizedValue = normalizedValue.replace(/\.{2,}/g, '.');
+          
+          // If the value is now empty or just dots, skip
+          if (!normalizedValue || normalizedValue === '.' || normalizedValue.match(/^\.+$/)) {
+            console.log(`[PSA Excel Parser]   Skipping row ${rowIndex} - value "${originalValue}" normalized to empty`);
+            continue;
+          }
+          
+          if (normalizedValue !== originalValue) {
+            console.log(`[PSA Excel Parser]   Value normalized: "${originalValue}" -> "${normalizedValue}"`);
+          }
+          valueStr = normalizedValue;
+          
           // Validate number pattern - allow decimals
           const numPattern = /^\d+\.?\d*$/;
           if (!numPattern.test(valueStr)) {
