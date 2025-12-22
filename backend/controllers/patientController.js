@@ -136,7 +136,7 @@ const generateUPI = () => {
 };
 
 // Helper function to send error response
-const sendErrorResponse = (res, status, message) => {
+export const sendErrorResponse = (res, status, message) => {
   return res.status(status).json({
     success: false,
     message
@@ -144,7 +144,7 @@ const sendErrorResponse = (res, status, message) => {
 };
 
 // Helper function to handle unique constraint violations
-const handleUniqueConstraintError = (error, res) => {
+export const handleUniqueConstraintError = (error, res) => {
   if (error.code === '23505') {
     const constraintMessages = {
       'patients_email_key': 'Patient with this email already exists',
@@ -161,7 +161,7 @@ const handleUniqueConstraintError = (error, res) => {
 };
 
 // Helper function to safely parse JSON field
-const parseJsonField = (jsonString, defaultValue = null) => {
+export const parseJsonField = (jsonString, defaultValue = null) => {
   if (!jsonString) return defaultValue;
   try {
     return JSON.parse(jsonString);
@@ -172,7 +172,7 @@ const parseJsonField = (jsonString, defaultValue = null) => {
 };
 
 // Helper function to check if patient email already exists
-const checkExistingEmail = async (client, email) => {
+export const checkExistingEmail = async (client, email) => {
   if (!email) return null;
   const existingEmail = await client.query(
     'SELECT id FROM patients WHERE email = $1',
@@ -191,7 +191,7 @@ const checkExistingEmail = async (client, email) => {
 };
 
 // Helper function to check if patient phone already exists
-const checkExistingPhone = async (client, phone) => {
+export const checkExistingPhone = async (client, phone) => {
   if (!phone) return null;
   const existingPhone = await client.query(
     'SELECT id FROM patients WHERE phone = $1',

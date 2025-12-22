@@ -2,7 +2,7 @@ import pool from '../config/database.js';
 import { sendAppointmentReminderEmail } from '../services/emailService.js';
 
 // Helper function to validate patient exists and is not expired
-const validatePatientForBooking = async (client, patientId, errorContext = 'booking') => {
+export const validatePatientForBooking = async (client, patientId, errorContext = 'booking') => {
   const patientCheck = await client.query(
     'SELECT id, first_name, last_name, status FROM patients WHERE id = $1',
     [patientId]
