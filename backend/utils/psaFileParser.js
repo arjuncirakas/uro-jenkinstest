@@ -128,6 +128,7 @@ const extractTextFromExcel = async (filePath) => {
     const workbook = XLSX.readFile(filePath);
     let text = '';
     let structuredData = [];
+    let allStructuredData = []; // Collect data from all sheets
     excelStructuredData = null; // Reset global variable
     
     // Extract text from all sheets
@@ -221,10 +222,12 @@ const extractTextFromExcel = async (filePath) => {
         
         // Start from after the header row (if found) or from row 0
         const startRow = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
-        console.log(`[PSA Excel Parser] Starting extraction from row: ${startRow} to ${range.e.r}`);
+        const endRow = range.e.r;
+        const totalRowsToProcess = endRow - startRow + 1;
+        console.log(`[PSA Excel Parser] Starting extraction from row: ${startRow} to ${endRow} (inclusive, ${totalRowsToProcess} rows to process)`);
         
         // Extract data row by row using direct cell access
-        for (let rowIndex = startRow; rowIndex <= range.e.r; rowIndex++) {
+        for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
           // Get date cell directly
           const dateCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: dateColumnIndex });
           const dateCell = worksheet[dateCellAddress];
@@ -356,15 +359,23 @@ const extractTextFromExcel = async (filePath) => {
         }
         
         console.log(`[PSA Excel Parser] ===== EXTRACTION COMPLETE =====`);
+        console.log(`[PSA Excel Parser] Processed rows: ${startRow} to ${endRow} (${endRow - startRow + 1} total rows)`);
         console.log(`[PSA Excel Parser] Total entries extracted: ${structuredData.length}`);
+        console.log(`[PSA Excel Parser] Expected entries: ${totalRowsToProcess}, Actual: ${structuredData.length}`);
+        if (structuredData.length !== totalRowsToProcess) {
+          console.log(`[PSA Excel Parser] ⚠️ WARNING: Expected ${totalRowsToProcess} entries but got ${structuredData.length}. Some rows may have been skipped.`);
+        }
         console.log(`[PSA Excel Parser] Extracted data:`, JSON.stringify(structuredData, null, 2));
         
-        // Store structured data globally so extractPSADataFromFile can use it
-        excelStructuredData = structuredData;
+        // Collect structured data from this sheet
+        if (structuredData.length > 0) {
+          allStructuredData = allStructuredData.concat(structuredData);
+          console.log(`[PSA Excel Parser] Collected ${structuredData.length} entries from ${sheetName}, total: ${allStructuredData.length}`);
+        }
       } else {
         console.log(`[PSA Excel Parser] ERROR: Could not identify date and value columns`);
         console.log(`[PSA Excel Parser] Date column: ${dateColumnIndex}, Value column: ${valueColumnIndex}`);
-        excelStructuredData = null;
+        // Don't reset excelStructuredData here - keep previous valid data if any
       }
       
       // If we found structured data, format it for parsing
@@ -414,6 +425,19 @@ const extractTextFromExcel = async (filePath) => {
         });
       }
     });
+    
+    // Store all collected structured data globally
+    if (allStructuredData.length > 0) {
+      excelStructuredData = allStructuredData;
+      console.log(`[PSA Excel Parser] ===== FINAL RESULT =====`);
+      console.log(`[PSA Excel Parser] Text length: ${text.length}`);
+      console.log(`[PSA Excel Parser] Total structured data entries: ${excelStructuredData.length}`);
+      console.log(`[PSA Excel Parser] Structured data stored globally:`, JSON.stringify(excelStructuredData, null, 2));
+    } else {
+      excelStructuredData = null;
+      console.log(`[PSA Excel Parser] ===== FINAL RESULT =====`);
+      console.log(`[PSA Excel Parser] No structured data found, will use text parsing`);
+    }
     
     return text;
   } catch (error) {
@@ -982,24 +1006,40 @@ export const extractPSADataFromFile = async (filePath, fileType) => {
     if (['.pdf'].includes(ext)) {
       text = await extractTextFromPDF(filePath);
     } else if (['.xls', '.xlsx'].includes(ext)) {
+      // Reset global variable before extraction
+      excelStructuredData = null;
       text = await extractTextFromExcel(filePath);
+      
+      console.log('[PSA Parser] After Excel extraction, checking for structured data...');
+      console.log('[PSA Parser] excelStructuredData:', excelStructuredData);
+      console.log('[PSA Parser] excelStructuredData length:', excelStructuredData?.length || 0);
       
       // If we have structured data from Excel, use it directly instead of re-parsing
       if (excelStructuredData && excelStructuredData.length > 0) {
-        console.log('[PSA Parser] Using structured data from Excel directly (avoiding re-parsing)');
+        console.log('[PSA Parser] ✓ Using structured data from Excel directly (avoiding re-parsing)');
         console.log('[PSA Parser] Structured data entries:', excelStructuredData.length);
+        console.log('[PSA Parser] Structured data:', JSON.stringify(excelStructuredData, null, 2));
         
         // Convert structured data to the format expected by the API
-        psaData = excelStructuredData.map(entry => ({
-          testDate: entry.date,
-          result: entry.value, // This preserves decimals like "7.5"
-          status: getPSAStatus(parseFloat(entry.value)),
-          notes: 'Extracted from file'
-        }));
+        console.log('[PSA Parser] Converting structured data to psaData format...');
+        console.log('[PSA Parser] Input structured data count:', excelStructuredData.length);
         
-        console.log('[PSA Parser] Converted to psaData format:', JSON.stringify(psaData, null, 2));
+        psaData = excelStructuredData.map((entry, index) => {
+          const converted = {
+            testDate: entry.date,
+            result: entry.value, // This preserves decimals like "7.5"
+            status: getPSAStatus(parseFloat(entry.value)),
+            notes: 'Extracted from file'
+          };
+          console.log(`[PSA Parser] Converting entry ${index + 1}/${excelStructuredData.length}:`, JSON.stringify(converted));
+          return converted;
+        });
+        
+        console.log('[PSA Parser] Converted to psaData format - total entries:', psaData.length);
+        console.log('[PSA Parser] Converted psaData:', JSON.stringify(psaData, null, 2));
         
         // Reset global variable
+        const savedData = excelStructuredData;
         excelStructuredData = null;
         
         return {
@@ -1008,6 +1048,8 @@ export const extractPSADataFromFile = async (filePath, fileType) => {
           psaEntries: psaData,
           count: psaData.length
         };
+      } else {
+        console.log('[PSA Parser] ✗ No structured data found, will parse text instead');
       }
     } else if (['.doc', '.docx'].includes(ext)) {
       text = await extractTextFromWord(filePath);
