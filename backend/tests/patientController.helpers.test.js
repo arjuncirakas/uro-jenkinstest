@@ -130,6 +130,37 @@ describe('Patient Controller Helper Functions', () => {
       expect(result).toBeNull();
       expect(res.status).not.toHaveBeenCalled();
     });
+
+    it('should handle error without constraint property', () => {
+      const error = {
+        code: '23505'
+      };
+      const res = {
+        status: jest.fn(),
+        json: jest.fn()
+      };
+
+      const result = handleUniqueConstraintError(error, res);
+
+      expect(result).toBeNull();
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('should handle error with null constraint', () => {
+      const error = {
+        code: '23505',
+        constraint: null
+      };
+      const res = {
+        status: jest.fn(),
+        json: jest.fn()
+      };
+
+      const result = handleUniqueConstraintError(error, res);
+
+      expect(result).toBeNull();
+      expect(res.status).not.toHaveBeenCalled();
+    });
   });
 
   describe('parseJsonField', () => {
@@ -273,6 +304,84 @@ describe('Patient Controller Helper Functions', () => {
 
       expect(result).toEqual({ exists: false });
       expect(client.query).toHaveBeenCalled();
+    });
+
+    it('should handle empty string email', async () => {
+      const client = {
+        query: jest.fn()
+      };
+
+      const result = await checkExistingEmail(client, '');
+
+      expect(result).toBeNull();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty string phone', async () => {
+      const client = {
+        query: jest.fn()
+      };
+
+      const result = await checkExistingPhone(client, '');
+
+      expect(result).toBeNull();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it('should handle undefined email', async () => {
+      const client = {
+        query: jest.fn()
+      };
+
+      const result = await checkExistingEmail(client, undefined);
+
+      expect(result).toBeNull();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it('should handle undefined phone', async () => {
+      const client = {
+        query: jest.fn()
+      };
+
+      const result = await checkExistingPhone(client, undefined);
+
+      expect(result).toBeNull();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('parseJsonField edge cases', () => {
+    it('should handle whitespace-only string', () => {
+      const result = parseJsonField('   ', null);
+      expect(result).toBeNull();
+    });
+
+    it('should parse nested JSON objects', () => {
+      const jsonString = '{"nested": {"key": "value"}, "array": [1, 2, 3]}';
+      const result = parseJsonField(jsonString);
+      expect(result).toEqual({
+        nested: { key: 'value' },
+        array: [1, 2, 3]
+      });
+    });
+
+    it('should handle JSON with null values', () => {
+      const jsonString = '{"key": null, "other": "value"}';
+      const result = parseJsonField(jsonString);
+      expect(result).toEqual({ key: null, other: 'value' });
+    });
+
+    it('should handle JSON with boolean values', () => {
+      const jsonString = '{"enabled": true, "disabled": false}';
+      const result = parseJsonField(jsonString);
+      expect(result).toEqual({ enabled: true, disabled: false });
+    });
+
+    it('should handle JSON with number values', () => {
+      const jsonString = '{"count": 42, "price": 99.99}';
+      const result = parseJsonField(jsonString);
+      expect(result).toEqual({ count: 42, price: 99.99 });
     });
   });
 });

@@ -106,10 +106,85 @@ describe('Booking Controller Helper Functions', () => {
 
       const result = await validatePatientForBooking(client, 123);
 
-      // Should use default 'booking' context, but since we only have 'appointment' and 'investigation'
-      // in the code, let's check what the actual behavior is
+      // Default 'booking' context falls through to investigation message
       expect(result.isValid).toBe(false);
       expect(result.error.status).toBe(400);
+      expect(result.error.message).toBe('Cannot book investigation for an expired patient');
+    });
+
+    it('should handle empty string email', async () => {
+      const client = {
+        query: jest.fn()
+      };
+
+      const { checkExistingEmail } = await import('../controllers/patientController.js');
+      const result = await checkExistingEmail(client, '');
+
+      expect(result).toBeNull();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty string phone', async () => {
+      const client = {
+        query: jest.fn()
+      };
+
+      const { checkExistingPhone } = await import('../controllers/patientController.js');
+      const result = await checkExistingPhone(client, '');
+
+      expect(result).toBeNull();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it('should handle Active status patient', async () => {
+      const client = {
+        query: jest.fn().mockResolvedValue({
+          rows: [{
+            id: 123,
+            first_name: 'John',
+            last_name: 'Doe',
+            status: 'Active'
+          }]
+        })
+      };
+
+      const result = await validatePatientForBooking(client, 123);
+      expect(result.isValid).toBe(true);
+      expect(result.patient.status).toBe('Active');
+    });
+
+    it('should handle Inactive status patient', async () => {
+      const client = {
+        query: jest.fn().mockResolvedValue({
+          rows: [{
+            id: 123,
+            first_name: 'John',
+            last_name: 'Doe',
+            status: 'Inactive'
+          }]
+        })
+      };
+
+      const result = await validatePatientForBooking(client, 123);
+      expect(result.isValid).toBe(true);
+      expect(result.patient.status).toBe('Inactive');
+    });
+
+    it('should handle Discharged status patient', async () => {
+      const client = {
+        query: jest.fn().mockResolvedValue({
+          rows: [{
+            id: 123,
+            first_name: 'John',
+            last_name: 'Doe',
+            status: 'Discharged'
+          }]
+        })
+      };
+
+      const result = await validatePatientForBooking(client, 123);
+      expect(result.isValid).toBe(true);
+      expect(result.patient.status).toBe('Discharged');
     });
   });
 });
