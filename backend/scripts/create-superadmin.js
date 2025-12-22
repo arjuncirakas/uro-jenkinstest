@@ -7,10 +7,10 @@ dotenv.config();
 
 const createSuperadmin = async () => {
   const client = await pool.connect();
-  
+
   try {
     console.log('🔧 Creating superadmin user...');
-    
+
     // Check if superadmin already exists
     const existingSuperadmin = await client.query(
       'SELECT id FROM users WHERE role = $1',
@@ -22,9 +22,16 @@ const createSuperadmin = async () => {
       return;
     }
 
-    // Default superadmin credentials
-    const email = process.env.SUPERADMIN_EMAIL || 'admin@urology.com';
-    const password = process.env.SUPERADMIN_PASSWORD || 'SuperAdmin123!';
+    // Get credentials from environment variables (required)
+    const email = process.env.SUPERADMIN_EMAIL;
+    const password = process.env.SUPERADMIN_PASSWORD;
+
+    if (!email || !password) {
+      console.error('❌ Error: SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD environment variables are required');
+      console.log('Please set these in your .env file or export them before running this script.');
+      process.exit(1);
+    }
+
     const firstName = 'Super';
     const lastName = 'Admin';
 
@@ -44,7 +51,6 @@ const createSuperadmin = async () => {
 
     console.log('✅ Superadmin user created successfully!');
     console.log('📧 Email:', superadmin.email);
-    console.log('🔑 Password:', password);
     console.log('⚠️  Please change the password after first login!');
 
   } catch (error) {
@@ -56,4 +62,3 @@ const createSuperadmin = async () => {
 };
 
 createSuperadmin();
-

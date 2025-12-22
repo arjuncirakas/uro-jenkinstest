@@ -14,10 +14,20 @@ const createSuperadminProduction = async () => {
         console.log(`🖥️  Host: ${process.env.DB_HOST || 'localhost'}`);
         console.log('');
 
-        const email = 'superadminuroprep@yopmail.com';
-        const password = 'SuperAdmin123!';
-        const firstName = 'Super';
-        const lastName = 'Admin';
+        // Get credentials from environment variables (required)
+        const email = process.env.SUPERADMIN_EMAIL;
+        const password = process.env.SUPERADMIN_PASSWORD;
+        const firstName = process.env.SUPERADMIN_FIRST_NAME || 'Super';
+        const lastName = process.env.SUPERADMIN_LAST_NAME || 'Admin';
+
+        if (!email || !password) {
+            console.error('❌ Error: SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD environment variables are required');
+            console.log('Please set these in your .env file or export them before running this script:');
+            console.log('');
+            console.log('  export SUPERADMIN_EMAIL="admin@yourcompany.com"');
+            console.log('  export SUPERADMIN_PASSWORD="YourSecurePassword"');
+            process.exit(1);
+        }
 
         // Check if user already exists
         const existingUser = await client.query(
@@ -50,7 +60,6 @@ const createSuperadminProduction = async () => {
 
             console.log('✅ Superadmin user updated successfully!');
             console.log('📧 Email:', email);
-            console.log('🔑 Password:', password);
         } else {
             // Create new user
             console.log('🆕 Creating new superadmin user...');
@@ -68,7 +77,6 @@ const createSuperadminProduction = async () => {
             const admin = result.rows[0];
             console.log('✅ Superadmin user created successfully!');
             console.log('📧 Email:', admin.email);
-            console.log('🔑 Password:', password);
             console.log('👤 Name:', `${admin.first_name} ${admin.last_name}`);
             console.log('🎯 Role:', admin.role);
             console.log('🆔 User ID:', admin.id);
@@ -78,8 +86,7 @@ const createSuperadminProduction = async () => {
         console.log('⚠️  Important: With the new OTP verification requirement,');
         console.log('   this user will receive an OTP email when logging in.');
         console.log('');
-        console.log('🌐 Login URL: https://uroprep.ahimsa.global/login');
-        console.log('📊 Dashboard URL: https://uroprep.ahimsa.global/superadmin/users');
+        console.log('⚠️  Please change the password after first login!');
 
     } catch (error) {
         console.error('❌ Error creating superadmin:', error);
