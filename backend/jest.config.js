@@ -10,7 +10,8 @@ export default {
   collectCoverageFrom: [
     'controllers/**/*.js',
     '!controllers/**/*.test.js',
-    '!**/node_modules/**'
+    '!**/node_modules/**',
+    '!**/coverage/**'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
