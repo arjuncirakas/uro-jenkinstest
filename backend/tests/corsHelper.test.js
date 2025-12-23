@@ -52,6 +52,37 @@ describe('Secure CORS Helper', () => {
             expect(origins).toContain('https://uroprep.ahimsa.global');
             expect(origins).toContain('https://app.example.com');
         });
+
+        it('should default to development when NODE_ENV is not set', () => {
+            delete process.env.NODE_ENV;
+            delete process.env.FRONTEND_URL;
+
+            const origins = corsHelper.getAllowedOrigins();
+
+            expect(Array.isArray(origins)).toBe(true);
+            expect(origins).toContain('http://localhost:5173');
+        });
+
+        it('should handle empty strings in FRONTEND_URL', () => {
+            process.env.NODE_ENV = 'production';
+            process.env.FRONTEND_URL = 'https://uroprep.ahimsa.global,,https://app.example.com';
+
+            const origins = corsHelper.getAllowedOrigins();
+
+            expect(origins).toContain('https://uroprep.ahimsa.global');
+            expect(origins).toContain('https://app.example.com');
+            expect(origins).not.toContain('');
+        });
+
+        it('should not add duplicate origins', () => {
+            process.env.NODE_ENV = 'development';
+            process.env.FRONTEND_URL = 'http://localhost:5173';
+
+            const origins = corsHelper.getAllowedOrigins();
+
+            const localhostCount = origins.filter(o => o === 'http://localhost:5173').length;
+            expect(localhostCount).toBe(1);
+        });
     });
 
     describe('isOriginAllowed', () => {
