@@ -7,10 +7,10 @@ import { validationResult } from 'express-validator';
 // Get all GPs
 export const getAllGPs = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { is_active = true } = req.query;
-    
+
     // When fetching for dropdown, we want all active GPs (regardless of verification status)
     // This ensures newly created GPs appear immediately
     const query = `
@@ -21,9 +21,9 @@ export const getAllGPs = async (req, res) => {
       WHERE role = 'gp' AND is_active = $1
       ORDER BY first_name, last_name
     `;
-    
+
     const result = await client.query(query, [is_active === 'true']);
-    
+
     // Transform to camelCase format for frontend consistency
     const gps = result.rows.map(gp => ({
       id: gp.id,
@@ -39,9 +39,9 @@ export const getAllGPs = async (req, res) => {
       createdAt: gp.created_at,
       lastLoginAt: gp.last_login_at
     }));
-    
+
     console.log(`📋 Returning ${gps.length} active GPs`);
-    
+
     res.json({
       success: true,
       data: gps,
@@ -61,10 +61,10 @@ export const getAllGPs = async (req, res) => {
 // Get GP by ID
 export const getGPById = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
-    
+
     const result = await client.query(`
       SELECT 
         id, email, first_name, last_name, phone, organization, role,
@@ -72,14 +72,14 @@ export const getGPById = async (req, res) => {
       FROM users 
       WHERE id = $1 AND role = 'gp'
     `, [id]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'GP not found'
       });
     }
-    
+
     res.json({
       success: true,
       data: result.rows[0]
@@ -98,10 +98,10 @@ export const getGPById = async (req, res) => {
 // Create new GP
 export const createGP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       await client.query('ROLLBACK');
@@ -111,15 +111,15 @@ export const createGP = async (req, res) => {
         details: errors.array()
       });
     }
-    
+
     const { first_name, last_name, email, phone, organization } = req.body;
-    
+
     // Check if user already exists
     const existingUser = await client.query(
       'SELECT id FROM users WHERE email = $1',
       [email]
     );
-    
+
     if (existingUser.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(409).json({
@@ -127,14 +127,14 @@ export const createGP = async (req, res) => {
         error: 'User with this email already exists'
       });
     }
-    
+
     // Check if phone number is already in use (if provided)
     if (phone) {
       const existingPhone = await client.query(
         'SELECT id FROM users WHERE phone = $1',
         [phone]
       );
-      
+
       if (existingPhone.rows.length > 0) {
         await client.query('ROLLBACK');
         return res.status(409).json({
@@ -143,7 +143,7 @@ export const createGP = async (req, res) => {
         });
       }
     }
-    
+
     // Generate a temporary password that meets validation requirements:
     // - Minimum 14 characters
     // - At least one lowercase letter (a-z)
@@ -151,35 +151,41 @@ export const createGP = async (req, res) => {
     // - At least one number (0-9)
     // - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
     // - No spaces
+    // Uses crypto.randomInt for cryptographically secure random number generation
     const generateSecurePassword = () => {
       const lowercase = 'abcdefghijklmnopqrstuvwxyz';
       const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const numbers = '0123456789';
       const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
       const allChars = lowercase + uppercase + numbers + special;
-      
-      // Ensure at least one of each required character type
+
+      // Ensure at least one of each required character type using crypto.randomInt
       let password = '';
-      password += lowercase[Math.floor(Math.random() * lowercase.length)];
-      password += uppercase[Math.floor(Math.random() * uppercase.length)];
-      password += numbers[Math.floor(Math.random() * numbers.length)];
-      password += special[Math.floor(Math.random() * special.length)];
-      
+      password += lowercase[crypto.randomInt(lowercase.length)];
+      password += uppercase[crypto.randomInt(uppercase.length)];
+      password += numbers[crypto.randomInt(numbers.length)];
+      password += special[crypto.randomInt(special.length)];
+
       // Fill the rest to meet minimum 14 characters requirement
       // We already have 4 characters, so we need at least 10 more
-      const remainingLength = 10 + Math.floor(Math.random() * 6); // 10-15 more chars = 14-19 total
+      const remainingLength = 10 + crypto.randomInt(6); // 10-15 more chars = 14-19 total
       for (let i = 0; i < remainingLength; i++) {
-        password += allChars[Math.floor(Math.random() * allChars.length)];
+        password += allChars[crypto.randomInt(allChars.length)];
       }
-      
-      // Shuffle the password to randomize character positions
-      return password.split('').sort(() => Math.random() - 0.5).join('');
+
+      // Secure shuffle using Fisher-Yates algorithm with crypto.randomInt
+      const passwordArray = password.split('');
+      for (let i = passwordArray.length - 1; i > 0; i--) {
+        const j = crypto.randomInt(i + 1);
+        [passwordArray[i], passwordArray[j]] = [passwordArray[j], passwordArray[i]];
+      }
+      return passwordArray.join('');
     };
-    
+
     const tempPassword = generateSecurePassword();
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
-    
+
     // Insert new GP (active and verified by default when created via Add GP modal)
     const result = await client.query(
       `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified) 
@@ -187,9 +193,9 @@ export const createGP = async (req, res) => {
        RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
       [email, passwordHash, first_name, last_name, phone, organization || null, 'gp', true, true]
     );
-    
+
     const newGP = result.rows[0];
-    
+
     // Send password email with auto-generated password
     let emailSent = false;
     let emailError = null;
@@ -199,7 +205,7 @@ export const createGP = async (req, res) => {
       console.log(`📧 Recipient: ${email}`);
       console.log(`📧 GP Name: ${first_name} ${last_name}`);
       console.log(`📧 Password length: ${tempPassword.length} characters`);
-      
+
       const emailResult = await sendPasswordEmail(email, first_name, tempPassword);
       emailSent = emailResult.success;
       emailDetails = {
@@ -208,7 +214,7 @@ export const createGP = async (req, res) => {
         rejected: emailResult.rejected,
         response: emailResult.response
       };
-      
+
       if (emailResult.success) {
         console.log(`✅ ========== Email sent successfully ==========`);
         console.log(`✅ Message ID: ${emailResult.messageId}`);
@@ -233,9 +239,9 @@ export const createGP = async (req, res) => {
       console.error('❌ Error stack:', emailError.stack);
       emailError = emailError.message || 'Unknown error';
     }
-    
+
     await client.query('COMMIT');
-    
+
     // Log the result
     if (emailSent) {
       console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), email sent to ${email}`);
@@ -243,10 +249,10 @@ export const createGP = async (req, res) => {
       console.warn(`⚠️ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), but email failed: ${emailError || 'Unknown error'}`);
       console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
     }
-    
+
     res.status(201).json({
       success: true,
-      message: emailSent 
+      message: emailSent
         ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
         : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
       data: {
@@ -283,10 +289,10 @@ export const createGP = async (req, res) => {
 // Update GP
 export const updateGP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       await client.query('ROLLBACK');
@@ -296,16 +302,16 @@ export const updateGP = async (req, res) => {
         details: errors.array()
       });
     }
-    
+
     const { id } = req.params;
     const { first_name, last_name, email, phone, organization, is_active } = req.body;
-    
+
     // Get existing GP
     const existingGP = await client.query(
       'SELECT email, is_active FROM users WHERE id = $1 AND role = $2',
       [id, 'gp']
     );
-    
+
     if (existingGP.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({
@@ -313,17 +319,17 @@ export const updateGP = async (req, res) => {
         error: 'GP not found'
       });
     }
-    
+
     const oldEmail = existingGP.rows[0].email;
     const finalIsActive = is_active !== undefined ? is_active : existingGP.rows[0].is_active;
-    
+
     // Check if email is being changed and if new email already exists
     if (email && email !== oldEmail) {
       const existingUser = await client.query(
         'SELECT id FROM users WHERE email = $1',
         [email]
       );
-      
+
       if (existingUser.rows.length > 0) {
         await client.query('ROLLBACK');
         return res.status(409).json({
@@ -332,14 +338,14 @@ export const updateGP = async (req, res) => {
         });
       }
     }
-    
+
     // Check if phone is being changed and if new phone already exists
     if (phone) {
       const existingPhone = await client.query(
         'SELECT id FROM users WHERE phone = $1 AND email != $2',
         [phone, email || oldEmail]
       );
-      
+
       if (existingPhone.rows.length > 0) {
         await client.query('ROLLBACK');
         return res.status(409).json({
@@ -348,7 +354,7 @@ export const updateGP = async (req, res) => {
         });
       }
     }
-    
+
     // Update GP
     const result = await client.query(`
       UPDATE users 
@@ -357,9 +363,9 @@ export const updateGP = async (req, res) => {
       WHERE id = $7 AND role = 'gp'
       RETURNING id, email, first_name, last_name, phone, organization, role, is_active, is_verified, created_at
     `, [first_name, last_name, email, phone, organization || null, finalIsActive, id]);
-    
+
     await client.query('COMMIT');
-    
+
     res.json({
       success: true,
       message: 'GP updated successfully',
@@ -387,24 +393,24 @@ export const updateGP = async (req, res) => {
 // Delete GP (soft delete)
 export const deleteGP = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
-    
+
     const result = await client.query(`
       UPDATE users 
       SET is_active = false, updated_at = CURRENT_TIMESTAMP
       WHERE id = $1 AND role = 'gp'
       RETURNING id, first_name, last_name
     `, [id]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'GP not found'
       });
     }
-    
+
     res.json({
       success: true,
       message: 'GP deleted successfully'
