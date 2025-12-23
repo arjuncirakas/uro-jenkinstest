@@ -14,6 +14,15 @@ export const errorHandler = (err, req, res, next) => {
     statusCode: 500
   };
 
+  // CORS Error
+  if (err.message === 'Not allowed by CORS') {
+    error = {
+      success: false,
+      message: 'CORS policy violation: Origin not allowed',
+      statusCode: 403
+    };
+  }
+
   // Mongoose validation error
   if (err.name === 'ValidationError' && err.errors) {
     const message = Object.values(err.errors).map(val => val.message).join(', ');
