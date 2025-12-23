@@ -68,6 +68,7 @@ describe('Health Check Auth - Complete Coverage', () => {
         it('should handle IPv6 localhost', async () => {
             process.env.NODE_ENV = 'production';
             process.env.HEALTH_CHECK_RESTRICT_ACCESS = 'true';
+            process.env.HEALTH_CHECK_ALLOWED_IPS = '::1';
 
             const { restrictHealthCheckAccess } = await import('../middleware/healthCheckAuth.js');
 
@@ -90,6 +91,7 @@ describe('Health Check Auth - Complete Coverage', () => {
         it('should handle IPv4-mapped IPv6 localhost', async () => {
             process.env.NODE_ENV = 'production';
             process.env.HEALTH_CHECK_RESTRICT_ACCESS = 'true';
+            process.env.HEALTH_CHECK_ALLOWED_IPS = '::1,127.0.0.1';
 
             const { restrictHealthCheckAccess } = await import('../middleware/healthCheckAuth.js');
 

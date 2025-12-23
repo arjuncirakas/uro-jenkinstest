@@ -99,7 +99,9 @@ export const restrictHealthCheckAccess = (req, res, next) => {
   }
 
   // Get allowed IPs from environment variable
-  const allowedIpsEnv = process.env.HEALTH_CHECK_ALLOWED_IPS || '127.0.0.1,::1';
+  // SECURITY FIX: In production, do NOT default to localhost. Require explicit configuration.
+  const defaultIps = isProduction ? '' : '127.0.0.1,::1';
+  const allowedIpsEnv = process.env.HEALTH_CHECK_ALLOWED_IPS || defaultIps;
   const allowedIps = allowedIpsEnv.split(',').map(ip => ip.trim()).filter(ip => ip);
 
   // Get client IP

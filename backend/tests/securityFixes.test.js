@@ -73,6 +73,7 @@ describe('Security Fixes', () => {
         it('should allow localhost in production', async () => {
             process.env.NODE_ENV = 'production';
             delete process.env.HEALTH_CHECK_RESTRICT_ACCESS;
+            process.env.HEALTH_CHECK_ALLOWED_IPS = '127.0.0.1';
 
             const { restrictHealthCheckAccess } = await import('../middleware/healthCheckAuth.js');
 
