@@ -1,9 +1,9 @@
 import express from 'express';
-import { 
-  addPSAResult, 
+import {
+  addPSAResult,
   updatePSAResult,
-  addOtherTestResult, 
-  getInvestigationResults, 
+  addOtherTestResult,
+  getInvestigationResults,
   getAllInvestigations,
   deleteInvestigationResult,
   createInvestigationRequest,
@@ -18,6 +18,7 @@ import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
 import { xssProtection } from '../middleware/sanitizer.js';
 import { validateFilePathMiddleware } from '../utils/ssrfProtection.js';
+import { setPreflightCorsHeaders } from '../utils/corsHelper.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -124,16 +125,10 @@ router.delete('/investigations/:resultId',
   deleteInvestigationResult
 );
 
-// Handle OPTIONS preflight for file requests
+// Handle OPTIONS preflight for file requests with secure origin validation
 router.options('/files/:filePath(*)', (req, res) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Max-Age', '86400');
-  }
+  // Use secure CORS helper that validates origin against allowlist
+  setPreflightCorsHeaders(req, res);
   res.status(200).end();
 });
 

@@ -628,11 +628,18 @@ export const getProfile = async (req, res) => {
 };
 
 // Request password reset (Step 1: Send OTP)
+// SECURITY FIX: Always returns the same response to prevent user enumeration
 export const requestPasswordReset = async (req, res) => {
   const client = await pool.connect();
 
   try {
     const { email } = req.body;
+
+    // Generic success message - always return this to prevent user enumeration
+    const genericSuccessResponse = {
+      success: true,
+      message: 'If an account exists with this email address, a password reset OTP will be sent.'
+    };
 
     // Check if user exists and is active
     const userResult = await client.query(
@@ -640,36 +647,37 @@ export const requestPasswordReset = async (req, res) => {
       [email]
     );
 
+    // SECURITY: If user doesn't exist, return generic success (don't reveal non-existence)
     if (userResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No account found with this email address'
-      });
+      console.log(`[Password Reset] Attempted for non-existent email: ${email}`);
+      return res.json(genericSuccessResponse);
     }
 
     const user = userResult.rows[0];
 
+    // SECURITY: If user is not verified, return generic success (don't reveal status)
     if (!user.is_verified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Your account is not verified. Please contact support.'
-      });
+      console.log(`[Password Reset] Attempted for unverified account: ${email}`);
+      return res.json(genericSuccessResponse);
     }
 
+    // SECURITY: If user is deactivated, return generic success (don't reveal status)
     if (!user.is_active) {
-      return res.status(400).json({
-        success: false,
-        message: 'Your account is deactivated. Please contact support.'
-      });
+      console.log(`[Password Reset] Attempted for deactivated account: ${email}`);
+      return res.json(genericSuccessResponse);
     }
 
-    // Generate and store OTP
-    await storeOTP(user.id, email, 'password_reset');
+    // User exists and is valid - actually send the OTP
+    try {
+      await storeOTP(user.id, email, 'password_reset');
+      console.log(`[Password Reset] OTP sent successfully to: ${email}`);
+    } catch (otpError) {
+      // Log the error but still return generic success to prevent enumeration
+      console.error(`[Password Reset] Error sending OTP to ${email}:`, otpError);
+    }
 
-    res.json({
-      success: true,
-      message: 'Password reset OTP has been sent to your email'
-    });
+    // Always return the same generic success message
+    res.json(genericSuccessResponse);
 
   } catch (error) {
     console.error('Request password reset error:', error);

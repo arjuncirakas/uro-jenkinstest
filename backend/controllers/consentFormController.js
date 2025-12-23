@@ -3,37 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// Helper function to set CORS headers for file responses
-const setCorsHeaders = (req, res) => {
-  const origin = req.headers.origin;
-  
-  // List of allowed localhost origins
-  const allowedLocalhostOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:5000',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5000'
-  ];
-  
-  // In development, allow all origins; in production, check against allowed list
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const isAllowedOrigin = !origin || isDevelopment || 
-    allowedLocalhostOrigins.includes(origin) ||
-    (process.env.FRONTEND_URL && process.env.FRONTEND_URL.includes(origin));
-  
-  if (origin && isAllowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Content-Length');
-  } else if (!origin) {
-    // Allow requests with no origin (server-to-server, Postman, etc.)
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-};
+// Import secure CORS helper - uses strict origin validation to prevent CORS misconfiguration attacks
+import { setCorsHeaders } from '../utils/corsHelper.js';
 
 // Configure multer for template uploads
 const templateStorage = multer.diskStorage({
@@ -402,7 +373,7 @@ export const deleteConsentFormTemplate = async (req, res) => {
 // Get patient consent forms
 export const getPatientConsentForms = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { patientId } = req.params;
 
@@ -427,7 +398,7 @@ export const getPatientConsentForms = async (req, res) => {
     // Add full URL for files
     const consentForms = result.rows.map(form => ({
       ...form,
-      file_url: form.file_path 
+      file_url: form.file_path
         ? `${req.protocol}://${req.get('host')}/${form.file_path}`
         : null
     }));
@@ -454,7 +425,7 @@ export const getPatientConsentForms = async (req, res) => {
 // Upload patient consent form
 export const uploadPatientConsentForm = async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { patientId } = req.params;
     const { consentFormId } = req.body;
@@ -555,22 +526,22 @@ export const uploadPatientConsentForm = async (req, res) => {
     }
   } catch (error) {
     console.error('Error uploading consent form:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to upload consent form',
-        error: error.message
-      });
-    } finally {
-      client.release();
-    }
-  };
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to upload consent form',
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+};
 
 // Serve consent form files
 export const serveConsentFormFile = async (req, res) => {
   try {
     // Get the validated file path from middleware (already normalized and validated)
     const fullPath = req.validatedFilePath;
-    
+
     if (!fullPath) {
       setCorsHeaders(req, res);
       return res.status(400).json({
@@ -578,10 +549,10 @@ export const serveConsentFormFile = async (req, res) => {
         message: 'File path is required'
       });
     }
-    
+
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
-    
+
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
       setCorsHeaders(req, res);
@@ -590,7 +561,7 @@ export const serveConsentFormFile = async (req, res) => {
         message: 'File not found'
       });
     }
-    
+
     // Set appropriate headers for file download/viewing
     const ext = path.extname(fullPath).toLowerCase();
     const mimeTypes = {
@@ -601,15 +572,15 @@ export const serveConsentFormFile = async (req, res) => {
       '.doc': 'application/msword',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     };
-    
+
     const mimeType = mimeTypes[ext] || 'application/octet-stream';
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
     res.setHeader('Cache-Control', 'no-cache');
-    
+
     // Stream the file with error handling
     const fileStream = fs.createReadStream(fullPath);
-    
+
     fileStream.on('error', (error) => {
       console.error('Error reading consent form file stream:', error);
       if (!res.headersSent) {
@@ -620,15 +591,15 @@ export const serveConsentFormFile = async (req, res) => {
         });
       }
     });
-    
+
     res.on('close', () => {
       if (!fileStream.destroyed) {
         fileStream.destroy();
       }
     });
-    
+
     fileStream.pipe(res);
-    
+
   } catch (error) {
     console.error('Serve consent form file error:', error);
     setCorsHeaders(req, res);

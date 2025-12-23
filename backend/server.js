@@ -127,23 +127,12 @@ app.get('/health', restrictHealthCheckAccess, (req, res) => {
   });
 });
 
-// API routes
+// API routes - SECURITY FIX: Removed metadata exposure
+// Previously exposed API version, endpoints, and internal documentation to unauthenticated users
 app.get('/api', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Urology Backend API',
-    version: '1.0.0',
-      endpoints: {
-        auth: '/api/auth',
-        superadmin: '/api/superadmin',
-        patients: '/api/patients',
-        doctors: '/api/doctors',
-        nurses: '/api/nurses',
-        gp: '/api/gp',
-        consentForms: '/api/consent-forms',
-        health: '/health'
-      },
-    documentation: `http://localhost:${PORT}/api`
+  res.status(401).json({
+    success: false,
+    message: 'Authentication required'
   });
 });
 
@@ -252,11 +241,11 @@ const startServer = async () => {
 
     // Initialize automatic no-show scheduler
     initAutoNoShowScheduler();
-    
+
     // Initialize automatic appointment scheduler
     const { initAutoAppointmentScheduler } = await import('./schedulers/autoAppointmentScheduler.js');
     initAutoAppointmentScheduler();
-    
+
     console.log(`⏰ Auto appointment scheduler: Active (runs daily at 2:00 AM)`);
 
     // Start the server
@@ -264,7 +253,6 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-      console.log(`📝 API Documentation: http://localhost:${PORT}/api`);
       console.log(`✅ Token refresh endpoint: http://localhost:${PORT}/api/auth/refresh-token`);
       console.log(`⏰ Auto no-show scheduler: Active (runs every hour)`);
     });

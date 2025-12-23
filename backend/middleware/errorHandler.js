@@ -1,3 +1,5 @@
+import { setCorsHeaders } from '../utils/corsHelper.js';
+
 // Global error handling middleware
 export const errorHandler = (err, req, res, next) => {
   console.error('[Error Handler] Error:', err);
@@ -77,19 +79,14 @@ export const errorHandler = (err, req, res, next) => {
 
   // Ensure response hasn't been sent
   if (!res.headersSent) {
-    // Ensure CORS headers are set even in error responses
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    }
-    
+    // Use secure CORS helper that validates origin against allowlist
+    // This prevents CORS misconfiguration where arbitrary origins are reflected with credentials
+    setCorsHeaders(req, res);
+
     res.status(error.statusCode).json({
       success: error.success,
       message: error.message,
-      ...(process.env.NODE_ENV === 'development' && { 
+      ...(process.env.NODE_ENV === 'development' && {
         stack: err.stack,
         error: err.message,
         code: err.code

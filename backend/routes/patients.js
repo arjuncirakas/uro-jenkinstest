@@ -6,7 +6,7 @@ import {
   getPatientById,
   updatePatient,
   deletePatient,
-  getAssignedPatientsForDoctor, 
+  getAssignedPatientsForDoctor,
   updatePatientPathway,
   getPatientsDueForReview,
   searchPatients,
@@ -31,50 +31,37 @@ const router = express.Router();
 // Apply XSS protection to all routes
 router.use(xssProtection);
 
-// Patient API info
+// Patient API info - SECURITY FIX: Removed endpoint and permission disclosure
+// Previously exposed role-based permissions to unauthenticated users (CVE: API Capability Disclosure)
 router.get('/', generalLimiter, (req, res) => {
-  res.json({
-    success: true,
-    message: 'Patient Management API',
-    endpoints: {
-      addPatient: 'POST /api/patients',
-      getPatients: 'GET /api/patients',
-      getPatientById: 'GET /api/patients/:id',
-      updatePatient: 'PUT /api/patients/:id',
-      deletePatient: 'DELETE /api/patients/:id'
-    },
-    permissions: {
-      addPatient: 'urologist, urology_nurse, gp',
-      getPatients: 'urologist, urology_nurse, gp',
-      getPatientById: 'urologist, urology_nurse, gp',
-      updatePatient: 'urologist, urology_nurse',
-      deletePatient: 'urologist, urology_nurse'
-    }
+  res.status(401).json({
+    success: false,
+    message: 'Authentication required'
   });
 });
 
 // Add new patient - accessible by urologists, doctors, nurses, and GPs
-router.post('/', 
-  generalLimiter, 
-  authenticateToken, 
-  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
+router.post('/',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   validatePatientInput,
   addPatient
 );
 
 // Get all patients - accessible by urologists, doctors, nurses, and GPs
-router.get('/list', 
-  generalLimiter, 
-  authenticateToken, 
-  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
+router.get('/list',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getPatients
 );
 
 // Get new patients - accessible by urologists, doctors, nurses, and GPs
-router.get('/new', 
-  generalLimiter, 
-  authenticateToken, 
-  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']), 
+router.get('/new',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getNewPatients
 );
 
@@ -111,9 +98,9 @@ router.get('/urologists',
 );
 
 // Get patient by ID - accessible by urologists, doctors, nurses, and GPs
-router.get('/:id', 
-  generalLimiter, 
-  authenticateToken, 
+router.get('/:id',
+  generalLimiter,
+  authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   (req, res, next) => {
     // Map :id parameter to patientId for IDOR protection
@@ -125,9 +112,9 @@ router.get('/:id',
 );
 
 // Update patient - accessible by urologists, doctors, and nurses
-router.put('/:id', 
-  generalLimiter, 
-  authenticateToken, 
+router.put('/:id',
+  generalLimiter,
+  authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   (req, res, next) => {
     // Map :id parameter to patientId for IDOR protection
@@ -168,9 +155,9 @@ router.put('/:id/expire',
 );
 
 // Delete patient (soft delete) - accessible by urologists, doctors, and nurses
-router.delete('/:id', 
-  generalLimiter, 
-  authenticateToken, 
+router.delete('/:id',
+  generalLimiter,
+  authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   (req, res, next) => {
     // Map :id parameter to patientId for IDOR protection

@@ -2,12 +2,14 @@
  * Health Check Access Control Middleware
  * Restricts /health endpoint access to internal monitoring systems only
  * 
+ * SECURITY FIX: Now restricts access by default in production environment
+ * 
  * Configuration via environment variables:
  * - HEALTH_CHECK_ALLOWED_IPS: Comma-separated list of allowed IPs/CIDR ranges
  *   Example: "127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16"
- * - HEALTH_CHECK_RESTRICT_ACCESS: Set to "true" to enable IP restriction (default: false)
- * 
- * If restriction is disabled, all IPs are allowed (useful for public health checks)
+ * - HEALTH_CHECK_RESTRICT_ACCESS: Override default behavior
+ *   - In production: defaults to restricted (set to "false" to disable)
+ *   - In development: defaults to open (set to "true" to enable)
  */
 
 /**
@@ -21,35 +23,35 @@ const ipInRange = (ip, cidr) => {
       return ip === cidr;
     }
 
-  const [rangeIp, prefixLength] = cidr.split('/');
-  const prefix = parseInt(prefixLength, 10);
+    const [rangeIp, prefixLength] = cidr.split('/');
+    const prefix = parseInt(prefixLength, 10);
 
-  // Only handle IPv4 addresses for CIDR matching
-  // IPv6 addresses will fall through to exact match
-  if (!ip.includes('.') || !rangeIp.includes('.')) {
-    return ip === cidr; // Fallback to exact match for non-IPv4
-  }
+    // Only handle IPv4 addresses for CIDR matching
+    // IPv6 addresses will fall through to exact match
+    if (!ip.includes('.') || !rangeIp.includes('.')) {
+      return ip === cidr; // Fallback to exact match for non-IPv4
+    }
 
-  // Convert IPv4 to number
-  const ipToNumber = (ip) => {
-    const parts = ip.split('.');
-    if (parts.length !== 4) return null;
-    return parts.reduce((acc, octet) => {
-      const num = parseInt(octet, 10);
-      if (isNaN(num) || num < 0 || num > 255) return null;
-      return (acc << 8) + num;
-    }, 0) >>> 0;
-  };
+    // Convert IPv4 to number
+    const ipToNumber = (ip) => {
+      const parts = ip.split('.');
+      if (parts.length !== 4) return null;
+      return parts.reduce((acc, octet) => {
+        const num = parseInt(octet, 10);
+        if (isNaN(num) || num < 0 || num > 255) return null;
+        return (acc << 8) + num;
+      }, 0) >>> 0;
+    };
 
-  const ipNum = ipToNumber(ip);
-  const rangeNum = ipToNumber(rangeIp);
+    const ipNum = ipToNumber(ip);
+    const rangeNum = ipToNumber(rangeIp);
 
-  if (ipNum === null || rangeNum === null || prefix < 0 || prefix > 32) {
-    return ip === cidr; // Fallback to exact match on error
-  }
+    if (ipNum === null || rangeNum === null || prefix < 0 || prefix > 32) {
+      return ip === cidr; // Fallback to exact match on error
+    }
 
-  const mask = ~(2 ** (32 - prefix) - 1);
-  return (ipNum & mask) === (rangeNum & mask);
+    const mask = ~(2 ** (32 - prefix) - 1);
+    return (ipNum & mask) === (rangeNum & mask);
   } catch (error) {
     // On any error, fall back to exact match
     return ip === cidr;
@@ -78,10 +80,18 @@ const getClientIp = (req) => {
 
 /**
  * Health check access control middleware
+ * SECURITY FIX: Now restricts access by default in production
  */
 export const restrictHealthCheckAccess = (req, res, next) => {
-  // Check if restriction is enabled
-  const isRestricted = process.env.HEALTH_CHECK_RESTRICT_ACCESS === 'true';
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Check if restriction is explicitly configured, otherwise default based on environment
+  // In production: restricted by default (set HEALTH_CHECK_RESTRICT_ACCESS=false to disable)
+  // In development: open by default (set HEALTH_CHECK_RESTRICT_ACCESS=true to enable)
+  const restrictionSetting = process.env.HEALTH_CHECK_RESTRICT_ACCESS;
+  const isRestricted = restrictionSetting !== undefined
+    ? restrictionSetting === 'true'
+    : isProduction; // Default: restricted in production, open in development
 
   // If restriction is disabled, allow all
   if (!isRestricted) {

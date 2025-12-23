@@ -10,6 +10,8 @@
  * E2E_DOCTOR_PASSWORD=YourDoctorPassword
  * E2E_GP_EMAIL=testgp@yopmail.com
  * E2E_GP_PASSWORD=YourGPPassword
+ * E2E_NURSE_EMAIL=testnurse@yopmail.com
+ * E2E_NURSE_PASSWORD=YourNursePassword
  */
 
 export const testUsers = {
@@ -39,6 +41,15 @@ export const testUsers = {
         get password() {
             // NOSONAR - this is a test configuration that reads from env vars
             return process.env.E2E_GP_PASSWORD || '';
+        }
+    },
+    nurse: {
+        role: 'urology_nurse',
+        dashboardRoute: '/nurse/opd-management',
+        email: process.env.E2E_NURSE_EMAIL || '',
+        get password() {
+            // NOSONAR - this is a test configuration that reads from env vars
+            return process.env.E2E_NURSE_PASSWORD || '';
         }
     }
 };
