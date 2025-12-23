@@ -1,1 +1,0 @@
-9 2jsX?hr5backend/scripts/create-password-reset-tokens-table.js

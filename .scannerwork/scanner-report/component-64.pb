@@ -1,1 +1,0 @@
-@ 2jsX]hr/backend/scripts/populate-doctors-departments.js

@@ -1,1 +1,0 @@
-B 2jsXGhrbackend/scripts/test-email.js
