@@ -48,6 +48,8 @@ describe('Secure CORS Helper', () => {
             process.env.FRONTEND_URL = 'https://uroprep.ahimsa.global,https://app.example.com';
 
             const origins = corsHelper.getAllowedOrigins();
+            
+            expect(origins.length).toBeGreaterThanOrEqual(2);
 
             expect(origins).toContain('https://uroprep.ahimsa.global');
             expect(origins).toContain('https://app.example.com');
@@ -134,6 +136,10 @@ describe('Secure CORS Helper', () => {
 
             expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', 'http://localhost:5173');
             expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Credentials', 'true');
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Expose-Headers', 'Content-Type, Content-Length');
+            expect(res.setHeader).toHaveBeenCalledTimes(5);
         });
 
         it('should NOT set CORS headers for unauthorized origin', () => {
@@ -210,6 +216,39 @@ describe('Secure CORS Helper', () => {
 
             expect(result).toBe(false);
             expect(res.setHeader).not.toHaveBeenCalled();
+        });
+
+        it('should return false when no origin header is present', () => {
+            process.env.NODE_ENV = 'development';
+
+            const req = { headers: {} };
+            const res = {
+                setHeader: jest.fn()
+            };
+
+            const result = corsHelper.setPreflightCorsHeaders(req, res);
+
+            expect(result).toBe(false);
+            expect(res.setHeader).not.toHaveBeenCalled();
+        });
+
+        it('should set all required CORS headers when origin is allowed', () => {
+            process.env.NODE_ENV = 'development';
+
+            const req = { headers: { origin: 'http://localhost:5173' } };
+            const res = {
+                setHeader: jest.fn()
+            };
+
+            const result = corsHelper.setPreflightCorsHeaders(req, res);
+
+            expect(result).toBe(true);
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', 'http://localhost:5173');
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Credentials', 'true');
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Max-Age', '86400');
+            expect(res.setHeader).toHaveBeenCalledTimes(5);
         });
     });
 });

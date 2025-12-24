@@ -4,9 +4,10 @@ import { generateTokens } from '../utils/jwt.js';
 
 // Simple login without OTP for testing
 export const loginSimple = async (req, res) => {
-  const client = await pool.connect();
+  let client;
   
   try {
+    client = await pool.connect();
     const { email, password } = req.body;
 
     // Find user by email
@@ -79,7 +80,9 @@ export const loginSimple = async (req, res) => {
       message: 'Internal server error'
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 

@@ -30,11 +30,39 @@ describe('Direct Source File Execution', () => {
                 res.status(200).end();
             });
 
-            await request(app)
+            const response = await request(app)
                 .options('/test')
                 .set('Origin', 'http://localhost:5173')
-                .set('Access-Control-Request-Method', 'GET')
-                .expect(200);
+                .set('Access-Control-Request-Method', 'GET');
+
+            // Explicit assertions for SonarQube
+            expect(response.status).toBe(200);
+            expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5173');
+            expect(response.headers['access-control-allow-methods']).toBeDefined();
+            expect(response.headers['access-control-allow-credentials']).toBe('true');
+            expect(response.headers['access-control-max-age']).toBe('86400');
+        });
+
+        it('should return false for unauthorized origin in setPreflightCorsHeaders', async () => {
+            process.env.NODE_ENV = 'production';
+            process.env.FRONTEND_URL = 'https://uroprep.ahimsa.global';
+
+            const { setPreflightCorsHeaders } = await import('../utils/corsHelper.js');
+
+            const app = express();
+            app.options('/test', (req, res) => {
+                const result = setPreflightCorsHeaders(req, res);
+                expect(result).toBe(false);
+                res.status(200).end();
+            });
+
+            const response = await request(app)
+                .options('/test')
+                .set('Origin', 'https://evil.com')
+                .set('Access-Control-Request-Method', 'GET');
+
+            expect(response.status).toBe(200);
+            expect(response.headers['access-control-allow-origin']).toBeUndefined();
         });
     });
 
@@ -71,7 +99,9 @@ describe('Direct Source File Execution', () => {
             app.use(generalLimiter);
             app.get('/test', (req, res) => res.json({ ok: true }));
 
-            await request(app).get('/test').expect(200);
+            const response = await request(app).get('/test');
+            expect(response.status).toBe(200);
+            expect(response.body.ok).toBe(true);
         });
 
         it('should execute authLimiter middleware', async () => {
@@ -84,7 +114,9 @@ describe('Direct Source File Execution', () => {
             app.use(authLimiter);
             app.get('/auth', (req, res) => res.json({ ok: true }));
 
-            await request(app).get('/auth').expect(200);
+            const response = await request(app).get('/auth');
+            expect(response.status).toBe(200);
+            expect(response.body.ok).toBe(true);
         });
 
         it('should execute otpLimiter middleware', async () => {
@@ -97,7 +129,9 @@ describe('Direct Source File Execution', () => {
             app.use(otpLimiter);
             app.get('/otp', (req, res) => res.json({ ok: true }));
 
-            await request(app).get('/otp').expect(200);
+            const response = await request(app).get('/otp');
+            expect(response.status).toBe(200);
+            expect(response.body.ok).toBe(true);
         });
 
         it('should execute registrationLimiter middleware', async () => {
@@ -110,7 +144,9 @@ describe('Direct Source File Execution', () => {
             app.use(registrationLimiter);
             app.get('/register', (req, res) => res.json({ ok: true }));
 
-            await request(app).get('/register').expect(200);
+            const response = await request(app).get('/register');
+            expect(response.status).toBe(200);
+            expect(response.body.ok).toBe(true);
         });
     });
 

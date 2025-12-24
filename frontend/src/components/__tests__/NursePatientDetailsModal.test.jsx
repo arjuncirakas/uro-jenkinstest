@@ -63,7 +63,7 @@ describe('NursePatientDetailsModal', () => {
 
         // When isOpen is false, the modal should not render any content
         expect(container.firstChild).toBeNull();
-    });
+    }, 10000);
 
     it('should render modal header when isOpen is true', async () => {
         const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;

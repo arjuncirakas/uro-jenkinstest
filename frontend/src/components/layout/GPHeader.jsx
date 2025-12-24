@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { IoNotificationsOutline } from 'react-icons/io5';
 import NotificationModal from '../NotificationModal';
 import GlobalPatientSearch from '../GlobalPatientSearch';
@@ -37,13 +38,13 @@ const GPHeader = ({ title, subtitle, searchPlaceholder = "Search patients by nam
         </div>
         {/* Search Bar and Notification */}
         <div className="w-full lg:w-96 flex items-center gap-3">
-          <GlobalPatientSearch 
+          <GlobalPatientSearch
             placeholder={searchPlaceholder}
             onPatientSelect={handlePatientSelect}
           />
           {/* Notification Icon */}
           <div className="relative">
-            <button 
+            <button
               onClick={() => setIsNotificationOpen(true)}
               className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
             >
@@ -60,7 +61,7 @@ const GPHeader = ({ title, subtitle, searchPlaceholder = "Search patients by nam
       </div>
 
       {/* Notification Modal */}
-      <NotificationModal 
+      <NotificationModal
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}
         onPatientClick={handlePatientClickFromNotification}
@@ -78,6 +79,12 @@ const GPHeader = ({ title, subtitle, searchPlaceholder = "Search patients by nam
       />
     </>
   );
+};
+
+GPHeader.propTypes = {
+  title: PropTypes.string,
+  subtitle: PropTypes.string,
+  searchPlaceholder: PropTypes.string
 };
 
 export default GPHeader;

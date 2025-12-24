@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiCalendar, FiClock, FiUser } from 'react-icons/fi';
 import { IoChevronForward } from 'react-icons/io5';
 import NursePatientDetailsModal from '../../components/NursePatientDetailsModal';
 import BookInvestigationModal from '../../components/BookInvestigationModal';
@@ -58,7 +57,9 @@ const OPDManagement = () => {
     setAppointmentsError(null);
 
     try {
-      const result = await bookingService.getTodaysAppointments(type);
+      // For follow-up tab, fetch all appointments (null) since we filter on frontend
+      const fetchType = type === 'followup' ? null : type;
+      const result = await bookingService.getTodaysAppointments(fetchType);
 
       if (result.success) {
         console.log('✅ OPDManagement: Raw appointments data:', result.data.appointments);
@@ -652,7 +653,7 @@ const OPDManagement = () => {
     try {
       // The API call is already made in the RescheduleConfirmationModal
       // Here we just need to refresh the data to reflect the changes
-      await refreshAllData();
+      refreshAllData();
 
       // Show success message
       console.log('Patient rescheduled successfully:', rescheduleData);
@@ -720,6 +721,15 @@ const OPDManagement = () => {
                     >
                       Urologist
                     </button>
+                    <button
+                      onClick={() => setActiveAppointmentTab('followup')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'followup'
+                        ? 'bg-teal-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                    >
+                      Follow-up
+                    </button>
                   </div>
                 </div>
               </div>
@@ -772,24 +782,36 @@ const OPDManagement = () => {
                         </tr>
                       ) : appointments.filter(apt => {
                         // Include appointments matching the active tab
-                        // Also include automatic appointments (without timeslots) in the urologist tab
-                        const matchesType = apt.type === activeAppointmentTab || 
-                          (apt.type === 'automatic' && activeAppointmentTab === 'urologist');
-                        return matchesType && apt.status !== 'no_show';
+                        if (activeAppointmentTab === 'followup') {
+                          // Show only automatic/follow-up appointments
+                          return (apt.type === 'automatic' || apt.appointment_type === 'automatic') && apt.status !== 'no_show';
+                        } else if (activeAppointmentTab === 'urologist') {
+                          // Show only urologist appointments (exclude automatic)
+                          return apt.type === 'urologist' && apt.status !== 'no_show';
+                        } else {
+                          // Investigation tab
+                          return apt.type === activeAppointmentTab && apt.status !== 'no_show';
+                        }
                       }).length === 0 ? (
                         <tr>
                           <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8 text-gray-500 text-sm">
-                            No {activeAppointmentTab} appointments found
+                            No {activeAppointmentTab === 'followup' ? 'follow-up' : activeAppointmentTab} appointments found
                           </td>
                         </tr>
                       ) : (
                         appointments
                           .filter(apt => {
                             // Include appointments matching the active tab
-                            // Also include automatic appointments (without timeslots) in the urologist tab
-                            const matchesType = apt.type === activeAppointmentTab || 
-                              (apt.type === 'automatic' && activeAppointmentTab === 'urologist');
-                            return matchesType && apt.status !== 'no_show';
+                            if (activeAppointmentTab === 'followup') {
+                              // Show only automatic/follow-up appointments
+                              return (apt.type === 'automatic' || apt.appointment_type === 'automatic') && apt.status !== 'no_show';
+                            } else if (activeAppointmentTab === 'urologist') {
+                              // Show only urologist appointments (exclude automatic)
+                              return apt.type === 'urologist' && apt.status !== 'no_show';
+                            } else {
+                              // Investigation tab
+                              return apt.type === activeAppointmentTab && apt.status !== 'no_show';
+                            }
                           })
                           .sort((a, b) => {
                             if (a.appointmentTime && !b.appointmentTime) return -1;

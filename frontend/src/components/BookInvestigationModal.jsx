@@ -209,7 +209,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
         // Check availability for each template
         if (mriTemplate) {
-          checkTemplateAvailability(mriTemplate, 'mri').then(isAvailable => {
+          checkTemplateAvailability(mriTemplate).then(isAvailable => {
             setTemplateAvailability(prev => ({ ...prev, mri: isAvailable }));
           });
         } else {
@@ -217,7 +217,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         }
 
         if (trusTemplate) {
-          checkTemplateAvailability(trusTemplate, 'trus').then(isAvailable => {
+          checkTemplateAvailability(trusTemplate).then(isAvailable => {
             setTemplateAvailability(prev => ({ ...prev, trus: isAvailable }));
           });
         } else {
@@ -225,7 +225,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         }
 
         if (biopsyTemplate) {
-          checkTemplateAvailability(biopsyTemplate, 'biopsy').then(isAvailable => {
+          checkTemplateAvailability(biopsyTemplate).then(isAvailable => {
             setTemplateAvailability(prev => ({ ...prev, biopsy: isAvailable }));
           });
         } else {
@@ -289,7 +289,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
 
     // Only doctor and date are required now - timeslot is optional
     if (!selectedDoctor || !selectedDate) {
@@ -654,11 +654,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     selectedTime !== '' ||
     notes.trim() !== '';
 
-  // Handle save function for Escape key
-  const handleSaveChanges = (e) => {
-    if (e) e.preventDefault();
-    handleSubmit(e);
-  };
+
 
   // Handle Escape key with save confirmation
   useEffect(() => {
@@ -833,10 +829,11 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
                   {/* Select Date */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="investigation-date" className="block text-sm font-medium text-gray-700 mb-2">
                       Select Date <span className="text-red-500 ml-1">*</span>
                     </label>
                     <input
+                      id="investigation-date"
                       type="date"
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
@@ -853,10 +850,11 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
                   {/* Notes */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="investigation-notes" className="block text-sm font-medium text-gray-700 mb-2">
                       Additional Notes
                     </label>
                     <textarea
+                      id="investigation-notes"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={3}
