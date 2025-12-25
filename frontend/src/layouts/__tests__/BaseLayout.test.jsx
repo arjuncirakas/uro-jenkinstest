@@ -202,4 +202,237 @@ describe('BaseLayout', () => {
 
         expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'false');
     });
+
+    it('does not close sidebar on other keys in overlay', () => {
+        renderLayout();
+
+        // Open sidebar
+        const menuButton = screen.getByLabelText(/open menu/i);
+        fireEvent.click(menuButton);
+
+        // Press other key on overlay
+        const overlay = screen.getByLabelText('Close sidebar');
+        fireEvent.keyDown(overlay, { key: 'Enter' });
+
+        // Should still be open
+        expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'true');
+    });
+
+    it('logs new patient when added', () => {
+        const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Add Patient'));
+
+        expect(consoleSpy).toHaveBeenCalledWith('New patient added:', expect.any(Object));
+        consoleSpy.mockRestore();
+    });
+
+    it('logs error when error occurs', () => {
+        const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Trigger Error'));
+
+        expect(consoleSpy).toHaveBeenCalledWith('Error occurred:', expect.any(Object));
+        consoleSpy.mockRestore();
+    });
+
+    it('dispatches patientAdded event with correct details', () => {
+        const dispatchSpy = vi.spyOn(globalThis, 'dispatchEvent');
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Add Patient'));
+
+        const event = dispatchSpy.mock.calls.find(call => call[0].type === 'patientAdded');
+        expect(event).toBeDefined();
+        expect(event[0].detail).toEqual({
+            firstName: 'John',
+            lastName: 'Doe',
+            upi: 'UPI123',
+            phone: '123',
+            email: 'test@test.com'
+        });
+        dispatchSpy.mockRestore();
+    });
+
+    it('sets success details correctly', () => {
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Add Patient'));
+
+        // Success modal should show with correct details
+        expect(screen.getByTestId('success-modal')).toBeInTheDocument();
+        expect(MockSuccessModal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                details: expect.objectContaining({
+                    name: 'John Doe',
+                    upi: 'UPI123',
+                    phone: '123',
+                    email: 'test@test.com'
+                })
+            }),
+            expect.any(Object)
+        );
+    });
+
+    it('clears success details when modal closes', () => {
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Add Patient'));
+        fireEvent.click(screen.getByText('Close Success'));
+
+        // Success details should be cleared
+        expect(MockSuccessModal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                details: null
+            }),
+            expect.any(Object)
+        );
+    });
+
+    it('sets error details correctly', () => {
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Trigger Error'));
+
+        expect(MockErrorModal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: 'Error',
+                message: 'Failed',
+                errors: []
+            }),
+            expect.any(Object)
+        );
+    });
+
+    it('handles error details with default values', async () => {
+        const errorModalModule = await import('../../components/modals/ErrorModal');
+        const MockErrorModalWithDefaults = vi.fn(({ isOpen, onClose, title, message, errors }) => {
+            if (!isOpen) return null;
+            return (
+                <div data-testid="error-modal">
+                    <span>{title}</span>
+                    <span>{message}</span>
+                    <span>{errors?.length || 0}</span>
+                    <button onClick={onClose}>Close Error</button>
+                </div>
+            );
+        });
+
+        vi.mocked(errorModalModule.default).mockImplementation(MockErrorModalWithDefaults);
+
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Trigger Error'));
+
+        // Should use default values if errorDetails is incomplete
+        expect(MockErrorModalWithDefaults).toHaveBeenCalled();
+    });
+
+    it('clears error details when modal closes', () => {
+        renderLayout();
+
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Trigger Error'));
+        fireEvent.click(screen.getByText('Close Error'));
+
+        // Error details should be cleared
+        expect(MockErrorModal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: 'Error',
+                message: 'An error occurred',
+                errors: []
+            }),
+            expect.any(Object)
+        );
+    });
+
+    it('shows overlay only when sidebar is open', () => {
+        renderLayout();
+
+        // Initially no overlay
+        expect(screen.queryByLabelText('Close sidebar')).not.toBeInTheDocument();
+
+        // Open sidebar
+        const menuButton = screen.getByLabelText(/open menu/i);
+        fireEvent.click(menuButton);
+
+        // Overlay should appear
+        expect(screen.getByLabelText('Close sidebar')).toBeInTheDocument();
+    });
+
+    it('hides menu button on large screens', () => {
+        renderLayout();
+        const menuButton = screen.getByLabelText(/open menu/i);
+        // Button should have lg:hidden class
+        expect(menuButton.className).toContain('lg:hidden');
+    });
+
+    it('shows close icon when sidebar is open', () => {
+        renderLayout();
+        const menuButton = screen.getByLabelText(/open menu/i);
+        fireEvent.click(menuButton);
+        
+        // Should show close icon
+        expect(screen.getByLabelText(/close menu/i)).toBeInTheDocument();
+    });
+
+    it('shows menu icon when sidebar is closed', () => {
+        renderLayout();
+        // Should show menu icon initially
+        expect(screen.getByLabelText(/open menu/i)).toBeInTheDocument();
+    });
+
+    it('passes isUrologist to AddPatientModal', () => {
+        renderLayout({ isUrologist: true });
+        fireEvent.click(screen.getByText('Open Add Patient'));
+
+        expect(MockAddPatientModal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                isUrologist: true
+            }),
+            expect.any(Object)
+        );
+    });
+
+    it('passes isUrologist false by default', () => {
+        renderLayout();
+        fireEvent.click(screen.getByText('Open Add Patient'));
+
+        expect(MockAddPatientModal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                isUrologist: false
+            }),
+            expect.any(Object)
+        );
+    });
+
+    it('handles patient with missing fields', async () => {
+        const addPatientModalModule = await import('../../components/AddPatientModal');
+        const MockAddPatientModalPartial = vi.fn(({ isOpen, onPatientAdded }) => {
+            if (!isOpen) return null;
+            return (
+                <div>
+                    <button onClick={() => onPatientAdded({ firstName: 'John' })}>Add Partial</button>
+                </div>
+            );
+        });
+
+        vi.mocked(addPatientModalModule.default).mockImplementation(MockAddPatientModalPartial);
+
+        renderLayout();
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Add Partial'));
+
+        // Should handle missing fields gracefully
+        expect(screen.getByTestId('success-modal')).toBeInTheDocument();
+    });
 });

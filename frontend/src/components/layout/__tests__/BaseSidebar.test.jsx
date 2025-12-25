@@ -151,4 +151,148 @@ describe('BaseSidebar', () => {
         const sidebar = container.firstChild;
         expect(sidebar).toHaveClass('-translate-x-full');
     });
+
+    it('handles navigation items with paths array', () => {
+        renderSidebar({}, '/test');
+        // Dashboard should be active because /test is in paths array
+        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        expect(dashboardLink).toHaveClass('bg-teal-50');
+    });
+
+    it('handles navigation items without paths array', () => {
+        renderSidebar({}, '/test/users');
+        // Users should be active because path matches
+        const usersLink = screen.getByText('Users').closest('a');
+        expect(usersLink).toHaveClass('bg-teal-50');
+    });
+
+    it('handles inactive navigation items', () => {
+        renderSidebar({}, '/test/other');
+        // Neither should be active
+        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        const usersLink = screen.getByText('Users').closest('a');
+        expect(dashboardLink).not.toHaveClass('bg-teal-50');
+        expect(usersLink).not.toHaveClass('bg-teal-50');
+    });
+
+    it('handles onClose being undefined', () => {
+        renderSidebar({ onClose: undefined });
+        // Should not crash when clicking link
+        fireEvent.click(screen.getByText('Users'));
+        expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('shows collapsed state styling', () => {
+        renderSidebar();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        // Check collapsed styling
+        const sidebar = screen.getByText('Dashboard').closest('div').parentElement;
+        expect(sidebar).toHaveClass('w-[80px]');
+    });
+
+    it('shows expanded state styling', () => {
+        renderSidebar();
+        // Should start expanded
+        const sidebar = screen.getByText('Dashboard').closest('div').parentElement;
+        expect(sidebar).toHaveClass('w-[280px]');
+    });
+
+    it('shows title tooltip when collapsed', () => {
+        renderSidebar();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        expect(dashboardLink).toHaveAttribute('title', 'Dashboard');
+    });
+
+    it('shows new button tooltip when collapsed', () => {
+        renderSidebar();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        const newButton = screen.getByTitle('New Item');
+        expect(newButton).toBeInTheDocument();
+    });
+
+    it('shows logout tooltip when collapsed', () => {
+        renderSidebar();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        const logoutButton = screen.getByTitle('Logout');
+        expect(logoutButton).toBeInTheDocument();
+    });
+
+    it('hides new button label when collapsed', () => {
+        renderSidebar();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        expect(screen.queryByText('New Item')).not.toBeInTheDocument();
+    });
+
+    it('hides logout text when collapsed', () => {
+        renderSidebar();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        expect(screen.queryByText('Logout')).not.toBeInTheDocument();
+    });
+
+    it('shows icon-only navigation when collapsed', () => {
+        renderSidebar();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        // Navigation items should still be visible but without text
+        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        expect(dashboardLink).toHaveClass('justify-center');
+    });
+
+    it('handles default panelName', () => {
+        renderSidebar({ panelName: undefined });
+        expect(screen.getByText('Panel')).toBeInTheDocument();
+    });
+
+    it('handles default newButtonLabel', () => {
+        renderSidebar({ newButtonLabel: undefined });
+        expect(screen.getByText('New Patient')).toBeInTheDocument();
+    });
+
+    it('handles navigation item with active state from paths array', () => {
+        const itemsWithPaths = [
+            { name: 'Dashboard', icon: HiHome, path: '/dashboard', paths: ['/dashboard', '/'] }
+        ];
+        renderSidebar({ navigationItems: itemsWithPaths }, '/');
+        
+        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        expect(dashboardLink).toHaveClass('bg-teal-50');
+    });
+
+    it('handles navigation item with active state from path match', () => {
+        const itemsWithoutPaths = [
+            { name: 'Users', icon: FaUsers, path: '/users' }
+        ];
+        renderSidebar({ navigationItems: itemsWithoutPaths }, '/users');
+        
+        const usersLink = screen.getByText('Users').closest('a');
+        expect(usersLink).toHaveClass('bg-teal-50');
+    });
+
+    it('applies active icon color when item is active', () => {
+        renderSidebar({}, '/test/dashboard');
+        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        const icon = dashboardLink.querySelector('svg');
+        expect(icon).toHaveClass('text-teal-600');
+    });
+
+    it('applies inactive icon color when item is not active', () => {
+        renderSidebar({}, '/test/other');
+        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        const icon = dashboardLink.querySelector('svg');
+        expect(icon).toHaveClass('text-gray-500');
+    });
 });

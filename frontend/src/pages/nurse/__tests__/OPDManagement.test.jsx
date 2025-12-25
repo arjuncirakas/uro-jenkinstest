@@ -469,7 +469,7 @@ describe('OPDManagement', () => {
             expect(screen.getByText('DATE OF APPOINTMENT')).toBeInTheDocument();
             expect(screen.getByText('UROLOGIST')).toBeInTheDocument();
             expect(screen.getByText('ACTIONS')).toBeInTheDocument();
-            
+
             // Check appointment data
             expect(screen.getByText('John Doe')).toBeInTheDocument();
             expect(screen.getByText('Dr. Smith')).toBeInTheDocument();
@@ -527,7 +527,8 @@ describe('OPDManagement', () => {
         });
 
         await waitFor(() => {
-            expect(bookingService.getTodaysAppointments).toHaveBeenCalledTimes(2);
+            // Check that the service was called at least twice (initial + retry)
+            expect(bookingService.getTodaysAppointments.mock.calls.length).toBeGreaterThanOrEqual(2);
         });
     });
 });

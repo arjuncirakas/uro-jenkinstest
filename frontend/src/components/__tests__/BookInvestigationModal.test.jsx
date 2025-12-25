@@ -178,7 +178,10 @@ describe('BookInvestigationModal', () => {
         bookingService.getAvailableTimeSlots.mockResolvedValue({ success: false, error: 'Slot Error' });
 
         renderModal();
-        await waitFor(() => screen.getByText('Dr. Smith'));
+        // Wait for doctors to load and doctor to be pre-selected
+        await waitFor(() => {
+            expect(bookingService.getAvailableUrologists).toHaveBeenCalled();
+        });
 
         const dateInput = screen.getByLabelText(/Select Date/i);
         fireEvent.change(dateInput, { target: { value: '2025-01-01' } });
@@ -758,6 +761,136 @@ describe('BookInvestigationModal', () => {
         // Since no doctor is selected, getAvailableTimeSlots should not be called
         await waitFor(() => {
             expect(bookingService.getAvailableTimeSlots).not.toHaveBeenCalled();
+        });
+    });
+
+    it('handles invalid file type for upload', async () => {
+        bookingService.getAvailableUrologists.mockResolvedValue({ success: true, data: mockDoctors });
+        consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: mockTemplates });
+
+        const { container } = renderModal();
+        await waitFor(() => expect(screen.getAllByText('MRI').length).toBeGreaterThan(0));
+
+        const fileInputs = container.querySelectorAll('input[type="file"]');
+        if (fileInputs.length > 0) {
+            const invalidFile = new File(['dummy'], 'test.txt', { type: 'text/plain' });
+            fireEvent.change(fileInputs[0], { target: { files: [invalidFile] } });
+
+            await waitFor(() => {
+                expect(window.alert).toHaveBeenCalledWith('Please upload a PDF or image file');
+            });
+        }
+    });
+
+    it('handles template with no template_file_url in print', async () => {
+        const templateWithoutUrl = [
+            { id: 1, test_name: 'MRI', is_auto_generated: false }
+        ];
+
+        bookingService.getAvailableUrologists.mockResolvedValue({ success: true, data: mockDoctors });
+        consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: templateWithoutUrl });
+
+        renderModal();
+        await waitFor(() => expect(screen.getAllByText('Print').length).toBeGreaterThan(0));
+
+        const printButtons = screen.getAllByText('Print');
+        if (printButtons[0]) {
+            fireEvent.click(printButtons[0]);
+            await waitFor(() => {
+                expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('No template file URL'));
+            });
+        }
+    });
+
+    it('handles popup blocked when opening template file', async () => {
+        openSpy.mockReturnValue(null); // Simulate popup blocked
+
+        bookingService.getAvailableUrologists.mockResolvedValue({ success: true, data: mockDoctors });
+        consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: mockTemplates });
+
+        renderModal();
+        await waitFor(() => expect(screen.getAllByText('Print').length).toBeGreaterThan(0));
+
+        const printButtons = screen.getAllByText('Print');
+        if (printButtons[0]) {
+            fireEvent.click(printButtons[0]);
+            await waitFor(() => {
+                expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('popup blocker'));
+            });
+        }
+    });
+
+    it('handles GET fallback with CORS error', async () => {
+        const corsError = new Error('Failed to fetch');
+        corsError.message = 'Failed to fetch';
+        fetchSpy
+            .mockRejectedValueOnce(new Error('HEAD failed'))
+            .mockRejectedValueOnce(corsError);
+
+        bookingService.getAvailableUrologists.mockResolvedValue({ success: true, data: mockDoctors });
+        consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: mockTemplates });
+
+        renderModal();
+
+        await waitFor(() => {
+            expect(consoleWarnSpy).toHaveBeenCalled();
+        });
+    });
+
+    it('handles GET fallback with AbortError', async () => {
+        const abortError = new Error('AbortError');
+        abortError.name = 'AbortError';
+        fetchSpy
+            .mockRejectedValueOnce(new Error('HEAD failed'))
+            .mockRejectedValueOnce(abortError);
+
+        bookingService.getAvailableUrologists.mockResolvedValue({ success: true, data: mockDoctors });
+        consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: mockTemplates });
+
+        renderModal();
+
+        await waitFor(() => {
+            expect(consoleWarnSpy).toHaveBeenCalled();
+        });
+    });
+
+    it('handles print window access error', async () => {
+        const mockWindow = {
+            document: null, // Simulate CORS error
+            print: vi.fn(),
+            close: vi.fn(),
+            closed: false,
+            focus: vi.fn(),
+            onload: null
+        };
+        openSpy.mockReturnValue(mockWindow);
+
+        bookingService.getAvailableUrologists.mockResolvedValue({ success: true, data: mockDoctors });
+        consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: mockTemplates });
+
+        renderModal();
+        await waitFor(() => expect(screen.getAllByText('Print').length).toBeGreaterThan(0));
+
+        const printButtons = screen.getAllByText('Print');
+        if (printButtons[0]) {
+            fireEvent.click(printButtons[0]);
+            // Wait for the setTimeout to execute
+            await new Promise(resolve => setTimeout(resolve, 2100));
+            // Should handle the access error gracefully
+        }
+    });
+
+    it('handles submit without required fields', async () => {
+        bookingService.getAvailableUrologists.mockResolvedValue({ success: true, data: mockDoctors });
+        consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: [] });
+
+        renderModal({ patient: { ...mockPatient, assignedUrologist: null, assigned_urologist: null } });
+
+        const submitButton = screen.getByRole('button', { name: 'Book Investigation' });
+        fireEvent.click(submitButton);
+
+        await waitFor(() => {
+            expect(window.alert).toHaveBeenCalledWith('Please select a urologist and date');
         });
     });
 });

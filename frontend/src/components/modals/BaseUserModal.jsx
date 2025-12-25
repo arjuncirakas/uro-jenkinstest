@@ -9,7 +9,7 @@ import PropTypes from 'prop-types';
  */
 const NAME_PATTERN = /^[a-zA-Z\s]+$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_CLEAN_PATTERN = /[\s()\-]/g;
+const PHONE_CLEAN_PATTERN = /[\s()-]/g;
 const LETTERS_PATTERN = /[a-zA-Z]/;
 
 /**
@@ -351,7 +351,7 @@ const BaseUserModal = ({
             <ErrorModal
                 isOpen={showErrorModal}
                 onClose={() => setShowErrorModal(false)}
-                error={errorMessage}
+                message={errorMessage}
                 title={errorTitle}
             />
         </>

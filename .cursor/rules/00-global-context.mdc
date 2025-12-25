@@ -1,0 +1,13 @@
+---
+description: Project Context and Stack
+globs: **/*
+alwaysApply: true
+---
+
+# Tech Stack & Standards
+- **Primary Language:** [e.g., TypeScript / Python]
+- **Testing Framework:** [e.g., Vitest / Jest / PyTest]
+- **Rule of Thumb:** We are currently fixing SonarQube technical debt. Priority is: 
+  1. Fix Bugs (Reliability) 
+  2. Increase Coverage on New Code 
+  3. Reduce Code Smells.

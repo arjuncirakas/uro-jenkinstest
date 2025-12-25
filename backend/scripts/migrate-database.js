@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import format from 'pg-format';
 
 // Database migration script
 const migrateDatabase = async () => {
@@ -53,9 +54,14 @@ const migrateDatabase = async () => {
       
       for (const column of newColumns) {
         try {
-          await client.query(`
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column.name} ${column.type};
-          `);
+          // Validate column name to prevent SQL injection
+          if (!/^\w+$/.test(column.name)) {
+            throw new Error(`Invalid column name: ${column.name}`);
+          }
+          // Use pg-format to safely escape the column name identifier
+          // Column type is hardcoded in the array (not user input), so it's safe
+          const query = format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS %I ', 'users', column.name) + column.type;
+          await client.query(query);
           console.log(`  ✅ Added column: ${column.name}`);
         } catch (err) {
           console.log(`  ⚠️  Column ${column.name}: ${err.message}`);

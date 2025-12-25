@@ -1,0 +1,13 @@
+---
+description: Enforce 80% coverage on new code
+globs: ["src/**/*.{ts,js,py}"]
+alwaysApply: true
+---
+
+# SonarQube Coverage Rule
+- **Mandatory Tests:** Every new function or modified logic MUST have a corresponding test file.
+- **Branch Coverage:** Don't just test the "happy path." You must write separate test cases for every `if`, `else`, `switch` case, and `catch` block.
+- **Mocking Strategy:** - Mock all network calls (APIs) and Database queries. 
+  - Do not use real timers; use "fake timers" if the code involves `setTimeout` or `intervals`.
+- **Edge Case Checklist:** Always include tests for `null`, `undefined`, `[]` (empty array), and `""` (empty string) inputs.
+- **Verification:** If possible, run the test command (e.g., `npm test`) to verify coverage before finalizing the code.

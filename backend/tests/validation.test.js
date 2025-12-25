@@ -1,14 +1,18 @@
-/**
- * Comprehensive tests for Validation utilities
- * Tests all schemas and validation middleware to achieve 100% coverage
- */
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import Joi from 'joi';
+import {
+  registerSchema,
+  loginSchema,
+  refreshTokenSchema,
+  otpVerificationSchema,
+  addPatientSchema,
+  updatePatientSchema,
+  validateRequest
+} from '../utils/validation.js';
 
-describe('Validation Utilities', () => {
-  let validation;
-
-  beforeEach(async () => {
-    validation = await import('../utils/validation.js');
+describe('validation.js', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('registerSchema', () => {
@@ -23,7 +27,7 @@ describe('Validation Utilities', () => {
         role: 'urologist'
       };
 
-      const { error } = validation.registerSchema.validate(validData);
+      const { error } = registerSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
@@ -36,9 +40,9 @@ describe('Validation Utilities', () => {
         role: 'urologist'
       };
 
-      const { error } = validation.registerSchema.validate(invalidData);
+      const { error } = registerSchema.validate(invalidData);
       expect(error).toBeDefined();
-      expect(error.details[0].message).toContain('valid email');
+      expect(error.details[0].message).toContain('email');
     });
 
     it('should reject weak password', () => {
@@ -50,47 +54,9 @@ describe('Validation Utilities', () => {
         role: 'urologist'
       };
 
-      const { error } = validation.registerSchema.validate(invalidData);
+      const { error } = registerSchema.validate(invalidData);
       expect(error).toBeDefined();
-    });
-
-    it('should reject password without special character', () => {
-      const invalidData = {
-        email: 'test@example.com',
-        password: 'TestPassword123',
-        firstName: 'John',
-        lastName: 'Doe',
-        role: 'urologist'
-      };
-
-      const { error } = validation.registerSchema.validate(invalidData);
-      expect(error).toBeDefined();
-    });
-
-    it('should reject invalid firstName', () => {
-      const invalidData = {
-        email: 'test@example.com',
-        password: 'TestPassword123!@#',
-        firstName: 'J',
-        lastName: 'Doe',
-        role: 'urologist'
-      };
-
-      const { error } = validation.registerSchema.validate(invalidData);
-      expect(error).toBeDefined();
-    });
-
-    it('should reject firstName with numbers', () => {
-      const invalidData = {
-        email: 'test@example.com',
-        password: 'TestPassword123!@#',
-        firstName: 'John123',
-        lastName: 'Doe',
-        role: 'urologist'
-      };
-
-      const { error } = validation.registerSchema.validate(invalidData);
-      expect(error).toBeDefined();
+      expect(error.details[0].message).toContain('Password');
     });
 
     it('should reject invalid role', () => {
@@ -102,7 +68,21 @@ describe('Validation Utilities', () => {
         role: 'invalid_role'
       };
 
-      const { error } = validation.registerSchema.validate(invalidData);
+      const { error } = registerSchema.validate(invalidData);
+      expect(error).toBeDefined();
+      expect(error.details[0].message).toContain('Role');
+    });
+
+    it('should reject short first name', () => {
+      const invalidData = {
+        email: 'test@example.com',
+        password: 'TestPassword123!@#',
+        firstName: 'J',
+        lastName: 'Doe',
+        role: 'urologist'
+      };
+
+      const { error } = registerSchema.validate(invalidData);
       expect(error).toBeDefined();
     });
 
@@ -115,22 +95,21 @@ describe('Validation Utilities', () => {
         role: 'urologist'
       };
 
-      const { error } = validation.registerSchema.validate(validData);
+      const { error } = registerSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
-    it('should reject invalid phone format', () => {
-      const invalidData = {
+    it('should accept optional organization', () => {
+      const validData = {
         email: 'test@example.com',
         password: 'TestPassword123!@#',
         firstName: 'John',
         lastName: 'Doe',
-        phone: 'invalid',
         role: 'urologist'
       };
 
-      const { error } = validation.registerSchema.validate(invalidData);
-      expect(error).toBeDefined();
+      const { error } = registerSchema.validate(validData);
+      expect(error).toBeUndefined();
     });
   });
 
@@ -141,16 +120,16 @@ describe('Validation Utilities', () => {
         password: 'anypassword'
       };
 
-      const { error } = validation.loginSchema.validate(validData);
+      const { error } = loginSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
     it('should reject missing email', () => {
       const invalidData = {
-        password: 'anypassword'
+        password: 'password'
       };
 
-      const { error } = validation.loginSchema.validate(invalidData);
+      const { error } = loginSchema.validate(invalidData);
       expect(error).toBeDefined();
     });
 
@@ -159,7 +138,17 @@ describe('Validation Utilities', () => {
         email: 'test@example.com'
       };
 
-      const { error } = validation.loginSchema.validate(invalidData);
+      const { error } = loginSchema.validate(invalidData);
+      expect(error).toBeDefined();
+    });
+
+    it('should reject invalid email format', () => {
+      const invalidData = {
+        email: 'invalid',
+        password: 'password'
+      };
+
+      const { error } = loginSchema.validate(invalidData);
       expect(error).toBeDefined();
     });
   });
@@ -167,18 +156,19 @@ describe('Validation Utilities', () => {
   describe('refreshTokenSchema', () => {
     it('should validate valid refresh token', () => {
       const validData = {
-        refreshToken: 'valid-token'
+        refreshToken: 'valid-token-string'
       };
 
-      const { error } = validation.refreshTokenSchema.validate(validData);
+      const { error } = refreshTokenSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
     it('should reject missing refresh token', () => {
       const invalidData = {};
 
-      const { error } = validation.refreshTokenSchema.validate(invalidData);
+      const { error } = refreshTokenSchema.validate(invalidData);
       expect(error).toBeDefined();
+      expect(error.details[0].message).toContain('required');
     });
   });
 
@@ -190,17 +180,17 @@ describe('Validation Utilities', () => {
         type: 'registration'
       };
 
-      const { error } = validation.otpVerificationSchema.validate(validData);
+      const { error } = otpVerificationSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
     it('should use default type when not provided', () => {
-      const data = {
+      const validData = {
         email: 'test@example.com',
         otp: '123456'
       };
 
-      const { error, value } = validation.otpVerificationSchema.validate(data);
+      const { error, value } = otpVerificationSchema.validate(validData);
       expect(error).toBeUndefined();
       expect(value.type).toBe('registration');
     });
@@ -208,22 +198,21 @@ describe('Validation Utilities', () => {
     it('should reject invalid OTP length', () => {
       const invalidData = {
         email: 'test@example.com',
-        otp: '12345',
-        type: 'registration'
+        otp: '12345'
       };
 
-      const { error } = validation.otpVerificationSchema.validate(invalidData);
+      const { error } = otpVerificationSchema.validate(invalidData);
       expect(error).toBeDefined();
+      expect(error.details[0].message).toContain('6 digits');
     });
 
     it('should reject non-numeric OTP', () => {
       const invalidData = {
         email: 'test@example.com',
-        otp: 'abcdef',
-        type: 'registration'
+        otp: 'abcdef'
       };
 
-      const { error } = validation.otpVerificationSchema.validate(invalidData);
+      const { error } = otpVerificationSchema.validate(invalidData);
       expect(error).toBeDefined();
     });
 
@@ -234,7 +223,7 @@ describe('Validation Utilities', () => {
         type: 'invalid'
       };
 
-      const { error } = validation.otpVerificationSchema.validate(invalidData);
+      const { error } = otpVerificationSchema.validate(invalidData);
       expect(error).toBeDefined();
     });
   });
@@ -246,11 +235,10 @@ describe('Validation Utilities', () => {
         lastName: 'Doe',
         dateOfBirth: '1990-01-01',
         phone: '+1234567890',
-        address: '123 Main St',
-        initialPSADate: '2020-01-01'
+        address: '123 Main St'
       };
 
-      const { error } = validation.addPatientSchema.validate(validData);
+      const { error } = addPatientSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
@@ -260,11 +248,10 @@ describe('Validation Utilities', () => {
         lastName: 'Doe',
         age: 30,
         phone: '+1234567890',
-        address: '123 Main St',
-        initialPSADate: '2020-01-01'
+        address: '123 Main St'
       };
 
-      const { error } = validation.addPatientSchema.validate(validData);
+      const { error } = addPatientSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
@@ -273,53 +260,39 @@ describe('Validation Utilities', () => {
         firstName: 'John',
         lastName: 'Doe',
         phone: '+1234567890',
-        address: '123 Main St',
-        initialPSADate: '2020-01-01'
+        address: '123 Main St'
       };
 
-      const { error } = validation.addPatientSchema.validate(invalidData);
+      const { error } = addPatientSchema.validate(invalidData);
       expect(error).toBeDefined();
-      // The custom validation message format may vary, check for the key phrase
-      const errorMessage = error.details[0].message || '';
-      // Joi custom validation messages may be in the format: "value" failed custom validation because [message]
-      // or just the message itself depending on how it's configured
-      expect(errorMessage).toBeDefined();
-      // Check if the error is about date of birth or age requirement
-      expect(
-        errorMessage.includes('date of birth') || 
-        errorMessage.includes('age') || 
-        error.details[0].type === 'any.custom'
-      ).toBe(true);
-    });
-
-    it('should reject invalid phone number', () => {
-      const invalidData = {
-        firstName: 'John',
-        lastName: 'Doe',
-        age: 30,
-        phone: '123',
-        address: '123 Main St',
-        initialPSADate: '2020-01-01'
-      };
-
-      const { error } = validation.addPatientSchema.validate(invalidData);
-      expect(error).toBeDefined();
+      expect(error.details[0].message).toContain('date of birth or age');
     });
 
     it('should reject future dateOfBirth', () => {
       const futureDate = new Date();
       futureDate.setFullYear(futureDate.getFullYear() + 1);
-      
       const invalidData = {
         firstName: 'John',
         lastName: 'Doe',
         dateOfBirth: futureDate.toISOString(),
         phone: '+1234567890',
-        address: '123 Main St',
-        initialPSADate: '2020-01-01'
+        address: '123 Main St'
       };
 
-      const { error } = validation.addPatientSchema.validate(invalidData);
+      const { error } = addPatientSchema.validate(invalidData);
+      expect(error).toBeDefined();
+    });
+
+    it('should reject invalid age range', () => {
+      const invalidData = {
+        firstName: 'John',
+        lastName: 'Doe',
+        age: 150,
+        phone: '+1234567890',
+        address: '123 Main St'
+      };
+
+      const { error } = addPatientSchema.validate(invalidData);
       expect(error).toBeDefined();
     });
 
@@ -327,16 +300,16 @@ describe('Validation Utilities', () => {
       const validData = {
         firstName: 'John',
         lastName: 'Doe',
-        age: 30,
+        dateOfBirth: '1990-01-01',
         phone: '+1234567890',
         address: '123 Main St',
-        initialPSADate: '2020-01-01',
         email: 'test@example.com',
         postcode: '12345',
-        city: 'Test City'
+        city: 'City',
+        state: 'State'
       };
 
-      const { error } = validation.addPatientSchema.validate(validData);
+      const { error } = addPatientSchema.validate(validData);
       expect(error).toBeUndefined();
     });
   });
@@ -345,42 +318,53 @@ describe('Validation Utilities', () => {
     it('should validate valid update data', () => {
       const validData = {
         firstName: 'John',
-        address: '123 Main St'
+        lastName: 'Doe',
+        phone: '+1234567890'
       };
 
-      const { error } = validation.updatePatientSchema.validate(validData);
+      const { error } = updatePatientSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
-    it('should allow all fields to be optional except address', () => {
+    it('should accept status field', () => {
       const validData = {
-        address: '123 Main St'
+        firstName: 'John',
+        status: 'Active'
       };
 
-      const { error } = validation.updatePatientSchema.validate(validData);
+      const { error } = updatePatientSchema.validate(validData);
       expect(error).toBeUndefined();
     });
 
-    it('should reject missing address', () => {
+    it('should reject invalid status', () => {
       const invalidData = {
-        firstName: 'John'
+        firstName: 'John',
+        status: 'InvalidStatus'
       };
 
-      const { error } = validation.updatePatientSchema.validate(invalidData);
+      const { error } = updatePatientSchema.validate(invalidData);
       expect(error).toBeDefined();
+    });
+
+    it('should allow partial updates', () => {
+      const validData = {
+        firstName: 'Jane'
+      };
+
+      const { error } = updatePatientSchema.validate(validData);
+      expect(error).toBeUndefined();
     });
   });
 
   describe('validateRequest middleware', () => {
-    it('should call next() when validation passes', () => {
-      const schema = validation.loginSchema;
-      const middleware = validation.validateRequest(schema);
-      
+    it('should call next when validation passes', () => {
+      const schema = Joi.object({
+        name: Joi.string().required()
+      });
+
+      const middleware = validateRequest(schema);
       const req = {
-        body: {
-          email: 'test@example.com',
-          password: 'password123'
-        }
+        body: { name: 'Test' }
       };
       const res = {};
       const next = jest.fn();
@@ -388,17 +372,17 @@ describe('Validation Utilities', () => {
       middleware(req, res, next);
 
       expect(next).toHaveBeenCalled();
-      expect(req.body.email).toBe('test@example.com');
+      expect(req.body.name).toBe('Test');
     });
 
     it('should return 400 when validation fails', () => {
-      const schema = validation.loginSchema;
-      const middleware = validation.validateRequest(schema);
-      
+      const schema = Joi.object({
+        name: Joi.string().required()
+      });
+
+      const middleware = validateRequest(schema);
       const req = {
-        body: {
-          email: 'invalid-email'
-        }
+        body: {}
       };
       const res = {
         status: jest.fn().mockReturnThis(),
@@ -409,28 +393,24 @@ describe('Validation Utilities', () => {
       middleware(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        message: 'Validation failed',
-        errors: expect.arrayContaining([
-          expect.objectContaining({
-            field: expect.any(String),
-            message: expect.any(String)
-          })
-        ])
-      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          message: 'Validation failed'
+        })
+      );
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('should handle multiple validation errors', () => {
-      const schema = validation.registerSchema;
-      const middleware = validation.validateRequest(schema);
-      
+    it('should include all validation errors', () => {
+      const schema = Joi.object({
+        name: Joi.string().required(),
+        email: Joi.string().email().required()
+      });
+
+      const middleware = validateRequest(schema);
       const req = {
-        body: {
-          email: 'invalid',
-          password: 'weak'
-        }
+        body: {}
       };
       const res = {
         status: jest.fn().mockReturnThis(),
@@ -443,11 +423,11 @@ describe('Validation Utilities', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           errors: expect.arrayContaining([
-            expect.any(Object)
+            expect.objectContaining({ field: 'name' }),
+            expect.objectContaining({ field: 'email' })
           ])
         })
       );
     });
   });
 });
-

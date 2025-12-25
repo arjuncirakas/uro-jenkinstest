@@ -1,0 +1,17 @@
+---
+description: Maintainability, Reliability, and Code Smell reduction
+globs: ["src/**/*.{ts,js,py}"]
+alwaysApply: true
+---
+
+# Clean Code & Reliability Standards
+- **Flatten Logic:** Use **Guard Clauses** (early returns) to avoid nested `if` statements. Maximum nesting depth allowed: 2 levels.
+- **Complexity:** If a function's "Cognitive Complexity" feels high (e.g., it has many logical operators like `&&` and `||`), break it into smaller sub-functions.
+- **Reliability (Bug Prevention):**
+  - Always handle potential `null` or `undefined` values using optional chaining (`?.`) or default values.
+  - Never leave an empty `catch` block; at least log the error.
+  - Avoid "magic numbers"; use named constants instead.
+- **SonarQube "Smell" Fixes:**
+  - Automatically remove unused variables and imports.
+  - Use `const` instead of `let` whenever a variable is not reassigned.
+  - Do not leave commented-out code blocks in the file.

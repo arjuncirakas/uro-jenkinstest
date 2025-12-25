@@ -94,4 +94,72 @@ describe('GPHeader', () => {
         expect(screen.getByTestId('patient-details-modal')).toBeInTheDocument();
         expect(screen.getByText('Notif Patient')).toBeInTheDocument();
     });
+
+    it('logs selected patient', () => {
+        const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        render(<GPHeader title="Title" subtitle="Subtitle" />);
+
+        fireEvent.click(screen.getByText('Select Patient'));
+
+        expect(consoleSpy).toHaveBeenCalledWith('Selected patient:', expect.any(Object));
+        consoleSpy.mockRestore();
+    });
+
+    it('logs notification click for patient', () => {
+        const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        render(<GPHeader title="Title" subtitle="Subtitle" />);
+
+        const notifButton = screen.getByText('5').closest('button');
+        fireEvent.click(notifButton);
+        fireEvent.click(screen.getByText('Click Patient'));
+
+        expect(consoleSpy).toHaveBeenCalledWith('GPHeader: Notification clicked for patient:', 'Notif Patient');
+        consoleSpy.mockRestore();
+    });
+
+    it('handles default searchPlaceholder', () => {
+        render(<GPHeader title="Title" subtitle="Subtitle" />);
+        // Should render with default placeholder
+        expect(screen.getByTestId('global-search')).toBeInTheDocument();
+    });
+
+    it('handles custom searchPlaceholder', () => {
+        render(<GPHeader title="Title" subtitle="Subtitle" searchPlaceholder="Custom placeholder" />);
+        // Should render with custom placeholder
+        expect(screen.getByTestId('global-search')).toBeInTheDocument();
+    });
+
+    it('clears selected patient when modal closes', () => {
+        render(<GPHeader title="Title" subtitle="Subtitle" />);
+
+        fireEvent.click(screen.getByText('Select Patient'));
+        expect(screen.getByTestId('patient-details-modal')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Close Details'));
+        expect(screen.queryByTestId('patient-details-modal')).not.toBeInTheDocument();
+    });
+
+    it('updates notification count', async () => {
+        render(<GPHeader title="Title" subtitle="Subtitle" />);
+        
+        await waitFor(() => {
+            expect(screen.getByText('5')).toBeInTheDocument();
+        });
+    });
+
+    it('hides notification badge when count is 0', () => {
+        const MockNotificationModalNoCount = vi.fn(({ onNotificationCountChange }) => {
+            React.useEffect(() => {
+                onNotificationCountChange(0);
+            }, []);
+            return null;
+        });
+
+        vi.mocked(require('../../NotificationModal').default).mockImplementation(MockNotificationModalNoCount);
+
+        render(<GPHeader title="Title" subtitle="Subtitle" />);
+        
+        // Badge should not be visible when count is 0
+        expect(screen.queryByText('0')).not.toBeInTheDocument();
+    });
 });

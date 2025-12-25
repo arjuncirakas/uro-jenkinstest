@@ -183,9 +183,8 @@ const buildExportQuery = (queryParams) => {
   if (needsAppointmentJoin) {
     const paramIndex = params.length + 1;
     const dateConditions = buildDateConditions(startDate, endDate, paramIndex, params);
-    if (dateConditions.length > 0) {
-      whereConditions.push(dateConditions.join(' AND '));
-    }
+    // dateConditions will always have content since needsAppointmentJoin requires startDate or endDate
+    whereConditions.push(dateConditions.join(' AND '));
   }
 
   const query = buildQueryString(selectFields, whereConditions);
