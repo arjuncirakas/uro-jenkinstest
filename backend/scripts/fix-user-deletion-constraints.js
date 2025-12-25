@@ -1,5 +1,4 @@
 import pg from 'pg';
-import format from 'pg-format';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -33,49 +32,40 @@ const CONSTRAINT_CONFIGS = [
 ];
 
 /**
- * Validate SQL identifiers to prevent injection
+ * Validate and escape SQL identifiers to prevent injection
  */
-const validateIdentifier = (identifier) => {
-  if (!/^\w+$/.test(identifier)) {
+const escapeIdentifier = (identifier) => {
+  if (!/^[a-zA-Z0-9_]+$/.test(identifier)) {
     throw new Error(`Invalid identifier: ${identifier}`);
   }
-  return identifier;
+  return `"${identifier}"`;
 };
 
 /**
  * Fix a single foreign key constraint to use SET NULL on delete
- * Security: Uses pg-format to safely escape SQL identifiers
  */
 const fixConstraint = async (client, table, column) => {
-  // Validate identifiers before using them
-  const safeTable = validateIdentifier(table);
-  const safeColumn = validateIdentifier(column);
   const constraintName = `${table}_${column}_fkey`;
-  const safeConstraint = validateIdentifier(constraintName);
+  const safeTable = escapeIdentifier(table);
+  const safeColumn = escapeIdentifier(column);
+  const safeConstraint = escapeIdentifier(constraintName);
 
   console.log(`📋 Fixing ${table}.${column} constraint...`);
 
-  // Make column nullable - using pg-format with %I for identifier escaping
-  await client.query(
-    format('ALTER TABLE %I ALTER COLUMN %I DROP NOT NULL', safeTable, safeColumn)
-  );
+  // Make column nullable
+  await client.query(`ALTER TABLE ${safeTable} ALTER COLUMN ${safeColumn} DROP NOT NULL;`);
 
-  // Drop existing constraint - using pg-format with %I for identifier escaping
-  await client.query(
-    format('ALTER TABLE %I DROP CONSTRAINT IF EXISTS %I', safeTable, safeConstraint)
-  );
+  // Drop existing constraint
+  await client.query(`ALTER TABLE ${safeTable} DROP CONSTRAINT IF EXISTS ${safeConstraint};`);
 
-  // Add new constraint with ON DELETE SET NULL - using pg-format with %I for identifier escaping
-  await client.query(
-    format(
-      'ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES %I(%I) ON DELETE SET NULL',
-      safeTable,
-      safeConstraint,
-      safeColumn,
-      'users',
-      'id'
-    )
-  );
+  // Add new constraint with ON DELETE SET NULL
+  await client.query(`
+    ALTER TABLE ${safeTable} 
+    ADD CONSTRAINT ${safeConstraint} 
+    FOREIGN KEY (${safeColumn}) 
+    REFERENCES "users"("id") 
+    ON DELETE SET NULL;
+  `);
 
   console.log(`✅ Fixed ${table}.${column}`);
 };

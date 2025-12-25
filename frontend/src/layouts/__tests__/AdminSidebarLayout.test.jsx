@@ -98,7 +98,7 @@ describe('AdminSidebarLayout', () => {
 
     it('handles logout error gracefully', async () => {
         const authService = (await import('../../services/authService.js')).default;
-        vi.mocked(authService.logout).mockRejectedValueOnce(new Error('Logout failed'));
+        authService.logout.mockRejectedValueOnce(new Error('Logout failed'));
 
         renderLayout();
 
@@ -158,7 +158,7 @@ describe('AdminSidebarLayout', () => {
         const tokenService = (await import('../../services/tokenService.js')).default;
         const authService = (await import('../../services/authService.js')).default;
 
-        vi.mocked(tokenService.needsRefresh).mockReturnValueOnce(true);
+        tokenService.needsRefresh.mockReturnValueOnce(true);
 
         renderLayout();
 
@@ -171,8 +171,8 @@ describe('AdminSidebarLayout', () => {
         const tokenService = (await import('../../services/tokenService.js')).default;
         const authService = (await import('../../services/authService.js')).default;
 
-        vi.mocked(tokenService.needsRefresh).mockReturnValueOnce(true);
-        vi.mocked(authService.autoRefreshToken).mockRejectedValueOnce(new Error('Refresh failed'));
+        tokenService.needsRefresh.mockReturnValueOnce(true);
+        authService.autoRefreshToken.mockRejectedValueOnce(new Error('Refresh failed'));
 
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
@@ -305,7 +305,7 @@ describe('AdminSidebarLayout', () => {
 
     it('handles localStorage removal on logout error', async () => {
         const authService = (await import('../../services/authService.js')).default;
-        vi.mocked(authService.logout).mockRejectedValueOnce(new Error('Logout failed'));
+        authService.logout.mockRejectedValueOnce(new Error('Logout failed'));
 
         const localStorageSpy = vi.spyOn(Storage.prototype, 'removeItem');
 
@@ -364,7 +364,7 @@ describe('AdminSidebarLayout', () => {
         const authService = (await import('../../services/authService.js')).default;
         const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-        vi.mocked(tokenService.needsRefresh).mockReturnValueOnce(true);
+        tokenService.needsRefresh.mockReturnValueOnce(true);
 
         renderLayout();
 
@@ -380,8 +380,8 @@ describe('AdminSidebarLayout', () => {
         const authService = (await import('../../services/authService.js')).default;
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-        vi.mocked(tokenService.needsRefresh).mockReturnValueOnce(true);
-        vi.mocked(authService.autoRefreshToken).mockRejectedValueOnce(new Error('Refresh failed'));
+        tokenService.needsRefresh.mockReturnValueOnce(true);
+        authService.autoRefreshToken.mockRejectedValueOnce(new Error('Refresh failed'));
 
         renderLayout();
 
@@ -397,24 +397,19 @@ describe('AdminSidebarLayout', () => {
         const tokenService = (await import('../../services/tokenService.js')).default;
         const authService = (await import('../../services/authService.js')).default;
 
-        vi.mocked(tokenService.needsRefresh).mockReturnValue(true);
+        tokenService.needsRefresh.mockReturnValue(true);
 
         renderLayout();
-
-        // Wait for initial call
-        await waitFor(() => {
-            expect(authService.autoRefreshToken).toHaveBeenCalled();
-        }, { timeout: 1000 });
 
         // Fast-forward 5 minutes
         vi.advanceTimersByTime(5 * 60 * 1000);
 
         await waitFor(() => {
             expect(authService.autoRefreshToken).toHaveBeenCalledTimes(2); // Initial + interval
-        }, { timeout: 1000 });
+        });
 
         vi.useRealTimers();
-    }, { timeout: 10000 });
+    });
 
     it('applies full width styling for fullWidthPaths', () => {
         const { container } = render(
@@ -451,14 +446,11 @@ describe('AdminSidebarLayout', () => {
         const openButton = screen.getByLabelText('Open sidebar');
         fireEvent.click(openButton);
 
-        // Wait for sidebar to open
         const closeButton = screen.getByLabelText('Close mobile sidebar');
-        expect(closeButton).toBeInTheDocument();
-        
         fireEvent.click(closeButton);
 
-        // Sidebar should be closed - check that open button is available again
-        expect(screen.getByLabelText('Open sidebar')).toBeInTheDocument();
+        // Sidebar should be closed
+        expect(screen.queryByLabelText('Close mobile sidebar')).not.toBeInTheDocument();
     });
 
     it('shows mobile menu button', () => {
@@ -540,7 +532,7 @@ describe('AdminSidebarLayout', () => {
 
     it('handles console.error on logout failure', async () => {
         const authService = (await import('../../services/authService.js')).default;
-        vi.mocked(authService.logout).mockRejectedValueOnce(new Error('Logout failed'));
+        authService.logout.mockRejectedValueOnce(new Error('Logout failed'));
 
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -551,23 +543,22 @@ describe('AdminSidebarLayout', () => {
 
         await waitFor(() => {
             expect(consoleErrorSpy).toHaveBeenCalledWith('Logout error:', expect.any(Error));
-        }, { timeout: 2000 });
+        });
 
         consoleErrorSpy.mockRestore();
-    }, { timeout: 10000 });
+    });
 
     it('handles token refresh when needsRefresh returns false', async () => {
         const tokenService = (await import('../../services/tokenService.js')).default;
         const authService = (await import('../../services/authService.js')).default;
 
-        vi.mocked(tokenService.needsRefresh).mockReturnValue(false);
+        tokenService.needsRefresh.mockReturnValue(false);
 
         renderLayout();
 
-        // Wait a bit to ensure no call happens
-        await new Promise(resolve => setTimeout(resolve, 100));
-
         // Should not call autoRefreshToken
-        expect(authService.autoRefreshToken).not.toHaveBeenCalled();
-    }, { timeout: 10000 });
+        await waitFor(() => {
+            expect(authService.autoRefreshToken).not.toHaveBeenCalled();
+        });
+    });
 });

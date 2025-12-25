@@ -312,8 +312,7 @@ describe('BaseLayout', () => {
         );
     });
 
-    it('handles error details with default values', async () => {
-        const errorModalModule = await import('../../components/modals/ErrorModal');
+    it('handles error details with default values', () => {
         const MockErrorModalWithDefaults = vi.fn(({ isOpen, onClose, title, message, errors }) => {
             if (!isOpen) return null;
             return (
@@ -326,7 +325,7 @@ describe('BaseLayout', () => {
             );
         });
 
-        vi.mocked(errorModalModule.default).mockImplementation(MockErrorModalWithDefaults);
+        vi.mocked(require('../../components/modals/ErrorModal').default).mockImplementation(MockErrorModalWithDefaults);
 
         renderLayout();
 
@@ -415,8 +414,7 @@ describe('BaseLayout', () => {
         );
     });
 
-    it('handles patient with missing fields', async () => {
-        const addPatientModalModule = await import('../../components/AddPatientModal');
+    it('handles patient with missing fields', () => {
         const MockAddPatientModalPartial = vi.fn(({ isOpen, onPatientAdded }) => {
             if (!isOpen) return null;
             return (
@@ -426,7 +424,7 @@ describe('BaseLayout', () => {
             );
         });
 
-        vi.mocked(addPatientModalModule.default).mockImplementation(MockAddPatientModalPartial);
+        vi.mocked(require('../../components/AddPatientModal').default).mockImplementation(MockAddPatientModalPartial);
 
         renderLayout();
         fireEvent.click(screen.getByText('Open Add Patient'));

@@ -748,26 +748,26 @@ describe('PSAModalShared', () => {
       expect(container.className).toContain('border-red-300');
     });
 
-    it('should return styles for Elevated status', async () => {
+    it('should return styles for Elevated status', () => {
       // Mock to return Elevated
-      const psaStatusModule = await import('../../utils/psaStatusByAge');
-      vi.mocked(psaStatusModule.getPSAStatusByAge).mockReturnValueOnce({ status: 'Elevated', message: 'Elevated' });
+      const { getPSAStatusByAge } = require('../../utils/psaStatusByAge');
+      getPSAStatusByAge.mockReturnValueOnce({ status: 'Elevated', message: 'Elevated' });
       render(<PSAStatusDisplay psaValue={4.2} patientAge={65} />);
       const container = document.querySelector('div');
       expect(container.className).toContain('border-orange-300');
     });
 
-    it('should return styles for Low status', async () => {
-      const psaStatusModule = await import('../../utils/psaStatusByAge');
-      vi.mocked(psaStatusModule.getPSAStatusByAge).mockReturnValueOnce({ status: 'Low', message: 'Low' });
+    it('should return styles for Low status', () => {
+      const { getPSAStatusByAge } = require('../../utils/psaStatusByAge');
+      getPSAStatusByAge.mockReturnValueOnce({ status: 'Low', message: 'Low' });
       render(<PSAStatusDisplay psaValue={0.5} patientAge={65} />);
       const container = document.querySelector('div');
       expect(container.className).toContain('border-yellow-300');
     });
 
-    it('should return default Normal styles for unknown status', async () => {
-      const psaStatusModule = await import('../../utils/psaStatusByAge');
-      vi.mocked(psaStatusModule.getPSAStatusByAge).mockReturnValueOnce({ status: 'Unknown', message: 'Unknown' });
+    it('should return default Normal styles for unknown status', () => {
+      const { getPSAStatusByAge } = require('../../utils/psaStatusByAge');
+      getPSAStatusByAge.mockReturnValueOnce({ status: 'Unknown', message: 'Unknown' });
       render(<PSAStatusDisplay psaValue={3.5} patientAge={65} />);
       const container = document.querySelector('div');
       expect(container.className).toContain('border-green-300');
@@ -775,16 +775,16 @@ describe('PSAModalShared', () => {
   });
 
   describe('PSAStatusDisplay message handling', () => {
-    it('should display statusInfo.message when available', async () => {
-      const psaStatusModule = await import('../../utils/psaStatusByAge');
-      vi.mocked(psaStatusModule.getPSAStatusByAge).mockReturnValueOnce({ status: 'High', message: 'Custom message' });
+    it('should display statusInfo.message when available', () => {
+      const { getPSAStatusByAge } = require('../../utils/psaStatusByAge');
+      getPSAStatusByAge.mockReturnValueOnce({ status: 'High', message: 'Custom message' });
       render(<PSAStatusDisplay psaValue={6.0} patientAge={65} />);
       expect(screen.getByText(/Custom message/)).toBeInTheDocument();
     });
 
-    it('should display threshold when message is not available', async () => {
-      const psaStatusModule = await import('../../utils/psaStatusByAge');
-      vi.mocked(psaStatusModule.getPSAStatusByAge).mockReturnValueOnce({ status: 'Normal' });
+    it('should display threshold when message is not available', () => {
+      const { getPSAStatusByAge } = require('../../utils/psaStatusByAge');
+      getPSAStatusByAge.mockReturnValueOnce({ status: 'Normal' });
       render(<PSAStatusDisplay psaValue={3.5} patientAge={65} />);
       expect(screen.getByText(/Threshold: 4.5 ng\/mL/)).toBeInTheDocument();
     });

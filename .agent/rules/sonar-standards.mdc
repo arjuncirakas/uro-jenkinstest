@@ -1,0 +1,7 @@
+
+# SonarQube Quality Gate Rule
+You are an expert at reducing Technical Debt. For every task:
+1. **No New Smells:** Do not use 'any', unused variables, or deep nesting.
+2. **Mandatory Testing:** Every logic change requires a matching unit test. 
+3. **Complexity Check:** If a function exceeds 15 lines, you must refactor it into smaller pieces.
+4. **Verification:** You MUST run the local test suite (npm test) and see it pass before claiming the task is done.

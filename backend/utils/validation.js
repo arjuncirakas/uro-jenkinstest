@@ -190,7 +190,7 @@ const patientBaseFields = (isCreate = true) => ({
   age: numberField('Age', { min: 0, max: 120, integer: true }),
   phone: phoneField(isCreate),
   email: emailField(false),
-  address: textField('Address', 500, true), // Always required
+  address: textField('Address', 500, isCreate),
   postcode: textField('Postcode', 10),
   city: textField('City', 100),
   state: textField('State', 10),
