@@ -127,29 +127,28 @@ describe('investigations routes', () => {
   it('should execute console.log in updateInvestigationRequestStatus middleware', async () => {
     const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     
+    // Import the actual route file to test the console.log
+    // We need to test the inline middleware function at line 53-56
+    const investigationsRoutes = await import('../routes/investigations.js');
+    
     // Create express app and mount router
     const express = (await import('express')).default;
     const app = express();
     app.use(express.json());
-    app.use('/api/investigations', router.default);
-
-    // Mock the controller
-    const investigationController = await import('../controllers/investigationController.js');
-    investigationController.updateInvestigationRequestStatus = jest.fn((req, res) => {
-      res.json({ success: true });
-    });
+    app.use('/api/investigations', investigationsRoutes.default);
 
     // Make request to trigger the middleware with console.log
     const supertest = (await import('supertest')).default;
-    await supertest(app)
+    const response = await supertest(app)
       .patch('/api/investigations/investigation-requests/123/status')
       .set('Authorization', 'Bearer test-token')
       .send({ status: 'approved' });
 
     // The console.log should be called (line 54)
-    // Note: This may not execute if middleware chain is fully mocked
-    // But we verify the route is registered
-    expect(router.default).toBeDefined();
+    // Verify it was called with the expected message
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[Investigation Routes] PATCH /investigation-requests/123/status - Route matched')
+    );
     
     consoleSpy.mockRestore();
   });

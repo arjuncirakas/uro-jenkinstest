@@ -45,4 +45,17 @@ describe('NurseLayout', () => {
         // Should render without errors, meaning BaseLayout accepted the props
         expect(screen.getByTestId('nurse-sidebar')).toBeInTheDocument();
     });
+
+    it('executes all lines including export statement', () => {
+        // The component is already imported at the top, so export statement is executed
+        // Just verify it renders correctly
+        render(
+            <MemoryRouter>
+                <NurseLayout />
+            </MemoryRouter>
+        );
+        
+        // Verify component renders (line 10)
+        expect(screen.getByTestId('nurse-sidebar')).toBeInTheDocument();
+    });
 });

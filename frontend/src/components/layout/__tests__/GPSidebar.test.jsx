@@ -123,4 +123,30 @@ describe('GPSidebar', () => {
             expect(mockNavigate).toHaveBeenCalledWith('/login');
         });
     });
+
+    it('renders all navigation items', () => {
+        render(
+            <MemoryRouter>
+                <GPSidebar isOpen={true} onClose={mockOnClose} onOpenAddPatient={mockOnOpenAddPatient} />
+            </MemoryRouter>
+        );
+        
+        // Verify all navigation items are rendered (lines 12-17)
+        expect(screen.getByText('Dashboard')).toBeInTheDocument();
+        expect(screen.getByText('Referred Patients')).toBeInTheDocument();
+        expect(screen.getByText('Active Monitoring')).toBeInTheDocument();
+        expect(screen.getByText('Medication')).toBeInTheDocument();
+    });
+
+    it('passes correct props to BaseSidebar', () => {
+        render(
+            <MemoryRouter>
+                <GPSidebar isOpen={true} onClose={mockOnClose} onOpenAddPatient={mockOnOpenAddPatient} />
+            </MemoryRouter>
+        );
+        
+        // Verify BaseSidebar receives correct props (lines 19-28)
+        expect(screen.getByText('GP Panel')).toBeInTheDocument();
+        expect(screen.getByText('New Patient')).toBeInTheDocument();
+    });
 });

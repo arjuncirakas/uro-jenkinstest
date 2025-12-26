@@ -672,7 +672,7 @@ describe('EditPSAResultModal', () => {
                 onSuccess={mockOnSuccess}
             />
         );
-        expect(screen.getByText('Patient')).toBeInTheDocument();
+        expect(screen.getByText('for Patient')).toBeInTheDocument();
     });
 
     it('should handle psaResult with status property', () => {
@@ -729,5 +729,191 @@ describe('EditPSAResultModal', () => {
             // Should not crash
             expect(screen.getByText('Edit PSA Result')).toBeInTheDocument();
         }
+    });
+
+    it('should dispatch PSA events on successful update', async () => {
+        const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
+        investigationService.updatePSAResult.mockResolvedValue({ success: true });
+
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={mockPsaResult}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        const submitButton = screen.getByRole('button', { name: /Update PSA Result/i });
+        fireEvent.click(submitButton);
+
+        await waitFor(() => {
+            expect(dispatchEventSpy).toHaveBeenCalled();
+        }, { timeout: 2000 });
+
+        dispatchEventSpy.mockRestore();
+    });
+
+    it('should handle error with result.error message', async () => {
+        investigationService.updatePSAResult.mockResolvedValue({ success: false, error: 'Custom error message' });
+
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={mockPsaResult}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        const submitButton = screen.getByRole('button', { name: /Update PSA Result/i });
+        fireEvent.click(submitButton);
+
+        await waitFor(() => {
+            expect(screen.getByText('Custom error message')).toBeInTheDocument();
+        }, { timeout: 2000 });
+    });
+
+    it('should ensure setIsSubmitting is false in finally block', async () => {
+        investigationService.updatePSAResult.mockResolvedValue({ success: true });
+
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={mockPsaResult}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        const submitButton = screen.getByRole('button', { name: /Update PSA Result/i });
+        fireEvent.click(submitButton);
+
+        await waitFor(() => {
+            expect(investigationService.updatePSAResult).toHaveBeenCalled();
+        });
+
+        // After submission, button should not be in submitting state
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Update PSA Result/i })).toBeInTheDocument();
+        }, { timeout: 2000 });
+    });
+
+    it('should show existing file when existingFileName exists and no new file', () => {
+        const psaResultWithFile = {
+            ...mockPsaResult,
+            filePath: '/path/to/file.pdf',
+            fileName: 'existing.pdf'
+        };
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={psaResultWithFile}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        // Should show "Current file" message (line 174-181)
+        expect(screen.getByText(/Current file: existing.pdf/i)).toBeInTheDocument();
+        expect(screen.getByText(/Upload a new file to replace it/i)).toBeInTheDocument();
+    });
+
+    it('should show different upload text when existingFileName exists', () => {
+        const psaResultWithFile = {
+            ...mockPsaResult,
+            filePath: '/path/to/file.pdf',
+            fileName: 'existing.pdf'
+        };
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={psaResultWithFile}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        // Should show "Click to upload new file" instead of "Click to upload or drag and drop" (line 218)
+        expect(screen.getByText(/Click to upload new file/i)).toBeInTheDocument();
+    });
+
+    it('should show default upload text when no existingFileName', () => {
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={mockPsaResult}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        // Should show default text (line 218)
+        expect(screen.getByText(/Click to upload or drag and drop/i)).toBeInTheDocument();
+    });
+
+    it('should include referenceRange in submit data', async () => {
+        investigationService.updatePSAResult.mockResolvedValue({ success: true });
+
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={mockPsaResult}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        const submitButton = screen.getByRole('button', { name: /Update PSA Result/i });
+        fireEvent.click(submitButton);
+
+        await waitFor(() => {
+            expect(investigationService.updatePSAResult).toHaveBeenCalledWith(
+                mockPsaResult.id,
+                expect.objectContaining({
+                    referenceRange: '0.0 - 4.0'
+                })
+            );
+        }, { timeout: 2000 });
+    });
+
+    it('should call onSuccess with correct message on successful update', async () => {
+        investigationService.updatePSAResult.mockResolvedValue({ success: true });
+
+        render(
+            <EditPSAResultModal
+                isOpen={true}
+                onClose={mockOnClose}
+                patient={mockPatient}
+                psaResult={mockPsaResult}
+                onSuccess={mockOnSuccess}
+            />
+        );
+
+        const submitButton = screen.getByRole('button', { name: /Update PSA Result/i });
+        fireEvent.click(submitButton);
+
+        await waitFor(() => {
+            expect(mockOnSuccess).toHaveBeenCalledWith('PSA result updated successfully!');
+        }, { timeout: 2000 });
+    });
+
+    it('should have PropTypes defined and component exported correctly', () => {
+        // This test ensures PropTypes (lines 246-252) and export (line 254) are executed
+        // Component is already imported at the top
+        expect(EditPSAResultModal).toBeDefined();
+        expect(EditPSAResultModal.propTypes).toBeDefined();
+        expect(EditPSAResultModal.propTypes.isOpen).toBeDefined();
+        expect(EditPSAResultModal.propTypes.onClose).toBeDefined();
+        expect(EditPSAResultModal.propTypes.patient).toBeDefined();
+        expect(EditPSAResultModal.propTypes.psaResult).toBeDefined();
+        expect(EditPSAResultModal.propTypes.onSuccess).toBeDefined();
     });
 });

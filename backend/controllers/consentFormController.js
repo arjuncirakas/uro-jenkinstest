@@ -22,6 +22,9 @@ const templateStorage = multer.diskStorage({
   }
 });
 
+// Export storage for testing purposes
+export const _templateStorage = templateStorage;
+
 const templateFileFilter = (req, file, cb) => {
   if (file.mimetype === 'application/pdf') {
     return cb(null, true);
@@ -51,6 +54,9 @@ const patientConsentStorage = multer.diskStorage({
     cb(null, `patient-consent-${uniqueSuffix}${ext}`);
   }
 });
+
+// Export storage for testing purposes
+export const _patientConsentStorage = patientConsentStorage;
 
 const patientConsentFileFilter = (req, file, cb) => {
   // Allow PDF, DOC, DOCX, JPG, JPEG, PNG
@@ -93,13 +99,23 @@ export const getConsentFormTemplates = async (req, res) => {
       ORDER BY created_at DESC
     `);
 
-    // Add full URL for template files
-    const templates = result.rows.map(template => ({
-      ...template,
-      template_file_url: template.template_file_path
-        ? `${req.protocol}://${req.get('host')}/${template.template_file_path}`
-        : null
-    }));
+    // Add full URL for template files using the API endpoint
+    const templates = result.rows.map(template => {
+      let templateFileUrl = null;
+      if (template.template_file_path) {
+        // Remove 'uploads/' prefix if present, as the API endpoint expects relative path
+        let relativePath = template.template_file_path.replace(/\\/g, '/');
+        if (relativePath.startsWith('uploads/')) {
+          relativePath = relativePath.replace(/^uploads\//, '');
+        }
+        // Construct URL using the API endpoint
+        templateFileUrl = `${req.protocol}://${req.get('host')}/api/consent-forms/files/${encodeURIComponent(relativePath)}`;
+      }
+      return {
+        ...template,
+        template_file_url: templateFileUrl
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -187,9 +203,17 @@ export const createConsentFormTemplate = async (req, res) => {
     ]);
 
     const template = result.rows[0];
-    template.template_file_url = templateFilePath
-      ? `${req.protocol}://${req.get('host')}/${templateFilePath}`
-      : null;
+    // Construct URL using the API endpoint
+    if (templateFilePath) {
+      // Remove 'uploads/' prefix if present, as the API endpoint expects relative path
+      let relativePath = templateFilePath.replace(/\\/g, '/');
+      if (relativePath.startsWith('uploads/')) {
+        relativePath = relativePath.replace(/^uploads\//, '');
+      }
+      template.template_file_url = `${req.protocol}://${req.get('host')}/api/consent-forms/files/${encodeURIComponent(relativePath)}`;
+    } else {
+      template.template_file_url = null;
+    }
 
     return res.status(201).json({
       success: true,
@@ -208,6 +232,101 @@ export const createConsentFormTemplate = async (req, res) => {
   }
 };
 
+// Helper function to validate template update input
+const validateTemplateUpdateInput = (procedure_name, test_name) => {
+  if (!procedure_name?.trim() && !test_name?.trim()) {
+    return {
+      isValid: false,
+      error: {
+        status: 400,
+        message: 'Either procedure name or test name is required'
+      }
+    };
+  }
+  return { isValid: true };
+};
+
+// Helper function to check if template exists
+const checkTemplateExists = async (client, templateId) => {
+  const result = await client.query(
+    'SELECT id, template_file_path FROM consent_forms WHERE id = $1',
+    [templateId]
+  );
+  
+  if (result.rows.length === 0) {
+    return {
+      exists: false,
+      error: {
+        status: 404,
+        message: 'Template not found'
+      }
+    };
+  }
+  
+  return { exists: true, template: result.rows[0] };
+};
+
+// Helper function to check for duplicate template names
+const checkDuplicateTemplateName = async (client, templateId, name) => {
+  const result = await client.query(`
+    SELECT id FROM consent_forms 
+    WHERE id != $1 
+    AND ((procedure_name IS NOT NULL AND LOWER(procedure_name) = LOWER($2))
+       OR (test_name IS NOT NULL AND LOWER(test_name) = LOWER($2)))
+  `, [templateId, name.trim()]);
+
+  if (result.rows.length > 0) {
+    return {
+      isDuplicate: true,
+      error: {
+        status: 400,
+        message: 'A template with this name already exists'
+      }
+    };
+  }
+  
+  return { isDuplicate: false };
+};
+
+// Helper function to handle file upload for template update
+const handleTemplateFileUpload = (file, existingFilePath) => {
+  if (!file) {
+    return {
+      templateFilePath: existingFilePath,
+      templateFileName: null,
+      templateFileSize: null
+    };
+  }
+
+  // Delete old file if exists
+  if (existingFilePath) {
+    const oldFilePath = path.join(process.cwd(), existingFilePath);
+    if (fs.existsSync(oldFilePath)) {
+      fs.unlinkSync(oldFilePath);
+    }
+  }
+
+  return {
+    templateFilePath: path.join('uploads', 'consent-forms', 'templates', file.filename),
+    templateFileName: file.originalname,
+    templateFileSize: file.size
+  };
+};
+
+// Helper function to construct template file URL
+const constructTemplateFileUrl = (templateFilePath, req) => {
+  if (!templateFilePath) {
+    return null;
+  }
+
+  let relativePath = templateFilePath.replace(/\\/g, '/');
+  if (relativePath.startsWith('uploads/')) {
+    relativePath = relativePath.replace(/^uploads\//, '');
+  }
+  
+  return `${req.protocol}://${req.get('host')}/api/consent-forms/files/${encodeURIComponent(relativePath)}`;
+};
+
 // Update a consent form template
 export const updateConsentFormTemplate = async (req, res) => {
   const client = await pool.connect();
@@ -218,62 +337,36 @@ export const updateConsentFormTemplate = async (req, res) => {
     const file = req.file;
 
     // Validate input
-    if (!procedure_name?.trim() && !test_name?.trim()) {
-      return res.status(400).json({
+    const validation = validateTemplateUpdateInput(procedure_name, test_name);
+    if (!validation.isValid) {
+      return res.status(validation.error.status).json({
         success: false,
-        message: 'Either procedure name or test name is required'
+        message: validation.error.message
       });
     }
 
     // Check if template exists
-    const existingTemplate = await client.query(
-      'SELECT id, template_file_path FROM consent_forms WHERE id = $1',
-      [templateId]
-    );
-
-    if (existingTemplate.rows.length === 0) {
-      return res.status(404).json({
+    const templateCheck = await checkTemplateExists(client, templateId);
+    if (!templateCheck.exists) {
+      return res.status(templateCheck.error.status).json({
         success: false,
-        message: 'Template not found'
+        message: templateCheck.error.message
       });
     }
 
     const name = procedure_name || test_name;
 
-    // Check if another template with same name exists
-    const duplicateCheck = await client.query(`
-      SELECT id FROM consent_forms 
-      WHERE id != $1 
-      AND ((procedure_name IS NOT NULL AND LOWER(procedure_name) = LOWER($2))
-         OR (test_name IS NOT NULL AND LOWER(test_name) = LOWER($2)))
-    `, [templateId, name.trim()]);
-
-    if (duplicateCheck.rows.length > 0) {
-      return res.status(400).json({
+    // Check for duplicate names
+    const duplicateCheck = await checkDuplicateTemplateName(client, templateId, name);
+    if (duplicateCheck.isDuplicate) {
+      return res.status(duplicateCheck.error.status).json({
         success: false,
-        message: 'A template with this name already exists'
+        message: duplicateCheck.error.message
       });
     }
 
-    let templateFilePath = existingTemplate.rows[0].template_file_path;
-    let templateFileName = null;
-    let templateFileSize = null;
-
-    // If new file is uploaded, replace the old one
-    if (file) {
-      // Delete old file if exists
-      if (templateFilePath) {
-        const oldFilePath = path.join(process.cwd(), templateFilePath);
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-        }
-      }
-
-      templateFilePath = path.join('uploads', 'consent-forms', 'templates', file.filename);
-      templateFileName = file.originalname;
-      templateFileSize = file.size;
-    }
-
+    // Handle file upload
+    const fileInfo = handleTemplateFileUpload(file, templateCheck.template.template_file_path);
     const isAutoGen = is_auto_generated === 'true' || is_auto_generated === true;
 
     // Update template
@@ -294,16 +387,14 @@ export const updateConsentFormTemplate = async (req, res) => {
       procedure_name ? procedure_name.trim() : null,
       test_name ? test_name.trim() : null,
       isAutoGen,
-      templateFilePath,
-      templateFileName,
-      templateFileSize,
+      fileInfo.templateFilePath,
+      fileInfo.templateFileName,
+      fileInfo.templateFileSize,
       templateId
     ]);
 
     const template = result.rows[0];
-    template.template_file_url = templateFilePath
-      ? `${req.protocol}://${req.get('host')}/${templateFilePath}`
-      : null;
+    template.template_file_url = constructTemplateFileUrl(fileInfo.templateFilePath, req);
 
     return res.status(200).json({
       success: true,
@@ -553,12 +644,32 @@ export const serveConsentFormFile = async (req, res) => {
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
 
+    // Log the path being checked for debugging
+    console.log('[serveConsentFormFile] Checking file:', {
+      validatedPath: fullPath,
+      exists: fs.existsSync(fullPath),
+      originalParam: req.params.filePath
+    });
+
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
+      console.error('[serveConsentFormFile] File not found:', {
+        checkedPath: fullPath,
+        originalParam: req.params.filePath,
+        cwd: process.cwd(),
+        baseDir: path.join(process.cwd(), 'uploads'),
+        uploadsExists: fs.existsSync(path.join(process.cwd(), 'uploads')),
+        templatesDirExists: fs.existsSync(path.join(process.cwd(), 'uploads', 'consent-forms', 'templates'))
+      });
+      
       setCorsHeaders(req, res);
       return res.status(404).json({
         success: false,
-        message: 'File not found'
+        message: 'File not found. Please verify the file exists on the server.',
+        debug: {
+          checkedPath: fullPath,
+          originalParam: req.params.filePath
+        }
       });
     }
 

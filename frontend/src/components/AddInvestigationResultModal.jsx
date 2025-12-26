@@ -4,6 +4,7 @@ import { FiX } from 'react-icons/fi';
 import { Upload, Eye } from 'lucide-react';
 import { investigationService } from '../services/investigationService';
 import { consentFormService } from '../services/consentFormService';
+import { printConsentForm } from '../utils/consentFormUtils';
 import PDFViewerModal from './PDFViewerModal';
 import ImageViewerModal from './ImageViewerModal';
 
@@ -191,111 +192,11 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
   // Print consent form
   const handlePrintConsentForm = async (template, testName) => {
-    if (!template || !patient) return;
-
-    try {
-      if (template.is_auto_generated) {
-        const printWindow = window.open('', '_blank');
-        const name = template.procedure_name || template.test_name || testName;
-        const type = template.procedure_name ? 'Procedure' : 'Test';
-        const dateOfBirth = patient.dateOfBirth || patient.date_of_birth || '';
-        const formattedDOB = dateOfBirth ? new Date(dateOfBirth).toLocaleDateString('en-GB') : '';
-        
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>${name} Consent Form</title>
-            <style>
-              @media print {
-                @page { margin: 20mm; }
-                body { margin: 0; }
-              }
-              body {
-                font-family: 'Arial', sans-serif;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 40px;
-                background: white;
-              }
-              .header {
-                text-align: center;
-                border-bottom: 3px solid #0d9488;
-                padding-bottom: 20px;
-                margin-bottom: 30px;
-              }
-              .patient-info {
-                margin: 20px 0;
-                padding: 15px;
-                background: #f0fdfa;
-                border-left: 4px solid #0d9488;
-              }
-              .consent-section {
-                margin: 30px 0;
-                line-height: 1.8;
-              }
-              .signature-section {
-                margin-top: 50px;
-                display: flex;
-                justify-content: space-between;
-              }
-              .signature-box {
-                width: 45%;
-                border-top: 2px solid #333;
-                padding-top: 10px;
-                margin-top: 60px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>${name} Consent Form</h1>
-            </div>
-            <div class="patient-info">
-              <p><strong>Patient Name:</strong> ${patient.name || patient.fullName || 'N/A'}</p>
-              <p><strong>Date of Birth:</strong> ${formattedDOB || 'N/A'}</p>
-              <p><strong>Date:</strong> ${new Date().toLocaleDateString('en-GB')}</p>
-            </div>
-            <div class="consent-section">
-              <p>I, <strong>${patient.name || patient.fullName || '[Patient Name]'}</strong>, hereby give my consent for the ${type.toLowerCase()} <strong>${name}</strong> to be performed.</p>
-              <p>I understand the nature and purpose of this ${type.toLowerCase()}, including the potential risks and benefits. I have been given the opportunity to ask questions, and all my questions have been answered to my satisfaction.</p>
-              <p>I understand that I may withdraw my consent at any time before the ${type.toLowerCase()} is performed.</p>
-            </div>
-            <div class="signature-section">
-              <div class="signature-box">
-                <p><strong>Patient Signature</strong></p>
-                <p style="margin-top: 40px;">_________________________</p>
-              </div>
-              <div class="signature-box">
-                <p><strong>Date</strong></p>
-                <p style="margin-top: 40px;">_________________________</p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `;
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.print();
-          }, 250);
-        };
-      } else {
-        const printWindow = window.open(template.template_file_url, '_blank');
-        if (printWindow) {
-          printWindow.onload = () => {
-            setTimeout(() => {
-              printWindow.print();
-            }, 250);
-          };
-        }
-      }
-    } catch (error) {
-      console.error('Error printing consent form:', error);
-      setConsentFormNotification({ type: 'error', message: 'Failed to print consent form. Please try again.' });
+    const onError = (errorMsg) => {
+      setConsentFormNotification({ type: 'error', message: errorMsg });
       setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
-    }
+    };
+    await printConsentForm(template, testName, patient, onError);
   };
 
   // Handle consent form upload

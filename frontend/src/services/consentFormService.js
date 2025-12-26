@@ -141,7 +141,15 @@ export const consentFormService = {
   // Get consent form file (for viewing)
   getConsentFormFile: async (filePath) => {
     try {
-      const response = await apiClient.get(`/consent-forms/files/${filePath}`, {
+      // The route uses :filePath(*) which captures the entire path
+      // We need to encode each path segment separately to preserve slashes
+      // For example: "consent-forms/templates/file.pdf" -> "consent-forms%2Ftemplates%2Ffile.pdf"
+      // But Express will decode it, so we encode the whole path
+      const encodedPath = encodeURIComponent(filePath);
+      
+      console.log('Fetching consent form file:', { originalPath: filePath, encodedPath });
+      
+      const response = await apiClient.get(`/consent-forms/files/${encodedPath}`, {
         responseType: 'blob' // Important: fetch as blob
       });
 
@@ -150,10 +158,15 @@ export const consentFormService = {
         data: response.data
       };
     } catch (error) {
-      console.error('Error fetching consent form file:', error);
+      console.error('Error fetching consent form file:', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        filePath
+      });
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to fetch consent form file'
+        error: error.response?.data?.message || error.message || 'Failed to fetch consent form file'
       };
     }
   }

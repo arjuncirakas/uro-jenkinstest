@@ -11,6 +11,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -80,6 +81,7 @@ export const validateFilePath = (filePath, baseDirectory) => {
     }
 
     // Normalize the path (resolves .. and . segments)
+    // Use path.normalize which handles platform-specific separators correctly
     const normalizedPath = path.normalize(decodedPath);
 
     // Resolve to absolute path
@@ -274,6 +276,14 @@ export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory
       });
     }
 
+    // Decode URL encoding if present (Express should do this, but be safe)
+    try {
+      filePath = decodeURIComponent(filePath);
+    } catch (e) {
+      // If decoding fails, use original path
+      console.warn('[SSRF Protection] Failed to decode file path:', filePath);
+    }
+
     // Normalize the file path - remove 'uploads/' prefix if present
     // File paths stored in DB might be 'uploads/investigations/file.pdf' or 'investigations/file.pdf'
     // We need to handle both formats
@@ -289,6 +299,12 @@ export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory
     // Use provided base directory or default to uploads directory
     const baseDir = baseDirectory || path.join(process.cwd(), 'uploads');
 
+    console.log('[SSRF Protection] Validating file path:', {
+      original: req.params[paramName],
+      decoded: filePath,
+      baseDir: baseDir
+    });
+
     const validation = validateFilePath(filePath, baseDir);
 
     if (!validation.valid) {
@@ -302,6 +318,10 @@ export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory
 
     // Attach validated path to request object
     req.validatedFilePath = validation.normalizedPath;
+    console.log('[SSRF Protection] Validated file path:', {
+      normalized: validation.normalizedPath,
+      exists: fs.existsSync(validation.normalizedPath)
+    });
     next();
   };
 };

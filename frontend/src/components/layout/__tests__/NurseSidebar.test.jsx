@@ -131,4 +131,33 @@ describe('NurseSidebar', () => {
             expect(mockNavigate).toHaveBeenCalledWith('/login');
         });
     });
+
+    it('renders all navigation items', () => {
+        render(
+            <MemoryRouter>
+                <NurseSidebar isOpen={true} onClose={mockOnClose} onOpenAddPatient={mockOnOpenAddPatient} />
+            </MemoryRouter>
+        );
+        
+        // Verify all navigation items are rendered (lines 11-19)
+        expect(screen.getByText('OPD Management')).toBeInTheDocument();
+        expect(screen.getByText('Investigations')).toBeInTheDocument();
+        expect(screen.getByText('Appointments')).toBeInTheDocument();
+        expect(screen.getByText('Active Monitoring')).toBeInTheDocument();
+        expect(screen.getByText('Surgery')).toBeInTheDocument();
+        expect(screen.getByText('Post-Op Follow-up')).toBeInTheDocument();
+        expect(screen.getByText('Patient List')).toBeInTheDocument();
+    });
+
+    it('passes correct props to BaseSidebar', () => {
+        render(
+            <MemoryRouter>
+                <NurseSidebar isOpen={true} onClose={mockOnClose} onOpenAddPatient={mockOnOpenAddPatient} />
+            </MemoryRouter>
+        );
+        
+        // Verify BaseSidebar receives correct props (lines 21-30)
+        expect(screen.getByText('Nurse Panel')).toBeInTheDocument();
+        expect(screen.getByText('New Patient')).toBeInTheDocument();
+    });
 });

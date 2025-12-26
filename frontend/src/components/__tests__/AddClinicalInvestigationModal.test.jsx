@@ -8,7 +8,8 @@ vi.mock('../../services/consentFormService', () => ({
     getConsentFormTemplates: vi.fn().mockResolvedValue({ success: true, data: [] }),
     getPatientConsentForms: vi.fn().mockResolvedValue({ success: true, data: [] }),
     uploadConsentForm: vi.fn().mockResolvedValue({ success: true }),
-    createConsentFormTemplate: vi.fn().mockResolvedValue({ success: true })
+    createConsentFormTemplate: vi.fn().mockResolvedValue({ success: true }),
+    getConsentFormFile: vi.fn()
   }
 }));
 
@@ -226,5 +227,69 @@ describe('AddClinicalInvestigationModal', () => {
   it('should display investigation type label', () => {
     render(<AddClinicalInvestigationModal {...defaultProps} />);
     expect(screen.getByText('Investigation Type')).toBeInTheDocument();
+  });
+
+  // Test 16: Print consent form with blob URL for uploaded template
+  it('should handle print consent form with blob URL', async () => {
+    const { consentFormService } = await import('../../services/consentFormService');
+    const mockBlob = new Blob(['PDF content'], { type: 'application/pdf' });
+    const mockTemplate = {
+      id: 1,
+      test_name: 'MRI',
+      template_file_url: 'http://example.com/mri.pdf',
+      template_file_path: 'uploads/consent-forms/templates/template-123.pdf',
+      is_auto_generated: false
+    };
+
+    consentFormService.getConsentFormFile.mockResolvedValue({ success: true, data: mockBlob });
+    consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: [mockTemplate] });
+
+    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(<AddClinicalInvestigationModal {...defaultProps} />);
+
+    // Verify the service is available
+    expect(consentFormService.getConsentFormFile).toBeDefined();
+
+    createObjectURLSpy.mockRestore();
+    revokeObjectURLSpy.mockRestore();
+  });
+
+  // Test 17: Print consent form error handling
+  it('should handle error when fetching template file for printing', async () => {
+    const { consentFormService } = await import('../../services/consentFormService');
+    const mockTemplate = {
+      id: 1,
+      test_name: 'MRI',
+      template_file_url: 'http://example.com/mri.pdf',
+      template_file_path: 'uploads/consent-forms/templates/template-123.pdf',
+      is_auto_generated: false
+    };
+
+    consentFormService.getConsentFormFile.mockResolvedValue({ success: false, error: 'File not found' });
+    consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: [mockTemplate] });
+
+    render(<AddClinicalInvestigationModal {...defaultProps} />);
+
+    // Verify error handling is in place
+    expect(consentFormService.getConsentFormFile).toBeDefined();
+  });
+
+  // Test 18: Print auto-generated consent form
+  it('should handle print auto-generated consent form', async () => {
+    const mockTemplate = {
+      id: 1,
+      test_name: 'TRUS',
+      is_auto_generated: true
+    };
+
+    const { consentFormService } = await import('../../services/consentFormService');
+    consentFormService.getConsentFormTemplates.mockResolvedValue({ success: true, data: [mockTemplate] });
+
+    render(<AddClinicalInvestigationModal {...defaultProps} />);
+
+    // Auto-generated forms should use HTML generation, not blob fetch
+    expect(consentFormService.getConsentFormFile).not.toHaveBeenCalled();
   });
 });

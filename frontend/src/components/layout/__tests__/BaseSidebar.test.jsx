@@ -183,20 +183,26 @@ describe('BaseSidebar', () => {
     });
 
     it('shows collapsed state styling', () => {
-        renderSidebar();
+        const { container } = renderSidebar();
         const collapseButton = screen.getByLabelText('Collapse sidebar');
         fireEvent.click(collapseButton);
 
-        // Check collapsed styling
-        const sidebar = screen.getByText('Dashboard').closest('div').parentElement;
-        expect(sidebar).toHaveClass('w-[80px]');
+        // Check collapsed styling - sidebar should have w-[80px] class when collapsed
+        const sidebar = container.firstChild;
+        expect(sidebar.className).toContain('w-[80px]');
+        // Dashboard text should be hidden when collapsed
+        expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+        // But should be accessible via title attribute
+        expect(screen.getByTitle('Dashboard')).toBeInTheDocument();
     });
 
     it('shows expanded state styling', () => {
-        renderSidebar();
-        // Should start expanded
-        const sidebar = screen.getByText('Dashboard').closest('div').parentElement;
-        expect(sidebar).toHaveClass('w-[280px]');
+        const { container } = renderSidebar();
+        // Should start expanded - sidebar should have w-[280px] class
+        const sidebar = container.firstChild;
+        expect(sidebar.className).toContain('w-[280px]');
+        // Dashboard text should be visible when expanded
+        expect(screen.getByText('Dashboard')).toBeInTheDocument();
     });
 
     it('shows title tooltip when collapsed', () => {
@@ -204,8 +210,13 @@ describe('BaseSidebar', () => {
         const collapseButton = screen.getByLabelText('Collapse sidebar');
         fireEvent.click(collapseButton);
 
-        const dashboardLink = screen.getByText('Dashboard').closest('a');
+        // Find link by title attribute (set when collapsed - line 94)
+        // When collapsed, text is hidden but title attribute is set
+        const dashboardLink = screen.getByTitle('Dashboard');
+        expect(dashboardLink).toBeInTheDocument();
         expect(dashboardLink).toHaveAttribute('title', 'Dashboard');
+        // Text should not be visible
+        expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
     });
 
     it('shows new button tooltip when collapsed', () => {
@@ -248,8 +259,16 @@ describe('BaseSidebar', () => {
         fireEvent.click(collapseButton);
 
         // Navigation items should still be visible but without text
-        const dashboardLink = screen.getByText('Dashboard').closest('a');
-        expect(dashboardLink).toHaveClass('justify-center');
+        // Find link by title attribute (set when collapsed - line 94)
+        const dashboardLink = screen.getByTitle('Dashboard');
+        expect(dashboardLink).toBeInTheDocument();
+        // When collapsed, links should be centered (line 90: justify-center)
+        expect(dashboardLink.className).toContain('justify-center');
+        // Text should be hidden when collapsed (line 97: {!isCollapsed && ...})
+        expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+        // Users link should also be accessible via title
+        const usersLink = screen.getByTitle('Users');
+        expect(usersLink).toBeInTheDocument();
     });
 
     it('handles default panelName', () => {

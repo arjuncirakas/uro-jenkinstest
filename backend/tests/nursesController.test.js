@@ -476,4 +476,552 @@ describe('nursesController', () => {
       expect(userControllerHelper.createErrorResponse).toHaveBeenCalledWith(mockRes, 500, 'Database error');
     });
   });
+
+  describe('getAllNurses - is_active conditions', () => {
+    it('should handle is_active as boolean true', async () => {
+      mockReq.query = { is_active: true };
+      userControllerHelper.getAllUsersByRole.mockResolvedValue({
+        success: true,
+        data: [],
+        count: 0
+      });
+
+      await nursesController.getAllNurses(mockReq, mockRes);
+
+      expect(userControllerHelper.getAllUsersByRole).toHaveBeenCalledWith('urology_nurse', true);
+    });
+
+    it('should handle is_active as string "true"', async () => {
+      mockReq.query = { is_active: 'true' };
+      userControllerHelper.getAllUsersByRole.mockResolvedValue({
+        success: true,
+        data: [],
+        count: 0
+      });
+
+      await nursesController.getAllNurses(mockReq, mockRes);
+
+      expect(userControllerHelper.getAllUsersByRole).toHaveBeenCalledWith('urology_nurse', true);
+    });
+
+    it('should handle is_active as false', async () => {
+      mockReq.query = { is_active: false };
+      userControllerHelper.getAllUsersByRole.mockResolvedValue({
+        success: true,
+        data: [],
+        count: 0
+      });
+
+      await nursesController.getAllNurses(mockReq, mockRes);
+
+      expect(userControllerHelper.getAllUsersByRole).toHaveBeenCalledWith('urology_nurse', false);
+    });
+  });
+
+  describe('createNurse - email sending error handling', () => {
+    it('should handle email sending error gracefully', async () => {
+      const { sendPasswordSetupEmail } = await import('../services/emailService.js');
+      sendPasswordSetupEmail.mockRejectedValueOnce(new Error('Email service down'));
+
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+      userControllerHelper.hashPassword.mockResolvedValue('hashed_password');
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', role: 'urology_nurse', created_at: new Date() }]
+        }) // INSERT user
+        .mockResolvedValueOnce({}) // INSERT token
+        .mockResolvedValueOnce({}); // COMMIT
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error sending password setup email:', expect.any(Error));
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('email sending failed')
+        })
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should handle successful email sending', async () => {
+      const { sendPasswordSetupEmail } = await import('../services/emailService.js');
+      sendPasswordSetupEmail.mockResolvedValueOnce({ success: true });
+
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+      userControllerHelper.hashPassword.mockResolvedValue('hashed_password');
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', role: 'urology_nurse', created_at: new Date() }]
+        }) // INSERT user
+        .mockResolvedValueOnce({}) // INSERT token
+        .mockResolvedValueOnce({}); // COMMIT
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Password setup email sent'),
+          data: expect.objectContaining({
+            emailSent: true
+          })
+        })
+      );
+    });
+  });
+
+  describe('updateNurse - is_active and email conditions', () => {
+    it('should handle is_active undefined (use existing value)', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'john@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE users'),
+        expect.arrayContaining([true]) // finalIsActive should be true (from existing)
+      );
+    });
+
+    it('should handle is_active provided', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890',
+        is_active: false
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'john@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: false, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE users'),
+        expect.arrayContaining([false]) // finalIsActive should be false (from body)
+      );
+    });
+
+    it('should handle email change (email !== oldEmail)', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'newemail@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'oldemail@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'newemail@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(userControllerHelper.checkEmailExists).toHaveBeenCalled();
+    });
+
+    it('should handle email not changed (email === oldEmail)', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'john@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      // Should not check email exists if email hasn't changed
+      expect(userControllerHelper.checkEmailExists).not.toHaveBeenCalled();
+    });
+
+    it('should handle checkPhoneExists with excludeEmail', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'john@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(userControllerHelper.checkPhoneExists).toHaveBeenCalledWith(
+        expect.anything(),
+        '1234567890',
+        'john@test.com' // excludeEmail should be passed
+      );
+    });
+
+    it('should handle checkPhoneExists with new email when email changed', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'newemail@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'oldemail@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'newemail@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(userControllerHelper.checkPhoneExists).toHaveBeenCalledWith(
+        expect.anything(),
+        '1234567890',
+        'newemail@test.com' // Should use new email
+      );
+    });
+  });
+
+  describe('getAllNurses - is_active edge cases', () => {
+    it('should handle is_active as undefined (defaults to true)', async () => {
+      mockReq.query = {};
+      userControllerHelper.getAllUsersByRole.mockResolvedValue({
+        success: true,
+        data: [],
+        count: 0
+      });
+
+      await nursesController.getAllNurses(mockReq, mockRes);
+
+      // Should default to true (line 22: is_active = true)
+      expect(userControllerHelper.getAllUsersByRole).toHaveBeenCalledWith('urology_nurse', true);
+    });
+
+    it('should handle is_active as string "false"', async () => {
+      mockReq.query = { is_active: 'false' };
+      userControllerHelper.getAllUsersByRole.mockResolvedValue({
+        success: true,
+        data: [],
+        count: 0
+      });
+
+      await nursesController.getAllNurses(mockReq, mockRes);
+
+      // String "false" is not === true or === 'true', so isActiveBool should be false
+      expect(userControllerHelper.getAllUsersByRole).toHaveBeenCalledWith('urology_nurse', false);
+    });
+
+    it('should handle is_active as other values (defaults to false)', async () => {
+      mockReq.query = { is_active: 'other' };
+      userControllerHelper.getAllUsersByRole.mockResolvedValue({
+        success: true,
+        data: [],
+        count: 0
+      });
+
+      await nursesController.getAllNurses(mockReq, mockRes);
+
+      // Other values should result in false (line 24: is_active === true || is_active === 'true')
+      expect(userControllerHelper.getAllUsersByRole).toHaveBeenCalledWith('urology_nurse', false);
+    });
+  });
+
+  describe('createNurse - organization handling', () => {
+    it('should handle organization as null', async () => {
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890',
+        organization: null
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+      userControllerHelper.hashPassword.mockResolvedValue('hashed_password');
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', created_at: new Date() }]
+        }) // INSERT user
+        .mockResolvedValueOnce({}) // INSERT password_setup_tokens
+        .mockResolvedValueOnce({}); // COMMIT
+
+      sendPasswordSetupEmail.mockResolvedValue({ success: true });
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      // Should pass null for organization (line 86: organization || null)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO users'),
+        expect.arrayContaining([null]) // organization should be null
+      );
+    });
+
+    it('should handle organization as undefined', async () => {
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+        // organization not provided
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+      userControllerHelper.hashPassword.mockResolvedValue('hashed_password');
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', created_at: new Date() }]
+        }) // INSERT user
+        .mockResolvedValueOnce({}) // INSERT password_setup_tokens
+        .mockResolvedValueOnce({}); // COMMIT
+
+      sendPasswordSetupEmail.mockResolvedValue({ success: true });
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      // Should pass null for organization when undefined (line 86: organization || null)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO users'),
+        expect.arrayContaining([null]) // organization should be null
+      );
+    });
+  });
+
+  describe('updateNurse - email and organization edge cases', () => {
+    it('should handle email as undefined/null (skip email check)', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        phone: '1234567890'
+        // email not provided
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'old@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'old@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      // Should not check email exists when email is undefined (line 170: email && email !== oldEmail)
+      expect(userControllerHelper.checkEmailExists).not.toHaveBeenCalled();
+    });
+
+    it('should handle organization as null in update', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890',
+        organization: null
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'john@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      // Should pass null for organization (line 188: organization || null)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE users'),
+        expect.arrayContaining([null]) // organization should be null
+      );
+    });
+
+    it('should handle organization as undefined in update', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+        // organization not provided
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'john@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      // Should pass null for organization when undefined (line 188: organization || null)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE users'),
+        expect.arrayContaining([null]) // organization should be null
+      );
+    });
+
+    it('should use oldEmail when email is undefined in checkPhoneExists', async () => {
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        phone: '1234567890'
+        // email not provided
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'old@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'old@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', is_active: true, is_verified: false, created_at: new Date() }]
+        }) // UPDATE
+        .mockResolvedValueOnce({}); // COMMIT
+
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      // Should use oldEmail when email is undefined (line 176: email || oldEmail)
+      expect(userControllerHelper.checkPhoneExists).toHaveBeenCalledWith(
+        expect.anything(),
+        '1234567890',
+        'old@test.com' // Should use oldEmail
+      );
+    });
+  });
 });
