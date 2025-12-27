@@ -7,7 +7,7 @@ import { useEscapeKey } from '../utils/useEscapeKey';
 const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = false }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [pdfError, setPdfError] = useState(false);
-  const iframeRef = useRef(null);
+  const embedRef = useRef(null);
   const hasPrintedRef = useRef(false);
 
   // Close on Escape key
@@ -119,30 +119,29 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
 
   const handlePrint = () => {
     try {
-      const iframe = iframeRef.current;
-      const contentWindow = iframe?.contentWindow;
+      // For embed tag, try to access the embedded document
+      const embed = embedRef.current;
       
-      if (contentWindow) {
-        contentWindow.focus();
-        setTimeout(() => {
-          contentWindow.print();
-        }, 100);
-      } else {
-        window.print();
-      }
-    } catch (error) {
-      console.error('Error printing PDF:', error);
-      try {
-        const iframe = iframeRef.current;
-        if (iframe?.contentWindow) {
-          iframe.contentWindow.print();
-        } else {
-          window.print();
+      // Try to get the embedded document (works for same-origin content)
+      if (embed) {
+        try {
+          // For embed tags, we can try to access the contentDocument
+          const embedDoc = embed.contentDocument || embed.getSVGDocument?.();
+          if (embedDoc && embedDoc.defaultView) {
+            embedDoc.defaultView.print();
+            return;
+          }
+        } catch (e) {
+          console.log('[FullScreenPDFModal] Cannot access embed document, using window.print');
         }
-      } catch (fallbackError) {
-        console.error('Fallback print error:', fallbackError);
-        window.print();
       }
+      
+      // Fallback: print the current window
+      window.print();
+    } catch (error) {
+      console.error('[FullScreenPDFModal] Error printing PDF:', error);
+      // Last resort: print current window
+      window.print();
     }
   };
 
@@ -235,9 +234,10 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
             </div>
           </div>
         ) : (
-          <iframe
-            ref={iframeRef}
+          <embed
+            ref={embedRef}
             src={pdfUrl}
+            type="application/pdf"
             className={`w-full h-full border-none ${isLoading ? 'hidden' : 'block'}`}
             title={fileName || 'PDF Document'}
             onLoad={handleIframeLoad}
