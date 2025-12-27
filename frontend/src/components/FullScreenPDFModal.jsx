@@ -20,23 +20,52 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
   // Reset state when modal opens/closes or PDF changes
   useEffect(() => {
     if (isOpen && pdfUrl) {
+      console.log('[FullScreenPDFModal] Modal opening:', {
+        isOpen,
+        pdfUrl: pdfUrl.substring(0, 50) + '...',
+        fileName,
+        autoPrint,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        bodyExists: !!document.body
+      });
       setIsLoading(true);
       setPdfError(false);
       hasPrintedRef.current = false;
+    } else if (!isOpen) {
+      console.log('[FullScreenPDFModal] Modal closed');
     }
-  }, [isOpen, pdfUrl]);
+  }, [isOpen, pdfUrl, fileName, autoPrint]);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
+      console.log('[FullScreenPDFModal] Locking body scroll');
+      const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
-        document.body.style.overflow = '';
+        console.log('[FullScreenPDFModal] Restoring body scroll');
+        document.body.style.overflow = originalOverflow;
       };
     }
   }, [isOpen]);
 
-  if (!isOpen || !pdfUrl) return null;
+  if (!isOpen || !pdfUrl) {
+    if (!isOpen) {
+      console.log('[FullScreenPDFModal] Not rendering - modal not open');
+    }
+    if (!pdfUrl) {
+      console.log('[FullScreenPDFModal] Not rendering - no PDF URL');
+    }
+    return null;
+  }
+
+  console.log('[FullScreenPDFModal] Rendering modal with:', {
+    isOpen,
+    hasPdfUrl: !!pdfUrl,
+    fileName,
+    viewport: { width: window.innerWidth, height: window.innerHeight }
+  });
 
   const handleDownload = () => {
     try {
@@ -83,11 +112,13 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
   };
 
   const handleIframeLoad = () => {
+    console.log('[FullScreenPDFModal] Iframe loaded successfully');
     setIsLoading(false);
     setPdfError(false);
     
     // Auto-print if enabled and hasn't printed yet
     if (autoPrint && !hasPrintedRef.current) {
+      console.log('[FullScreenPDFModal] Auto-print enabled, triggering print in 500ms');
       hasPrintedRef.current = true;
       setTimeout(() => {
         handlePrint();
@@ -96,6 +127,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
   };
 
   const handleIframeError = () => {
+    console.error('[FullScreenPDFModal] Iframe error loading PDF:', pdfUrl);
     setIsLoading(false);
     setPdfError(true);
   };
@@ -190,8 +222,53 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
     </div>
   );
 
+  // Verify modal was rendered correctly after mount
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        const modalElement = document.querySelector('[data-testid="fullscreen-pdf-modal"]');
+        if (modalElement) {
+          const computedStyle = window.getComputedStyle(modalElement);
+          const rect = modalElement.getBoundingClientRect();
+          console.log('[FullScreenPDFModal] Modal element verified:', {
+            found: true,
+            position: computedStyle.position,
+            top: computedStyle.top,
+            left: computedStyle.left,
+            width: computedStyle.width,
+            height: computedStyle.height,
+            zIndex: computedStyle.zIndex,
+            boundingRect: {
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height
+            },
+            viewport: {
+              width: window.innerWidth,
+              height: window.innerHeight
+            }
+          });
+        } else {
+          console.error('[FullScreenPDFModal] ERROR: Modal element not found in DOM!');
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
   // Render at document body level using portal
-  return createPortal(modalContent, document.body);
+  const portalTarget = document.body;
+  console.log('[FullScreenPDFModal] Creating portal to document.body:', {
+    bodyExists: !!portalTarget,
+    bodyChildren: portalTarget?.children?.length || 0,
+    viewportSize: {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+  });
+  
+  return createPortal(modalContent, portalTarget);
 };
 
 FullScreenPDFModal.propTypes = {

@@ -193,7 +193,14 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
   // Print consent form - opens in modal
   const handlePrintConsentForm = async (template, testName) => {
+    console.log('[AddInvestigationResultModal] handlePrintConsentForm called:', {
+      hasTemplate: !!template,
+      hasPatient: !!patient,
+      testName
+    });
+
     if (!template || !patient) {
+      console.warn('[AddInvestigationResultModal] Missing template or patient');
       setConsentFormNotification({ type: 'error', message: 'Missing template or patient information' });
       setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
       return;
@@ -203,13 +210,23 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     setConsentFormNotification({ type: '', message: '' });
 
     try {
+      console.log('[AddInvestigationResultModal] Fetching consent form blob URL...');
       const result = await getConsentFormBlobUrl(template, testName, patient);
+      console.log('[AddInvestigationResultModal] getConsentFormBlobUrl result:', {
+        success: result.success,
+        hasBlobUrl: !!result.blobUrl,
+        fileName: result.fileName,
+        error: result.error
+      });
       
       if (result.success && result.blobUrl) {
+        console.log('[AddInvestigationResultModal] Setting PDF viewer state and opening modal');
         setPdfViewerUrl(result.blobUrl);
         setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
         setIsPDFViewerModalOpen(true);
+        console.log('[AddInvestigationResultModal] Modal should now be open');
       } else {
+        console.error('[AddInvestigationResultModal] Failed to get blob URL:', result.error);
         setConsentFormNotification({ 
           type: 'error', 
           message: result.error || 'Failed to load consent form' 
@@ -217,7 +234,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
       }
     } catch (error) {
-      console.error('Error loading consent form:', error);
+      console.error('[AddInvestigationResultModal] Error loading consent form:', error);
       setConsentFormNotification({ 
         type: 'error', 
         message: 'Failed to load consent form. Please try again.' 
