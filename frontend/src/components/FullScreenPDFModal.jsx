@@ -32,6 +32,14 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       setIsLoading(true);
       setPdfError(false);
       hasPrintedRef.current = false;
+      
+      // Fallback: Hide loading after a timeout (embed tags don't always fire onLoad)
+      const loadingTimeout = setTimeout(() => {
+        console.log('[FullScreenPDFModal] Loading timeout - hiding loading state');
+        setIsLoading(false);
+      }, 2000); // 2 second timeout
+      
+      return () => clearTimeout(loadingTimeout);
     } else if (!isOpen) {
       console.log('[FullScreenPDFModal] Modal closed');
     }
@@ -84,6 +92,44 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       return () => clearTimeout(timer);
     }
   }, [isOpen, pdfUrl]);
+
+  // Fallback: Check if embed has loaded (for when onLoad doesn't fire)
+  // MUST be before early return to follow Rules of Hooks
+  useEffect(() => {
+    if (isOpen && pdfUrl && isLoading) {
+      // Timeout fallback - hide loading after 1 second (embed loads quickly)
+      const timeout = setTimeout(() => {
+        console.log('[FullScreenPDFModal] Loading timeout - hiding loading state (embed onLoad may not have fired)');
+        setIsLoading(false);
+        setPdfError(false);
+        
+        // Auto-print if enabled - will be handled by handleIframeLoad or separate effect
+        if (autoPrint && !hasPrintedRef.current) {
+          hasPrintedRef.current = true;
+          // Delay print to allow PDF to render
+          setTimeout(() => {
+            try {
+              const embed = embedRef.current;
+              if (embed) {
+                const embedDoc = embed.contentDocument || embed.getSVGDocument?.();
+                if (embedDoc && embedDoc.defaultView) {
+                  embedDoc.defaultView.print();
+                } else {
+                  window.print();
+                }
+              } else {
+                window.print();
+              }
+            } catch (e) {
+              window.print();
+            }
+          }, 500);
+        }
+      }, 1000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [isOpen, pdfUrl, isLoading, autoPrint]);
 
   if (!isOpen || !pdfUrl) {
     if (!isOpen) {
@@ -146,7 +192,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
   };
 
   const handleIframeLoad = () => {
-    console.log('[FullScreenPDFModal] Iframe loaded successfully');
+    console.log('[FullScreenPDFModal] PDF embed onLoad event fired');
     setIsLoading(false);
     setPdfError(false);
     
@@ -234,15 +280,23 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
             </div>
           </div>
         ) : (
-          <embed
+          <object
             ref={embedRef}
-            src={pdfUrl}
+            data={pdfUrl}
             type="application/pdf"
-            className={`w-full h-full border-none ${isLoading ? 'hidden' : 'block'}`}
+            className="w-full h-full border-none"
             title={fileName || 'PDF Document'}
             onLoad={handleIframeLoad}
             onError={handleIframeError}
-          />
+            style={{ opacity: isLoading ? 0 : 1, transition: 'opacity 0.3s' }}
+          >
+            <embed
+              src={pdfUrl}
+              type="application/pdf"
+              className="w-full h-full border-none"
+              title={fileName || 'PDF Document'}
+            />
+          </object>
         )}
       </div>
 
