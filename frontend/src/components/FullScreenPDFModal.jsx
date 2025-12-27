@@ -169,7 +169,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
 
   const modalContent = (
     <div 
-      className="fixed top-0 left-0 right-0 bottom-0 bg-black flex flex-col z-[99999]"
+      className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black flex flex-col z-[99999]"
       data-testid="fullscreen-pdf-modal"
     >
       {/* Minimal Header */}
@@ -208,7 +208,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       </div>
 
       {/* PDF Container - Takes up remaining space */}
-      <div className="flex-1 relative bg-gray-900 overflow-hidden">
+      <div className="flex-1 relative bg-gray-900 overflow-hidden min-h-0 h-full">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <div className="flex flex-col items-center space-y-4">
