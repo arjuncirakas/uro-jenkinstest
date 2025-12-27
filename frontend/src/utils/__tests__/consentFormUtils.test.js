@@ -3,7 +3,7 @@
  * Ensures 100% coverage including all branches, error cases, and edge cases
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { printConsentForm } from '../consentFormUtils';
+import { printConsentForm, getConsentFormBlobUrl } from '../consentFormUtils';
 import { consentFormService } from '../../services/consentFormService';
 
 // Mock consentFormService
@@ -764,6 +764,355 @@ describe('consentFormUtils', () => {
       await printConsentForm(errorTemplate, 'BIOPSY', mockPatient);
 
       expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('getConsentFormBlobUrl - input validation', () => {
+    it('should return error when template is null', async () => {
+      const result = await getConsentFormBlobUrl(null, 'BIOPSY', mockPatient);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Missing template or patient');
+    });
+
+    it('should return error when template is undefined', async () => {
+      const result = await getConsentFormBlobUrl(undefined, 'BIOPSY', mockPatient);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Missing template or patient');
+    });
+
+    it('should return error when patient is null', async () => {
+      const result = await getConsentFormBlobUrl(mockTemplate, 'BIOPSY', null);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Missing template or patient');
+    });
+
+    it('should return error when patient is undefined', async () => {
+      const result = await getConsentFormBlobUrl(mockTemplate, 'BIOPSY', undefined);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Missing template or patient');
+    });
+  });
+
+  describe('getConsentFormBlobUrl - auto-generated forms', () => {
+    it('should return blob URL for auto-generated form', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true,
+        procedure_name: 'MRI'
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'MRI', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(result.blobUrl).toBeDefined();
+      expect(result.blobUrl).toContain('blob:');
+      expect(result.fileName).toBe('MRI Consent Form.html');
+      expect(mockWindow.URL.createObjectURL).toHaveBeenCalled();
+    });
+
+    it('should use test_name when procedure_name is not available', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true,
+        procedure_name: null,
+        test_name: 'PSA Test'
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'PSA Test', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(result.fileName).toBe('PSA Test Consent Form.html');
+    });
+
+    it('should use testName parameter when template name is missing', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true,
+        procedure_name: null,
+        test_name: null
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'Custom Test', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(result.fileName).toBe('Custom Test Consent Form.html');
+    });
+
+    it('should handle patient with dateOfBirth', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true
+      };
+      const patientWithDOB = {
+        ...mockPatient,
+        dateOfBirth: '1990-05-15'
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'BIOPSY', patientWithDOB);
+
+      expect(result.success).toBe(true);
+      expect(result.blobUrl).toBeDefined();
+    });
+
+    it('should handle patient with date_of_birth', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true
+      };
+      const patientWithDOB = {
+        ...mockPatient,
+        dateOfBirth: null,
+        date_of_birth: '1990-05-15'
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'BIOPSY', patientWithDOB);
+
+      expect(result.success).toBe(true);
+      expect(result.blobUrl).toBeDefined();
+    });
+
+    it('should handle patient without date of birth', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true
+      };
+      const patientNoDOB = {
+        ...mockPatient,
+        dateOfBirth: null,
+        date_of_birth: null
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'BIOPSY', patientNoDOB);
+
+      expect(result.success).toBe(true);
+      expect(result.blobUrl).toBeDefined();
+    });
+
+    it('should determine type as Procedure when procedure_name exists', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true,
+        procedure_name: 'MRI'
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'MRI', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(result.blobUrl).toBeDefined();
+    });
+
+    it('should determine type as Test when only test_name exists', async () => {
+      const autoGenTemplate = {
+        ...mockTemplate,
+        is_auto_generated: true,
+        procedure_name: null,
+        test_name: 'PSA Test'
+      };
+
+      const result = await getConsentFormBlobUrl(autoGenTemplate, 'PSA Test', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(result.blobUrl).toBeDefined();
+    });
+  });
+
+  describe('getConsentFormBlobUrl - uploaded templates', () => {
+    it('should return blob URL for uploaded template successfully', async () => {
+      const mockBlob = new Blob(['pdf content'], { type: 'application/pdf' });
+      consentFormService.getConsentFormFile.mockResolvedValue({
+        success: true,
+        data: mockBlob
+      });
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'uploads/consent-forms/templates/template-123.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(result.blobUrl).toBeDefined();
+      expect(result.blobUrl).toContain('blob:');
+      expect(result.fileName).toBe('template-123.pdf');
+      expect(consentFormService.getConsentFormFile).toHaveBeenCalledWith(
+        'consent-forms/templates/template-123.pdf'
+      );
+      expect(mockWindow.URL.createObjectURL).toHaveBeenCalledWith(mockBlob);
+    });
+
+    it('should handle Windows path separators', async () => {
+      const mockBlob = new Blob(['pdf content'], { type: 'application/pdf' });
+      consentFormService.getConsentFormFile.mockResolvedValue({
+        success: true,
+        data: mockBlob
+      });
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'uploads\\consent-forms\\templates\\template-123.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(consentFormService.getConsentFormFile).toHaveBeenCalledWith(
+        'consent-forms/templates/template-123.pdf'
+      );
+    });
+
+    it('should handle path without uploads prefix', async () => {
+      const mockBlob = new Blob(['pdf content'], { type: 'application/pdf' });
+      consentFormService.getConsentFormFile.mockResolvedValue({
+        success: true,
+        data: mockBlob
+      });
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'consent-forms/templates/template-123.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(consentFormService.getConsentFormFile).toHaveBeenCalledWith(
+        'consent-forms/templates/template-123.pdf'
+      );
+    });
+
+    it('should handle empty template_file_path', async () => {
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: ''
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('The template file path is invalid. Please contact the administrator to re-upload the template.');
+      expect(consentFormService.getConsentFormFile).not.toHaveBeenCalled();
+    });
+
+    it('should handle whitespace-only template_file_path', async () => {
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: '   '
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('The template file path is invalid. Please contact the administrator to re-upload the template.');
+    });
+
+    it('should handle missing template_file_path', async () => {
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: null
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No template file is available for BIOPSY');
+    });
+
+    it('should handle failed file fetch', async () => {
+      consentFormService.getConsentFormFile.mockResolvedValue({
+        success: false,
+        error: 'File not found'
+      });
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'uploads/consent-forms/templates/template-123.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('The consent form template file could not be found. The file may have been moved or deleted. Please contact the administrator to re-upload the template.');
+    });
+
+    it('should handle file fetch error without error message', async () => {
+      consentFormService.getConsentFormFile.mockResolvedValue({
+        success: false,
+        error: null
+      });
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'uploads/consent-forms/templates/template-123.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('The consent form template file could not be found. The file may have been moved or deleted. Please contact the administrator to re-upload the template.');
+    });
+
+    it('should handle fetch error exception', async () => {
+      consentFormService.getConsentFormFile.mockRejectedValue(
+        new Error('Network error')
+      );
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'uploads/consent-forms/templates/template-123.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Unable to load the consent form for BIOPSY');
+      expect(result.error).toContain('Please try again or contact support');
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+
+    it('should handle fetch error without error message', async () => {
+      const errorWithoutMessage = { message: null };
+      consentFormService.getConsentFormFile.mockRejectedValue(errorWithoutMessage);
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'uploads/consent-forms/templates/template-123.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Unable to load the consent form for BIOPSY');
+      expect(result.error).toContain('Please try again or contact support');
+    });
+
+    it('should use testName for fileName when path extraction fails', async () => {
+      const mockBlob = new Blob(['pdf content'], { type: 'application/pdf' });
+      consentFormService.getConsentFormFile.mockResolvedValue({
+        success: true,
+        data: mockBlob
+      });
+
+      const uploadedTemplate = {
+        ...mockTemplate,
+        is_auto_generated: false,
+        template_file_path: 'template.pdf'
+      };
+
+      const result = await getConsentFormBlobUrl(uploadedTemplate, 'BIOPSY', mockPatient);
+
+      expect(result.success).toBe(true);
+      expect(result.fileName).toBe('template.pdf');
     });
   });
 });

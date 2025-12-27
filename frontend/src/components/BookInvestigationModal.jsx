@@ -3,7 +3,8 @@ import { IoClose, IoChevronDown, IoPrint, IoCloudUpload } from 'react-icons/io5'
 import ConfirmModal from './ConfirmModal';
 import { bookingService } from '../services/bookingService';
 import { consentFormService } from '../services/consentFormService';
-import { printConsentForm } from '../utils/consentFormUtils';
+import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
+import PDFViewerModal from './PDFViewerModal';
 
 const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const [selectedDoctor, setSelectedDoctor] = useState('');
@@ -39,6 +40,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     trus: null,
     biopsy: null
   });
+  const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  
+  // PDF viewer state
+  const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
+  const [pdfViewerFileName, setPdfViewerFileName] = useState(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -381,9 +388,12 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     setShowConfirmModal(false);
   };
 
-  // Print consent form with patient details automatically filled
+  // Print consent form - opens in modal
   const handlePrintConsentForm = async (template, testName) => {
-    if (!template || !patient) return;
+    if (!template || !patient) {
+      alert('Missing template or patient information');
+      return;
+    }
 
     // Only block if we're CERTAIN the template is not available
     // Allow printing if availability is null (still checking) or true (available)
@@ -398,7 +408,34 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       }
     }
 
-    await printConsentForm(template, testName, patient);
+    setPrintingConsentForm(true);
+
+    try {
+      const result = await getConsentFormBlobUrl(template, testName, patient);
+      
+      if (result.success && result.blobUrl) {
+        setPdfViewerUrl(result.blobUrl);
+        setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
+        setIsPDFViewerModalOpen(true);
+      } else {
+        alert(result.error || 'Failed to load consent form');
+      }
+    } catch (error) {
+      console.error('Error loading consent form:', error);
+      alert('Failed to load consent form. Please try again.');
+    } finally {
+      setPrintingConsentForm(false);
+    }
+  };
+  
+  // Close PDF viewer and cleanup
+  const handleClosePDFViewer = () => {
+    setIsPDFViewerModalOpen(false);
+    if (pdfViewerUrl) {
+      URL.revokeObjectURL(pdfViewerUrl);
+      setPdfViewerUrl(null);
+      setPdfViewerFileName(null);
+    }
   };
 
 
@@ -824,14 +861,23 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(mriConsentForm, 'MRI')}
-                          disabled={!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false
+                          disabled={(!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false) || printingConsentForm}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false) || printingConsentForm
                             ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
                             : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
                             }`}
                         >
-                          <IoPrint className="h-4 w-4 mr-2" />
-                          Print
+                          {printingConsentForm ? (
+                            <>
+                              <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                              <span>Loading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <IoPrint className="h-4 w-4 mr-2" />
+                              Print
+                            </>
+                          )}
                         </button>
                         <label className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
                           <IoCloudUpload className="h-4 w-4 mr-2" />
@@ -906,14 +952,23 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(trusConsentForm, 'TRUS')}
-                          disabled={!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false
+                          disabled={(!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false) || printingConsentForm}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false) || printingConsentForm
                             ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
                             : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
                             }`}
                         >
-                          <IoPrint className="h-4 w-4 mr-2" />
-                          Print
+                          {printingConsentForm ? (
+                            <>
+                              <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                              <span>Loading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <IoPrint className="h-4 w-4 mr-2" />
+                              Print
+                            </>
+                          )}
                         </button>
                         <label className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
                           <IoCloudUpload className="h-4 w-4 mr-2" />
@@ -988,14 +1043,23 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(biopsyConsentForm, 'Biopsy')}
-                          disabled={!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false
+                          disabled={(!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false) || printingConsentForm}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false) || printingConsentForm
                             ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
                             : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
                             }`}
                         >
-                          <IoPrint className="h-4 w-4 mr-2" />
-                          Print
+                          {printingConsentForm ? (
+                            <>
+                              <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                              <span>Loading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <IoPrint className="h-4 w-4 mr-2" />
+                              Print
+                            </>
+                          )}
                         </button>
                         <label className="flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
                           <IoCloudUpload className="h-4 w-4 mr-2" />
@@ -1064,6 +1128,15 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         onCancel={() => setShowConfirmModal(false)}
         title="Unsaved Changes"
         message="You have unsaved changes. Do you want to save before closing?"
+      />
+      
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={isPDFViewerModalOpen}
+        onClose={handleClosePDFViewer}
+        pdfUrl={pdfViewerUrl}
+        fileName={pdfViewerFileName}
+        autoPrint={true}
       />
     </>
   );

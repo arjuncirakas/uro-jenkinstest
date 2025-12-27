@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { IoClose, IoDownload } from 'react-icons/io5';
+import PropTypes from 'prop-types';
+import { IoClose, IoDownload, IoPrint } from 'react-icons/io5';
 import { useEscapeKey } from '../utils/useEscapeKey';
 
-const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
+const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = false }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [pdfError, setPdfError] = useState(false);
+  const iframeRef = React.useRef(null);
+  const hasPrintedRef = React.useRef(false);
 
   // Close on Escape key
   useEscapeKey(() => {
@@ -18,6 +21,7 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
     if (isOpen && pdfUrl) {
       setIsLoading(true);
       setPdfError(false);
+      hasPrintedRef.current = false;
     }
   }, [isOpen, pdfUrl]);
 
@@ -38,9 +42,55 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
     }
   };
 
+  const handlePrint = () => {
+    try {
+      const iframe = iframeRef.current;
+      const contentWindow = iframe?.contentWindow;
+      
+      if (contentWindow) {
+        // Focus the iframe first to ensure print dialog works
+        contentWindow.focus();
+        // Small delay to ensure focus is set
+        setTimeout(() => {
+          contentWindow.print();
+        }, 100);
+      } else {
+        // Fallback: try to print the current window
+        window.print();
+      }
+    } catch (error) {
+      console.error('Error printing PDF:', error);
+      // Fallback: try alternative print methods
+      try {
+        const iframe = iframeRef.current;
+        if (iframe) {
+          // Try accessing contentDocument for same-origin content
+          if (iframe.contentDocument) {
+            iframe.contentDocument.execCommand('print', false, null);
+          } else if (iframe.contentWindow) {
+            iframe.contentWindow.print();
+          }
+        }
+      } catch (fallbackError) {
+        console.error('Fallback print error:', fallbackError);
+        // Last resort: print current window
+        window.print();
+      }
+    }
+  };
+
   const handleIframeLoad = () => {
     setIsLoading(false);
     setPdfError(false);
+    
+    // Auto-print if enabled and hasn't printed yet
+    if (autoPrint && !hasPrintedRef.current) {
+      hasPrintedRef.current = true;
+      // Small delay to ensure PDF is fully rendered
+      setTimeout(() => {
+        handlePrint();
+      }, 500);
+    }
   };
 
   const handleIframeError = () => {
@@ -59,6 +109,13 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
             </h2>
           </div>
           <div className="flex items-center space-x-2 ml-4">
+            <button
+              onClick={handlePrint}
+              className="p-2 bg-teal-700 hover:bg-teal-500 rounded-lg transition-colors"
+              title="Print"
+            >
+              <IoPrint className="text-xl" />
+            </button>
             <button
               onClick={handleDownload}
               className="p-2 bg-teal-700 hover:bg-teal-500 rounded-lg transition-colors"
@@ -104,6 +161,7 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
             </div>
           ) : (
             <iframe
+              ref={iframeRef}
               src={pdfUrl}
               className="w-full h-full border-none"
               title={fileName || 'PDF Document'}
@@ -129,6 +187,14 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
       </div>
     </div>
   );
+};
+
+PDFViewerModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  pdfUrl: PropTypes.string,
+  fileName: PropTypes.string,
+  autoPrint: PropTypes.bool
 };
 
 export default PDFViewerModal;

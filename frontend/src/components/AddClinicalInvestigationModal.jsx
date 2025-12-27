@@ -4,7 +4,9 @@ import { IoClose, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import { FaFlask, FaXRay, FaMicroscope } from 'react-icons/fa';
 import { Eye, Upload, FileText } from 'lucide-react';
 import { notesService } from '../services/notesService';
-import { printConsentForm } from '../utils/consentFormUtils';
+import { consentFormService } from '../services/consentFormService';
+import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
+import PDFViewerModal from './PDFViewerModal';
 
 /**
  * AddClinicalInvestigationModal component
@@ -43,6 +45,12 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
   const [consentFormTemplates, setConsentFormTemplates] = useState([]);
   const [patientConsentForms, setPatientConsentForms] = useState([]);
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
+  const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  
+  // PDF viewer state
+  const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
+  const [pdfViewerFileName, setPdfViewerFileName] = useState(null);
 
   // Helper function to handle validation errors
   const handleValidationError = (errorMessage) => {
@@ -111,9 +119,42 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
     });
   };
 
-  // Print consent form
+  // Print consent form - opens in modal
   const handlePrintConsentForm = async (template, testName) => {
-    await printConsentForm(template, testName, patient);
+    if (!template || !patient) {
+      setError('Missing template or patient information');
+      return;
+    }
+
+    setPrintingConsentForm(true);
+    setError('');
+
+    try {
+      const result = await getConsentFormBlobUrl(template, testName, patient);
+      
+      if (result.success && result.blobUrl) {
+        setPdfViewerUrl(result.blobUrl);
+        setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
+        setIsPDFViewerModalOpen(true);
+      } else {
+        setError(result.error || 'Failed to load consent form');
+      }
+    } catch (error) {
+      console.error('Error loading consent form:', error);
+      setError('Failed to load consent form. Please try again.');
+    } finally {
+      setPrintingConsentForm(false);
+    }
+  };
+  
+  // Close PDF viewer and cleanup
+  const handleClosePDFViewer = () => {
+    setIsPDFViewerModalOpen(false);
+    if (pdfViewerUrl) {
+      URL.revokeObjectURL(pdfViewerUrl);
+      setPdfViewerUrl(null);
+      setPdfViewerFileName(null);
+    }
   };
 
   if (!isOpen) return null;
@@ -450,15 +491,25 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                       <button
                                         type="button"
                                         onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, test)}
-                                        disabled={!consentTemplate}
+                                        disabled={!consentTemplate || printingConsentForm}
                                         className={`px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                                          consentTemplate
+                                          consentTemplate && !printingConsentForm
                                             ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
                                             : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
                                         }`}
+                                        title={printingConsentForm ? 'Loading consent form...' : 'View consent form'}
                                       >
-                                        <IoPrint className="w-3 h-3" />
-                                        Print
+                                        {printingConsentForm ? (
+                                          <>
+                                            <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Loading...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <IoPrint className="w-3 h-3" />
+                                            Print
+                                          </>
+                                        )}
                                       </button>
                                       <label className={`px-2 py-1 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1 ${
                                         consentTemplate
@@ -737,6 +788,15 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
           </div>
         </div>
       </div>
+      
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={isPDFViewerModalOpen}
+        onClose={handleClosePDFViewer}
+        pdfUrl={pdfViewerUrl}
+        fileName={pdfViewerFileName}
+        autoPrint={true}
+      />
     </div>
   );
 };

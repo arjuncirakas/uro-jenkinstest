@@ -158,15 +158,25 @@ export const consentFormService = {
         data: response.data
       };
     } catch (error) {
+      // Log technical details for debugging
       console.error('Error fetching consent form file:', {
         error: error.message,
         response: error.response?.data,
         status: error.response?.status,
         filePath
       });
+      
+      // Return user-friendly error message (no status codes or technical details)
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          error: 'File not found'
+        };
+      }
+      
       return {
         success: false,
-        error: error.response?.data?.message || error.message || 'Failed to fetch consent form file'
+        error: error.response?.data?.message || 'Unable to load the consent form file. Please try again or contact support if the problem persists.'
       };
     }
   }

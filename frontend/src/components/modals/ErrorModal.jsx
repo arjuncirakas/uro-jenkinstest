@@ -28,11 +28,8 @@ const ErrorModal = ({ isOpen, onClose, title, message, errors, onConfirm }) => {
             </div>
             <div className="ml-4">
               <h3 className="text-xl font-semibold text-gray-900">
-                {title || 'Validation Error'}
+                {title || 'Error'}
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {message || 'Please correct the following errors and try again'}
-              </p>
             </div>
           </div>
           <button

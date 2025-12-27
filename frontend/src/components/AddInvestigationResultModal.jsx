@@ -4,7 +4,7 @@ import { FiX } from 'react-icons/fi';
 import { Upload, Eye } from 'lucide-react';
 import { investigationService } from '../services/investigationService';
 import { consentFormService } from '../services/consentFormService';
-import { printConsentForm } from '../utils/consentFormUtils';
+import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
 import PDFViewerModal from './PDFViewerModal';
 import ImageViewerModal from './ImageViewerModal';
 
@@ -28,6 +28,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   const [isImageViewerModalOpen, setIsImageViewerModalOpen] = useState(false);
   const [imageViewerUrl, setImageViewerUrl] = useState(null);
   const [imageViewerFileName, setImageViewerFileName] = useState(null);
+  const [printingConsentForm, setPrintingConsentForm] = useState(false);
 
   // Get existing file info (calculate before early return)
   const existingFilePath = existingResult?.filePath || existingResult?.file_path || null;
@@ -190,13 +191,41 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     return foundForm;
   };
 
-  // Print consent form
+  // Print consent form - opens in modal
   const handlePrintConsentForm = async (template, testName) => {
-    const onError = (errorMsg) => {
-      setConsentFormNotification({ type: 'error', message: errorMsg });
+    if (!template || !patient) {
+      setConsentFormNotification({ type: 'error', message: 'Missing template or patient information' });
       setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
-    };
-    await printConsentForm(template, testName, patient, onError);
+      return;
+    }
+
+    setPrintingConsentForm(true);
+    setConsentFormNotification({ type: '', message: '' });
+
+    try {
+      const result = await getConsentFormBlobUrl(template, testName, patient);
+      
+      if (result.success && result.blobUrl) {
+        setPdfViewerUrl(result.blobUrl);
+        setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
+        setIsPDFViewerModalOpen(true);
+      } else {
+        setConsentFormNotification({ 
+          type: 'error', 
+          message: result.error || 'Failed to load consent form' 
+        });
+        setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+      }
+    } catch (error) {
+      console.error('Error loading consent form:', error);
+      setConsentFormNotification({ 
+        type: 'error', 
+        message: 'Failed to load consent form. Please try again.' 
+      });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+    } finally {
+      setPrintingConsentForm(false);
+    }
   };
 
   // Handle consent form upload
@@ -301,6 +330,154 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     setTimeout(() => {
       setPdfViewerFileName(null);
     }, 300);
+  };
+
+  // Render consent form section - extracted to reduce cognitive complexity
+  const renderConsentFormSection = () => {
+    if (isPSATest) return null;
+
+    const investigationName = investigationRequest?.investigationName || investigationRequest?.investigation_name || '';
+    const consentTemplate = getConsentFormTemplate(investigationName);
+    const patientConsentForm = getPatientConsentForm(investigationName, consentTemplate?.id);
+    
+    // Check if form has been uploaded
+    const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath || patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
+    const fileName = patientConsentForm?.file_name || patientConsentForm?.fileName || 'Consent Form';
+    
+    // Check if form is uploaded (not a template reference)
+    const hasUploadedForm = !!(patientConsentForm && 
+                           filePath && 
+                           typeof filePath === 'string' &&
+                           filePath.trim() !== '' &&
+                           !filePath.toLowerCase().includes('template') &&
+                           !filePath.toLowerCase().includes('auto-generated'));
+    
+    // Get button title text
+    const getButtonTitle = () => {
+      if (!consentTemplate) {
+        return 'Consent form template not available. Please create one in the superadmin panel.';
+      }
+      if (printingConsentForm) {
+        return 'Loading consent form...';
+      }
+      return 'View consent form';
+    };
+
+    return (
+      <div className="px-4 pb-2 mt-2">
+        <div className="border-t border-gray-200 pt-2">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-gray-700">
+              Consent Form for {investigationName}
+            </h3>
+            {hasUploadedForm && (
+              <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                Uploaded
+              </span>
+            )}
+          </div>
+
+          {consentFormNotification.message && (
+            <div className={`mb-2 p-1.5 rounded text-xs ${
+              consentFormNotification.type === 'success' 
+                ? 'bg-gray-50 text-gray-700 border border-gray-200' 
+                : 'bg-gray-50 text-gray-700 border border-gray-200'
+            }`}>
+              {consentFormNotification.message}
+            </div>
+          )}
+
+          {hasUploadedForm && (
+            <div className="mb-2 p-1.5 bg-gray-50 rounded border border-gray-200">
+              <div className="flex items-center gap-2">
+                <IoDocument className="w-3.5 h-3.5 text-gray-500" />
+                <span className="text-xs text-gray-600 truncate">{fileName}</span>
+              </div>
+            </div>
+          )}
+
+          {(loadingConsentForms || uploadingConsentForm) && (
+            <div className="mb-2 flex items-center gap-2 text-xs text-gray-500">
+              <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+              <span>{uploadingConsentForm ? 'Uploading...' : 'Loading...'}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
+                disabled={!consentTemplate || loadingConsentForms || printingConsentForm}
+                className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
+                  consentTemplate && !loadingConsentForms && !printingConsentForm
+                    ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                    : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                }`}
+                title={getButtonTitle()}
+              >
+                {printingConsentForm ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <>
+                    <IoPrint className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </>
+                )}
+              </button>
+
+              <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                consentTemplate && !loadingConsentForms && !uploadingConsentForm
+                  ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                  : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+              }`}
+              title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+              >
+                <IoCloudUpload className="w-3.5 h-3.5" />
+                <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file && consentTemplate) {
+                      handleConsentFormUpload(investigationName, consentTemplate, file);
+                    } else if (file && !consentTemplate) {
+                      setConsentFormNotification({ type: 'error', message: 'Consent form template not available. Please create one in the superadmin panel first.' });
+                      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+                    }
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                  disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm}
+                />
+              </label>
+            </div>
+
+            {hasUploadedForm && (
+              <button
+                type="button"
+                onClick={() => handleViewConsentForm(patientConsentForm)}
+                className="w-full px-3 py-2 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors flex items-center justify-center gap-1.5"
+                title="View uploaded consent form"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View Consent Form</span>
+              </button>
+            )}
+          </div>
+
+          {!consentTemplate && (
+            <p className="mt-2 text-xs text-gray-500 text-center">
+              Template not available
+            </p>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Close image viewer and cleanup
@@ -629,153 +806,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
           )}
 
           {/* Consent Form Section - Professional minimal design, hidden for PSA tests */}
-          {!isPSATest && (() => {
-            const investigationName = investigationRequest?.investigationName || investigationRequest?.investigation_name || '';
-            const consentTemplate = getConsentFormTemplate(investigationName);
-            const patientConsentForm = getPatientConsentForm(investigationName, consentTemplate?.id);
-            
-            // Check if form has been uploaded - simplified check
-            const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath || patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
-            const fileName = patientConsentForm?.file_name || patientConsentForm?.fileName || 'Consent Form';
-            
-            // Simplified check - if patientConsentForm exists and has a file_path, it's uploaded
-            // Only exclude if it's clearly a template or auto-generated
-            // Be very lenient - any file_path means it's uploaded
-            const hasUploadedForm = !!(patientConsentForm && 
-                                   filePath && 
-                                   typeof filePath === 'string' &&
-                                   filePath.trim() !== '' &&
-                                   !filePath.toLowerCase().includes('template') &&
-                                   !filePath.toLowerCase().includes('auto-generated'));
-            
-            // Debug logging
-            console.log('🔍 Consent Form Section Render:', {
-              investigationName,
-              hasPatientConsentForm: !!patientConsentForm,
-              patientConsentForm,
-              filePath,
-              fileName,
-              hasUploadedForm,
-              patientConsentFormsCount: patientConsentForms.length,
-              templatesCount: consentFormTemplates.length
-            });
-
-            return (
-              <div className="px-4 pb-2 mt-2">
-                {/* Consent Form Section */}
-                <div className="border-t border-gray-200 pt-2">
-                  {/* Section Header */}
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-semibold text-gray-700">
-                      Consent Form for {investigationName}
-                    </h3>
-                    {hasUploadedForm && (
-                      <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                        Uploaded
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Notification Message */}
-                  {consentFormNotification.message && (
-                    <div className={`mb-2 p-1.5 rounded text-xs ${
-                      consentFormNotification.type === 'success' 
-                        ? 'bg-gray-50 text-gray-700 border border-gray-200' 
-                        : 'bg-gray-50 text-gray-700 border border-gray-200'
-                    }`}>
-                      {consentFormNotification.message}
-                    </div>
-                  )}
-
-                  {/* Uploaded File Info */}
-                  {hasUploadedForm && (
-                    <div className="mb-2 p-1.5 bg-gray-50 rounded border border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <IoDocument className="w-3.5 h-3.5 text-gray-500" />
-                        <span className="text-xs text-gray-600 truncate">{fileName}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Loading/Uploading Status - Single Loader */}
-                  {(loadingConsentForms || uploadingConsentForm) && (
-                    <div className="mb-2 flex items-center gap-2 text-xs text-gray-500">
-                      <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                      <span>{uploadingConsentForm ? 'Uploading...' : 'Loading...'}</span>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
-                        disabled={!consentTemplate || loadingConsentForms}
-                        className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
-                          consentTemplate && !loadingConsentForms
-                            ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-                            : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-                        }`}
-                        title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
-                      >
-                        <IoPrint className="w-3.5 h-3.5" />
-                        <span>Print</span>
-                      </button>
-
-                      <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                        consentTemplate && !loadingConsentForms && !uploadingConsentForm
-                          ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-                          : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-                      }`}
-                      title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
-                      >
-                        <IoCloudUpload className="w-3.5 h-3.5" />
-                        <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
-                        <input
-                          type="file"
-                          accept=".pdf,image/*"
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file && consentTemplate) {
-                              handleConsentFormUpload(investigationName, consentTemplate, file);
-                            } else if (file && !consentTemplate) {
-                              setConsentFormNotification({ type: 'error', message: 'Consent form template not available. Please create one in the superadmin panel first.' });
-                              setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
-                            }
-                            // Reset input
-                            e.target.value = '';
-                          }}
-                          className="hidden"
-                          disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm}
-                        />
-                      </label>
-                    </div>
-
-                    {/* View Consent Form Button - Only visible when form is uploaded */}
-                    {hasUploadedForm && (
-                      <button
-                        type="button"
-                        onClick={() => handleViewConsentForm(patientConsentForm)}
-                        className="w-full px-3 py-2 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors flex items-center justify-center gap-1.5"
-                        title="View uploaded consent form"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>View Consent Form</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Helper Text */}
-                  {!consentTemplate && (
-                    <p className="mt-2 text-xs text-gray-500 text-center">
-                      Template not available
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+          {renderConsentFormSection()}
         </div>
 
         {/* Fixed Footer */}
@@ -821,6 +852,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         onClose={handleClosePDFViewer}
         pdfUrl={pdfViewerUrl}
         fileName={pdfViewerFileName}
+        autoPrint={true}
       />
 
       {/* Image Viewer Modal */}

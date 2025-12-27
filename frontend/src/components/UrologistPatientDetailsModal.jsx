@@ -29,7 +29,7 @@ import PathwayValidator from './PathwayValidator';
 import PDFViewerModal from './PDFViewerModal';
 import ImageViewerModal from './ImageViewerModal';
 import { consentFormService } from '../services/consentFormService';
-import { printConsentForm } from '../utils/consentFormUtils';
+import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
 
 const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error, onTransferSuccess }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -81,6 +81,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [patientConsentForms, setPatientConsentForms] = useState([]);
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
   const [uploadingConsentForms, setUploadingConsentForms] = useState({});
+  const [printingConsentForm, setPrintingConsentForm] = useState(false);
 
   // Transfer form states
   const [transferDetails, setTransferDetails] = useState({
@@ -790,14 +791,37 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     });
   };
 
-  // Print consent form
+  // Print consent form - opens in modal
   const handlePrintConsentForm = async (template, testName) => {
-    const onError = (errorMsg) => {
+    if (!template || !patient) {
       setErrorModalTitle('Error');
-      setErrorModalMessage(errorMsg);
+      setErrorModalMessage('Missing template or patient information');
       setIsErrorModalOpen(true);
-    };
-    await printConsentForm(template, testName, patient, onError);
+      return;
+    }
+
+    setPrintingConsentForm(true);
+
+    try {
+      const result = await getConsentFormBlobUrl(template, testName, patient);
+      
+      if (result.success && result.blobUrl) {
+        setPdfViewerUrl(result.blobUrl);
+        setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
+        setIsPDFViewerModalOpen(true);
+      } else {
+        setErrorModalTitle('Error');
+        setErrorModalMessage(result.error || 'Failed to load consent form');
+        setIsErrorModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error loading consent form:', error);
+      setErrorModalTitle('Error');
+      setErrorModalMessage('Failed to load consent form. Please try again.');
+      setIsErrorModalOpen(true);
+    } finally {
+      setPrintingConsentForm(false);
+    }
   };
 
   // Handle consent form upload
@@ -3457,15 +3481,32 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                                       <button
                                                         type="button"
                                                         onClick={() => templateToUse && handlePrintConsentForm(templateToUse, investigationName)}
-                                                        disabled={!templateToUse}
-                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse
+                                                        disabled={!templateToUse || printingConsentForm}
+                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && !printingConsentForm
                                                           ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
                                                           : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
                                                           }`}
-                                                        title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : 'Print consent form'}
+                                                        title={(() => {
+                                                          if (!templateToUse) {
+                                                            return 'Consent form template not available. Please create one in the superadmin panel.';
+                                                          }
+                                                          if (printingConsentForm) {
+                                                            return 'Loading consent form...';
+                                                          }
+                                                          return 'View consent form';
+                                                        })()}
                                                       >
-                                                        <IoPrint className="w-3 h-3" />
-                                                        Print
+                                                        {printingConsentForm ? (
+                                                          <>
+                                                            <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                                            <span>Loading...</span>
+                                                          </>
+                                                        ) : (
+                                                          <>
+                                                            <IoPrint className="w-3 h-3" />
+                                                            Print
+                                                          </>
+                                                        )}
                                                       </button>
                                                       <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${templateToUse
                                                         ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
@@ -7510,6 +7551,7 @@ ${transferDetails.additionalNotes}` : ''}
         }}
         pdfUrl={pdfViewerUrl}
         fileName={pdfViewerFileName}
+        autoPrint={true}
       />
 
       {/* Image Viewer Modal */}
