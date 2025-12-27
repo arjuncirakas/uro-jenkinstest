@@ -50,6 +50,41 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
     }
   }, [isOpen]);
 
+  // Verify modal was rendered correctly after mount
+  useEffect(() => {
+    if (isOpen && pdfUrl) {
+      const timer = setTimeout(() => {
+        const modalElement = document.querySelector('[data-testid="fullscreen-pdf-modal"]');
+        if (modalElement) {
+          const computedStyle = window.getComputedStyle(modalElement);
+          const rect = modalElement.getBoundingClientRect();
+          console.log('[FullScreenPDFModal] Modal element verified:', {
+            found: true,
+            position: computedStyle.position,
+            top: computedStyle.top,
+            left: computedStyle.left,
+            width: computedStyle.width,
+            height: computedStyle.height,
+            zIndex: computedStyle.zIndex,
+            boundingRect: {
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height
+            },
+            viewport: {
+              width: window.innerWidth,
+              height: window.innerHeight
+            }
+          });
+        } else {
+          console.error('[FullScreenPDFModal] ERROR: Modal element not found in DOM!');
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, pdfUrl]);
+
   if (!isOpen || !pdfUrl) {
     if (!isOpen) {
       console.log('[FullScreenPDFModal] Not rendering - modal not open');
@@ -133,7 +168,10 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
   };
 
   const modalContent = (
-    <div className="fixed top-0 left-0 right-0 bottom-0 bg-black flex flex-col z-[99999]">
+    <div 
+      className="fixed top-0 left-0 right-0 bottom-0 bg-black flex flex-col z-[99999]"
+      data-testid="fullscreen-pdf-modal"
+    >
       {/* Minimal Header */}
       <div className="bg-teal-600 text-white px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center space-x-3 flex-1 min-w-0">
@@ -221,41 +259,6 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       </div>
     </div>
   );
-
-  // Verify modal was rendered correctly after mount
-  useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        const modalElement = document.querySelector('[data-testid="fullscreen-pdf-modal"]');
-        if (modalElement) {
-          const computedStyle = window.getComputedStyle(modalElement);
-          const rect = modalElement.getBoundingClientRect();
-          console.log('[FullScreenPDFModal] Modal element verified:', {
-            found: true,
-            position: computedStyle.position,
-            top: computedStyle.top,
-            left: computedStyle.left,
-            width: computedStyle.width,
-            height: computedStyle.height,
-            zIndex: computedStyle.zIndex,
-            boundingRect: {
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height
-            },
-            viewport: {
-              width: window.innerWidth,
-              height: window.innerHeight
-            }
-          });
-        } else {
-          console.error('[FullScreenPDFModal] ERROR: Modal element not found in DOM!');
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
 
   // Render at document body level using portal
   const portalTarget = document.body;
