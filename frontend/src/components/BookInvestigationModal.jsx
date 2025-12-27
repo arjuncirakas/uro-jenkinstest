@@ -4,7 +4,7 @@ import ConfirmModal from './ConfirmModal';
 import { bookingService } from '../services/bookingService';
 import { consentFormService } from '../services/consentFormService';
 import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
-import PDFViewerModal from './PDFViewerModal';
+import FullScreenPDFModal from './FullScreenPDFModal';
 
 const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const [selectedDoctor, setSelectedDoctor] = useState('');
@@ -1131,7 +1131,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       />
       
       {/* PDF Viewer Modal */}
-      <PDFViewerModal
+      <FullScreenPDFModal
         isOpen={isPDFViewerModalOpen}
         onClose={handleClosePDFViewer}
         pdfUrl={pdfViewerUrl}

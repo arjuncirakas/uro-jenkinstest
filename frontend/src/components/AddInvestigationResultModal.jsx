@@ -5,7 +5,7 @@ import { Upload, Eye } from 'lucide-react';
 import { investigationService } from '../services/investigationService';
 import { consentFormService } from '../services/consentFormService';
 import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
-import PDFViewerModal from './PDFViewerModal';
+import FullScreenPDFModal from './FullScreenPDFModal';
 import ImageViewerModal from './ImageViewerModal';
 
 const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, patient, existingResult, onSuccess, isPSATest = false, onStatusUpdate }) => {
@@ -847,7 +847,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       </div>
 
       {/* PDF Viewer Modal */}
-      <PDFViewerModal
+      <FullScreenPDFModal
         isOpen={isPDFViewerModalOpen}
         onClose={handleClosePDFViewer}
         pdfUrl={pdfViewerUrl}

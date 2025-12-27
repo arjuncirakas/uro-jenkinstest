@@ -6,7 +6,7 @@ import { Eye, Upload, FileText } from 'lucide-react';
 import { notesService } from '../services/notesService';
 import { consentFormService } from '../services/consentFormService';
 import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
-import PDFViewerModal from './PDFViewerModal';
+import FullScreenPDFModal from './FullScreenPDFModal';
 
 /**
  * AddClinicalInvestigationModal component
@@ -790,7 +790,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
       </div>
       
       {/* PDF Viewer Modal */}
-      <PDFViewerModal
+      <FullScreenPDFModal
         isOpen={isPDFViewerModalOpen}
         onClose={handleClosePDFViewer}
         pdfUrl={pdfViewerUrl}

@@ -14,7 +14,7 @@ import AddInvestigationResultModal from './AddInvestigationResultModal';
 import MDTSchedulingModal from './MDTSchedulingModal';
 import AddClinicalInvestigationModal from './AddClinicalInvestigationModal';
 import ImageViewerModal from './ImageViewerModal';
-import PDFViewerModal from './PDFViewerModal';
+import FullScreenPDFModal from './FullScreenPDFModal';
 import EditSurgeryAppointmentModal from './EditSurgeryAppointmentModal';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import ConfirmModal from './ConfirmModal';
@@ -6276,7 +6276,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       />
 
       {/* PDF Viewer Modal */}
-      <PDFViewerModal
+      <FullScreenPDFModal
         isOpen={isPDFViewerModalOpen}
         onClose={handleClosePDFViewer}
         pdfUrl={pdfViewerUrl}

@@ -26,7 +26,7 @@ import { calculatePSAVelocity } from '../utils/psaVelocity';
 import { getPatientPipelineStage } from '../utils/patientPipeline';
 import DecisionSupportPanel from './DecisionSupportPanel';
 import PathwayValidator from './PathwayValidator';
-import PDFViewerModal from './PDFViewerModal';
+import FullScreenPDFModal from './FullScreenPDFModal';
 import ImageViewerModal from './ImageViewerModal';
 import { consentFormService } from '../services/consentFormService';
 import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
@@ -7539,7 +7539,7 @@ ${transferDetails.additionalNotes}` : ''}
       />
 
       {/* PDF Viewer Modal */}
-      <PDFViewerModal
+      <FullScreenPDFModal
         isOpen={isPDFViewerModalOpen}
         onClose={() => {
           setIsPDFViewerModalOpen(false);
