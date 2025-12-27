@@ -33,11 +33,11 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       setPdfError(false);
       hasPrintedRef.current = false;
       
-      // Fallback: Hide loading after a timeout (embed tags don't always fire onLoad)
+      // Fallback: Hide loading after a timeout (iframes don't always fire onLoad reliably)
       const loadingTimeout = setTimeout(() => {
-        console.log('[FullScreenPDFModal] Loading timeout - hiding loading state');
+        console.log('[FullScreenPDFModal] Initial loading timeout - hiding loading state');
         setIsLoading(false);
-      }, 2000); // 2 second timeout
+      }, 800); // 800ms timeout
       
       return () => clearTimeout(loadingTimeout);
     } else if (!isOpen) {
@@ -93,30 +93,27 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
     }
   }, [isOpen, pdfUrl]);
 
-  // Fallback: Check if embed has loaded (for when onLoad doesn't fire)
+  // Fallback: Check if iframe has loaded (for when onLoad doesn't fire)
   // MUST be before early return to follow Rules of Hooks
   useEffect(() => {
     if (isOpen && pdfUrl && isLoading) {
-      // Timeout fallback - hide loading after 1 second (embed loads quickly)
+      // Timeout fallback - hide loading after 500ms (iframe loads quickly for blob URLs)
       const timeout = setTimeout(() => {
-        console.log('[FullScreenPDFModal] Loading timeout - hiding loading state (embed onLoad may not have fired)');
+        console.log('[FullScreenPDFModal] Loading timeout - hiding loading state (iframe onLoad may not have fired)');
         setIsLoading(false);
         setPdfError(false);
         
-        // Auto-print if enabled - will be handled by handleIframeLoad or separate effect
+        // Auto-print if enabled
         if (autoPrint && !hasPrintedRef.current) {
           hasPrintedRef.current = true;
-          // Delay print to allow PDF to render
           setTimeout(() => {
             try {
-              const embed = embedRef.current;
-              if (embed) {
-                const embedDoc = embed.contentDocument || embed.getSVGDocument?.();
-                if (embedDoc && embedDoc.defaultView) {
-                  embedDoc.defaultView.print();
-                } else {
-                  window.print();
-                }
+              const iframe = embedRef.current;
+              if (iframe?.contentWindow) {
+                iframe.contentWindow.focus();
+                setTimeout(() => {
+                  iframe.contentWindow.print();
+                }, 100);
               } else {
                 window.print();
               }
@@ -125,7 +122,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
             }
           }, 500);
         }
-      }, 1000);
+      }, 500);
       
       return () => clearTimeout(timeout);
     }
@@ -165,29 +162,30 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
 
   const handlePrint = () => {
     try {
-      // For embed tag, try to access the embedded document
-      const embed = embedRef.current;
+      const iframe = embedRef.current;
+      const contentWindow = iframe?.contentWindow;
       
-      // Try to get the embedded document (works for same-origin content)
-      if (embed) {
-        try {
-          // For embed tags, we can try to access the contentDocument
-          const embedDoc = embed.contentDocument || embed.getSVGDocument?.();
-          if (embedDoc && embedDoc.defaultView) {
-            embedDoc.defaultView.print();
-            return;
-          }
-        } catch (e) {
-          console.log('[FullScreenPDFModal] Cannot access embed document, using window.print');
-        }
+      if (contentWindow) {
+        contentWindow.focus();
+        setTimeout(() => {
+          contentWindow.print();
+        }, 100);
+      } else {
+        window.print();
       }
-      
-      // Fallback: print the current window
-      window.print();
     } catch (error) {
       console.error('[FullScreenPDFModal] Error printing PDF:', error);
-      // Last resort: print current window
-      window.print();
+      try {
+        const iframe = embedRef.current;
+        if (iframe?.contentWindow) {
+          iframe.contentWindow.print();
+        } else {
+          window.print();
+        }
+      } catch (fallbackError) {
+        console.error('[FullScreenPDFModal] Fallback print error:', fallbackError);
+        window.print();
+      }
     }
   };
 
@@ -280,23 +278,21 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
             </div>
           </div>
         ) : (
-          <object
+          <iframe
             ref={embedRef}
-            data={pdfUrl}
-            type="application/pdf"
+            src={pdfUrl}
             className="w-full h-full border-none"
             title={fileName || 'PDF Document'}
             onLoad={handleIframeLoad}
             onError={handleIframeError}
-            style={{ opacity: isLoading ? 0 : 1, transition: 'opacity 0.3s' }}
-          >
-            <embed
-              src={pdfUrl}
-              type="application/pdf"
-              className="w-full h-full border-none"
-              title={fileName || 'PDF Document'}
-            />
-          </object>
+            style={{ 
+              width: '100%',
+              height: '100%',
+              minHeight: '100%',
+              opacity: isLoading ? 0 : 1,
+              transition: 'opacity 0.3s'
+            }}
+          />
         )}
       </div>
 
