@@ -112,7 +112,7 @@ export const getConsentFormTemplates = async (req, res) => {
         templateFileUrl = `${req.protocol}://${req.get('host')}/api/consent-forms/files/${encodeURIComponent(relativePath)}`;
       }
       return {
-        ...template,
+      ...template,
         template_file_url: templateFileUrl
       };
     });

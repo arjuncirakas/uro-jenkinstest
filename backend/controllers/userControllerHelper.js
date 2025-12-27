@@ -161,7 +161,7 @@ export const getValidationErrors = (req) => {
  * Handle unique constraint violation error
  */
 export const handleUniqueConstraintError = (error, entityName) => {
-    if (error.code === '23505') {
+    if (error && error.code === '23505') {
         return { status: 409, error: `${entityName} with this email or phone already exists` };
     }
     return { status: 500, error: `Failed to process ${entityName}` };

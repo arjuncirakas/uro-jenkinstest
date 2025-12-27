@@ -35,12 +35,12 @@ function normalizeLcovPaths(filePath) {
   const isBackendCoverage = filePath.includes('backend') && !filePath.includes('frontend');
 
   content = content.replace(absolutePathPattern, (match, srcFilePath) => {
-    // Normalize path separators
+    // Normalize path separators FIRST - convert all backslashes to forward slashes
     let normalizedPath = srcFilePath.replace(/\\/g, '/');
 
     // Check if path is already relative and correct
     if (normalizedPath.startsWith('frontend/src/') || normalizedPath.startsWith('backend/')) {
-      return match; // Already correct
+      return `SF:${normalizedPath}`; // Already correct, but ensure SF: prefix
     }
 
     // Handle paths that start with 'src/' - these are from frontend coverage run from frontend directory

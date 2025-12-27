@@ -1024,4 +1024,166 @@ describe('nursesController', () => {
       );
     });
   });
+
+  describe('createNurse - database connection errors', () => {
+    it('should handle database connection error', async () => {
+      mockConnect.mockRejectedValueOnce(new Error('Connection failed'));
+
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      expect(userControllerHelper.createErrorResponse).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateNurse - database connection errors', () => {
+    it('should handle database connection error during update', async () => {
+      mockConnect.mockRejectedValueOnce(new Error('Connection failed'));
+
+      mockReq.params = { id: '1' };
+      mockReq.body = {
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@test.com',
+        phone: '1234567890'
+      };
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(userControllerHelper.createErrorResponse).toHaveBeenCalled();
+    });
+  });
+
+  describe('createNurse - transaction rollback on error', () => {
+    it('should rollback transaction on database error during insert', async () => {
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+      userControllerHelper.hashPassword.mockResolvedValue('hashed_password');
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockRejectedValueOnce(new Error('Database constraint violation')); // INSERT fails
+
+      userControllerHelper.handleUniqueConstraintError.mockReturnValue({
+        status: 500,
+        error: 'Database error'
+      });
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      expect(mockQuery).toHaveBeenCalledWith('ROLLBACK');
+      expect(userControllerHelper.createErrorResponse).toHaveBeenCalled();
+    });
+
+    it('should rollback transaction on error during token insert', async () => {
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+      userControllerHelper.hashPassword.mockResolvedValue('hashed_password');
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', created_at: new Date() }]
+        }) // INSERT user
+        .mockRejectedValueOnce(new Error('Token insert failed')); // INSERT token fails
+
+      userControllerHelper.handleUniqueConstraintError.mockReturnValue({
+        status: 500,
+        error: 'Database error'
+      });
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      expect(mockQuery).toHaveBeenCalledWith('ROLLBACK');
+      expect(userControllerHelper.createErrorResponse).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateNurse - transaction rollback on error', () => {
+    it('should rollback transaction on error during SELECT', async () => {
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockRejectedValueOnce(new Error('SELECT failed')); // SELECT fails
+
+      userControllerHelper.handleUniqueConstraintError.mockReturnValue({
+        status: 500,
+        error: 'Database error'
+      });
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(mockQuery).toHaveBeenCalledWith('ROLLBACK');
+      expect(userControllerHelper.createErrorResponse).toHaveBeenCalled();
+    });
+
+    it('should rollback transaction on error during UPDATE', async () => {
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ email: 'john@test.com', is_active: true }]
+        }) // SELECT existing
+        .mockRejectedValueOnce(new Error('UPDATE failed')); // UPDATE fails
+
+      userControllerHelper.handleUniqueConstraintError.mockReturnValue({
+        status: 500,
+        error: 'Database error'
+      });
+
+      await nursesController.updateNurse(mockReq, mockRes);
+
+      expect(mockQuery).toHaveBeenCalledWith('ROLLBACK');
+      expect(userControllerHelper.createErrorResponse).toHaveBeenCalled();
+    });
+  });
+
+  describe('createNurse - email sending error logging', () => {
+    it('should log error when email sending throws exception', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      userControllerHelper.getValidationErrors.mockReturnValue({ hasErrors: false });
+      userControllerHelper.checkEmailExists.mockResolvedValue(false);
+      userControllerHelper.checkPhoneExists.mockResolvedValue(false);
+      userControllerHelper.hashPassword.mockResolvedValue('hashed_password');
+
+      mockQuery
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, email: 'john@test.com', first_name: 'John', last_name: 'Doe', phone: '1234567890', organization: null, role: 'urology_nurse', created_at: new Date() }]
+        }) // INSERT user
+        .mockResolvedValueOnce({}) // INSERT token
+        .mockResolvedValueOnce({}); // COMMIT
+
+      sendPasswordSetupEmail.mockRejectedValueOnce(new Error('Email service unavailable'));
+
+      await nursesController.createNurse(mockReq, mockRes);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error sending password setup email:', expect.any(Error));
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('email sending failed')
+        })
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
 });

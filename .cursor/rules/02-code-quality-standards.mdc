@@ -1,0 +1,260 @@
+---
+description: Code Quality Standards - Coverage, Duplication, Maintainability, Reliability
+globs: ["**/*.{js,jsx,ts,tsx}"]
+alwaysApply: true
+---
+
+# Code Quality Standards
+
+## Core Principle
+**NEVER modify core functionality when writing tests or improving code quality. All changes must be non-breaking and preserve existing behavior.**
+
+## 1. Test Coverage Requirements
+
+### Mandatory Coverage
+- **100% line coverage** for all new and modified code
+- **100% branch coverage** - test every `if`, `else`, `switch` case, `catch` block
+- **100% function coverage** - test every exported function
+- **Edge cases required**: `null`, `undefined`, `[]`, `""`, `0`, negative numbers
+
+### Test Structure
+```javascript
+describe('Component/Function Name', () => {
+  describe('Feature/Function Group', () => {
+    it('should handle happy path', () => {});
+    it('should handle error case', () => {});
+    it('should handle edge case (null/undefined/empty)', () => {});
+    it('should handle boundary conditions', () => {});
+  });
+});
+```
+
+### Mocking Strategy
+- Mock all external dependencies (APIs, services, timers)
+- Use fake timers for `setTimeout`, `setInterval`, `Date`
+- Mock network calls with realistic responses
+- Never use real timers in tests
+
+## 2. Code Duplication Prevention
+
+### DRY Principle (Don't Repeat Yourself)
+- **Extract common test utilities** into shared helper files
+- **Reuse test setup/teardown** logic
+- **Create reusable mock factories** for common objects
+- **Share validation logic** across tests
+
+### Duplication Detection
+- If the same test logic appears 3+ times, extract to helper
+- If mock setup is repeated, create factory function
+- If assertions are similar, create custom matcher
+
+### Example: Shared Test Utilities
+```javascript
+// tests/utils/testHelpers.js
+export const createMockUser = (overrides = {}) => ({
+  id: 1,
+  email: 'test@example.com',
+  name: 'Test User',
+  ...overrides
+});
+
+export const createMockRequest = (overrides = {}) => ({
+  body: {},
+  params: {},
+  query: {},
+  user: null,
+  ...overrides
+});
+```
+
+## 3. Maintainability Standards
+
+### Code Organization
+- **One test file per source file** (e.g., `Component.test.jsx` for `Component.jsx`)
+- **Group related tests** using `describe` blocks
+- **Use descriptive test names** that explain what is being tested
+- **Keep tests focused** - one assertion per test when possible
+
+### Readability
+- **Clear test names**: `should handle X when Y occurs` format
+- **Arrange-Act-Assert pattern**: Setup, Execute, Verify
+- **Minimal nesting** - maximum 3 levels deep
+- **Comments only when necessary** - code should be self-documenting
+
+### Maintainability Checklist
+- [ ] Tests are independent (no shared state between tests)
+- [ ] Tests are deterministic (same input = same output)
+- [ ] Tests are fast (no real network calls, no real timers)
+- [ ] Tests are isolated (can run in any order)
+- [ ] Test failures are easy to debug (clear error messages)
+
+### Example: Well-Structured Test
+```javascript
+describe('UserService', () => {
+  let mockApi;
+  
+  beforeEach(() => {
+    mockApi = createMockApi();
+  });
+  
+  describe('getUser', () => {
+    it('should return user when API call succeeds', async () => {
+      // Arrange
+      const userId = 1;
+      const expectedUser = createMockUser({ id: userId });
+      mockApi.get.mockResolvedValue({ data: expectedUser });
+      
+      // Act
+      const result = await userService.getUser(userId);
+      
+      // Assert
+      expect(result).toEqual(expectedUser);
+      expect(mockApi.get).toHaveBeenCalledWith(`/users/${userId}`);
+    });
+    
+    it('should throw error when API call fails', async () => {
+      // Arrange
+      mockApi.get.mockRejectedValue(new Error('Network error'));
+      
+      // Act & Assert
+      await expect(userService.getUser(1)).rejects.toThrow('Network error');
+    });
+  });
+});
+```
+
+## 4. Reliability Standards
+
+### Test Reliability
+- **No flaky tests** - tests must pass consistently
+- **No race conditions** - use proper async/await
+- **No time-dependent tests** - use fake timers
+- **No random data** - use fixed test data or seeded random
+
+### Error Handling
+- **Test error paths** - every try/catch must be tested
+- **Test edge cases** - boundary conditions, null checks
+- **Test validation** - invalid inputs, missing required fields
+- **Test error messages** - verify meaningful error messages
+
+### Reliability Checklist
+- [ ] Tests use fake timers (no `setTimeout`/`setInterval` in tests)
+- [ ] Tests mock all external dependencies
+- [ ] Tests clean up after themselves (no side effects)
+- [ ] Tests don't depend on execution order
+- [ ] Tests don't depend on external state (database, filesystem)
+
+### Example: Reliable Test
+```javascript
+describe('TokenRefresh', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+  
+  it('should refresh token before expiration', async () => {
+    // Arrange
+    const mockTokenService = createMockTokenService();
+    mockTokenService.needsRefresh.mockReturnValue(true);
+    
+    // Act
+    tokenRefreshManager.start();
+    vi.advanceTimersByTime(4 * 60 * 1000); // 4 minutes
+    await vi.runAllTimersAsync();
+    
+    // Assert
+    expect(mockTokenService.refreshIfNeeded).toHaveBeenCalled();
+  });
+});
+```
+
+## 5. Test File Organization
+
+### File Structure
+```
+src/
+  component/
+    Component.jsx
+    __tests__/
+      Component.test.jsx
+  service/
+    service.js
+    __tests__/
+      service.test.js
+  utils/
+    __tests__/
+      testHelpers.js  # Shared test utilities
+```
+
+### Naming Conventions
+- Test files: `*.test.js`, `*.test.jsx`, `*.spec.js`, `*.spec.jsx`
+- Test utilities: `testHelpers.js`, `testUtils.js`, `mockFactories.js`
+- Test data: `testData.js`, `fixtures.js`
+
+## 6. Coverage Exclusions
+
+### Valid Exclusions
+- Test files themselves (`**/*.test.{js,jsx}`)
+- Configuration files (`*.config.js`)
+- Build artifacts (`dist/`, `build/`)
+- Third-party code (`node_modules/`)
+- Dummy/test data files (if explicitly marked)
+
+### Invalid Exclusions
+- ❌ Business logic files
+- ❌ Utility functions
+- ❌ Service files
+- ❌ Components (unless E2E tested)
+
+## 7. Code Quality Metrics
+
+### Target Metrics
+- **Coverage**: 100% (Statements, Branches, Functions, Lines)
+- **Duplication**: < 3% (aim for 0%)
+- **Maintainability**: Grade A (no code smells)
+- **Reliability**: Grade A (no bugs)
+
+### SonarQube Integration
+- All tests must pass before coverage is reported
+- Coverage reports must be generated (`lcov.info`)
+- Paths must be normalized for SonarQube
+- Exclusions must be properly configured
+
+## 8. Best Practices Summary
+
+### DO ✅
+- Write tests for every function/component
+- Extract common test logic to helpers
+- Use descriptive test names
+- Mock external dependencies
+- Test error cases and edge cases
+- Keep tests independent and isolated
+- Use fake timers for time-dependent code
+- Clean up after tests (restore mocks, clear timers)
+
+### DON'T ❌
+- Don't modify core functionality for testing
+- Don't duplicate test logic (extract to helpers)
+- Don't use real timers in tests
+- Don't make real network calls in tests
+- Don't create flaky tests
+- Don't skip edge cases
+- Don't write tests that depend on execution order
+- Don't leave test code that affects production
+
+## 9. Review Checklist
+
+Before submitting tests:
+- [ ] 100% coverage for the file being tested
+- [ ] All branches tested (if/else, switch, catch)
+- [ ] Edge cases covered (null, undefined, empty, boundaries)
+- [ ] No code duplication (shared utilities used)
+- [ ] Tests are maintainable (clear, organized, documented)
+- [ ] Tests are reliable (no flakiness, proper mocking)
+- [ ] Core functionality unchanged
+- [ ] All tests pass consistently
+- [ ] Coverage report generated successfully

@@ -51,15 +51,32 @@ const OPDManagement = () => {
     }
   };
 
+  // Helper function to filter appointments by tab type
+  const filterAppointmentsByTab = (appointments, tabType) => {
+    return appointments.filter(apt => {
+      if (apt.status === 'no_show') return false;
+
+      const isFollowUp = apt.type === 'automatic' || apt.appointment_type === 'automatic';
+
+      if (tabType === 'investigation') {
+        // Show investigation appointments and follow-up appointments
+        return apt.type === 'investigation' || isFollowUp;
+      } else if (tabType === 'urologist') {
+        // Show urologist appointments and follow-up appointments
+        return apt.type === 'urologist' || isFollowUp;
+      }
+      return false;
+    });
+  };
+
   // Fetch today's appointments
-  const fetchTodaysAppointments = async (type = null) => {
+  const fetchTodaysAppointments = async () => {
     setLoadingAppointments(true);
     setAppointmentsError(null);
 
     try {
-      // For follow-up tab, fetch all appointments (null) since we filter on frontend
-      const fetchType = type === 'followup' ? null : type;
-      const result = await bookingService.getTodaysAppointments(fetchType);
+      // Fetch all appointments, filtering will be done on frontend
+      const result = await bookingService.getTodaysAppointments(null);
 
       if (result.success) {
         console.log('✅ OPDManagement: Raw appointments data:', result.data.appointments);
@@ -272,11 +289,11 @@ const OPDManagement = () => {
       console.log('Appointment booked event received in OPD Management:', event.detail);
       // Refresh new patients list to remove patients who now have appointments
       // Refresh appointments to show the new booking
-      // Add a delay to ensure backend has processed the appointment
-      setTimeout(() => {
-        fetchNewPatients();
-        fetchTodaysAppointments(activeAppointmentTab);
-      }, 800);
+          // Add a delay to ensure backend has processed the appointment
+          setTimeout(() => {
+            fetchNewPatients();
+            fetchTodaysAppointments();
+          }, 800);
     };
 
     window.addEventListener('appointment:updated', handleAppointmentBooked);
@@ -296,7 +313,7 @@ const OPDManagement = () => {
       console.log('Test result added event received in OPD Management:', event.detail);
       // Show brief loading indicator and refresh appointments data to show updated test status
       setLoadingAppointments(true);
-      fetchTodaysAppointments(activeAppointmentTab);
+      fetchTodaysAppointments();
     };
 
     window.addEventListener('testResultAdded', handleTestResultAdded);
@@ -306,10 +323,7 @@ const OPDManagement = () => {
     };
   }, [activeAppointmentTab]);
 
-  // Fetch appointments when tab changes
-  useEffect(() => {
-    fetchTodaysAppointments(activeAppointmentTab);
-  }, [activeAppointmentTab]);
+  // Note: No need to refetch when tab changes since we filter on frontend
 
   // Listen for patient update events to refresh all data
   useEffect(() => {
@@ -676,7 +690,7 @@ const OPDManagement = () => {
 
   // Refresh all appointment data
   const refreshAllData = () => {
-    fetchTodaysAppointments(activeAppointmentTab);
+    fetchTodaysAppointments();
     fetchNoShowPatients();
     fetchNewPatients();
   };
@@ -721,15 +735,6 @@ const OPDManagement = () => {
                     >
                       Urologist
                     </button>
-                    <button
-                      onClick={() => setActiveAppointmentTab('followup')}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeAppointmentTab === 'followup'
-                        ? 'bg-teal-600 text-white'
-                        : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                    >
-                      Follow-up
-                    </button>
                   </div>
                 </div>
               </div>
@@ -759,60 +764,49 @@ const OPDManagement = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {loadingAppointments ? (
-                        <tr>
-                          <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
-                            <div className="flex items-center justify-center space-x-2">
-                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
-                              <span className="text-gray-600 text-sm">Loading appointments...</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : appointmentsError ? (
-                        <tr>
-                          <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
-                            <div className="text-red-600 text-sm mb-2">{appointmentsError}</div>
-                            <button
-                              onClick={() => fetchTodaysAppointments(activeAppointmentTab)}
-                              className="px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                            >
-                              Retry
-                            </button>
-                          </td>
-                        </tr>
-                      ) : appointments.filter(apt => {
-                        // Include appointments matching the active tab
-                        if (activeAppointmentTab === 'followup') {
-                          // Show only automatic/follow-up appointments
-                          return (apt.type === 'automatic' || apt.appointment_type === 'automatic') && apt.status !== 'no_show';
-                        } else if (activeAppointmentTab === 'urologist') {
-                          // Show only urologist appointments (exclude automatic)
-                          return apt.type === 'urologist' && apt.status !== 'no_show';
-                        } else {
-                          // Investigation tab
-                          return apt.type === activeAppointmentTab && apt.status !== 'no_show';
+                      {(() => {
+                        if (loadingAppointments) {
+                          return (
+                            <tr>
+                              <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
+                                <div className="flex items-center justify-center space-x-2">
+                                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                                  <span className="text-gray-600 text-sm">Loading appointments...</span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
                         }
-                      }).length === 0 ? (
-                        <tr>
-                          <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8 text-gray-500 text-sm">
-                            No {activeAppointmentTab === 'followup' ? 'follow-up' : activeAppointmentTab} appointments found
-                          </td>
-                        </tr>
-                      ) : (
-                        appointments
-                          .filter(apt => {
-                            // Include appointments matching the active tab
-                            if (activeAppointmentTab === 'followup') {
-                              // Show only automatic/follow-up appointments
-                              return (apt.type === 'automatic' || apt.appointment_type === 'automatic') && apt.status !== 'no_show';
-                            } else if (activeAppointmentTab === 'urologist') {
-                              // Show only urologist appointments (exclude automatic)
-                              return apt.type === 'urologist' && apt.status !== 'no_show';
-                            } else {
-                              // Investigation tab
-                              return apt.type === activeAppointmentTab && apt.status !== 'no_show';
-                            }
-                          })
+
+                        if (appointmentsError) {
+                          return (
+                            <tr>
+                              <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8">
+                                <div className="text-red-600 text-sm mb-2">{appointmentsError}</div>
+                                <button
+                                  onClick={() => fetchTodaysAppointments()}
+                                  className="px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
+                                >
+                                  Retry
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        const filteredAppointments = filterAppointmentsByTab(appointments, activeAppointmentTab);
+
+                        if (filteredAppointments.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="text-center py-8 text-gray-500 text-sm">
+                                No {activeAppointmentTab} appointments found
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return filteredAppointments
                           .sort((a, b) => {
                             if (a.appointmentTime && !b.appointmentTime) return -1;
                             if (!a.appointmentTime && b.appointmentTime) return 1;
@@ -893,8 +887,8 @@ const OPDManagement = () => {
                                 </tr>
                               </React.Fragment>
                             );
-                          })
-                      )}
+                          });
+                      })()}
                     </tbody>
                   </table>
                 </div>

@@ -1,0 +1,274 @@
+---
+description: Test Writing Guidelines - Ensuring Core Functionality is Never Affected
+globs: ["**/*.test.{js,jsx}", "**/*.spec.{js,jsx}", "**/__tests__/**"]
+alwaysApply: true
+---
+
+# Test Writing Guidelines
+
+## Critical Rule: Never Modify Core Functionality
+
+**When writing tests, you MUST:**
+1. ✅ Test existing behavior as-is
+2. ✅ Mock dependencies, don't change them
+3. ✅ Use test utilities, don't modify source code
+4. ✅ Add tests, don't refactor production code
+5. ❌ NEVER change business logic for testing
+6. ❌ NEVER remove features to make testing easier
+7. ❌ NEVER modify function signatures
+8. ❌ NEVER change error handling logic
+
+## Test Writing Process
+
+### Step 1: Understand the Code
+- Read the source file completely
+- Identify all functions, branches, edge cases
+- Understand dependencies and their contracts
+- Note any side effects or state changes
+
+### Step 2: Plan Test Coverage
+- List all functions to test
+- List all branches (if/else, switch, try/catch)
+- List all edge cases (null, undefined, empty, boundaries)
+- Identify dependencies to mock
+
+### Step 3: Write Tests (Without Modifying Source)
+- Create test file: `SourceFile.test.js`
+- Import source file as-is
+- Mock dependencies using test doubles
+- Test all paths without changing source code
+
+### Step 4: Verify No Changes
+- Source file should be unchanged
+- Only test file should be new/modified
+- All existing functionality preserved
+- All existing tests still pass
+
+## Example: Testing Without Modifying Source
+
+### ❌ WRONG - Modifying Source for Testing
+```javascript
+// Source file (DON'T DO THIS)
+export const processData = (data) => {
+  // Added "if (process.env.NODE_ENV === 'test')" - BAD!
+  if (process.env.NODE_ENV === 'test') {
+    return mockResult;
+  }
+  return actualProcessData(data);
+};
+```
+
+### ✅ CORRECT - Testing Without Modifying Source
+```javascript
+// Source file (unchanged)
+export const processData = (data) => {
+  return actualProcessData(data);
+};
+
+// Test file
+describe('processData', () => {
+  it('should process data correctly', () => {
+    // Mock dependencies, not the source
+    const mockData = createMockData();
+    const result = processData(mockData);
+    expect(result).toEqual(expectedResult);
+  });
+});
+```
+
+## Mocking Strategy
+
+### Mock External Dependencies
+```javascript
+// ✅ CORRECT - Mock the dependency
+vi.mock('../services/apiService', () => ({
+  default: {
+    fetchData: vi.fn()
+  }
+}));
+```
+
+### Don't Modify Source to Accept Mocks
+```javascript
+// ❌ WRONG - Don't add dependency injection just for testing
+export const processData = (data, apiService = defaultApiService) => {
+  // This changes the API just for testing - BAD!
+};
+```
+
+## Test Utilities Pattern
+
+### Create Shared Test Utilities
+```javascript
+// tests/utils/mockFactories.js
+export const createMockUser = (overrides = {}) => ({
+  id: 1,
+  email: 'test@example.com',
+  name: 'Test User',
+  ...overrides
+});
+
+// Use in tests
+const user = createMockUser({ email: 'custom@test.com' });
+```
+
+### Don't Modify Source to Support Test Utilities
+```javascript
+// ❌ WRONG - Don't add test-only methods
+export const processData = (data) => {
+  // ... actual logic
+};
+
+// Test-only method - BAD!
+export const _testHelper = () => {
+  // This pollutes production code
+};
+```
+
+## Edge Case Testing
+
+### Test Edge Cases Without Modifying Validation
+```javascript
+// Source file (unchanged)
+export const validateEmail = (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+// Test file
+describe('validateEmail', () => {
+  it('should handle null', () => {
+    expect(validateEmail(null)).toBe(false);
+  });
+  
+  it('should handle undefined', () => {
+    expect(validateEmail(undefined)).toBe(false);
+  });
+  
+  it('should handle empty string', () => {
+    expect(validateEmail('')).toBe(false);
+  });
+});
+```
+
+## State Management Testing
+
+### Test Redux Slices Without Modifying Logic
+```javascript
+// Source file (unchanged)
+const authSlice = createSlice({
+  name: 'auth',
+  initialState: { user: null },
+  reducers: {
+    setUser: (state, action) => {
+      state.user = action.payload;
+    }
+  }
+});
+
+// Test file
+describe('authSlice', () => {
+  it('should set user', () => {
+    const state = authSlice.reducer(
+      { user: null },
+      authSlice.actions.setUser({ id: 1, name: 'Test' })
+    );
+    expect(state.user).toEqual({ id: 1, name: 'Test' });
+  });
+});
+```
+
+## Component Testing
+
+### Test Components Without Modifying Props/Behavior
+```javascript
+// Source file (unchanged)
+const Button = ({ onClick, children, disabled }) => {
+  return (
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  );
+};
+
+// Test file
+describe('Button', () => {
+  it('should call onClick when clicked', () => {
+    const handleClick = vi.fn();
+    render(<Button onClick={handleClick}>Click me</Button>);
+    fireEvent.click(screen.getByText('Click me'));
+    expect(handleClick).toHaveBeenCalled();
+  });
+});
+```
+
+## Service Testing
+
+### Test Services Without Modifying API
+```javascript
+// Source file (unchanged)
+export const userService = {
+  async getUser(id) {
+    const response = await api.get(`/users/${id}`);
+    return response.data;
+  }
+};
+
+// Test file
+vi.mock('../api', () => ({
+  default: {
+    get: vi.fn()
+  }
+}));
+
+describe('userService', () => {
+  it('should fetch user', async () => {
+    mockApi.get.mockResolvedValue({ data: { id: 1 } });
+    const user = await userService.getUser(1);
+    expect(user).toEqual({ id: 1 });
+  });
+});
+```
+
+## Verification Checklist
+
+Before considering tests complete:
+- [ ] Source file is completely unchanged
+- [ ] All existing functionality works as before
+- [ ] No test-only code in source files
+- [ ] No environment checks added to source
+- [ ] No dependency injection added just for testing
+- [ ] All tests pass with original code
+- [ ] Coverage is 100% for the file
+- [ ] No breaking changes introduced
+
+## Common Mistakes to Avoid
+
+### ❌ Adding Test Helpers to Source
+```javascript
+// DON'T add this to source files
+export const _testHelper = () => { /* test code */ };
+```
+
+### ❌ Modifying Logic for Testability
+```javascript
+// DON'T change this
+export const process = (data) => {
+  if (process.env.NODE_ENV === 'test') return mockData; // BAD!
+  return actualProcess(data);
+};
+```
+
+### ❌ Removing Features for Testing
+```javascript
+// DON'T remove error handling
+export const process = (data) => {
+  // Removed try/catch to make testing easier - BAD!
+  return riskyOperation(data);
+};
+```
+
+### ✅ Correct Approach
+- Keep source code unchanged
+- Mock dependencies in tests
+- Use test utilities for setup
+- Test all paths without modifying source

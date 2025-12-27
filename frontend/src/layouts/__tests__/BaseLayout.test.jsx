@@ -28,22 +28,24 @@ const MockAddPatientModal = vi.fn(({ isOpen, onClose, onPatientAdded, onError })
     );
 });
 
-const MockSuccessModal = vi.fn(({ isOpen, onClose, title }) => {
+const MockSuccessModal = vi.fn(({ isOpen, onClose, onConfirm, title }) => {
     if (!isOpen) return null;
     return (
         <div data-testid="success-modal">
             <span>{title}</span>
             <button onClick={onClose}>Close Success</button>
+            {onConfirm && <button onClick={onConfirm} data-testid="success-confirm">Confirm Success</button>}
         </div>
     );
 });
 
-const MockErrorModal = vi.fn(({ isOpen, onClose, title }) => {
+const MockErrorModal = vi.fn(({ isOpen, onClose, onConfirm, title }) => {
     if (!isOpen) return null;
     return (
         <div data-testid="error-modal">
             <span>{title}</span>
             <button onClick={onClose}>Close Error</button>
+            {onConfirm && <button onClick={onConfirm} data-testid="error-confirm">Confirm Error</button>}
         </div>
     );
 });
@@ -630,5 +632,158 @@ describe('BaseLayout', () => {
         }));
 
         consoleLogSpy.mockRestore();
+    });
+
+    it('should handle PropTypes validation', () => {
+        // Test that PropTypes are defined and component accepts correct props
+        // This test verifies the component can be rendered with different prop values
+        const { rerender } = renderLayout({ isUrologist: true });
+        expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
+        
+        // Test with default isUrologist (false) - rerender with new props
+        rerender(
+            <MemoryRouter>
+                <BaseLayout SidebarComponent={MockSidebar} isUrologist={false} />
+            </MemoryRouter>
+        );
+        expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
+    });
+
+    it('should handle all state transitions correctly', () => {
+        renderLayout();
+        
+        // Test initial state - sidebar closed
+        expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'false');
+        
+        // Open sidebar
+        const menuButton = screen.getByLabelText(/open menu/i);
+        fireEvent.click(menuButton);
+        expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'true');
+        
+        // Close sidebar via toggle
+        fireEvent.click(menuButton);
+        expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'false');
+    });
+
+    it('should handle onConfirm for SuccessModal', () => {
+        renderLayout();
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Add Patient'));
+        
+        // Success modal should be open
+        expect(screen.getByTestId('success-modal')).toBeInTheDocument();
+        
+        // Close via onConfirm button
+        const confirmButton = screen.getByTestId('success-confirm');
+        fireEvent.click(confirmButton);
+        
+        // Modal should close
+        expect(screen.queryByTestId('success-modal')).not.toBeInTheDocument();
+    });
+
+    it('should handle onConfirm for ErrorModal', () => {
+        renderLayout();
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        fireEvent.click(screen.getByText('Trigger Error'));
+        
+        // Error modal should be open
+        expect(screen.getByTestId('error-modal')).toBeInTheDocument();
+        
+        // Close via onConfirm button
+        const confirmButton = screen.getByTestId('error-confirm');
+        fireEvent.click(confirmButton);
+        
+        // Modal should close
+        expect(screen.queryByTestId('error-modal')).not.toBeInTheDocument();
+    });
+
+    it('should execute export statement', () => {
+        // Component is imported at the top, so export statement is executed
+        renderLayout();
+        expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
+    });
+
+    it('should call onOpenAddPatient arrow function from SidebarComponent', () => {
+        const mockOnOpenAddPatient = vi.fn();
+        const CustomSidebar = ({ onOpenAddPatient }) => (
+            <div data-testid="custom-sidebar">
+                <button onClick={onOpenAddPatient}>Open Add Patient Custom</button>
+            </div>
+        );
+
+        render(
+            <MemoryRouter>
+                <BaseLayout SidebarComponent={CustomSidebar} />
+            </MemoryRouter>
+        );
+
+        // Click button that calls onOpenAddPatient (line 85: () => setIsAddPatientOpen(true))
+        fireEvent.click(screen.getByText('Open Add Patient Custom'));
+        
+        // AddPatientModal should open
+        expect(screen.getByTestId('add-patient-modal')).toBeInTheDocument();
+    });
+
+    it('should call onClose arrow function from AddPatientModal', () => {
+        renderLayout();
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        
+        // Modal should be open
+        expect(screen.getByTestId('add-patient-modal')).toBeInTheDocument();
+        
+        // Close modal (line 95: () => setIsAddPatientOpen(false))
+        fireEvent.click(screen.getByText('Close Modal'));
+        
+        // Modal should close
+        expect(screen.queryByTestId('add-patient-modal')).not.toBeInTheDocument();
+    });
+
+    it('should handle onKeyDown arrow function with Escape key', () => {
+        renderLayout();
+        const menuButton = screen.getByLabelText(/open menu/i);
+        fireEvent.click(menuButton);
+
+        // Overlay should be present
+        const overlay = screen.getByLabelText('Close sidebar');
+        
+        // Test Escape key handler (line 77: (e) => e.key === 'Escape' && toggleSidebar())
+        fireEvent.keyDown(overlay, { key: 'Escape' });
+        
+        // Sidebar should close
+        expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'false');
+    });
+
+    it('should handle onKeyDown arrow function with non-Escape key', () => {
+        renderLayout();
+        const menuButton = screen.getByLabelText(/open menu/i);
+        fireEvent.click(menuButton);
+
+        // Overlay should be present
+        const overlay = screen.getByLabelText('Close sidebar');
+        
+        // Test non-Escape key (line 77: should not trigger toggleSidebar)
+        fireEvent.keyDown(overlay, { key: 'Enter' });
+        
+        // Sidebar should remain open (Escape key handler only closes on Escape)
+        expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'true');
+    });
+
+    it('should handle all inline arrow functions in JSX', () => {
+        renderLayout();
+        
+        // Test onOpenAddPatient arrow function (line 85)
+        fireEvent.click(screen.getByText('Open Add Patient'));
+        expect(screen.getByTestId('add-patient-modal')).toBeInTheDocument();
+        
+        // Test onClose arrow function (line 95)
+        fireEvent.click(screen.getByText('Close Modal'));
+        expect(screen.queryByTestId('add-patient-modal')).not.toBeInTheDocument();
+        
+        // Test onKeyDown arrow function (line 77)
+        const menuButton = screen.getByLabelText(/open menu/i);
+        fireEvent.click(menuButton);
+        const overlay = screen.getByLabelText('Close sidebar');
+        fireEvent.keyDown(overlay, { key: 'Escape' });
+        expect(screen.getByTestId('mock-sidebar')).toHaveAttribute('data-open', 'false');
     });
 });

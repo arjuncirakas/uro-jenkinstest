@@ -75,6 +75,306 @@ describe('Consent Form Controller - Complete Coverage Tests', () => {
     consentFormController = await import('../controllers/consentFormController.js');
   });
 
+  describe('updateConsentFormTemplate', () => {
+    it('should update template successfully without file', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Updated Procedure',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = null;
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: 'uploads/consent-forms/templates/old.pdf' }]
+        }) // Template exists
+        .mockResolvedValueOnce({ rows: [] }) // No duplicate
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            procedure_name: 'Updated Procedure',
+            test_name: null,
+            is_auto_generated: false,
+            template_file_path: 'uploads/consent-forms/templates/old.pdf',
+            template_file_name: 'old.pdf',
+            template_file_size: 1024
+          }]
+        }); // Update result
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Consent form template updated successfully',
+        data: expect.objectContaining({
+          template: expect.objectContaining({
+            name: 'Updated Procedure'
+          })
+        })
+      });
+    });
+
+    it('should update template successfully with new file', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Updated Procedure',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = {
+        filename: 'template-new-123.pdf',
+        originalname: 'New Template.pdf',
+        size: 2048
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: 'uploads/consent-forms/templates/old.pdf' }]
+        }) // Template exists
+        .mockResolvedValueOnce({ rows: [] }) // No duplicate
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            procedure_name: 'Updated Procedure',
+            test_name: null,
+            is_auto_generated: false,
+            template_file_path: 'uploads/consent-forms/templates/template-new-123.pdf',
+            template_file_name: 'New Template.pdf',
+            template_file_size: 2048
+          }]
+        }); // Update result
+
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.unlinkSync.mockImplementation(() => {});
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockFs.unlinkSync).toHaveBeenCalled();
+    });
+
+    it('should return 400 when validation fails', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: '',
+        test_name: '',
+        is_auto_generated: 'false'
+      };
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Either procedure name or test name is required'
+      });
+    });
+
+    it('should return 404 when template not found', async () => {
+      mockReq.params = { templateId: '999' };
+      mockReq.body = {
+        procedure_name: 'Test',
+        test_name: null
+      };
+
+      mockClient.query.mockResolvedValueOnce({ rows: [] }); // Template not found
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Template not found'
+      });
+    });
+
+    it('should return 400 when duplicate name exists', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Duplicate Name',
+        test_name: null
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: null }]
+        }) // Template exists
+        .mockResolvedValueOnce({ rows: [{ id: 2 }] }); // Duplicate found
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'A template with this name already exists'
+      });
+    });
+
+    it('should handle is_auto_generated as boolean true', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Test',
+        test_name: null,
+        is_auto_generated: true
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: null }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Test',
+            procedure_name: 'Test',
+            test_name: null,
+            is_auto_generated: true
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    it('should handle database error', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Test',
+        test_name: null
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: null }]
+        })
+        .mockRejectedValueOnce(new Error('Database error'));
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Failed to update consent form template',
+        error: 'Database error'
+      });
+    });
+
+    it('should handle constructTemplateFileUrl with null file path', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Test',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = null;
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: null }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Test',
+            procedure_name: 'Test',
+            test_name: null,
+            is_auto_generated: false,
+            template_file_path: null,
+            template_file_name: null,
+            template_file_size: null
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      const responseData = mockRes.json.mock.calls[0][0];
+      expect(responseData.data.template.template_file_url).toBeNull();
+    });
+
+    it('should handle constructTemplateFileUrl with Windows path', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Test',
+        test_name: null
+      };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        originalname: 'Test.pdf',
+        size: 1024
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: 'uploads\\consent-forms\\templates\\old.pdf' }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Test',
+            procedure_name: 'Test',
+            test_name: null,
+            is_auto_generated: false,
+            template_file_path: 'uploads/consent-forms/templates/template-123.pdf',
+            template_file_name: 'Test.pdf',
+            template_file_size: 1024
+          }]
+        });
+
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.unlinkSync.mockImplementation(() => {});
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      const responseData = mockRes.json.mock.calls[0][0];
+      expect(responseData.data.template.template_file_url).toContain('consent-forms/templates/template-123.pdf');
+    });
+
+    it('should handle handleTemplateFileUpload when existing file does not exist', async () => {
+      mockReq.params = { templateId: '1' };
+      mockReq.body = {
+        procedure_name: 'Test',
+        test_name: null
+      };
+      mockReq.file = {
+        filename: 'template-new.pdf',
+        originalname: 'New.pdf',
+        size: 1024
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{ id: 1, template_file_path: 'uploads/consent-forms/templates/old.pdf' }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Test',
+            procedure_name: 'Test',
+            test_name: null,
+            is_auto_generated: false,
+            template_file_path: 'uploads/consent-forms/templates/template-new.pdf',
+            template_file_name: 'New.pdf',
+            template_file_size: 1024
+          }]
+        });
+
+      mockFs.existsSync.mockReturnValue(false); // Old file doesn't exist
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockFs.unlinkSync).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deleteConsentFormTemplate', () => {
     it('should delete template successfully when file exists', async () => {
       mockReq.params = { templateId: '1' };
@@ -733,6 +1033,147 @@ describe('Consent Form Controller - Complete Coverage Tests', () => {
         message: 'Error serving file'
       });
       expect(mockSetCorsHeaders).toHaveBeenCalled();
+    });
+
+    it('should handle file stream error when headers not sent', async () => {
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'error') {
+            // Simulate error after a delay
+            setTimeout(() => handler(new Error('Stream error')), 0);
+          }
+        }),
+        pipe: jest.fn(),
+        destroyed: false
+      };
+
+      mockReq.validatedFilePath = '/path/to/file.pdf';
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+      mockRes.headersSent = false;
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      // Wait for error handler to be called
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockFileStream.on).toHaveBeenCalledWith('error', expect.any(Function));
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should handle file stream error when headers already sent', async () => {
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'error') {
+            // Simulate error after headers sent
+            setTimeout(() => {
+              mockRes.headersSent = true;
+              handler(new Error('Stream error'));
+            }, 0);
+          }
+        }),
+        pipe: jest.fn(),
+        destroyed: false
+      };
+
+      mockReq.validatedFilePath = '/path/to/file.pdf';
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+      mockRes.headersSent = false;
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      // Wait for error handler to be called
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockFileStream.on).toHaveBeenCalledWith('error', expect.any(Function));
+      // Should not call res.status when headers already sent
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should destroy file stream on res close when not destroyed', async () => {
+      const mockFileStream = {
+        on: jest.fn(),
+        pipe: jest.fn(),
+        destroyed: false,
+        destroy: jest.fn()
+      };
+
+      mockReq.validatedFilePath = '/path/to/file.pdf';
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      let closeHandler;
+      mockRes.on = jest.fn((event, handler) => {
+        if (event === 'close') {
+          closeHandler = handler;
+        }
+      });
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      if (closeHandler) {
+        closeHandler();
+        expect(mockFileStream.destroy).toHaveBeenCalled();
+      }
+    });
+
+    it('should not destroy file stream on res close when already destroyed', async () => {
+      const mockFileStream = {
+        on: jest.fn(),
+        pipe: jest.fn(),
+        destroyed: true,
+        destroy: jest.fn()
+      };
+
+      mockReq.validatedFilePath = '/path/to/file.pdf';
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      let closeHandler;
+      mockRes.on = jest.fn((event, handler) => {
+        if (event === 'close') {
+          closeHandler = handler;
+        }
+      });
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      if (closeHandler) {
+        closeHandler();
+        expect(mockFileStream.destroy).not.toHaveBeenCalled();
+      }
+    });
+
+    it('should handle all mime types correctly', async () => {
+      const mimeTypes = {
+        '.pdf': 'application/pdf',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.unknown': 'application/octet-stream'
+      };
+
+      for (const [ext, mimeType] of Object.entries(mimeTypes)) {
+        const mockFileStream = {
+          on: jest.fn(),
+          pipe: jest.fn()
+        };
+
+        mockReq.validatedFilePath = `/path/to/file${ext}`;
+        mockFs.existsSync.mockReturnValue(true);
+        mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+        await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+        expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', mimeType);
+      }
     });
   });
 

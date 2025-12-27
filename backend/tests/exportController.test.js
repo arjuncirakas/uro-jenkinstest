@@ -944,4 +944,114 @@ describe('Export Controller', () => {
             consoleSpy.mockRestore();
         });
     });
+
+    describe('exportPatients - connection error handling', () => {
+        it('should handle pool connection error', async () => {
+            poolMock.connect.mockRejectedValueOnce(new Error('Connection pool exhausted'));
+
+            await exportPatientsToCSV(mockReq, mockRes);
+
+            expect(mockRes.status).toHaveBeenCalledWith(500);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                success: false,
+                message: 'Internal server error'
+            });
+        });
+    });
+
+    describe('buildExportQuery - edge cases', () => {
+        it('should handle fields with extra whitespace', () => {
+            const result = buildExportQuery({
+                fields: '  first_name  ,  last_name  ,  upi  '
+            });
+            expect(result.selectFields.length).toBe(3);
+            expect(result.error).toBeUndefined();
+        });
+
+        it('should handle empty fields array after filtering', () => {
+            const result = buildExportQuery({
+                fields: 'invalid1,invalid2,invalid3'
+            });
+            expect(result.error).toBe('No valid fields selected');
+        });
+
+        it('should handle null values in query params', () => {
+            const result = buildExportQuery({
+                fields: null,
+                startDate: null,
+                endDate: null,
+                carePathway: null,
+                status: null
+            });
+            expect(result.selectFields.length).toBeGreaterThan(0);
+            expect(result.error).toBeUndefined();
+        });
+
+        it('should handle undefined values in query params', () => {
+            const result = buildExportQuery({
+                fields: undefined,
+                startDate: undefined,
+                endDate: undefined
+            });
+            expect(result.selectFields.length).toBeGreaterThan(0);
+            expect(result.error).toBeUndefined();
+        });
+    });
+
+    describe('convertToCSV - all special character combinations', () => {
+        it('should handle value with comma and quote', () => {
+            const headers = ['text'];
+            const rows = [{ text: 'Test, "quote"' }];
+            const csv = convertToCSV(rows, headers);
+            expect(csv).toContain('"Test, ""quote"""');
+        });
+
+        it('should handle value with newline and comma', () => {
+            const headers = ['note'];
+            const rows = [{ note: 'Line1\nLine2, continuation' }];
+            const csv = convertToCSV(rows, headers);
+            expect(csv).toContain('"Line1');
+            expect(csv).toContain('continuation"');
+        });
+
+        it('should handle value with all special characters', () => {
+            const headers = ['text'];
+            const rows = [{ text: 'Test, "quote" and\nnewline' }];
+            const csv = convertToCSV(rows, headers);
+            expect(csv).toContain('"Test, ""quote"" and');
+        });
+    });
+
+    describe('exportPatients - format handling', () => {
+        it('should handle Excel format correctly', async () => {
+            mockClient.query.mockResolvedValue({
+                rows: [{ 'p.first_name': 'John' }]
+            });
+
+            await exportPatientsToExcel(mockReq, mockRes);
+
+            expect(mockRes.setHeader).toHaveBeenCalledWith(
+                'Content-Type',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            );
+            expect(mockRes.setHeader).toHaveBeenCalledWith(
+                'Content-Disposition',
+                expect.stringContaining('.xlsx')
+            );
+        });
+
+        it('should handle CSV format correctly', async () => {
+            mockClient.query.mockResolvedValue({
+                rows: [{ 'p.first_name': 'John' }]
+            });
+
+            await exportPatientsToCSV(mockReq, mockRes);
+
+            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
+            expect(mockRes.setHeader).toHaveBeenCalledWith(
+                'Content-Disposition',
+                expect.stringContaining('.csv')
+            );
+        });
+    });
 });
