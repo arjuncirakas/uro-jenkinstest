@@ -401,7 +401,8 @@ const getUploadedTemplateBlobUrl = async (template, testName) => {
       
       // Extract the path from the URL (e.g., /api/consent-forms/files/consent-forms%2Ftemplates%2Ffile.pdf)
       const urlObj = new URL(template.template_file_url);
-      const pathMatch = urlObj.pathname.match(/\/files\/(.+)$/);
+      const pathRegex = /\/files\/(.+)$/;
+      const pathMatch = pathRegex.exec(urlObj.pathname);
       
       if (pathMatch) {
         // Decode the path to get the original relative path
