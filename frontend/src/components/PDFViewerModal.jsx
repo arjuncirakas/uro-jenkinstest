@@ -101,28 +101,8 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = false }
 
   // Render modal at document body level to avoid parent container constraints
   const modalContent = (
-    <div 
-      className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[9999]"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 9999
-      }}
-    >
-      <div 
-        className="w-full h-full flex flex-col bg-white"
-        style={{
-          width: '100vw',
-          height: '100vh',
-          maxWidth: '100vw',
-          maxHeight: '100vh'
-        }}
-      >
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[9999] w-screen h-screen">
+      <div className="w-full h-full flex flex-col bg-white max-w-screen max-h-screen">
         {/* Header */}
         <div className="bg-teal-600 text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center space-x-3 flex-1 min-w-0">
@@ -156,14 +136,7 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = false }
         </div>
 
         {/* PDF Container - Full screen */}
-        <div 
-          className="flex-1 relative bg-gray-900 overflow-hidden"
-          style={{
-            flex: '1 1 auto',
-            minHeight: 0,
-            height: '100%'
-          }}
-        >
+        <div className="flex-1 relative bg-gray-900 overflow-hidden min-h-0 h-full">
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <div className="flex flex-col items-center space-y-4">
@@ -192,17 +165,10 @@ const PDFViewerModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = false }
             <iframe
               ref={iframeRef}
               src={pdfUrl}
-              className="w-full h-full border-none"
+              className={`w-full h-full border-none flex-1 min-h-0 ${isLoading ? 'hidden' : 'block'}`}
               title={fileName || 'PDF Document'}
               onLoad={handleIframeLoad}
               onError={handleIframeError}
-              style={{ 
-                display: isLoading ? 'none' : 'block',
-                width: '100%',
-                height: '100%',
-                minHeight: 0,
-                flex: '1 1 auto'
-              }}
             />
           )}
         </div>
