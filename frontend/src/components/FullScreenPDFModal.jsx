@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import { IoClose, IoDownload, IoPrint } from 'react-icons/io5';
@@ -32,13 +32,13 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       setIsLoading(true);
       setPdfError(false);
       hasPrintedRef.current = false;
-      
+
       // Fallback: Hide loading after a timeout (iframes don't always fire onLoad reliably)
       const loadingTimeout = setTimeout(() => {
         console.log('[FullScreenPDFModal] Initial loading timeout - hiding loading state');
         setIsLoading(false);
       }, 800); // 800ms timeout
-      
+
       return () => clearTimeout(loadingTimeout);
     } else if (!isOpen) {
       console.log('[FullScreenPDFModal] Modal closed');
@@ -102,7 +102,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
         console.log('[FullScreenPDFModal] Loading timeout - hiding loading state (iframe onLoad may not have fired)');
         setIsLoading(false);
         setPdfError(false);
-        
+
         // Auto-print if enabled
         if (autoPrint && !hasPrintedRef.current) {
           hasPrintedRef.current = true;
@@ -117,13 +117,13 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
               } else {
                 window.print();
               }
-            } catch (e) {
+            } catch {
               window.print();
             }
           }, 500);
         }
       }, 500);
-      
+
       return () => clearTimeout(timeout);
     }
   }, [isOpen, pdfUrl, isLoading, autoPrint]);
@@ -164,7 +164,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
     try {
       const iframe = embedRef.current;
       const contentWindow = iframe?.contentWindow;
-      
+
       if (contentWindow) {
         contentWindow.focus();
         setTimeout(() => {
@@ -193,7 +193,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
     console.log('[FullScreenPDFModal] PDF embed onLoad event fired');
     setIsLoading(false);
     setPdfError(false);
-    
+
     // Auto-print if enabled and hasn't printed yet
     if (autoPrint && !hasPrintedRef.current) {
       console.log('[FullScreenPDFModal] Auto-print enabled, triggering print in 500ms');
@@ -211,12 +211,25 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
   };
 
   const modalContent = (
-    <div 
-      className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black flex flex-col z-[99999]"
+    <div
+      className="fixed top-0 left-0 right-0 bottom-0 bg-black flex flex-col"
       data-testid="fullscreen-pdf-modal"
+      style={{
+        width: '100vw',
+        height: '100vh',
+        zIndex: 99999,
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        margin: 0,
+        padding: 0
+      }}
     >
       {/* Minimal Header */}
-      <div className="bg-teal-600 text-white px-4 py-2 flex items-center justify-between flex-shrink-0">
+      <div
+        className="bg-teal-600 text-white px-4 py-2 flex items-center justify-between"
+        style={{ flexShrink: 0, height: '48px' }}
+      >
         <div className="flex items-center space-x-3 flex-1 min-w-0">
           <h2 className="text-base font-semibold truncate">
             {fileName || 'PDF Viewer'}
@@ -251,7 +264,14 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       </div>
 
       {/* PDF Container - Takes up remaining space */}
-      <div className="flex-1 relative bg-gray-900 overflow-hidden min-h-0 h-full">
+      <div
+        className="relative bg-gray-900 overflow-hidden"
+        style={{
+          flex: '1 1 0%',
+          minHeight: 0,
+          height: 'calc(100vh - 80px)' // 48px header + 32px footer
+        }}
+      >
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <div className="flex flex-col items-center space-y-4">
@@ -281,14 +301,17 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
           <iframe
             ref={embedRef}
             src={pdfUrl}
-            className="w-full h-full border-none"
+            className="border-none"
             title={fileName || 'PDF Document'}
             onLoad={handleIframeLoad}
             onError={handleIframeError}
-            style={{ 
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
               width: '100%',
               height: '100%',
-              minHeight: '100%',
+              border: 'none',
               opacity: isLoading ? 0 : 1,
               transition: 'opacity 0.3s'
             }}
@@ -297,7 +320,10 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       </div>
 
       {/* Minimal Footer */}
-      <div className="bg-gray-100 px-4 py-2 flex items-center justify-between text-xs text-gray-600 flex-shrink-0">
+      <div
+        className="bg-gray-100 px-4 flex items-center justify-between text-xs text-gray-600"
+        style={{ flexShrink: 0, height: '32px' }}
+      >
         <span>Press ESC to close</span>
         <button
           onClick={onClose}
@@ -320,7 +346,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
       height: window.innerHeight
     }
   });
-  
+
   return createPortal(modalContent, portalTarget);
 };
 
