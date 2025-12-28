@@ -1,77 +1,251 @@
-import React, { useEffect, useRef } from 'react'; // eslint-disable-line no-unused-vars
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
+import { IoClose, IoDownload, IoPrint } from 'react-icons/io5';
+import { useEscapeKey } from '../utils/useEscapeKey';
 
-/**
- * FullScreenPDFModal - Opens PDF in a new browser tab for full-screen viewing
- * 
- * This component opens the PDF in a new tab instead of a modal because:
- * 1. Browser PDFs viewers work best when they have the full tab
- * 2. No CSP issues with workers or external scripts
- * 3. User has full control over zoom, print, download via browser controls
- * 4. Works consistently across all browsers
- */
 const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = false }) => {
-  const hasOpenedRef = useRef(false);
-  const windowRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pdfError, setPdfError] = useState(false);
+  const iframeRef = React.useRef(null);
+  const hasPrintedRef = React.useRef(false);
 
+  // Close on Escape key
+  useEscapeKey(() => {
+    if (isOpen) {
+      onClose();
+    }
+  });
+
+  // Reset state when modal opens/closes or PDF changes
   useEffect(() => {
-    if (isOpen && pdfUrl && !hasOpenedRef.current) {
-      hasOpenedRef.current = true;
+    if (isOpen && pdfUrl) {
+      setIsLoading(true);
+      setPdfError(false);
+      hasPrintedRef.current = false;
+    }
+  }, [isOpen, pdfUrl]);
 
-      console.log('[FullScreenPDFModal] Opening PDF in new tab:', {
-        pdfUrl: pdfUrl.substring(0, 50) + '...',
-        fileName,
-        autoPrint
-      });
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
-      // Open PDF in new tab
-      const newWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
-      windowRef.current = newWindow;
+  if (!isOpen || !pdfUrl) return null;
 
-      if (newWindow) {
-        // Set the tab title if possible
-        try {
-          newWindow.document.title = fileName || 'PDF Document';
-        } catch {
-          // Cross-origin security may prevent this, which is fine
-        }
+  const handleDownload = () => {
+    try {
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = fileName || 'document.pdf';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      alert('Failed to download PDF. Please try again.');
+    }
+  };
 
-        // If autoPrint is enabled, trigger print after the PDF loads
-        if (autoPrint) {
-          // Use a timeout to allow the PDF to load
-          setTimeout(() => {
-            try {
-              if (newWindow && !newWindow.closed) {
-                newWindow.print();
-              }
-            } catch (error) {
-              console.log('[FullScreenPDFModal] Auto-print not available:', error);
-            }
-          }, 2000);
-        }
+  const handlePrint = () => {
+    try {
+      const iframe = iframeRef.current;
+      const contentWindow = iframe?.contentWindow;
+
+      if (contentWindow) {
+        // Focus the iframe first to ensure print dialog works
+        contentWindow.focus();
+        // Small delay to ensure focus is set
+        setTimeout(() => {
+          contentWindow.print();
+        }, 100);
       } else {
-        // Popup was blocked, show a fallback
-        console.warn('[FullScreenPDFModal] Popup blocked, providing fallback');
-        alert('Please allow popups to view the PDF, or use the download option.');
+        // Fallback: try to print the current window
+        window.print();
       }
+    } catch (error) {
+      console.error('Error printing PDF:', error);
+      // Fallback: try alternative print methods
+      try {
+        const iframe = iframeRef.current;
+        if (iframe) {
+          // Try accessing contentDocument for same-origin content
+          if (iframe.contentDocument) {
+            iframe.contentDocument.execCommand('print', false, null);
+          } else if (iframe.contentWindow) {
+            iframe.contentWindow.print();
+          }
+        }
+      } catch (fallbackError) {
+        console.error('Fallback print error:', fallbackError);
+        // Last resort: print current window
+        window.print();
+      }
+    }
+  };
 
-      // Close the modal state after opening
-      // Small delay to ensure the window opened
+  const handleIframeLoad = () => {
+    setIsLoading(false);
+    setPdfError(false);
+
+    // Auto-print if enabled and hasn't printed yet
+    if (autoPrint && !hasPrintedRef.current) {
+      hasPrintedRef.current = true;
+      // Small delay to ensure PDF is fully rendered
       setTimeout(() => {
-        onClose();
-        hasOpenedRef.current = false;
-      }, 100);
+        handlePrint();
+      }, 500);
     }
+  };
 
-    // Reset when modal closes
-    if (!isOpen) {
-      hasOpenedRef.current = false;
-    }
-  }, [isOpen, pdfUrl, fileName, autoPrint, onClose]);
+  const handleIframeError = () => {
+    setIsLoading(false);
+    setPdfError(true);
+  };
 
-  // This component doesn't render anything visible
-  // The PDF opens in a new tab instead
-  return null;
+  // Render modal at document body level to avoid parent container constraints
+  const modalContent = (
+    <div
+      className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[9999]"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 99999
+      }}
+    >
+      <div
+        className="w-full h-full flex flex-col bg-white"
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        {/* Header */}
+        <div
+          className="bg-teal-600 text-white px-6 py-4 flex items-center justify-between flex-shrink-0"
+          style={{ flexShrink: 0 }}
+        >
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
+            <h2 className="text-lg font-semibold truncate">
+              {fileName || 'PDF Viewer'}
+            </h2>
+          </div>
+          <div className="flex items-center space-x-2 ml-4">
+            <button
+              onClick={handlePrint}
+              className="p-2 bg-teal-700 hover:bg-teal-500 rounded-lg transition-colors"
+              title="Print"
+              type="button"
+            >
+              <IoPrint className="text-xl" />
+            </button>
+            <button
+              onClick={handleDownload}
+              className="p-2 bg-teal-700 hover:bg-teal-500 rounded-lg transition-colors"
+              title="Download"
+              type="button"
+            >
+              <IoDownload className="text-xl" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 bg-teal-700 hover:bg-teal-500 rounded-lg transition-colors"
+              title="Close"
+              type="button"
+            >
+              <IoClose className="text-xl" />
+            </button>
+          </div>
+        </div>
+
+        {/* PDF Container - Full screen */}
+        <div
+          className="flex-1 relative bg-gray-900 overflow-hidden"
+          style={{
+            flex: '1 1 auto',
+            position: 'relative',
+            minHeight: 0,
+            overflow: 'hidden'
+          }}
+        >
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="flex flex-col items-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+                <p className="text-white text-sm">Loading PDF...</p>
+              </div>
+            </div>
+          )}
+
+          {pdfError ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center p-8">
+                <div className="text-red-400 text-lg mb-2">Failed to load PDF</div>
+                <p className="text-gray-400 text-sm mb-4">
+                  The PDF could not be displayed. It may be corrupted or in an unsupported format.
+                </p>
+                <button
+                  onClick={handleDownload}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  type="button"
+                >
+                  Try Downloading Instead
+                </button>
+              </div>
+            </div>
+          ) : (
+            <iframe
+              ref={iframeRef}
+              src={pdfUrl}
+              title={fileName || 'PDF Document'}
+              onLoad={handleIframeLoad}
+              onError={handleIframeError}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                display: isLoading ? 'none' : 'block'
+              }}
+            />
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="bg-gray-100 px-6 py-3 flex items-center justify-between text-sm text-gray-600 flex-shrink-0"
+          style={{ flexShrink: 0 }}
+        >
+          <div className="flex items-center space-x-4">
+            <span>Press ESC to close</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Use portal to render at document body level, avoiding any parent container constraints
+  return createPortal(modalContent, document.body);
 };
 
 FullScreenPDFModal.propTypes = {
