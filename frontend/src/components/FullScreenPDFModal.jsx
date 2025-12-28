@@ -1,14 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react'; // eslint-disable-line no-unused-vars
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
-import { IoClose, IoDownload, IoPrint } from 'react-icons/io5';
+import { IoClose, IoDownload, IoPrint, IoChevronBack, IoChevronForward, IoAdd, IoRemove } from 'react-icons/io5';
 import { useEscapeKey } from '../utils/useEscapeKey';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up the worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = false }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [pdfError, setPdfError] = useState(false);
-  const embedRef = useRef(null);
+  const [pdfDocument, setPdfDocument] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [scale, setScale] = useState(1);
+  const [fitMode, setFitMode] = useState('width'); // 'width', 'height', 'page'
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
   const hasPrintedRef = useRef(false);
+  const renderTaskRef = useRef(null);
 
   // Close on Escape key
   useEscapeKey(() => {
@@ -17,140 +28,151 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
     }
   });
 
-  // Reset state when modal opens/closes or PDF changes
+  // Load PDF document
   useEffect(() => {
-    if (isOpen && pdfUrl) {
-      console.log('[FullScreenPDFModal] Modal opening:', {
-        isOpen,
-        pdfUrl: pdfUrl.substring(0, 50) + '...',
-        fileName,
-        autoPrint,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-        bodyExists: !!document.body
-      });
-      setIsLoading(true);
-      setPdfError(false);
-      hasPrintedRef.current = false;
+    if (!isOpen || !pdfUrl) {
+      setPdfDocument(null);
+      setCurrentPage(1);
+      setTotalPages(0);
+      return;
+    }
 
-      // Fallback: Hide loading after a timeout (iframes don't always fire onLoad reliably)
-      const loadingTimeout = setTimeout(() => {
-        console.log('[FullScreenPDFModal] Initial loading timeout - hiding loading state');
+    setIsLoading(true);
+    setPdfError(false);
+    hasPrintedRef.current = false;
+
+    const loadPdf = async () => {
+      try {
+        console.log('[FullScreenPDFModal] Loading PDF:', pdfUrl.substring(0, 50) + '...');
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+
+        console.log('[FullScreenPDFModal] PDF loaded, pages:', pdf.numPages);
+        setPdfDocument(pdf);
+        setTotalPages(pdf.numPages);
+        setCurrentPage(1);
         setIsLoading(false);
-      }, 800); // 800ms timeout
-
-      return () => clearTimeout(loadingTimeout);
-    } else if (!isOpen) {
-      console.log('[FullScreenPDFModal] Modal closed');
-    }
-  }, [isOpen, pdfUrl, fileName, autoPrint]);
-
-  // Prevent body scroll when modal is open
-  useEffect(() => {
-    if (isOpen) {
-      console.log('[FullScreenPDFModal] Locking body scroll');
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        console.log('[FullScreenPDFModal] Restoring body scroll');
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [isOpen]);
-
-  // Verify modal was rendered correctly after mount
-  useEffect(() => {
-    if (isOpen && pdfUrl) {
-      const timer = setTimeout(() => {
-        const modalElement = document.querySelector('[data-testid="fullscreen-pdf-modal"]');
-        if (modalElement) {
-          const computedStyle = window.getComputedStyle(modalElement);
-          const rect = modalElement.getBoundingClientRect();
-          console.log('[FullScreenPDFModal] Modal element verified:', {
-            found: true,
-            position: computedStyle.position,
-            top: computedStyle.top,
-            left: computedStyle.left,
-            width: computedStyle.width,
-            height: computedStyle.height,
-            zIndex: computedStyle.zIndex,
-            boundingRect: {
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height
-            },
-            viewport: {
-              width: window.innerWidth,
-              height: window.innerHeight
-            }
-          });
-        } else {
-          console.error('[FullScreenPDFModal] ERROR: Modal element not found in DOM!');
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, pdfUrl]);
-
-  // Fallback: Check if iframe has loaded (for when onLoad doesn't fire)
-  // MUST be before early return to follow Rules of Hooks
-  useEffect(() => {
-    if (isOpen && pdfUrl && isLoading) {
-      // Timeout fallback - hide loading after 500ms (iframe loads quickly for blob URLs)
-      const timeout = setTimeout(() => {
-        console.log('[FullScreenPDFModal] Loading timeout - hiding loading state (iframe onLoad may not have fired)');
-        setIsLoading(false);
-        setPdfError(false);
 
         // Auto-print if enabled
         if (autoPrint && !hasPrintedRef.current) {
           hasPrintedRef.current = true;
           setTimeout(() => {
-            try {
-              const iframe = embedRef.current;
-              if (iframe?.contentWindow) {
-                iframe.contentWindow.focus();
-                setTimeout(() => {
-                  iframe.contentWindow.print();
-                }, 100);
-              } else {
-                window.print();
-              }
-            } catch {
-              window.print();
-            }
-          }, 500);
+            handlePrint();
+          }, 1000);
         }
-      }, 500);
+      } catch (error) {
+        console.error('[FullScreenPDFModal] Error loading PDF:', error);
+        setPdfError(true);
+        setIsLoading(false);
+      }
+    };
 
-      return () => clearTimeout(timeout);
+    loadPdf();
+
+    return () => {
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+      }
+    };
+  }, [isOpen, pdfUrl, autoPrint]);
+
+  // Calculate scale to fit container
+  const calculateScale = useCallback((page, containerWidth, containerHeight) => {
+    const viewport = page.getViewport({ scale: 1 });
+
+    if (fitMode === 'width') {
+      return (containerWidth - 40) / viewport.width; // 40px for padding
+    } else if (fitMode === 'height') {
+      return (containerHeight - 40) / viewport.height;
+    } else {
+      // Fit entire page
+      const scaleX = (containerWidth - 40) / viewport.width;
+      const scaleY = (containerHeight - 40) / viewport.height;
+      return Math.min(scaleX, scaleY);
     }
-  }, [isOpen, pdfUrl, isLoading, autoPrint]);
+  }, [fitMode]);
+
+  // Render current page
+  useEffect(() => {
+    if (!pdfDocument || !canvasRef.current || !containerRef.current) return;
+
+    const renderPage = async () => {
+      try {
+        // Cancel any ongoing render
+        if (renderTaskRef.current) {
+          await renderTaskRef.current.cancel().catch(() => { });
+        }
+
+        const page = await pdfDocument.getPage(currentPage);
+        const container = containerRef.current;
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+
+        // Calculate scale to fit
+        const calculatedScale = calculateScale(page, containerWidth, containerHeight);
+        setScale(calculatedScale);
+
+        const viewport = page.getViewport({ scale: calculatedScale });
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+
+        // Set canvas dimensions
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        // Render PDF page
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        renderTaskRef.current = page.render(renderContext);
+        await renderTaskRef.current.promise;
+
+        console.log('[FullScreenPDFModal] Page rendered:', currentPage, 'at scale:', calculatedScale);
+      } catch (error) {
+        if (error.name !== 'RenderingCancelledException') {
+          console.error('[FullScreenPDFModal] Error rendering page:', error);
+        }
+      }
+    };
+
+    renderPage();
+  }, [pdfDocument, currentPage, fitMode, calculateScale]);
+
+  // Re-render on window resize
+  useEffect(() => {
+    if (!pdfDocument) return;
+
+    const handleResize = () => {
+      // Trigger re-render by updating fit mode
+      setFitMode(prev => prev);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [pdfDocument]);
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen || !pdfUrl) {
-    if (!isOpen) {
-      console.log('[FullScreenPDFModal] Not rendering - modal not open');
-    }
-    if (!pdfUrl) {
-      console.log('[FullScreenPDFModal] Not rendering - no PDF URL');
-    }
     return null;
   }
-
-  console.log('[FullScreenPDFModal] Rendering modal with:', {
-    isOpen,
-    hasPdfUrl: !!pdfUrl,
-    fileName,
-    viewport: { width: window.innerWidth, height: window.innerHeight }
-  });
 
   const handleDownload = () => {
     try {
       const link = document.createElement('a');
       link.href = pdfUrl;
       link.download = fileName || 'document.pdf';
-      link.className = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -161,53 +183,41 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
   };
 
   const handlePrint = () => {
-    try {
-      const iframe = embedRef.current;
-      const contentWindow = iframe?.contentWindow;
-
-      if (contentWindow) {
-        contentWindow.focus();
-        setTimeout(() => {
-          contentWindow.print();
-        }, 100);
-      } else {
-        window.print();
-      }
-    } catch (error) {
-      console.error('[FullScreenPDFModal] Error printing PDF:', error);
-      try {
-        const iframe = embedRef.current;
-        if (iframe?.contentWindow) {
-          iframe.contentWindow.print();
-        } else {
-          window.print();
-        }
-      } catch (fallbackError) {
-        console.error('[FullScreenPDFModal] Fallback print error:', fallbackError);
-        window.print();
-      }
+    // Open PDF in new window for printing
+    const printWindow = window.open(pdfUrl, '_blank');
+    if (printWindow) {
+      printWindow.addEventListener('load', () => {
+        printWindow.print();
+      });
+    } else {
+      window.print();
     }
   };
 
-  const handleIframeLoad = () => {
-    console.log('[FullScreenPDFModal] PDF embed onLoad event fired');
-    setIsLoading(false);
-    setPdfError(false);
-
-    // Auto-print if enabled and hasn't printed yet
-    if (autoPrint && !hasPrintedRef.current) {
-      console.log('[FullScreenPDFModal] Auto-print enabled, triggering print in 500ms');
-      hasPrintedRef.current = true;
-      setTimeout(() => {
-        handlePrint();
-      }, 500);
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
     }
   };
 
-  const handleIframeError = () => {
-    console.error('[FullScreenPDFModal] Iframe error loading PDF:', pdfUrl);
-    setIsLoading(false);
-    setPdfError(true);
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  const zoomIn = () => {
+    setFitMode('custom');
+    setScale(prev => Math.min(prev * 1.25, 5));
+  };
+
+  const zoomOut = () => {
+    setFitMode('custom');
+    setScale(prev => Math.max(prev * 0.8, 0.25));
+  };
+
+  const fitToWidth = () => {
+    setFitMode('width');
   };
 
   const modalContent = (
@@ -230,7 +240,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
         overflow: 'hidden'
       }}
     >
-      {/* Minimal Header */}
+      {/* Header */}
       <div
         style={{
           backgroundColor: '#0d9488',
@@ -249,7 +259,108 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
             {fileName || 'PDF Viewer'}
           </h2>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+
+        {/* Page navigation and zoom controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {totalPages > 1 && (
+            <>
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage <= 1}
+                style={{
+                  padding: '6px',
+                  backgroundColor: currentPage <= 1 ? '#666' : '#0f766e',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                type="button"
+              >
+                <IoChevronBack style={{ fontSize: '18px', color: 'white' }} />
+              </button>
+              <span style={{ color: 'white', fontSize: '14px', minWidth: '80px', textAlign: 'center' }}>
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage >= totalPages}
+                style={{
+                  padding: '6px',
+                  backgroundColor: currentPage >= totalPages ? '#666' : '#0f766e',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                type="button"
+              >
+                <IoChevronForward style={{ fontSize: '18px', color: 'white' }} />
+              </button>
+              <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.3)', margin: '0 8px' }} />
+            </>
+          )}
+
+          <button
+            onClick={zoomOut}
+            style={{
+              padding: '6px',
+              backgroundColor: '#0f766e',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            title="Zoom Out"
+            type="button"
+          >
+            <IoRemove style={{ fontSize: '18px', color: 'white' }} />
+          </button>
+          <span style={{ color: 'white', fontSize: '12px', minWidth: '50px', textAlign: 'center' }}>
+            {Math.round(scale * 100)}%
+          </span>
+          <button
+            onClick={zoomIn}
+            style={{
+              padding: '6px',
+              backgroundColor: '#0f766e',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            title="Zoom In"
+            type="button"
+          >
+            <IoAdd style={{ fontSize: '18px', color: 'white' }} />
+          </button>
+          <button
+            onClick={fitToWidth}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: fitMode === 'width' ? '#0f766e' : '#0d9488',
+              border: '1px solid rgba(255,255,255,0.3)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              color: 'white'
+            }}
+            title="Fit to Width"
+            type="button"
+          >
+            Fit
+          </button>
+
+          <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.3)', margin: '0 8px' }} />
+
           <button
             onClick={handlePrint}
             style={{
@@ -304,97 +415,92 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
         </div>
       </div>
 
-      {/* PDF Container - Takes up remaining space */}
+      {/* PDF Container */}
       <div
+        ref={containerRef}
         style={{
-          position: 'relative',
-          backgroundColor: '#1f2937',
-          overflow: 'hidden',
           flex: '1 1 auto',
           minHeight: 0,
-          height: 'calc(100vh - 80px)'
+          backgroundColor: '#374151',
+          overflow: 'auto',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          padding: '20px'
         }}
       >
         {isLoading && (
           <div style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10
+            gap: '16px'
           }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                border: '2px solid transparent',
-                borderBottomColor: '#14b8a6',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }}></div>
-              <p style={{ color: 'white', fontSize: '14px', margin: 0 }}>Loading PDF...</p>
-            </div>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              border: '3px solid #1f2937',
+              borderTopColor: '#14b8a6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            <p style={{ color: 'white', fontSize: '14px', margin: 0 }}>Loading PDF...</p>
+            <style>{`
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            `}</style>
           </div>
         )}
 
-        {pdfError ? (
+        {pdfError && (
           <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            height: '100%',
+            color: 'white',
+            textAlign: 'center',
+            padding: '20px'
           }}>
-            <div style={{ textAlign: 'center', padding: '32px' }}>
-              <div style={{ color: '#f87171', fontSize: '18px', marginBottom: '8px' }}>Failed to load PDF</div>
-              <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '16px' }}>
-                The PDF could not be displayed. It may be corrupted or in an unsupported format.
-              </p>
-              <button
-                onClick={handleDownload}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#0d9488',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-                type="button"
-              >
-                Try Downloading Instead
-              </button>
-            </div>
+            <div style={{ color: '#f87171', fontSize: '18px', marginBottom: '8px' }}>Failed to load PDF</div>
+            <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '16px' }}>
+              The PDF could not be displayed. Please try downloading it instead.
+            </p>
+            <button
+              onClick={handleDownload}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#0d9488',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+              type="button"
+            >
+              Download PDF
+            </button>
           </div>
-        ) : (
-          <iframe
-            ref={embedRef}
-            src={pdfUrl}
-            title={fileName || 'PDF Document'}
-            onLoad={handleIframeLoad}
-            onError={handleIframeError}
+        )}
+
+        {!isLoading && !pdfError && (
+          <canvas
+            ref={canvasRef}
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              opacity: isLoading ? 0 : 1,
-              transition: 'opacity 0.3s'
+              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              backgroundColor: 'white'
             }}
           />
         )}
       </div>
 
-      {/* Minimal Footer */}
+      {/* Footer */}
       <div
         style={{
           backgroundColor: '#f3f4f6',
@@ -409,7 +515,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
           minHeight: '32px'
         }}
       >
-        <span>Press ESC to close</span>
+        <span>Press ESC to close • Use scroll to navigate</span>
         <button
           onClick={onClose}
           style={{
@@ -430,18 +536,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
     </div>
   );
 
-  // Render at document body level using portal
-  const portalTarget = document.body;
-  console.log('[FullScreenPDFModal] Creating portal to document.body:', {
-    bodyExists: !!portalTarget,
-    bodyChildren: portalTarget?.children?.length || 0,
-    viewportSize: {
-      width: window.innerWidth,
-      height: window.innerHeight
-    }
-  });
-
-  return createPortal(modalContent, portalTarget);
+  return createPortal(modalContent, document.body);
 };
 
 FullScreenPDFModal.propTypes = {
@@ -453,4 +548,3 @@ FullScreenPDFModal.propTypes = {
 };
 
 export default FullScreenPDFModal;
-
