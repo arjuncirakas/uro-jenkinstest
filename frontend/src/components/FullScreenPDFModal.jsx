@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // eslint-disable-line no-unused-vars
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import { IoClose, IoDownload, IoPrint } from 'react-icons/io5';
