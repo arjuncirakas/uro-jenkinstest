@@ -212,85 +212,161 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
 
   const modalContent = (
     <div
-      className="fixed top-0 left-0 right-0 bottom-0 bg-black flex flex-col"
       data-testid="fullscreen-pdf-modal"
       style={{
-        width: '100vw',
-        height: '100vh',
-        zIndex: 99999,
         position: 'fixed',
         top: 0,
         left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: '#000',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 99999,
         margin: 0,
-        padding: 0
+        padding: 0,
+        overflow: 'hidden'
       }}
     >
       {/* Minimal Header */}
       <div
-        className="bg-teal-600 text-white px-4 py-2 flex items-center justify-between"
-        style={{ flexShrink: 0, height: '48px' }}
+        style={{
+          backgroundColor: '#0d9488',
+          color: 'white',
+          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          height: '48px',
+          minHeight: '48px'
+        }}
       >
-        <div className="flex items-center space-x-3 flex-1 min-w-0">
-          <h2 className="text-base font-semibold truncate">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
             {fileName || 'PDF Viewer'}
           </h2>
         </div>
-        <div className="flex items-center space-x-2 ml-4">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
           <button
             onClick={handlePrint}
-            className="p-1.5 bg-teal-700 hover:bg-teal-500 rounded transition-colors"
+            style={{
+              padding: '6px',
+              backgroundColor: '#0f766e',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
             title="Print"
             type="button"
           >
-            <IoPrint className="text-lg" />
+            <IoPrint style={{ fontSize: '18px', color: 'white' }} />
           </button>
           <button
             onClick={handleDownload}
-            className="p-1.5 bg-teal-700 hover:bg-teal-500 rounded transition-colors"
+            style={{
+              padding: '6px',
+              backgroundColor: '#0f766e',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
             title="Download"
             type="button"
           >
-            <IoDownload className="text-lg" />
+            <IoDownload style={{ fontSize: '18px', color: 'white' }} />
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 bg-teal-700 hover:bg-teal-500 rounded transition-colors"
+            style={{
+              padding: '6px',
+              backgroundColor: '#0f766e',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
             title="Close"
             type="button"
           >
-            <IoClose className="text-lg" />
+            <IoClose style={{ fontSize: '18px', color: 'white' }} />
           </button>
         </div>
       </div>
 
       {/* PDF Container - Takes up remaining space */}
       <div
-        className="relative bg-gray-900 overflow-hidden"
         style={{
-          flex: '1 1 0%',
+          position: 'relative',
+          backgroundColor: '#1f2937',
+          overflow: 'hidden',
+          flex: '1 1 auto',
           minHeight: 0,
-          height: 'calc(100vh - 80px)' // 48px header + 32px footer
+          height: 'calc(100vh - 80px)'
         }}
       >
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="flex flex-col items-center space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
-              <p className="text-white text-sm">Loading PDF...</p>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                border: '2px solid transparent',
+                borderBottomColor: '#14b8a6',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}></div>
+              <p style={{ color: 'white', fontSize: '14px', margin: 0 }}>Loading PDF...</p>
             </div>
           </div>
         )}
 
         {pdfError ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center p-8">
-              <div className="text-red-400 text-lg mb-2">Failed to load PDF</div>
-              <p className="text-gray-400 text-sm mb-4">
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <div style={{ textAlign: 'center', padding: '32px' }}>
+              <div style={{ color: '#f87171', fontSize: '18px', marginBottom: '8px' }}>Failed to load PDF</div>
+              <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '16px' }}>
                 The PDF could not be displayed. It may be corrupted or in an unsupported format.
               </p>
               <button
                 onClick={handleDownload}
-                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#0d9488',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
                 type="button"
               >
                 Try Downloading Instead
@@ -301,7 +377,6 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
           <iframe
             ref={embedRef}
             src={pdfUrl}
-            className="border-none"
             title={fileName || 'PDF Document'}
             onLoad={handleIframeLoad}
             onError={handleIframeError}
@@ -321,13 +396,32 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName, autoPrint = fal
 
       {/* Minimal Footer */}
       <div
-        className="bg-gray-100 px-4 flex items-center justify-between text-xs text-gray-600"
-        style={{ flexShrink: 0, height: '32px' }}
+        style={{
+          backgroundColor: '#f3f4f6',
+          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '12px',
+          color: '#4b5563',
+          flexShrink: 0,
+          height: '32px',
+          minHeight: '32px'
+        }}
       >
         <span>Press ESC to close</span>
         <button
           onClick={onClose}
-          className="px-3 py-1 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors text-xs font-medium"
+          style={{
+            padding: '4px 12px',
+            backgroundColor: '#0d9488',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: 500
+          }}
           type="button"
         >
           Close
