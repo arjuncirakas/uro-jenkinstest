@@ -15,6 +15,10 @@ vi.mock('../services/investigationService', () => ({
       success: true,
       data: { id: 1 }
     }),
+    updateOtherTestResult: vi.fn().mockResolvedValue({
+      success: true,
+      data: { id: 1 }
+    }),
     viewFile: vi.fn().mockResolvedValue(new Blob(['test'], { type: 'application/pdf' }))
   }
 }));
@@ -1549,9 +1553,89 @@ describe('AddInvestigationResultModal', () => {
     });
   });
 
-  describe('Debug Logging', () => {
-    it('should log debug information when modal opens with existing result', () => {
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  describe('Event Listeners', () => {
+    it('should listen for openImageViewer event and open image viewer modal', async () => {
+      renderModal();
+      
+      const event = new CustomEvent('openImageViewer', {
+        detail: {
+          imageUrl: 'data:image/png;base64,test',
+          fileName: 'test.png',
+          blobUrl: 'blob:http://localhost/test'
+        }
+      });
+      
+      window.dispatchEvent(event);
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('image-viewer')).toBeInTheDocument();
+      });
+    });
+
+    it('should not open image viewer if imageUrl is missing in event', () => {
+      renderModal();
+      
+      const event = new CustomEvent('openImageViewer', {
+        detail: {
+          fileName: 'test.png',
+          blobUrl: 'blob:http://localhost/test'
+        }
+      });
+      
+      window.dispatchEvent(event);
+      
+      expect(screen.queryByTestId('image-viewer')).not.toBeInTheDocument();
+    });
+
+    it('should listen for openPDFViewer event and open PDF viewer modal', async () => {
+      renderModal();
+      
+      const event = new CustomEvent('openPDFViewer', {
+        detail: {
+          pdfUrl: 'blob:http://localhost/test.pdf',
+          fileName: 'test.pdf',
+          blobUrl: 'blob:http://localhost/test'
+        }
+      });
+      
+      window.dispatchEvent(event);
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument();
+      });
+    });
+
+    it('should not open PDF viewer if pdfUrl is missing in event', () => {
+      renderModal();
+      
+      const event = new CustomEvent('openPDFViewer', {
+        detail: {
+          fileName: 'test.pdf',
+          blobUrl: 'blob:http://localhost/test'
+        }
+      });
+      
+      window.dispatchEvent(event);
+      
+      expect(screen.queryByTestId('pdf-viewer')).not.toBeInTheDocument();
+    });
+
+    it('should cleanup event listeners on unmount', () => {
+      const { unmount } = renderModal();
+      
+      const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+      
+      unmount();
+      
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('openImageViewer', expect.any(Function));
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('openPDFViewer', expect.any(Function));
+      
+      removeEventListenerSpy.mockRestore();
+    });
+  });
+
+  describe('Remove File Functionality', () => {
+    it('should show remove button for existing file', async () => {
       const existingResult = {
         id: 1,
         result: '5.2',
@@ -1561,12 +1645,248 @@ describe('AddInvestigationResultModal', () => {
       
       renderModal({ existingResult });
       
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('AddInvestigationResultModal - Existing result:'),
-        existingResult
-      );
+      await waitFor(() => {
+        const removeButton = screen.getByTitle('Remove existing file');
+        expect(removeButton).toBeInTheDocument();
+      });
+    });
+
+    it('should show confirmation modal when remove button is clicked', async () => {
+      const existingResult = {
+        id: 1,
+        result: '5.2',
+        filePath: 'uploads/test.pdf',
+        fileName: 'test.pdf'
+      };
       
-      consoleLogSpy.mockRestore();
+      window.confirm = vi.fn().mockReturnValue(true);
+      
+      renderModal({ existingResult });
+      
+      await waitFor(() => {
+        const removeButton = screen.getByTitle('Remove existing file');
+        expect(removeButton).toBeInTheDocument();
+      });
+      
+      const removeButton = screen.getByTitle('Remove existing file');
+      fireEvent.click(removeButton);
+      
+      expect(window.confirm).toHaveBeenCalledWith('Are you sure you want to remove this file? You can upload a new file to replace it.');
+    });
+
+    it('should set removeExistingFile flag when user confirms removal', async () => {
+      const existingResult = {
+        id: 1,
+        result: '5.2',
+        filePath: 'uploads/test.pdf',
+        fileName: 'test.pdf'
+      };
+      
+      window.confirm = vi.fn().mockReturnValue(true);
+      
+      renderModal({ existingResult });
+      
+      await waitFor(() => {
+        const removeButton = screen.getByTitle('Remove existing file');
+        expect(removeButton).toBeInTheDocument();
+      });
+      
+      const removeButton = screen.getByTitle('Remove existing file');
+      fireEvent.click(removeButton);
+      
+      await waitFor(() => {
+        // File should be hidden after removal
+        expect(screen.queryByText('Existing uploaded file')).not.toBeInTheDocument();
+      });
+    });
+
+    it('should not remove file if user cancels confirmation', async () => {
+      const existingResult = {
+        id: 1,
+        result: '5.2',
+        filePath: 'uploads/test.pdf',
+        fileName: 'test.pdf'
+      };
+      
+      window.confirm = vi.fn().mockReturnValue(false);
+      
+      renderModal({ existingResult });
+      
+      await waitFor(() => {
+        const removeButton = screen.getByTitle('Remove existing file');
+        expect(removeButton).toBeInTheDocument();
+      });
+      
+      const removeButton = screen.getByTitle('Remove existing file');
+      fireEvent.click(removeButton);
+      
+      // File should still be visible
+      await waitFor(() => {
+        expect(screen.getByText('Existing uploaded file')).toBeInTheDocument();
+      });
+    });
+
+    it('should clear removeExistingFile flag when new file is selected', async () => {
+      const existingResult = {
+        id: 1,
+        result: '5.2',
+        filePath: 'uploads/test.pdf',
+        fileName: 'test.pdf'
+      };
+      
+      window.confirm = vi.fn().mockReturnValue(true);
+      
+      renderModal({ existingResult });
+      
+      // Remove file
+      await waitFor(() => {
+        const removeButton = screen.getByTitle('Remove existing file');
+        fireEvent.click(removeButton);
+      });
+      
+      // Upload new file
+      const fileInput = screen.getByLabelText(/upload report/i);
+      const file = new File(['test'], 'new-test.pdf', { type: 'application/pdf' });
+      
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      
+      // File should be visible again
+      await waitFor(() => {
+        expect(screen.getByText('new-test.pdf')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Update Functionality', () => {
+    it('should use updateOtherTestResult when existingResult exists', async () => {
+      const { investigationService } = await import('../services/investigationService');
+      investigationService.updateOtherTestResult = vi.fn().mockResolvedValue({
+        success: true,
+        data: { id: 1 }
+      });
+      
+      const existingResult = {
+        id: 1,
+        result: '5.2',
+        notes: 'Test notes',
+        filePath: 'uploads/test.pdf',
+        fileName: 'test.pdf',
+        testDate: '2024-01-01'
+      };
+      
+      const onSuccess = vi.fn();
+      renderModal({ existingResult, onSuccess });
+      
+      const submitButton = screen.getByText('Save Result');
+      fireEvent.click(submitButton);
+      
+      await waitFor(() => {
+        expect(investigationService.updateOtherTestResult).toHaveBeenCalledWith(
+          existingResult.id,
+          expect.objectContaining({
+            testName: 'MRI',
+            testDate: '2024-01-01',
+            result: '5.2',
+            notes: 'Test notes'
+          })
+        );
+      });
+    });
+
+    it('should use addOtherTestResult when existingResult does not exist', async () => {
+      const { investigationService } = await import('../services/investigationService');
+      investigationService.addOtherTestResult = vi.fn().mockResolvedValue({
+        success: true,
+        data: { id: 1 }
+      });
+      
+      const onSuccess = vi.fn();
+      renderModal({ onSuccess });
+      
+      const submitButton = screen.getByText('Save Result');
+      fireEvent.click(submitButton);
+      
+      await waitFor(() => {
+        expect(investigationService.addOtherTestResult).toHaveBeenCalledWith(
+          mockPatient.id,
+          expect.objectContaining({
+            testName: 'MRI'
+          })
+        );
+      });
+    });
+
+    it('should send removeFile flag when file is removed and no new file uploaded', async () => {
+      const { investigationService } = await import('../services/investigationService');
+      investigationService.updateOtherTestResult = vi.fn().mockResolvedValue({
+        success: true,
+        data: { id: 1 }
+      });
+      
+      const existingResult = {
+        id: 1,
+        result: '5.2',
+        filePath: 'uploads/test.pdf',
+        fileName: 'test.pdf'
+      };
+      
+      window.confirm = vi.fn().mockReturnValue(true);
+      
+      renderModal({ existingResult });
+      
+      // Remove file
+      await waitFor(() => {
+        const removeButton = screen.getByTitle('Remove existing file');
+        fireEvent.click(removeButton);
+      });
+      
+      // Submit
+      const submitButton = screen.getByText('Save Result');
+      fireEvent.click(submitButton);
+      
+      await waitFor(() => {
+        expect(investigationService.updateOtherTestResult).toHaveBeenCalledWith(
+          existingResult.id,
+          expect.objectContaining({
+            removeFile: true
+          })
+        );
+      });
+    });
+
+    it('should not send removeFile flag when new file is uploaded', async () => {
+      const { investigationService } = await import('../services/investigationService');
+      investigationService.updateOtherTestResult = vi.fn().mockResolvedValue({
+        success: true,
+        data: { id: 1 }
+      });
+      
+      const existingResult = {
+        id: 1,
+        result: '5.2',
+        filePath: 'uploads/test.pdf',
+        fileName: 'test.pdf'
+      };
+      
+      renderModal({ existingResult });
+      
+      // Upload new file
+      const fileInput = screen.getByLabelText(/upload report/i);
+      const file = new File(['test'], 'new-test.pdf', { type: 'application/pdf' });
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      
+      // Submit
+      const submitButton = screen.getByText('Save Result');
+      fireEvent.click(submitButton);
+      
+      await waitFor(() => {
+        expect(investigationService.updateOtherTestResult).toHaveBeenCalledWith(
+          existingResult.id,
+          expect.objectContaining({
+            removeFile: false
+          })
+        );
+      });
     });
   });
 });

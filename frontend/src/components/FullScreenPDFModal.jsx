@@ -66,7 +66,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
     return () => {
       // Cleanup after 60 seconds to give plenty of time for printing
       setTimeout(() => {
-        if (iframeRef.current && iframeRef.current.parentNode) {
+        if (iframeRef.current?.parentNode) {
           document.body.removeChild(iframeRef.current);
           iframeRef.current = null;
         }
@@ -82,8 +82,7 @@ FullScreenPDFModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
   pdfUrl: PropTypes.string,
-  fileName: PropTypes.string,
-  autoPrint: PropTypes.bool
+  fileName: PropTypes.string
 };
 
 export default FullScreenPDFModal;

@@ -1,8 +1,10 @@
 import express from 'express';
+import multer from 'multer';
 import {
   addPSAResult,
   updatePSAResult,
   addOtherTestResult,
+  updateOtherTestResult,
   getInvestigationResults,
   getAllInvestigations,
   deleteInvestigationResult,
@@ -92,13 +94,48 @@ router.patch('/psa-results/:resultId',
   updatePSAResult
 );
 
+// Multer error handling middleware
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'File size exceeds the 10MB limit'
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      message: err.message || 'File upload error'
+    });
+  }
+  if (err) {
+    // This catches fileFilter errors
+    return res.status(400).json({
+      success: false,
+      message: err.message || 'Invalid file type'
+    });
+  }
+  next();
+};
+
 // Add other test result with file upload for a patient
 router.post('/patients/:patientId/test-results',
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   upload.single('testFile'),
+  handleMulterError,
   addOtherTestResult
+);
+
+// Update other test result with file upload
+router.patch('/test-results/:resultId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
+  upload.single('testFile'),
+  handleMulterError,
+  updateOtherTestResult
 );
 
 // Get investigation results for a patient

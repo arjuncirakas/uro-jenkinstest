@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { IoClose, IoDocument, IoCheckmarkCircle, IoCloseCircle, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import { FiX } from 'react-icons/fi';
-import { Upload, Eye } from 'lucide-react';
+import { Upload, Eye, Trash } from 'lucide-react';
 import { investigationService } from '../services/investigationService';
 import { consentFormService } from '../services/consentFormService';
 import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
 import FullScreenPDFModal from './FullScreenPDFModal';
 import ImageViewerModal from './ImageViewerModal';
+import ConfirmationModal from './modals/ConfirmationModal';
 
 const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, patient, existingResult, onSuccess, isPSATest = false, onStatusUpdate }) => {
   const [result, setResult] = useState('');
@@ -29,11 +31,13 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   const [imageViewerUrl, setImageViewerUrl] = useState(null);
   const [imageViewerFileName, setImageViewerFileName] = useState(null);
   const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  const [removeExistingFile, setRemoveExistingFile] = useState(false);
+  const [showRemoveFileConfirm, setShowRemoveFileConfirm] = useState(false);
 
   // Get existing file info (calculate before early return)
   const existingFilePath = existingResult?.filePath || existingResult?.file_path || null;
   const existingFileName = existingResult?.fileName || existingResult?.file_name || null;
-  const hasExistingFile = !!existingFilePath;
+  const hasExistingFile = !!existingFilePath && !removeExistingFile;
 
   // Initialize form with existing result data when modal opens or existingResult changes
   useEffect(() => {
@@ -45,12 +49,16 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       setFileName('');
       setError('');
       setConsentFormNotification({ type: '', message: '' });
+      setRemoveExistingFile(false);
+      setShowRemoveFileConfirm(false);
       return;
     }
 
     if (existingResult) {
       setResult(existingResult.result || '');
       setNotes(existingResult.notes || '');
+      setRemoveExistingFile(false);
+      setShowRemoveFileConfirm(false);
       // Note: We don't set the file state for existing files since they're already uploaded
       // We'll display them separately
     } else {
@@ -59,18 +67,10 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       setNotes('');
       setFile(null);
       setFileName('');
+      setRemoveExistingFile(false);
     }
   }, [existingResult, isOpen]);
 
-  // Debug logging
-  useEffect(() => {
-    if (isOpen && existingResult) {
-      console.log('🔍 AddInvestigationResultModal - Existing result:', existingResult);
-      console.log('🔍 AddInvestigationResultModal - File path:', existingFilePath);
-      console.log('🔍 AddInvestigationResultModal - File name:', existingFileName);
-      console.log('🔍 AddInvestigationResultModal - Has existing file:', hasExistingFile);
-    }
-  }, [existingResult, existingFilePath, existingFileName, hasExistingFile, isOpen]);
 
   // Fetch consent form templates and patient consent forms
   const fetchConsentForms = useCallback(async () => {
@@ -104,6 +104,41 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     }
   }, [isOpen, patient?.id, isPSATest, fetchConsentForms]);
 
+  // Listen for image viewer events
+  useEffect(() => {
+    const handleOpenImageViewer = (event) => {
+      const { imageUrl, fileName } = event.detail;
+      
+      if (!imageUrl) {
+        return;
+      }
+      
+      setImageViewerUrl(imageUrl);
+      setImageViewerFileName(fileName || 'Image');
+      setIsImageViewerModalOpen(true);
+    };
+
+    const handleOpenPDFViewer = (event) => {
+      const { pdfUrl, fileName } = event.detail;
+      
+      if (!pdfUrl) {
+        return;
+      }
+      
+      setPdfViewerUrl(pdfUrl);
+      setPdfViewerFileName(fileName || 'PDF');
+      setIsPDFViewerModalOpen(true);
+    };
+
+    window.addEventListener('openImageViewer', handleOpenImageViewer);
+    window.addEventListener('openPDFViewer', handleOpenPDFViewer);
+
+    return () => {
+      window.removeEventListener('openImageViewer', handleOpenImageViewer);
+      window.removeEventListener('openPDFViewer', handleOpenPDFViewer);
+    };
+  }, []);
+
   // Debug: Log when patientConsentForms changes
   useEffect(() => {
     if (isOpen && patientConsentForms.length > 0) {
@@ -121,86 +156,69 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     );
   };
 
+  // Helper function to check if a name matches the normalized test name
+  const matchesTestName = (name, normalizedTestName) => {
+    if (!name) return false;
+    return name.toUpperCase().trim() === normalizedTestName;
+  };
+
+  // Helper function to check if consent form matches by template ID
+  const matchesByTemplateId = (cf, templateId) => {
+    if (!templateId) return false;
+    return cf.consent_form_id === templateId || cf.template_id === templateId;
+  };
+
+  // Helper function to check if consent form matches by template
+  const matchesByTemplate = (cf, normalizedTestName) => {
+    const template = consentFormTemplates.find(t => 
+      t.id === cf.template_id || 
+      t.id === cf.consent_form_id ||
+      cf.template_id === t.id ||
+      cf.consent_form_id === t.id
+    );
+    
+    if (!template) return false;
+    
+    const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
+    const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
+    return (templateTestName === normalizedTestName) || (templateProcName === normalizedTestName);
+  };
+
   // Get patient consent form for the investigation
   const getPatientConsentForm = (testName, templateId = null) => {
     if (!testName) return null;
     const normalizedTestName = testName.toUpperCase().trim();
     
-    // Debug logging
-    console.log('🔍 getPatientConsentForm - Searching for:', normalizedTestName, 'with templateId:', templateId);
-    console.log('🔍 Available patient consent forms:', patientConsentForms);
-    console.log('🔍 Available templates:', consentFormTemplates);
-    
     const foundForm = patientConsentForms.find(cf => {
       // First, if we have a templateId, try matching by consent_form_id directly
-      if (templateId && (cf.consent_form_id === templateId || cf.template_id === templateId)) {
-        console.log('✅ Matched by template ID:', cf);
+      if (matchesByTemplateId(cf, templateId)) {
         return true;
       }
       
       // Second, try matching by consent_form_name
-      if (cf.consent_form_name) {
-        const consentFormName = cf.consent_form_name.toUpperCase().trim();
-        if (consentFormName === normalizedTestName) {
-          console.log('✅ Matched by consent_form_name:', cf);
-          return true;
-        }
+      if (matchesTestName(cf.consent_form_name, normalizedTestName)) {
+        return true;
       }
       
       // Third, try matching by test_name or procedure_name from the joined data
-      if (cf.test_name) {
-        const cfTestName = cf.test_name.toUpperCase().trim();
-        if (cfTestName === normalizedTestName) {
-          console.log('✅ Matched by test_name:', cf);
-          return true;
-        }
+      if (matchesTestName(cf.test_name, normalizedTestName)) {
+        return true;
       }
       
-      if (cf.procedure_name) {
-        const cfProcName = cf.procedure_name.toUpperCase().trim();
-        if (cfProcName === normalizedTestName) {
-          console.log('✅ Matched by procedure_name:', cf);
-          return true;
-        }
+      if (matchesTestName(cf.procedure_name, normalizedTestName)) {
+        return true;
       }
       
       // Fourth, try matching by template
-      const template = consentFormTemplates.find(t => 
-        t.id === cf.template_id || 
-        t.id === cf.consent_form_id ||
-        cf.template_id === t.id ||
-        cf.consent_form_id === t.id
-      );
-      
-      if (template) {
-        const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
-        const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
-        const matches = (templateTestName === normalizedTestName) ||
-                       (templateProcName === normalizedTestName);
-        
-        if (matches) {
-          console.log('✅ Matched by template:', { template, cf });
-        }
-        return matches;
-      }
-      
-      return false;
+      return matchesByTemplate(cf, normalizedTestName);
     });
     
-    console.log('🔍 Found form:', foundForm);
-    return foundForm;
+    return foundForm || null;
   };
 
   // Print consent form - opens in modal
   const handlePrintConsentForm = async (template, testName) => {
-    console.log('[AddInvestigationResultModal] handlePrintConsentForm called:', {
-      hasTemplate: !!template,
-      hasPatient: !!patient,
-      testName
-    });
-
     if (!template || !patient) {
-      console.warn('[AddInvestigationResultModal] Missing template or patient');
       setConsentFormNotification({ type: 'error', message: 'Missing template or patient information' });
       setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
       return;
@@ -210,23 +228,13 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     setConsentFormNotification({ type: '', message: '' });
 
     try {
-      console.log('[AddInvestigationResultModal] Fetching consent form blob URL...');
       const result = await getConsentFormBlobUrl(template, testName, patient);
-      console.log('[AddInvestigationResultModal] getConsentFormBlobUrl result:', {
-        success: result.success,
-        hasBlobUrl: !!result.blobUrl,
-        fileName: result.fileName,
-        error: result.error
-      });
       
       if (result.success && result.blobUrl) {
-        console.log('[AddInvestigationResultModal] Setting PDF viewer state and opening modal');
         setPdfViewerUrl(result.blobUrl);
         setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
         setIsPDFViewerModalOpen(true);
-        console.log('[AddInvestigationResultModal] Modal should now be open');
       } else {
-        console.error('[AddInvestigationResultModal] Failed to get blob URL:', result.error);
         setConsentFormNotification({ 
           type: 'error', 
           message: result.error || 'Failed to load consent form' 
@@ -234,7 +242,6 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
       }
     } catch (error) {
-      console.error('[AddInvestigationResultModal] Error loading consent form:', error);
       setConsentFormNotification({ 
         type: 'error', 
         message: 'Failed to load consent form. Please try again.' 
@@ -500,8 +507,13 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   // Close image viewer and cleanup
   const handleCloseImageViewer = () => {
     setIsImageViewerModalOpen(false);
+    // Clean up blob URLs (both data URLs and blob URLs)
     if (imageViewerUrl) {
-      URL.revokeObjectURL(imageViewerUrl);
+      // Only revoke if it's a blob URL (starts with 'blob:')
+      // Data URLs (from FileReader.readAsDataURL) don't need to be revoked
+      if (imageViewerUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imageViewerUrl);
+      }
       setImageViewerUrl(null);
     }
     setTimeout(() => {
@@ -515,6 +527,9 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
+      // Clear removeExistingFile flag when new file is selected (new file will replace old one)
+      setRemoveExistingFile(false);
+      
       // Validate file type
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
       if (!allowedTypes.includes(selectedFile.type)) {
@@ -562,26 +577,25 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     setIsSubmitting(true);
 
     try {
+      const isUpdate = !!existingResult?.id;
+      const testDate = existingResult?.testDate || existingResult?.test_date || new Date().toISOString().split('T')[0];
+
       // Create the test result data
       const testData = {
         testName: investigationRequest.investigationName || investigationRequest.investigation_name,
-        testDate: new Date().toISOString().split('T')[0],
+        testDate: testDate,
         result: result || '',
         notes: notes || '',
-        testFile: isPSATest ? null : file // Don't include file for PSA tests
+        testFile: isPSATest ? null : file, // Don't include file for PSA tests
+        removeFile: removeExistingFile && !file // Remove file flag if user clicked remove and no new file
       };
 
-      console.log('🔍 Submitting investigation result:', {
-        ...testData,
-        testFile: file ? file.name : 'No file'
-      });
-
-      // Call the API to add the test result
-      const resultResponse = await investigationService.addOtherTestResult(patient.id, testData);
+      // Call the API to update or add the test result
+      const resultResponse = isUpdate
+        ? await investigationService.updateOtherTestResult(existingResult.id, testData)
+        : await investigationService.addOtherTestResult(patient.id, testData);
 
       if (resultResponse.success) {
-        console.log('✅ Investigation result added:', resultResponse.data);
-
         // Dispatch event to refresh investigation management table
         window.dispatchEvent(new CustomEvent('testResultAdded', {
           detail: {
@@ -593,18 +607,16 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
         // Call success callback
         if (onSuccess) {
-          onSuccess('Investigation result added successfully!', investigationRequest.id);
+          onSuccess(`Investigation result ${isUpdate ? 'updated' : 'added'} successfully!`, investigationRequest.id);
         }
 
         // Reset form and close
         handleClose();
       } else {
-        console.error('❌ Failed to add investigation result:', resultResponse.error);
-        setError(resultResponse.error || 'Failed to add investigation result');
+        setError(resultResponse.error || `Failed to ${isUpdate ? 'update' : 'add'} investigation result`);
         setIsSubmitting(false);
       }
     } catch (err) {
-      console.error('❌ Error adding investigation result:', err);
       setError('An unexpected error occurred');
       setIsSubmitting(false);
     }
@@ -720,6 +732,19 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                             disabled={!existingFilePath}
                           >
                             View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setShowRemoveFileConfirm(true);
+                            }}
+                            className="text-red-600 hover:text-red-800 transition-colors text-xs font-medium px-2 py-1 rounded hover:bg-red-100 flex items-center gap-1"
+                            title="Remove existing file"
+                          >
+                            <Trash className="w-3.5 h-3.5" />
+                            Remove
                           </button>
                         </div>
                       </div>
@@ -879,8 +904,52 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         imageUrl={imageViewerUrl}
         fileName={imageViewerFileName}
       />
+
+      {/* Remove File Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showRemoveFileConfirm}
+        onClose={() => setShowRemoveFileConfirm(false)}
+        onConfirm={() => {
+          setRemoveExistingFile(true);
+          setShowRemoveFileConfirm(false);
+        }}
+        title="Remove File"
+        message="Are you sure you want to remove this file? You can upload a new file to replace it."
+        confirmText="Remove"
+        cancelText="Cancel"
+        type="warning"
+      />
     </div>
   );
+};
+
+AddInvestigationResultModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  investigationRequest: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    investigationName: PropTypes.string,
+    investigation_name: PropTypes.string
+  }),
+  patient: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    patientId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    patient_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+  }),
+  existingResult: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    testDate: PropTypes.string,
+    test_date: PropTypes.string,
+    result: PropTypes.string,
+    notes: PropTypes.string,
+    filePath: PropTypes.string,
+    file_path: PropTypes.string,
+    fileName: PropTypes.string,
+    file_name: PropTypes.string
+  }),
+  onSuccess: PropTypes.func,
+  isPSATest: PropTypes.bool,
+  onStatusUpdate: PropTypes.func
 };
 
 export default AddInvestigationResultModal;

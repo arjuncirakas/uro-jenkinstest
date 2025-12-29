@@ -913,5 +913,189 @@ describe('investigationService', () => {
       expect(mockLink.click).toHaveBeenCalled();
     });
   });
+
+  describe('updateOtherTestResult', () => {
+    it('should update test result successfully with file', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01',
+        result: '5.2',
+        notes: 'Test notes',
+        testFile: new File(['content'], 'test.pdf', { type: 'application/pdf' })
+      };
+
+      const mockResponse = {
+        data: {
+          data: { id: resultId, ...testData }
+        }
+      };
+
+      apiClient.patch.mockResolvedValue(mockResponse);
+
+      const result = await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(apiClient.patch).toHaveBeenCalledWith(
+        `/test-results/${resultId}`,
+        expect.any(FormData),
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockResponse.data.data);
+    });
+
+    it('should update test result successfully without file', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01',
+        result: '5.2',
+        notes: 'Test notes'
+      };
+
+      const mockResponse = {
+        data: {
+          data: { id: resultId, ...testData }
+        }
+      };
+
+      apiClient.patch.mockResolvedValue(mockResponse);
+
+      const result = await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(apiClient.patch).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle update error with response message', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01'
+      };
+
+      const error = {
+        response: {
+          data: {
+            message: 'Test result not found'
+          }
+        }
+      };
+
+      apiClient.patch.mockRejectedValue(error);
+
+      const result = await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Test result not found');
+    });
+
+    it('should handle update error with response error property', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01'
+      };
+
+      const error = {
+        response: {
+          data: {
+            error: 'Invalid file type'
+          }
+        }
+      };
+
+      apiClient.patch.mockRejectedValue(error);
+
+      const result = await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Invalid file type');
+    });
+
+    it('should handle update error with error message', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01'
+      };
+
+      const error = {
+        message: 'Network error'
+      };
+
+      apiClient.patch.mockRejectedValue(error);
+
+      const result = await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Network error');
+    });
+
+    it('should handle update error with default message', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01'
+      };
+
+      const error = {};
+
+      apiClient.patch.mockRejectedValue(error);
+
+      const result = await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Failed to update test result');
+    });
+
+    it('should exclude null and undefined values from FormData', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01',
+        result: null,
+        notes: undefined,
+        testFile: new File(['content'], 'test.pdf', { type: 'application/pdf' })
+      };
+
+      const mockResponse = {
+        data: {
+          data: { id: resultId }
+        }
+      };
+
+      apiClient.patch.mockResolvedValue(mockResponse);
+
+      await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(apiClient.patch).toHaveBeenCalled();
+    });
+
+    it('should include removeFile flag in FormData', async () => {
+      const resultId = 1;
+      const testData = {
+        testName: 'MRI',
+        testDate: '2024-01-01',
+        removeFile: true
+      };
+
+      const mockResponse = {
+        data: {
+          data: { id: resultId }
+        }
+      };
+
+      apiClient.patch.mockResolvedValue(mockResponse);
+
+      await investigationService.updateOtherTestResult(resultId, testData);
+
+      expect(apiClient.patch).toHaveBeenCalled();
+    });
+  });
 });
 

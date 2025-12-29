@@ -47,6 +47,18 @@ vi.mock('../../services/consentFormService', () => ({
     }
 }));
 
+vi.mock('../../services/authService', () => ({
+    default: {
+        getCurrentUser: vi.fn().mockResolvedValue({ id: 1, role: 'urologist' })
+    }
+}));
+
+vi.mock('../../services/mdtService', () => ({
+    mdtService: {
+        getMDTSchedules: vi.fn().mockResolvedValue({ success: true, data: [] })
+    }
+}));
+
 // Mock AddInvestigationResultModal
 vi.mock('../AddInvestigationResultModal', () => ({
     default: ({ isOpen, onClose, investigationRequest, existingResult, patient }) => {
@@ -63,20 +75,24 @@ vi.mock('../AddInvestigationResultModal', () => ({
     }
 }));
 
-describe('NursePatientDetailsModal', () => {
+describe('UrologistPatientDetailsModal', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Mock window.open
+        global.window.open = vi.fn();
     });
 
     it('should not render when isOpen is false', async () => {
-        const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+        const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
         const { container } = render(
-            <NursePatientDetailsModal
+            <UrologistPatientDetailsModal
                 isOpen={false}
                 onClose={vi.fn()}
                 patient={{ id: 1, name: 'Test Patient' }}
-                onPatientUpdated={vi.fn()}
+                loading={false}
+                error={null}
+                onTransferSuccess={vi.fn()}
             />
         );
 
@@ -85,14 +101,16 @@ describe('NursePatientDetailsModal', () => {
     }, 10000);
 
     it('should render modal header when isOpen is true', async () => {
-        const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+        const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
         render(
-            <NursePatientDetailsModal
+            <UrologistPatientDetailsModal
                 isOpen={true}
                 onClose={vi.fn()}
                 patient={{ id: 1, name: 'Test Patient', upi: 'UPI123' }}
-                onPatientUpdated={vi.fn()}
+                loading={false}
+                error={null}
+                onTransferSuccess={vi.fn()}
             />
         );
 
@@ -101,44 +119,10 @@ describe('NursePatientDetailsModal', () => {
         });
     });
 
-    it('should handle print consent form with blob URL for uploaded template', async () => {
-        const { consentFormService } = await import('../../services/consentFormService');
-        const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
-
-        const mockBlob = new Blob(['PDF content'], { type: 'application/pdf' });
-        const mockTemplate = {
-            id: 1,
-            test_name: 'MRI',
-            template_file_url: 'http://example.com/mri.pdf',
-            template_file_path: 'uploads/consent-forms/templates/template-123.pdf',
-            is_auto_generated: false
-        };
-
-        consentFormService.getConsentFormFile.mockResolvedValue({ success: true, data: mockBlob });
-
-        const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
-        const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-        const openSpy = vi.spyOn(window, 'open').mockReturnValue({
-            document: { write: vi.fn(), close: vi.fn(), body: {} },
-            print: vi.fn(),
-            close: vi.fn(),
-            closed: false,
-            onload: null
-        });
-
-        // This test verifies the print functionality exists and can be called
-        // The actual implementation would be tested through integration tests
-        expect(consentFormService.getConsentFormFile).toBeDefined();
-
-        createObjectURLSpy.mockRestore();
-        revokeObjectURLSpy.mockRestore();
-        openSpy.mockRestore();
-    });
-
     describe('Edit/Re-upload functionality', () => {
         it('should show Edit button next to View button when result is uploaded', async () => {
             const { investigationService } = await import('../../services/investigationService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -174,11 +158,13 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
-                    onPatientUpdated={vi.fn()}
+                    loading={false}
+                    error={null}
+                    onTransferSuccess={vi.fn()}
                 />
             );
 
@@ -196,15 +182,14 @@ describe('NursePatientDetailsModal', () => {
                 expect(viewButtons.length).toBeGreaterThan(0);
             }, { timeout: 5000 });
 
-            // Check if Edit button is present (it should be next to View button)
-            // The Edit button uses the Edit icon from lucide-react
+            // Check if Edit button is present
             const editButtons = document.querySelectorAll('button[title="Edit/Re-upload result"]');
             expect(editButtons.length).toBeGreaterThan(0);
         });
 
         it('should open AddInvestigationResultModal with existing result when Edit button is clicked', async () => {
             const { investigationService } = await import('../../services/investigationService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -240,11 +225,13 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
-                    onPatientUpdated={vi.fn()}
+                    loading={false}
+                    error={null}
+                    onTransferSuccess={vi.fn()}
                 />
             );
 
@@ -273,7 +260,7 @@ describe('NursePatientDetailsModal', () => {
 
         it('should handle Edit button click when investigation request is clinical investigation', async () => {
             const { investigationService } = await import('../../services/investigationService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -316,11 +303,13 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
-                    onPatientUpdated={vi.fn()}
+                    loading={false}
+                    error={null}
+                    onTransferSuccess={vi.fn()}
                 />
             );
 
@@ -346,9 +335,9 @@ describe('NursePatientDetailsModal', () => {
             });
         });
 
-        it('should handle Edit button in grouped tests section', async () => {
+        it('should handle Edit button in view results modal section', async () => {
             const { investigationService } = await import('../../services/investigationService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -385,11 +374,13 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
-                    onPatientUpdated={vi.fn()}
+                    loading={false}
+                    error={null}
+                    onTransferSuccess={vi.fn()}
                 />
             );
 
@@ -401,20 +392,25 @@ describe('NursePatientDetailsModal', () => {
                 }
             });
 
-            // Wait for the grouped tests section to render
+            // Wait for View button to appear and click it to open view results modal
             await waitFor(() => {
-                const viewFileButtons = screen.queryAllByText('View File');
-                expect(viewFileButtons.length).toBeGreaterThan(0);
+                const viewButtons = screen.queryAllByText(/View.*Result/i);
+                if (viewButtons.length > 0) {
+                    fireEvent.click(viewButtons[0]);
+                }
             }, { timeout: 5000 });
 
-            // Check if Edit button is present in grouped tests section
-            const editButtons = document.querySelectorAll('button[title="Edit/Re-upload result"]');
-            expect(editButtons.length).toBeGreaterThan(0);
+            // Wait for view results modal to open and check for Edit button
+            await waitFor(() => {
+                const editButtons = document.querySelectorAll('button[title="Edit/Re-upload result"]');
+                // Edit button should be present in view results modal
+                expect(editButtons.length).toBeGreaterThan(0);
+            }, { timeout: 5000 });
         });
 
         it('should not show Edit button when filePath is missing', async () => {
             const { investigationService } = await import('../../services/investigationService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -449,11 +445,13 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
-                    onPatientUpdated={vi.fn()}
+                    loading={false}
+                    error={null}
+                    onTransferSuccess={vi.fn()}
                 />
             );
 
@@ -468,15 +466,13 @@ describe('NursePatientDetailsModal', () => {
             // Edit button should not appear when there's no filePath
             await waitFor(() => {
                 const editButtons = document.querySelectorAll('button[title="Edit/Re-upload result"]');
-                // Edit button should not appear in the main section when no filePath
-                // But might appear in grouped tests if filePath exists there
                 expect(editButtons.length).toBe(0);
             }, { timeout: 5000 });
         });
 
         it('should reset selectedExistingResult when modal closes', async () => {
             const { investigationService } = await import('../../services/investigationService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -512,11 +508,13 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
-                    onPatientUpdated={vi.fn()}
+                    loading={false}
+                    error={null}
+                    onTransferSuccess={vi.fn()}
                 />
             );
 
@@ -555,7 +553,7 @@ describe('NursePatientDetailsModal', () => {
     describe('Consent Form Print Button', () => {
         it('should disable Print button when template is not available', async () => {
             const { consentFormService } = await import('../../services/consentFormService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -588,7 +586,7 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
@@ -615,7 +613,7 @@ describe('NursePatientDetailsModal', () => {
 
         it('should enable Print button when template is available', async () => {
             const { consentFormService } = await import('../../services/consentFormService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -655,7 +653,7 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
@@ -682,7 +680,7 @@ describe('NursePatientDetailsModal', () => {
 
         it('should show Template Not Available badge when template is missing', async () => {
             const { consentFormService } = await import('../../services/consentFormService');
-            const NursePatientDetailsModal = (await import('../NursePatientDetailsModal')).default;
+            const UrologistPatientDetailsModal = (await import('../UrologistPatientDetailsModal')).default;
 
             const mockInvestigationRequests = [
                 {
@@ -715,7 +713,7 @@ describe('NursePatientDetailsModal', () => {
             });
 
             render(
-                <NursePatientDetailsModal
+                <UrologistPatientDetailsModal
                     isOpen={true}
                     onClose={vi.fn()}
                     patient={{ id: 1, name: 'Test Patient' }}
@@ -737,3 +735,4 @@ describe('NursePatientDetailsModal', () => {
         });
     });
 });
+

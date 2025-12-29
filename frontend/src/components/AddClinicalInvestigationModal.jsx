@@ -497,7 +497,13 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                             ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
                                             : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
                                         }`}
-                                        title={printingConsentForm ? 'Loading consent form...' : 'View consent form'}
+                                        title={
+                                          !consentTemplate 
+                                            ? 'Consent form template not available. Please create one in the superadmin panel.'
+                                            : printingConsentForm 
+                                              ? 'Loading consent form...' 
+                                              : 'View consent form'
+                                        }
                                       >
                                         {printingConsentForm ? (
                                           <>

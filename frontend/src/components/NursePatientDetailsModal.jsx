@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard, IoPrint, IoCloudUpload } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
@@ -74,6 +75,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   const [isAddTestModalOpen, setIsAddTestModalOpen] = useState(false);
   const [isAddResultModalOpen, setIsAddResultModalOpen] = useState(false);
   const [selectedInvestigationRequest, setSelectedInvestigationRequest] = useState(null);
+  const [selectedExistingResult, setSelectedExistingResult] = useState(null);
 
   // Edit Surgery Appointment Modal state
   const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
@@ -1385,6 +1387,456 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   };
 
   // Handle viewing files
+  // Helper function to create request object from clinical investigation
+  const createRequestFromClinicalInvestigation = (request) => {
+    if (!request.isClinicalInvestigation) {
+      return request;
+    }
+    return {
+      id: request.noteId,
+      investigationName: request.investigationName,
+      investigation_name: request.investigation_name,
+      investigationType: request.investigationType,
+      investigation_type: request.investigation_type,
+      scheduledDate: request.scheduledDate,
+      scheduled_date: request.scheduled_date,
+      status: request.status,
+      notes: request.notes
+    };
+  };
+
+  // Helper function to create request object from matching request or test data
+  const createRequestFromMatchOrTest = (matchingRequest, testData) => {
+    if (matchingRequest) {
+      return createRequestFromClinicalInvestigation(matchingRequest);
+    }
+    const name = testData?.testName || testData?.test_name || '';
+    return {
+      investigationName: name,
+      investigation_name: name
+    };
+  };
+
+  // Helper function to handle edit button click
+  const handleEditResult = (request, uploadedResult) => {
+    const requestToUse = createRequestFromClinicalInvestigation(request);
+    setSelectedInvestigationRequest(requestToUse);
+    setSelectedExistingResult(uploadedResult);
+    setIsAddResultModalOpen(true);
+  };
+
+  // Helper function to render upload button for investigation request
+  const renderUploadButton = (request, investigationName) => {
+    const isNotRequired = (request.status || '').toLowerCase() === 'not_required';
+    if (isNotRequired) {
+      return null;
+    }
+
+    const isPSATest = investigationName.includes('PSA');
+    const handleUploadClick = () => {
+      const requestToUse = createRequestFromClinicalInvestigation(request);
+      setSelectedInvestigationRequest(requestToUse);
+      setIsAddResultModalOpen(true);
+    };
+
+    return (
+      <button
+        onClick={handleUploadClick}
+        className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-md hover:bg-teal-700 transition-colors flex items-center gap-1.5"
+      >
+        {isPSATest ? (
+          <>
+            <Plus className="w-3.5 h-3.5" />
+            Add Value
+          </>
+        ) : (
+          <>
+            <Upload className="w-3.5 h-3.5" />
+            Upload {investigationName} Result
+          </>
+        )}
+      </button>
+    );
+  };
+
+  // Helper function to render a single test item in grouped history
+  const renderTestItem = (test) => {
+    const handleViewClick = () => {
+      const filePath = test.filePath || test.file_path;
+      if (filePath) {
+        handleViewFile(filePath);
+      } else {
+        handleViewReport(test);
+      }
+    };
+
+    const handleEditClick = () => {
+      handleEditResultFromGroupedTest(test, investigationRequests);
+    };
+
+    return (
+      <div key={test.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h4 className="font-semibold text-gray-900">{(test.testName || '').toUpperCase()}</h4>
+            </div>
+            <div className="text-sm text-gray-600 mb-2">
+              Time: {test.date}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleViewClick}
+              className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
+            >
+              {(test.filePath || test.file_path) ? 'View File' : 'View'}
+            </button>
+            {(test.filePath || test.file_path) && (
+              <button
+                onClick={handleEditClick}
+                className="px-2.5 py-1 bg-teal-50 text-teal-700 text-sm rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center gap-1"
+                title="Edit/Re-upload result"
+              >
+                <Edit className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+          {test.result && (
+            <div>
+              <span className="text-sm font-medium text-gray-700">Result:</span>
+              <span className="ml-2 text-sm text-gray-900">{test.result}</span>
+            </div>
+          )}
+        </div>
+
+        {test.notes && (
+          <div className="pt-3 border-t border-gray-200">
+            <span className="text-sm font-medium text-gray-700">Notes:</span>
+            <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-wrap-anywhere">{test.notes}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Helper function to render grouped test history
+  const renderGroupedTestHistory = (testHistory) => {
+    const groupedTests = testHistory.reduce((groups, test) => {
+      const date = test.date;
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(test);
+      return groups;
+    }, {});
+
+    const sortedDates = Object.keys(groupedTests).sort((a, b) => new Date(b) - new Date(a));
+
+    return sortedDates.map((date) => (
+      <div key={date} className="space-y-4">
+        {/* Date Title */}
+        <div className="flex items-center">
+          <div className="flex-1 border-t border-gray-300"></div>
+          <div className="px-4">
+            <h3 className="text-lg font-semibold text-gray-800 bg-white px-3 py-1 rounded-lg border border-gray-200">
+              {new Date(date).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </h3>
+          </div>
+          <div className="flex-1 border-t border-gray-300"></div>
+        </div>
+
+        {/* Tests for this date */}
+        <div className="space-y-3">
+          {groupedTests[date].map(renderTestItem)}
+        </div>
+      </div>
+    ));
+  };
+
+  // Helper function to render investigation request item (reduces nesting)
+  const renderInvestigationRequestItem = (request, investigationName, hasResults, uploadedResult, sortedResults, otherTestResults) => {
+    const handleViewClick = () => {
+      if (uploadedResult?.filePath) {
+        handleViewFile(uploadedResult.filePath);
+      }
+    };
+
+    const handleEditClick = () => {
+      handleEditResult(request, uploadedResult);
+    };
+
+    return (
+      <div key={`request-${request.id}`} className="bg-gray-50 rounded-md p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-3">
+              <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
+              {(request.status || '').toLowerCase() === 'not_required' && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full border border-gray-200">
+                  Not Required
+                </span>
+              )}
+            </div>
+
+            {/* Show all result details inline */}
+            {hasResults && sortedResults.length > 0 && (
+              <div className="space-y-3 mt-3">
+                {sortedResults.map((result, idx) => {
+                  const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  }) : 'N/A';
+
+                  return (
+                    <div key={result.id || idx} className="bg-white rounded-md p-3 border border-gray-200">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-gray-600">Result #{sortedResults.length - idx}</span>
+                          {result.status && (
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
+                              {result.status}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-gray-600">
+                          <span className="font-medium">Date: </span>
+                          <span className="text-gray-900">{resultDate}</span>
+                        </div>
+
+                        {result.authorName && (
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium">Added by: </span>
+                            <span className="text-gray-900">{result.authorName}</span>
+                            {result.authorRole && (
+                              <span className="text-gray-500"> ({result.authorRole})</span>
+                            )}
+                          </div>
+                        )}
+
+                        {result.result && (
+                          <div className="text-sm text-gray-700">
+                            <span className="font-medium text-gray-600">Result Value: </span>
+                            <span className="text-lg font-semibold text-gray-900">{result.result}</span>
+                          </div>
+                        )}
+
+                        {result.referenceRange && result.referenceRange !== 'N/A' && (
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium">Reference Range: </span>
+                            <span className="text-gray-900">{result.referenceRange}</span>
+                          </div>
+                        )}
+
+                        {result.notes && (
+                          <div className="text-xs text-gray-600 pt-1 border-t border-gray-100">
+                            <span className="font-medium">Notes: </span>
+                            <span className="text-gray-900">{result.notes}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Status update controls */}
+            {!hasResults && !request.isClinicalInvestigation && request.id && (request.status || '').toLowerCase() !== 'not_required' && (
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={async () => {
+                    if (!request.id || request.isClinicalInvestigation) return;
+                    try {
+                      const result = await investigationService.updateInvestigationRequestStatus(request.id, 'not_required');
+                      if (result.success) {
+                        fetchInvestigationRequests();
+                        window.dispatchEvent(new CustomEvent('investigationStatusUpdated', {
+                          detail: { patientId: patient?.id, testName: investigationName, status: 'not_required' }
+                        }));
+                        setSuccessModalTitle('Status Updated');
+                        setSuccessModalMessage('Investigation status updated to NOT REQUIRED.');
+                        setIsSuccessModalOpen(true);
+                      }
+                    } catch (error) {
+                      setErrorModalTitle('Update Failed');
+                      setErrorModalMessage('Failed to update investigation request status');
+                      setIsErrorModalOpen(true);
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300"
+                >
+                  Not Required
+                </button>
+              </div>
+            )}
+
+            {/* Consent Form Section - extracted to reduce nesting */}
+            {(() => {
+              const normalizedName = investigationName.toUpperCase().trim();
+              const isPSATest = normalizedName.includes('PSA') || normalizedName.startsWith('PSA') ||
+                normalizedName === 'PSA TOTAL' || normalizedName === 'PSA FREE' ||
+                normalizedName === 'PSA RATIO' || normalizedName === 'PSA VELOCITY' || normalizedName === 'PSA DENSITY';
+              if (isPSATest) return null;
+
+              const consentTemplate = getConsentFormTemplate(investigationName);
+              const matchingTemplate = consentTemplate ? null : consentFormTemplates.find(t => {
+                const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
+                const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
+                return (templateTestName && (templateTestName === normalizedName || normalizedName.includes(templateTestName) || templateTestName.includes(normalizedName))) ||
+                  (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
+              });
+              const patientConsentFormCheck = getPatientConsentForm(investigationName);
+              const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ?
+                consentFormTemplates.find(t => t.id === patientConsentFormCheck.template_id || t.id === patientConsentFormCheck.consent_form_id) : null);
+              const patientConsentForm = patientConsentFormCheck || getPatientConsentForm(investigationName);
+              const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath ||
+                patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
+              const hasUploadedForm = filePath?.startsWith('uploads/consent-forms/patients/') &&
+                !filePath.includes('templates/') && !filePath.includes('auto-generated');
+
+              return (
+                <div className="w-full mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold text-gray-700">Consent Form</span>
+                    {hasUploadedForm && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Signed</span>
+                    )}
+                    {!templateToUse && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">Template Not Available</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <button
+                      type="button"
+                      onClick={() => templateToUse && handlePrintConsentForm(templateToUse, investigationName)}
+                      disabled={!templateToUse || printingConsentForm}
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && !printingConsentForm
+                        ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
+                        : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
+                      title={
+                        !templateToUse 
+                          ? 'Consent form template not available. Please create one in the superadmin panel.'
+                          : printingConsentForm 
+                            ? 'Loading consent form...' 
+                            : 'Print consent form'
+                      }
+                    >
+                      {printingConsentForm ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                          <span>Loading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <IoPrint className="w-3 h-3" />
+                          Print
+                        </>
+                      )}
+                    </button>
+                    <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${templateToUse
+                      ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                      : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
+                    >
+                      <IoCloudUpload className="w-3 h-3" />
+                      {hasUploadedForm ? `Re-upload Signed ${investigationName}` : `Upload Signed ${investigationName}`}
+                      <input
+                        type="file"
+                        accept=".pdf,image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file && templateToUse) {
+                            handleConsentFormUpload(investigationName, templateToUse, file);
+                          } else if (file && !templateToUse) {
+                            alert('Consent form template not available. Please create one in the superadmin panel first.');
+                          }
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                        disabled={!templateToUse || uploadingConsentForms[investigationName.toLowerCase()]}
+                      />
+                    </label>
+                  </div>
+                  {hasUploadedForm && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleViewConsentForm(patientConsentForm)}
+                        className="w-full px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Eye className="w-3 h-3" />
+                        View {investigationName} Consent Form
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="flex-shrink-0">
+            {hasResults ? (
+              uploadedResult && uploadedResult.filePath ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleViewClick}
+                    className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                  >
+                    <Eye className="w-3 h-3" />
+                    View {investigationName} Result
+                  </button>
+                  <button
+                    onClick={handleEditClick}
+                    className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded border border-teal-200 hover:bg-teal-100 transition-colors flex items-center gap-1.5"
+                    title="Edit/Re-upload result"
+                  >
+                    <Edit className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : null
+            ) : (
+              renderUploadButton(request, investigationName)
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper function to handle edit result from grouped tests
+  const handleEditResultFromGroupedTest = (test, investigationRequests) => {
+    const testName = (test.testName || test.test_name || '').trim().toUpperCase();
+    const matchingRequest = investigationRequests.find(req => {
+      const reqName = (req.investigationName || req.investigation_name || '').trim().toUpperCase();
+      return reqName === testName;
+    });
+    
+    const requestToUse = createRequestFromMatchOrTest(matchingRequest, test);
+    
+    setSelectedInvestigationRequest(requestToUse);
+    setSelectedExistingResult({
+      id: test.id,
+      testName: test.testName || test.test_name,
+      result: test.result,
+      notes: test.notes,
+      filePath: test.filePath || test.file_path,
+      fileName: test.fileName || test.file_name
+    });
+    setIsAddResultModalOpen(true);
+  };
+
   const handleViewFile = (filePath) => {
     if (filePath) {
       investigationService.viewFile(filePath);
@@ -3169,344 +3621,13 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                       // 2. Test typically requires consent (MRI, TRUS, Biopsy)
                                       const shouldShowConsentForm = consentTemplateForCheck || isConsentRequiredTest;
 
-                                      // Handle status update for main tests
-                                      const handleStatusUpdate = async (newStatus) => {
-                                        if (!request.id || request.isClinicalInvestigation) {
-                                          // For clinical investigations, we can't update status directly
-                                          return;
-                                        }
-
-                                        try {
-                                          const result = await investigationService.updateInvestigationRequestStatus(request.id, newStatus);
-                                          if (result.success) {
-                                            // Refresh investigation requests
-                                            fetchInvestigationRequests();
-
-                                            // Trigger event to refresh investigation management table
-                                            window.dispatchEvent(new CustomEvent('investigationStatusUpdated', {
-                                              detail: {
-                                                patientId: patient.id,
-                                                testName: investigationName,
-                                                status: newStatus
-                                              }
-                                            }));
-
-                                            setSuccessModalTitle('Status Updated');
-                                            setSuccessModalMessage(`Investigation status updated to ${newStatus.replace('_', ' ').toUpperCase()}. The investigation management table will be refreshed.`);
-                                            setIsSuccessModalOpen(true);
-                                          } else {
-                                            setErrorModalTitle('Update Failed');
-                                            setErrorModalMessage(result.error || 'Failed to update status');
-                                            setIsErrorModalOpen(true);
-                                          }
-                                        } catch (error) {
-                                          setErrorModalTitle('Update Failed');
-                                          setErrorModalMessage('Failed to update investigation request status');
-                                          setIsErrorModalOpen(true);
-                                        }
-                                      };
-
-                                      return (
-                                        <div key={`request-${request.id}`} className="bg-gray-50 rounded-md p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-                                          <div className="flex items-start justify-between gap-4">
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-2 mb-3">
-                                                <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
-                                                {(request.status || '').toLowerCase() === 'not_required' && (
-                                                  <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full border border-gray-200">
-                                                    Not Required
-                                                  </span>
-                                                )}
-                                              </div>
-
-                                              {/* Show all result details inline */}
-                                              {hasResults && sortedResults.length > 0 && (
-                                                <div className="space-y-3 mt-3">
-                                                  {sortedResults.map((result, idx) => {
-                                                    const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
-                                                      day: '2-digit',
-                                                      month: '2-digit',
-                                                      year: 'numeric'
-                                                    }) : 'N/A';
-
-                                                    return (
-                                                      <div key={result.id || idx} className="bg-white rounded-md p-3 border border-gray-200">
-                                                        <div className="flex items-start justify-between mb-2">
-                                                          <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-semibold text-gray-600">Result #{sortedResults.length - idx}</span>
-                                                            {result.status && (
-                                                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
-                                                                {result.status}
-                                                              </span>
-                                                            )}
-                                                          </div>
-                                                        </div>
-
-                                                        <div className="space-y-1.5">
-                                                          <div className="text-xs text-gray-600">
-                                                            <span className="font-medium">Date: </span>
-                                                            <span className="text-gray-900">{resultDate}</span>
-                                                          </div>
-
-                                                          {result.authorName && (
-                                                            <div className="text-xs text-gray-600">
-                                                              <span className="font-medium">Added by: </span>
-                                                              <span className="text-gray-900">{result.authorName}</span>
-                                                              {result.authorRole && (
-                                                                <span className="text-gray-500"> ({result.authorRole})</span>
-                                                              )}
-                                                            </div>
-                                                          )}
-
-                                                          {result.result && (
-                                                            <div className="text-sm text-gray-700">
-                                                              <span className="font-medium text-gray-600">Result Value: </span>
-                                                              <span className="text-lg font-semibold text-gray-900">{result.result}</span>
-                                                            </div>
-                                                          )}
-
-                                                          {result.referenceRange && result.referenceRange !== 'N/A' && (
-                                                            <div className="text-xs text-gray-600">
-                                                              <span className="font-medium">Reference Range: </span>
-                                                              <span className="text-gray-900">{result.referenceRange}</span>
-                                                            </div>
-                                                          )}
-
-                                                          {result.notes && (
-                                                            <div className="text-xs text-gray-600 pt-1 border-t border-gray-100">
-                                                              <span className="font-medium">Notes: </span>
-                                                              <span className="text-gray-900">{result.notes}</span>
-                                                            </div>
-                                                          )}
-                                                        </div>
-                                                      </div>
-                                                    );
-                                                  })}
-                                                </div>
-                                              )}
-
-                                              {/* Status update controls for all investigation requests - only show if no results exist and not marked as not_required */}
-                                              {!hasResults && !request.isClinicalInvestigation && request.id && (request.status || '').toLowerCase() !== 'not_required' && (
-                                                <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                                  <button
-                                                    onClick={() => handleStatusUpdate('not_required')}
-                                                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${request.status === 'not_required'
-                                                      ? 'bg-gray-400 text-white cursor-not-allowed'
-                                                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300'
-                                                      }`}
-                                                    disabled={request.status === 'not_required'}
-                                                  >
-                                                    Not Required
-                                                  </button>
-                                                </div>
-                                              )}
-
-                                              {/* Consent Form Section - Skip for PSA tests */}
-                                              {(() => {
-                                                const normalizedName = investigationName.toUpperCase().trim();
-
-                                                // Skip consent form for PSA tests
-                                                const isPSATest = normalizedName.includes('PSA') ||
-                                                  normalizedName.startsWith('PSA') ||
-                                                  normalizedName === 'PSA TOTAL' ||
-                                                  normalizedName === 'PSA FREE' ||
-                                                  normalizedName === 'PSA RATIO' ||
-                                                  normalizedName === 'PSA VELOCITY' ||
-                                                  normalizedName === 'PSA DENSITY';
-
-                                                // Don't show consent form section for PSA tests
-                                                if (isPSATest) {
-                                                  return null;
-                                                }
-
-                                                // Get consent form template for this test
-                                                const consentTemplate = getConsentFormTemplate(investigationName);
-
-                                                // Also check ALL templates to see if any match (for custom tests)
-                                                // This handles cases where the template name might not exactly match
-                                                // Only search if consentTemplate wasn't found
-                                                const matchingTemplate = consentTemplate ? null : consentFormTemplates.find(t => {
-                                                  const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
-                                                  const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
-                                                  return (templateTestName && (templateTestName === normalizedName || normalizedName.includes(templateTestName) || templateTestName.includes(normalizedName))) ||
-                                                    (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
-                                                });
-
-                                                const patientConsentFormCheck = getPatientConsentForm(investigationName);
-
-                                                // Use the template if found - prioritize direct match, then matching template, then from patient consent form
-                                                const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ?
-                                                  consentFormTemplates.find(t =>
-                                                    t.id === patientConsentFormCheck.template_id ||
-                                                    t.id === patientConsentFormCheck.consent_form_id
-                                                  ) : null);
-
-                                                const patientConsentForm = patientConsentFormCheck || getPatientConsentForm(investigationName);
-
-                                                // Check for uploaded signed form - only consider it signed if it's manually uploaded
-                                                // Auto-attached forms have file_path set to template paths, which should not be considered "signed"
-                                                const filePath = patientConsentForm?.file_path ||
-                                                  patientConsentForm?.filePath ||
-                                                  patientConsentForm?.signed_file_path ||
-                                                  patientConsentForm?.signed_filePath;
-
-                                                // Only consider it signed if the file path indicates a manually uploaded file
-                                                // (starts with 'uploads/consent-forms/patients/') and not a template reference
-                                                const hasUploadedForm = filePath &&
-                                                  filePath.startsWith('uploads/consent-forms/patients/') &&
-                                                  !filePath.includes('templates/') &&
-                                                  !filePath.includes('auto-generated');
-
-                                                return (
-                                                  <div className="w-full mt-4 pt-4 border-t border-gray-200">
-                                                    <div className="flex items-center justify-between mb-3">
-                                                      <span className="text-xs font-semibold text-gray-700">Consent Form</span>
-                                                      {hasUploadedForm && (
-                                                        <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                                                          Signed
-                                                        </span>
-                                                      )}
-                                                      {!templateToUse && (
-                                                        <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
-                                                          Template Not Available
-                                                        </span>
-                                                      )}
-                                                    </div>
-
-                                                    {/* Print and Upload Section */}
-                                                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => templateToUse && handlePrintConsentForm(templateToUse, investigationName)}
-                                                        disabled={!templateToUse || printingConsentForm}
-                                                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && !printingConsentForm
-                                                          ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
-                                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                                          }`}
-                                                        title={(() => {
-                                                          if (!templateToUse) {
-                                                            return 'Consent form template not available. Please create one in the superadmin panel.';
-                                                          }
-                                                          if (printingConsentForm) {
-                                                            return 'Loading consent form...';
-                                                          }
-                                                          return 'View consent form';
-                                                        })()}
-                                                      >
-                                                        {printingConsentForm ? (
-                                                          <>
-                                                            <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                                                            <span>Loading...</span>
-                                                          </>
-                                                        ) : (
-                                                          <>
-                                                            <IoPrint className="w-3 h-3" />
-                                                            Print
-                                                          </>
-                                                        )}
-                                                      </button>
-                                                      <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${templateToUse
-                                                        ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
-                                                        : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                                        }`}
-                                                        title={!templateToUse ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
-                                                      >
-                                                        <IoCloudUpload className="w-3 h-3" />
-                                                        {hasUploadedForm ? `Re-upload Signed ${investigationName}` : `Upload Signed ${investigationName}`}
-                                                        <input
-                                                          type="file"
-                                                          accept=".pdf,image/*"
-                                                          onChange={(e) => {
-                                                            const file = e.target.files[0];
-                                                            if (file && templateToUse) {
-                                                              handleConsentFormUpload(investigationName, templateToUse, file);
-                                                            } else if (file && !templateToUse) {
-                                                              alert('Consent form template not available. Please create one in the superadmin panel first.');
-                                                            }
-                                                            e.target.value = ''; // Reset input
-                                                          }}
-                                                          className="hidden"
-                                                          disabled={!templateToUse || uploadingConsentForms[investigationName.toLowerCase()]}
-                                                        />
-                                                      </label>
-                                                    </div>
-
-                                                    {/* View Consent Form Button - Only visible when form is uploaded */}
-                                                    {hasUploadedForm && (
-                                                      <div className="mt-2">
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => handleViewConsentForm(patientConsentForm)}
-                                                          className="w-full px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors flex items-center justify-center gap-1.5"
-                                                        >
-                                                          <Eye className="w-3 h-3" />
-                                                          View {investigationName} Consent Form
-                                                        </button>
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                );
-                                              })()}
-                                            </div>
-
-                                            <div className="flex-shrink-0">
-                                              {hasResults ? (
-                                                uploadedResult && uploadedResult.filePath ? (
-                                                  <button
-                                                    onClick={() => handleViewFile(uploadedResult.filePath)}
-                                                    className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
-                                                  >
-                                                    <Eye className="w-3 h-3" />
-                                                    View {investigationName} Result
-                                                  </button>
-                                                ) : null
-                                              ) : (
-                                                (() => {
-                                                  // Don't show upload button if status is not_required
-                                                  const isNotRequired = (request.status || '').toLowerCase() === 'not_required';
-                                                  if (isNotRequired) {
-                                                    return null;
-                                                  }
-
-                                                  // Check if this is a PSA-related test
-                                                  const isPSATest = investigationName.includes('PSA');
-                                                  return (
-                                                    <button
-                                                      onClick={() => {
-                                                        const requestToUse = request.isClinicalInvestigation ? {
-                                                          id: request.noteId,
-                                                          investigationName: request.investigationName,
-                                                          investigation_name: request.investigation_name,
-                                                          investigationType: request.investigationType,
-                                                          investigation_type: request.investigation_type,
-                                                          scheduledDate: request.scheduledDate,
-                                                          scheduled_date: request.scheduled_date,
-                                                          status: request.status,
-                                                          notes: request.notes
-                                                        } : request;
-                                                        setSelectedInvestigationRequest(requestToUse);
-                                                        setIsAddResultModalOpen(true);
-                                                      }}
-                                                      className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-md hover:bg-teal-700 transition-colors flex items-center gap-1.5"
-                                                    >
-                                                      {isPSATest ? (
-                                                        <>
-                                                          <Plus className="w-3.5 h-3.5" />
-                                                          Add Value
-                                                        </>
-                                                      ) : (
-                                                        <>
-                                                          <Upload className="w-3.5 h-3.5" />
-                                                          Upload {investigationName} Result
-                                                        </>
-                                                      )}
-                                                    </button>
-                                                  );
-                                                })()
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
+                                      return renderInvestigationRequestItem(
+                                        request,
+                                        investigationName,
+                                        hasResults,
+                                        uploadedResult,
+                                        sortedResults,
+                                        otherTestResults
                                       );
                                     })}
                                   </div>
@@ -5174,88 +5295,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                   </div>
                 ) : testHistory.length > 0 ? (
                   <div className="space-y-6">
-                    {/* Group tests by date */}
-                    {(() => {
-                      // Group tests by date
-                      const groupedTests = testHistory.reduce((groups, test) => {
-                        const date = test.date;
-                        if (!groups[date]) {
-                          groups[date] = [];
-                        }
-                        groups[date].push(test);
-                        return groups;
-                      }, {});
-
-                      // Sort dates in descending order (most recent first)
-                      const sortedDates = Object.keys(groupedTests).sort((a, b) => new Date(b) - new Date(a));
-
-                      return sortedDates.map((date) => (
-                        <div key={date} className="space-y-4">
-                          {/* Date Title */}
-                          <div className="flex items-center">
-                            <div className="flex-1 border-t border-gray-300"></div>
-                            <div className="px-4">
-                              <h3 className="text-lg font-semibold text-gray-800 bg-white px-3 py-1 rounded-lg border border-gray-200">
-                                {new Date(date).toLocaleDateString('en-US', {
-                                  weekday: 'long',
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric'
-                                })}
-                              </h3>
-                            </div>
-                            <div className="flex-1 border-t border-gray-300"></div>
-                          </div>
-
-                          {/* Tests for this date */}
-                          <div className="space-y-3">
-                            {groupedTests[date].map((test) => (
-                              <div key={test.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                                <div className="flex items-start justify-between mb-3">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
-                                      <h4 className="font-semibold text-gray-900">{(test.testName || '').toUpperCase()}</h4>
-                                    </div>
-                                    <div className="text-sm text-gray-600 mb-2">
-                                      Time: {test.date}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      const filePath = test.filePath || test.file_path;
-                                      if (filePath) {
-                                        handleViewFile(filePath);
-                                      } else {
-                                        handleViewReport(test);
-                                      }
-                                    }}
-                                    className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                                  >
-                                    {(test.filePath || test.file_path) ? 'View File' : 'View'}
-                                  </button>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                                  {test.result && (
-                                    <div>
-                                      <span className="text-sm font-medium text-gray-700">Result:</span>
-                                      <span className="ml-2 text-sm text-gray-900">{test.result}</span>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {test.notes && (
-                                  <div className="pt-3 border-t border-gray-200">
-                                    <span className="text-sm font-medium text-gray-700">Notes:</span>
-                                    <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-wrap-anywhere">{test.notes}</p>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ));
-                    })()}
+                    {renderGroupedTestHistory(testHistory)}
                   </div>
                 ) : (
                   /* Empty State for No Test Results */
@@ -6244,13 +6284,16 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         onClose={() => {
           setIsAddResultModalOpen(false);
           setSelectedInvestigationRequest(null);
+          setSelectedExistingResult(null);
         }}
         investigationRequest={selectedInvestigationRequest}
         patient={patient}
+        existingResult={selectedExistingResult}
         isPSATest={selectedInvestigationRequest ? (selectedInvestigationRequest.investigationName || selectedInvestigationRequest.investigation_name || '').toUpperCase().includes('PSA') : false}
         onSuccess={(message, requestId) => {
           setIsAddResultModalOpen(false);
           setSelectedInvestigationRequest(null);
+          setSelectedExistingResult(null);
           // Refresh both investigation results and requests
           fetchInvestigations();
           fetchInvestigationRequests();
@@ -6413,6 +6456,20 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       />
     </>
   );
+};
+
+NursePatientDetailsModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  patient: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    patientId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    patient_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    name: PropTypes.string,
+    patientName: PropTypes.string,
+    upi: PropTypes.string
+  }),
+  onPatientUpdated: PropTypes.func
 };
 
 export default NursePatientDetailsModal;

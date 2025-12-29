@@ -37,12 +37,49 @@ if (process.env.NODE_ENV === 'development') {
 // Test database connection
 export const testConnection = async () => {
   try {
+    console.log('🔌 Attempting to connect to database...');
+    console.log('🔌 Database config:', {
+      host: dbConfig.host,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      user: dbConfig.user,
+      password: dbConfig.password ? '***' : '(not set)'
+    });
+    
     const client = await pool.connect();
     console.log('✅ Database connected successfully');
     client.release();
     return true;
   } catch (err) {
-    console.error('❌ Database connection failed:', err.message);
+    console.error('❌ Database connection failed:');
+    console.error('   Error message:', err.message);
+    console.error('   Error code:', err.code);
+    console.error('   Error name:', err.name);
+    if (err.stack) {
+      console.error('   Stack trace:', err.stack);
+    }
+    console.error('🔌 Attempted connection to:', {
+      host: dbConfig.host,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      user: dbConfig.user
+    });
+    
+    // Common error messages and solutions
+    if (err.code === 'ECONNREFUSED') {
+      console.error('💡 Solution: PostgreSQL server is not running or not accessible at the specified host/port');
+      console.error('   - Check if PostgreSQL is running: `pg_ctl status` or check services');
+      console.error('   - Verify host and port in .env file');
+    } else if (err.code === 'ENOTFOUND') {
+      console.error('💡 Solution: Database host not found. Check DB_HOST in .env file');
+    } else if (err.code === '28P01' || err.message.includes('password authentication failed')) {
+      console.error('💡 Solution: Invalid database credentials. Check DB_USER and DB_PASSWORD in .env file');
+    } else if (err.code === '3D000' || err.message.includes('database') && err.message.includes('does not exist')) {
+      console.error('💡 Solution: Database does not exist. Create it or check DB_NAME in .env file');
+    } else if (err.code === 'ETIMEDOUT') {
+      console.error('💡 Solution: Connection timeout. Check network connectivity and firewall settings');
+    }
+    
     return false;
   }
 };

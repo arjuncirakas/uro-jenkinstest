@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { IoClose, IoDownload, IoExpand, IoContract } from 'react-icons/io5';
 import { useEscapeKey } from '../utils/useEscapeKey';
 
@@ -21,7 +22,7 @@ const ImageViewerModal = ({ isOpen, onClose, imageUrl, fileName }) => {
       setImageError(false);
       setIsZoomed(false);
     }
-  }, [isOpen, imageUrl]);
+  }, [isOpen, imageUrl, fileName]);
 
   if (!isOpen || !imageUrl) return null;
 
@@ -40,12 +41,15 @@ const ImageViewerModal = ({ isOpen, onClose, imageUrl, fileName }) => {
     }
   };
 
-  const handleImageLoad = () => {
-    setIsLoading(false);
-    setImageError(false);
+  const handleImageLoad = (e) => {
+    // Use a small delay to ensure state update happens
+    setTimeout(() => {
+      setIsLoading(false);
+      setImageError(false);
+    }, 50);
   };
 
-  const handleImageError = () => {
+  const handleImageError = (e) => {
     setIsLoading(false);
     setImageError(true);
   };
@@ -119,7 +123,22 @@ const ImageViewerModal = ({ isOpen, onClose, imageUrl, fileName }) => {
               onLoad={handleImageLoad}
               onError={handleImageError}
               onClick={() => setIsZoomed(!isZoomed)}
-              style={{ display: isLoading ? 'none' : 'block' }}
+              style={{ 
+                opacity: isLoading ? 0 : 1,
+                maxWidth: '100%',
+                maxHeight: '100%',
+                transition: 'opacity 0.3s ease-in-out'
+              }}
+              ref={(img) => {
+                // If image is already loaded (cached or data URL), trigger onLoad immediately
+                if (img?.complete && img?.naturalHeight !== 0) {
+                  // Use setTimeout to ensure state update happens after render
+                  setTimeout(() => {
+                    setIsLoading(false);
+                    setImageError(false);
+                  }, 0);
+                }
+              }}
             />
           )}
         </div>
@@ -141,6 +160,13 @@ const ImageViewerModal = ({ isOpen, onClose, imageUrl, fileName }) => {
       </div>
     </div>
   );
+};
+
+ImageViewerModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  imageUrl: PropTypes.string,
+  fileName: PropTypes.string
 };
 
 export default ImageViewerModal;
