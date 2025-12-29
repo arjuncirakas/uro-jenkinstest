@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard, IoPrint, IoCloudUpload } from 'react-icons/io5';
+import { IoClose, IoTimeSharp, IoMedical, IoCheckmarkCircle, IoDocumentText, IoAnalytics, IoDocument, IoHeart, IoCheckmark, IoAlertCircle, IoCalendar, IoServer, IoConstruct, IoBusiness, IoPeople, IoCheckmarkDone, IoClipboard } from 'react-icons/io5';
 import { FaNotesMedical, FaUserMd, FaUserNurse, FaFileMedical, FaFlask, FaPills, FaStethoscope } from 'react-icons/fa';
 import { BsClockHistory } from 'react-icons/bs';
-import { Plus, Upload, Trash, Eye, Edit } from 'lucide-react';
+import { Trash, Eye, Edit, Plus, Upload } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LabelList } from 'recharts';
 import SuccessModal from './SuccessModal';
 import ErrorModal from './modals/ErrorModal';
@@ -31,6 +31,10 @@ import FullScreenPDFModal from './FullScreenPDFModal';
 import ImageViewerModal from './ImageViewerModal';
 import { consentFormService } from '../services/consentFormService';
 import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
+import { getConsentFormTemplate as getConsentFormTemplateHelper, getPatientConsentForm as getPatientConsentFormHelper, getPrintButtonTitle as getPrintButtonTitleHelper } from '../utils/consentFormHelpers';
+import InvestigationRequestItem from './shared/InvestigationRequestItem';
+import UploadResultButton from './shared/UploadResultButton';
+import { createRequestFromMatchOrTest as createRequestFromMatchOrTestHelper, createRequestFromClinicalInvestigation as createRequestFromClinicalInvestigationHelper, prepareEditResultData } from '../utils/investigationRequestHelpers';
 
 const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error, onTransferSuccess }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -694,103 +698,19 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   };
 
-  // Get consent form template for a test
+  // Get consent form template for a test - using shared utility
   const getConsentFormTemplate = (testName) => {
-    if (!testName) return null;
-
-    // Normalize test name - remove "CUSTOM:" prefix if present
-    let normalizedTestName = testName.toUpperCase().trim();
-    if (normalizedTestName.startsWith('CUSTOM:')) {
-      normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
-    }
-
-    // Try exact match first (with whitespace normalization)
-    const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
-    let template = consentFormTemplates.find(t => {
-      const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
-      const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
-      const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
-      const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
-      return (templateTestName && (templateTestName === normalizedTestName || templateTestNameNoSpaces === normalizedTestNameNoSpaces)) ||
-        (templateProcName && (templateProcName === normalizedTestName || templateProcNameNoSpaces === normalizedTestNameNoSpaces));
-    });
-
-    // If no exact match, try partial match (for cases where names might have slight variations)
-    if (!template) {
-      template = consentFormTemplates.find(t => {
-        const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
-        const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
-        // Check if either name contains the other (bidirectional matching)
-        // Also check for case-insensitive equality (handles variations in spacing/casing)
-        return (templateTestName && (
-          normalizedTestName === templateTestName ||
-          normalizedTestName.includes(templateTestName) ||
-          templateTestName.includes(normalizedTestName) ||
-          normalizedTestName.replace(/\s+/g, '') === templateTestName.replace(/\s+/g, '')
-        )) ||
-          (templateProcName && (
-            normalizedTestName === templateProcName ||
-            normalizedTestName.includes(templateProcName) ||
-            templateProcName.includes(normalizedTestName) ||
-            normalizedTestName.replace(/\s+/g, '') === templateProcName.replace(/\s+/g, '')
-          ));
-      });
-    }
-
-    // Debug logging for custom tests
-    if (normalizedTestName && !normalizedTestName.match(/^(MRI|TRUS|BIOPSY|PSA)/i)) {
-      console.log(`[Consent Form] Looking for template for custom test: "${normalizedTestName}"`, {
-        foundTemplate: !!template,
-        templateId: template?.id,
-        templateTestName: template?.test_name,
-        templateProcName: template?.procedure_name,
-        allTemplates: consentFormTemplates.map(t => ({
-          id: t.id,
-          test_name: t.test_name,
-          procedure_name: t.procedure_name
-        }))
-      });
-    }
-
-    return template;
+    return getConsentFormTemplateHelper(testName, consentFormTemplates, true); // Enable debug logging for Urologist
   };
 
-  // Get patient consent form for a test
+  // Get patient consent form for a test - using shared utility
   const getPatientConsentForm = (testName) => {
-    if (!testName) return null;
+    return getPatientConsentFormHelper(testName, patientConsentForms, consentFormTemplates);
+  };
 
-    // Normalize test name - remove "CUSTOM:" prefix if present
-    let normalizedTestName = testName.toUpperCase().trim();
-    if (normalizedTestName.startsWith('CUSTOM:')) {
-      normalizedTestName = normalizedTestName.replace(/^CUSTOM:\s*/, '').trim();
-    }
-
-    return patientConsentForms.find(cf => {
-      // First, try matching by consent_form_name (from API response)
-      if (cf.consent_form_name) {
-        const consentFormName = cf.consent_form_name.toUpperCase().trim();
-        if (consentFormName === normalizedTestName ||
-          consentFormName.includes(normalizedTestName) ||
-          normalizedTestName.includes(consentFormName)) {
-          return true;
-        }
-      }
-
-      // Second, try matching by template
-      const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
-      if (template) {
-        const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
-        const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
-        return (templateTestName === normalizedTestName) ||
-          (templateProcName === normalizedTestName) ||
-          (templateTestName && normalizedTestName.includes(templateTestName)) ||
-          (templateProcName && normalizedTestName.includes(templateProcName)) ||
-          (templateTestName && templateTestName.includes(normalizedTestName)) ||
-          (templateProcName && templateProcName.includes(normalizedTestName));
-      }
-
-      return false;
-    });
+  // Helper function to get print button title - using shared utility
+  const getPrintButtonTitle = (hasTemplate, isPrinting) => {
+    return getPrintButtonTitleHelper(hasTemplate, isPrinting);
   };
 
   // Print consent form - opens in modal
@@ -1900,33 +1820,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
   // Handle view file
   // Helper function to create request object from clinical investigation
+  // Helper function to create request from clinical investigation - using shared utility
   const createRequestFromClinicalInvestigation = (request) => {
-    if (!request.isClinicalInvestigation) {
-      return request;
-    }
-    return {
-      id: request.noteId,
-      investigationName: request.investigationName,
-      investigation_name: request.investigation_name,
-      investigationType: request.investigationType,
-      investigation_type: request.investigation_type,
-      scheduledDate: request.scheduledDate,
-      scheduled_date: request.scheduled_date,
-      status: request.status,
-      notes: request.notes
-    };
+    return createRequestFromClinicalInvestigationHelper(request);
   };
 
-  // Helper function to create request object from matching request or test data
+  // Helper function to create request object from matching request or test data - using shared utility
   const createRequestFromMatchOrTest = (matchingRequest, testName, testData = null) => {
-    if (matchingRequest) {
-      return createRequestFromClinicalInvestigation(matchingRequest);
-    }
-    const name = testData?.testName || testData?.test_name || testName || '';
-    return {
-      investigationName: name,
-      investigation_name: name
-    };
+    return createRequestFromMatchOrTestHelper(matchingRequest, testName, testData, createRequestFromClinicalInvestigation);
   };
 
   // Helper function to handle edit button click
@@ -1937,14 +1838,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     setIsAddResultModalOpen(true);
   };
 
-  // Helper function to render upload button for investigation request
+  // Helper function to render upload button for investigation request - using shared component
   const renderUploadButton = (request, investigationName) => {
-    const isNotRequired = (request.status || '').toLowerCase() === 'not_required';
-    if (isNotRequired) {
-      return null;
-    }
-
-    const isPSATest = investigationName.includes('PSA');
     const handleUploadClick = () => {
       const requestToUse = createRequestFromClinicalInvestigation(request);
       setSelectedInvestigationRequest(requestToUse);
@@ -1952,307 +1847,46 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     };
 
     return (
-      <button
-        onClick={handleUploadClick}
-        className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-md hover:bg-teal-700 transition-colors flex items-center gap-1.5"
-      >
-        {isPSATest ? (
-          <>
-            <Plus className="w-3.5 h-3.5" />
-            Add Value
-          </>
-        ) : (
-          <>
-            <Upload className="w-3.5 h-3.5" />
-            Upload {investigationName} Result
-          </>
-        )}
-      </button>
+      <UploadResultButton
+        request={request}
+        investigationName={investigationName}
+        onUploadClick={handleUploadClick}
+      />
     );
   };
 
-  // Helper function to render investigation request item (reduces nesting)
+  // Helper function to render investigation request item - using shared component
   const renderInvestigationRequestItem = (request, investigationName, hasResults, uploadedResult, sortedResults) => {
-    const handleViewClick = () => {
-      if (uploadedResult?.filePath) {
-        const fileUrl = uploadedResult.filePath.startsWith('http')
-          ? uploadedResult.filePath
-          : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${uploadedResult.filePath}`;
-        window.open(fileUrl, '_blank');
-      }
-    };
-
-    const handleEditClick = () => {
-      handleEditResult(request, uploadedResult);
-    };
-
     return (
-      <div key={`request-${request.id}`} className="bg-gray-50 rounded-md p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-3">
-              <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
-              {(request.status || '').toLowerCase() === 'not_required' && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full border border-gray-200">
-                  Not Required
-                </span>
-              )}
-            </div>
-
-            {/* Show all result details inline */}
-            {hasResults && sortedResults.length > 0 && (
-              <div className="space-y-3 mt-3">
-                {sortedResults.map((result, idx) => {
-                  const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                  }) : 'N/A';
-
-                  return (
-                    <div key={result.id || idx} className="bg-white rounded-md p-3 border border-gray-200">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-gray-600">Result #{sortedResults.length - idx}</span>
-                          {result.status && (
-                            <span className={`px-2 py-0.5 text-xs font-medium rounded ${result.status.toLowerCase() === 'normal' ? 'bg-green-100 text-green-700' :
-                              result.status.toLowerCase() === 'high' || result.status.toLowerCase() === 'elevated' ? 'bg-red-100 text-red-700' :
-                                result.status.toLowerCase() === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
-                                  'bg-blue-100 text-blue-700'
-                              }`}>
-                              {result.status}
-                            </span>
-                          )}
-                        </div>
-                        {result.filePath && (
-                          <button
-                            onClick={() => {
-                              const fileUrl = result.filePath.startsWith('http')
-                                ? result.filePath
-                                : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${result.filePath}`;
-                              window.open(fileUrl, '_blank');
-                            }}
-                            className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors flex items-center gap-1"
-                            title="View file"
-                          >
-                            <Eye className="w-3 h-3" />
-                            View File
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="text-xs text-gray-600">
-                          <span className="font-medium">Date: </span>
-                          <span className="text-gray-900">{resultDate}</span>
-                        </div>
-
-                        {result.authorName && (
-                          <div className="text-xs text-gray-600">
-                            <span className="font-medium">Added by: </span>
-                            <span className="text-gray-900">{result.authorName}</span>
-                            {result.authorRole && (
-                              <span className="text-gray-500"> ({result.authorRole})</span>
-                            )}
-                          </div>
-                        )}
-
-                        {result.result && (
-                          <div className="text-sm text-gray-700">
-                            <span className="font-medium text-gray-600">Result Value: </span>
-                            <span className="text-lg font-semibold text-gray-900">{result.result}</span>
-                          </div>
-                        )}
-
-                        {result.referenceRange && result.referenceRange !== 'N/A' && (
-                          <div className="text-xs text-gray-600">
-                            <span className="font-medium">Reference Range: </span>
-                            <span className="text-gray-900">{result.referenceRange}</span>
-                          </div>
-                        )}
-
-                        {result.notes && (
-                          <div className="text-xs text-gray-600 pt-1 border-t border-gray-100">
-                            <span className="font-medium">Notes: </span>
-                            <span className="text-gray-900">{result.notes}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {!hasResults && request.notes && (
-              <div className="text-sm text-gray-600 mb-2">
-                <span className="font-medium">Notes: </span>
-                <span>{request.notes}</span>
-              </div>
-            )}
-
-            {/* Status update controls */}
-            {!hasResults && !request.isClinicalInvestigation && request.id && (request.status || '').toLowerCase() !== 'not_required' && (
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={async () => {
-                    if (!request.id || request.isClinicalInvestigation) return;
-                    try {
-                      const result = await investigationService.updateInvestigationRequestStatus(request.id, 'not_required');
-                      if (result.success) {
-                        fetchInvestigationRequests();
-                        window.dispatchEvent(new CustomEvent('investigationStatusUpdated', {
-                          detail: { patientId: patient?.id, testName: investigationName, status: 'not_required' }
-                        }));
-                        setSuccessModalTitle('Status Updated');
-                        setSuccessModalMessage('Investigation status updated to NOT REQUIRED.');
-                        setIsSuccessModalOpen(true);
-                      }
-                    } catch (error) {
-                      setErrorModalTitle('Update Failed');
-                      setErrorModalMessage('Failed to update investigation request status');
-                      setIsErrorModalOpen(true);
-                    }
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300"
-                >
-                  Not Required
-                </button>
-              </div>
-            )}
-
-            {/* Consent Form Section - extracted to reduce nesting */}
-            {(() => {
-              const normalizedName = investigationName.toUpperCase().trim();
-              const isPSATest = normalizedName.includes('PSA') || normalizedName.startsWith('PSA') ||
-                normalizedName === 'PSA TOTAL' || normalizedName === 'PSA FREE' ||
-                normalizedName === 'PSA RATIO' || normalizedName === 'PSA VELOCITY' || normalizedName === 'PSA DENSITY';
-              if (isPSATest) return null;
-
-              const consentTemplate = getConsentFormTemplate(investigationName);
-              const matchingTemplate = consentTemplate ? null : consentFormTemplates.find(t => {
-                const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
-                const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
-                return (templateTestName && (templateTestName === normalizedName || normalizedName.includes(templateTestName) || templateTestName.includes(normalizedName))) ||
-                  (templateProcName && (templateProcName === normalizedName || normalizedName.includes(templateProcName) || templateProcName.includes(normalizedName)));
-              });
-              const patientConsentFormCheck = getPatientConsentForm(investigationName);
-              const templateToUse = consentTemplate || matchingTemplate || (patientConsentFormCheck ?
-                consentFormTemplates.find(t => t.id === patientConsentFormCheck.template_id || t.id === patientConsentFormCheck.consent_form_id) : null);
-              const patientConsentForm = patientConsentFormCheck || getPatientConsentForm(investigationName);
-              const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath ||
-                patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
-              const hasUploadedForm = filePath?.startsWith('uploads/consent-forms/patients/') &&
-                !filePath.includes('templates/') && !filePath.includes('auto-generated');
-
-              return (
-                <div className="w-full mt-4 pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-gray-700">Consent Form</span>
-                    {hasUploadedForm && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Signed</span>
-                    )}
-                    {!templateToUse && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">Template Not Available</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <button
-                      type="button"
-                      onClick={() => templateToUse && handlePrintConsentForm(templateToUse, investigationName)}
-                      disabled={!templateToUse || printingConsentForm}
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && !printingConsentForm
-                        ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
-                        : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
-                      title={
-                        !templateToUse 
-                          ? 'Consent form template not available. Please create one in the superadmin panel.'
-                          : printingConsentForm 
-                            ? 'Loading consent form...' 
-                            : 'Print consent form'
-                      }
-                    >
-                      {printingConsentForm ? (
-                        <>
-                          <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                          <span>Loading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <IoPrint className="w-3 h-3" />
-                          Print
-                        </>
-                      )}
-                    </button>
-                    <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1.5 ${templateToUse
-                      ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
-                      : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
-                    >
-                      <IoCloudUpload className="w-3 h-3" />
-                      {hasUploadedForm ? `Re-upload Signed ${investigationName}` : `Upload Signed ${investigationName}`}
-                      <input
-                        type="file"
-                        accept=".pdf,image/*"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file && templateToUse) {
-                            handleConsentFormUpload(investigationName, templateToUse, file);
-                          } else if (file && !templateToUse) {
-                            setErrorModalTitle('Error');
-                            setErrorModalMessage('Consent form template not available. Please create one in the superadmin panel first.');
-                            setIsErrorModalOpen(true);
-                          }
-                          e.target.value = '';
-                        }}
-                        className="hidden"
-                        disabled={!templateToUse || uploadingConsentForms[investigationName.toLowerCase()]}
-                      />
-                    </label>
-                  </div>
-                  {hasUploadedForm && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => handleViewConsentForm(patientConsentForm)}
-                        className="w-full px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 justify-center"
-                        title="View uploaded consent form"
-                      >
-                        <Eye className="w-3 h-3" />
-                        View {investigationName} Consent Form
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-
-          <div className="flex-shrink-0">
-            {hasResults ? (
-              uploadedResult && uploadedResult.filePath ? (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={handleViewClick}
-                    className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
-                  >
-                    <Eye className="w-3 h-3" />
-                    View {investigationName} Result
-                  </button>
-                  <button
-                    onClick={handleEditClick}
-                    className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded border border-teal-200 hover:bg-teal-100 transition-colors flex items-center gap-1.5"
-                    title="Edit/Re-upload result"
-                  >
-                    <Edit className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : null
-            ) : (
-              renderUploadButton(request, investigationName)
-            )}
-          </div>
-        </div>
-      </div>
+      <InvestigationRequestItem
+        request={request}
+        investigationName={investigationName}
+        hasResults={hasResults}
+        uploadedResult={uploadedResult}
+        sortedResults={sortedResults}
+        patient={patient}
+        consentFormTemplates={consentFormTemplates}
+        printingConsentForm={printingConsentForm}
+        uploadingConsentForms={uploadingConsentForms}
+        getConsentFormTemplate={getConsentFormTemplate}
+        getPatientConsentForm={getPatientConsentForm}
+        getPrintButtonTitle={getPrintButtonTitle}
+        handlePrintConsentForm={handlePrintConsentForm}
+        handleConsentFormUpload={handleConsentFormUpload}
+        handleViewConsentForm={handleViewConsentForm}
+        handleEditResult={handleEditResult}
+        handleViewFile={handleViewFile}
+        renderUploadButton={renderUploadButton}
+        investigationService={investigationService}
+        setErrorModalTitle={setErrorModalTitle}
+        setErrorModalMessage={setErrorModalMessage}
+        setIsErrorModalOpen={setIsErrorModalOpen}
+        setSuccessModalTitle={setSuccessModalTitle}
+        setSuccessModalMessage={setSuccessModalMessage}
+        setIsSuccessModalOpen={setIsSuccessModalOpen}
+        fetchInvestigationRequests={fetchInvestigationRequests}
+        showErrorAlert={true}
+      />
     );
   };
 
@@ -2267,14 +1901,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     const requestToUse = createRequestFromMatchOrTest(matchingRequest, selectedTestName, result);
     
     setSelectedInvestigationRequest(requestToUse);
-    setSelectedExistingResult({
-      id: result.id,
-      testName: result.testName || result.test_name || selectedTestName,
-      result: result.result,
-      notes: result.notes,
-      filePath: result.filePath,
-      fileName: result.fileName || result.file_name
-    });
+    setSelectedExistingResult(prepareEditResultData(result, selectedTestName));
     setIsViewResultsModalOpen(false);
     setIsAddResultModalOpen(true);
   };

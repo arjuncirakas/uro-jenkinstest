@@ -147,13 +147,27 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   }, [patientConsentForms, isOpen]);
 
   // Get consent form template for the investigation
+  // Get consent form template for a test - EXACT MATCH ONLY
   const getConsentFormTemplate = (testName) => {
     if (!testName) return null;
     const normalizedTestName = testName.toUpperCase().trim();
-    return consentFormTemplates.find(t => 
-      (t.test_name && t.test_name.toUpperCase().trim() === normalizedTestName) ||
-      (t.procedure_name && t.procedure_name.toUpperCase().trim() === normalizedTestName)
-    );
+    const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
+    
+    return consentFormTemplates.find(t => {
+      const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
+      const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
+      const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
+      const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
+      
+      // Only match if names are exactly equal (with or without spaces)
+      return (templateTestName && (
+        templateTestName === normalizedTestName || 
+        templateTestNameNoSpaces === normalizedTestNameNoSpaces
+      )) || (templateProcName && (
+        templateProcName === normalizedTestName || 
+        templateProcNameNoSpaces === normalizedTestNameNoSpaces
+      ));
+    }) || null;
   };
 
   // Helper function to check if a name matches the normalized test name
@@ -184,33 +198,47 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     return (templateTestName === normalizedTestName) || (templateProcName === normalizedTestName);
   };
 
-  // Get patient consent form for the investigation
+  // Get patient consent form for the investigation - EXACT MATCH ONLY
   const getPatientConsentForm = (testName, templateId = null) => {
     if (!testName) return null;
     const normalizedTestName = testName.toUpperCase().trim();
+    const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
     
     const foundForm = patientConsentForms.find(cf => {
-      // First, if we have a templateId, try matching by consent_form_id directly
-      if (matchesByTemplateId(cf, templateId)) {
-        return true;
+      // First, try matching by consent_form_name - EXACT MATCH ONLY
+      if (cf.consent_form_name) {
+        const consentFormName = cf.consent_form_name.toUpperCase().trim();
+        const consentFormNameNoSpaces = consentFormName.replace(/\s+/g, '');
+        if (consentFormName === normalizedTestName || 
+            consentFormNameNoSpaces === normalizedTestNameNoSpaces) {
+          return true;
+        }
       }
       
-      // Second, try matching by consent_form_name
-      if (matchesTestName(cf.consent_form_name, normalizedTestName)) {
-        return true;
+      // Second, try matching by template - EXACT MATCH ONLY
+      const template = consentFormTemplates.find(t => 
+        t.id === cf.template_id || 
+        t.id === cf.consent_form_id ||
+        (templateId && (t.id === templateId))
+      );
+      
+      if (template) {
+        const templateTestName = template.test_name?.toUpperCase().trim() || '';
+        const templateProcName = template.procedure_name?.toUpperCase().trim() || '';
+        const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
+        const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
+        
+        // Only match if names are exactly equal
+        return (templateTestName && (
+          templateTestName === normalizedTestName || 
+          templateTestNameNoSpaces === normalizedTestNameNoSpaces
+        )) || (templateProcName && (
+          templateProcName === normalizedTestName || 
+          templateProcNameNoSpaces === normalizedTestNameNoSpaces
+        ));
       }
       
-      // Third, try matching by test_name or procedure_name from the joined data
-      if (matchesTestName(cf.test_name, normalizedTestName)) {
-        return true;
-      }
-      
-      if (matchesTestName(cf.procedure_name, normalizedTestName)) {
-        return true;
-      }
-      
-      // Fourth, try matching by template
-      return matchesByTemplate(cf, normalizedTestName);
+      return false;
     });
     
     return foundForm || null;
@@ -363,6 +391,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     const investigationName = investigationRequest?.investigationName || investigationRequest?.investigation_name || '';
     const consentTemplate = getConsentFormTemplate(investigationName);
     const patientConsentForm = getPatientConsentForm(investigationName, consentTemplate?.id);
+    const isNotRequired = (investigationRequest?.status || '').toLowerCase() === 'not_required';
     
     // Check if form has been uploaded
     const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath || patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
@@ -378,6 +407,9 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     
     // Get button title text
     const getButtonTitle = () => {
+      if (isNotRequired) {
+        return 'Test is marked as Not Required. Consent form actions are disabled.';
+      }
       if (!consentTemplate) {
         return 'Consent form template not available. Please create one in the superadmin panel.';
       }
@@ -431,10 +463,10 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, investigationName)}
-                disabled={!consentTemplate || loadingConsentForms || printingConsentForm}
+                onClick={() => consentTemplate && !isNotRequired && handlePrintConsentForm(consentTemplate, investigationName)}
+                disabled={!consentTemplate || loadingConsentForms || printingConsentForm || isNotRequired}
                 className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
-                  consentTemplate && !loadingConsentForms && !printingConsentForm
+                  consentTemplate && !loadingConsentForms && !printingConsentForm && !isNotRequired
                     ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
                     : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
                 }`}
@@ -453,12 +485,18 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                 )}
               </button>
 
-              <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                consentTemplate && !loadingConsentForms && !uploadingConsentForm
-                  ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+              <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
+                consentTemplate && !loadingConsentForms && !uploadingConsentForm && !isNotRequired
+                  ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 cursor-pointer'
                   : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
               }`}
-              title={!consentTemplate ? 'Consent form template not available. Please create one in the superadmin panel.' : hasUploadedForm ? 'Re-upload signed consent form' : 'Upload signed consent form'}
+              title={isNotRequired 
+                ? 'Test is marked as Not Required. Consent form actions are disabled.' 
+                : !consentTemplate 
+                  ? 'Consent form template not available. Please create one in the superadmin panel.' 
+                  : hasUploadedForm 
+                    ? 'Re-upload signed consent form' 
+                    : 'Upload signed consent form'}
               >
                 <IoCloudUpload className="w-3.5 h-3.5" />
                 <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
@@ -467,16 +505,19 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                   accept=".pdf,image/*"
                   onChange={(e) => {
                     const file = e.target.files[0];
-                    if (file && consentTemplate) {
+                    if (file && consentTemplate && !isNotRequired) {
                       handleConsentFormUpload(investigationName, consentTemplate, file);
                     } else if (file && !consentTemplate) {
                       setConsentFormNotification({ type: 'error', message: 'Consent form template not available. Please create one in the superadmin panel first.' });
+                      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+                    } else if (file && isNotRequired) {
+                      setConsentFormNotification({ type: 'error', message: 'Test is marked as Not Required. Consent form actions are disabled.' });
                       setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
                     }
                     e.target.value = '';
                   }}
                   className="hidden"
-                  disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm}
+                  disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm || isNotRequired}
                 />
               </label>
             </div>

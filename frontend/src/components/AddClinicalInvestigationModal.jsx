@@ -6,6 +6,7 @@ import { Eye, Upload, FileText } from 'lucide-react';
 import { notesService } from '../services/notesService';
 import { consentFormService } from '../services/consentFormService';
 import { getConsentFormBlobUrl } from '../utils/consentFormUtils';
+import { getPrintButtonTitle as getPrintButtonTitleHelper } from '../utils/consentFormHelpers';
 import FullScreenPDFModal from './FullScreenPDFModal';
 
 /**
@@ -91,32 +92,70 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
     }
   };
 
-  // Get consent form template for a test
+  // Get consent form template for a test - EXACT MATCH ONLY
   const getConsentFormTemplate = (testName) => {
-    const normalizedTestName = testName.toUpperCase();
-    return consentFormTemplates.find(t => 
-      (t.test_name && t.test_name.toUpperCase() === normalizedTestName) ||
-      (t.procedure_name && t.procedure_name.toUpperCase() === normalizedTestName)
-    );
+    if (!testName) return null;
+    const normalizedTestName = testName.toUpperCase().trim();
+    const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
+    
+    return consentFormTemplates.find(t => {
+      const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
+      const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
+      const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
+      const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
+      
+      // Only match if names are exactly equal (with or without spaces)
+      return (templateTestName && (
+        templateTestName === normalizedTestName || 
+        templateTestNameNoSpaces === normalizedTestNameNoSpaces
+      )) || (templateProcName && (
+        templateProcName === normalizedTestName || 
+        templateProcNameNoSpaces === normalizedTestNameNoSpaces
+      ));
+    }) || null;
   };
 
-  // Get patient consent form for a test
+  // Get patient consent form for a test - EXACT MATCH ONLY
   const getPatientConsentForm = (testName) => {
-    const normalizedTestName = testName.toUpperCase();
+    if (!testName) return null;
+    const normalizedTestName = testName.toUpperCase().trim();
+    const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
+    
     return patientConsentForms.find(cf => {
+      // First, try matching by consent_form_name - EXACT MATCH ONLY
       if (cf.consent_form_name) {
-        const consentFormName = cf.consent_form_name.toUpperCase();
-        if (consentFormName === normalizedTestName) {
+        const consentFormName = cf.consent_form_name.toUpperCase().trim();
+        const consentFormNameNoSpaces = consentFormName.replace(/\s+/g, '');
+        if (consentFormName === normalizedTestName || 
+            consentFormNameNoSpaces === normalizedTestNameNoSpaces) {
           return true;
         }
       }
+      
+      // Second, try matching by template - EXACT MATCH ONLY
       const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
       if (template) {
-        return (template.test_name && template.test_name.toUpperCase() === normalizedTestName) ||
-               (template.procedure_name && template.procedure_name.toUpperCase() === normalizedTestName);
+        const templateTestName = template.test_name?.toUpperCase().trim() || '';
+        const templateProcName = template.procedure_name?.toUpperCase().trim() || '';
+        const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
+        const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
+        
+        // Only match if names are exactly equal
+        return (templateTestName && (
+          templateTestName === normalizedTestName || 
+          templateTestNameNoSpaces === normalizedTestNameNoSpaces
+        )) || (templateProcName && (
+          templateProcName === normalizedTestName || 
+          templateProcNameNoSpaces === normalizedTestNameNoSpaces
+        ));
       }
       return false;
-    });
+    }) || null;
+  };
+
+  // Helper function to get print button title - using shared utility
+  const getPrintButtonTitle = (hasTemplate, isPrinting) => {
+    return getPrintButtonTitleHelper(hasTemplate, isPrinting, 'View consent form');
   };
 
   // Print consent form - opens in modal
@@ -497,13 +536,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                             ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
                                             : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
                                         }`}
-                                        title={
-                                          !consentTemplate 
-                                            ? 'Consent form template not available. Please create one in the superadmin panel.'
-                                            : printingConsentForm 
-                                              ? 'Loading consent form...' 
-                                              : 'View consent form'
-                                        }
+                                        title={getPrintButtonTitle(consentTemplate, printingConsentForm)}
                                       >
                                         {printingConsentForm ? (
                                           <>
