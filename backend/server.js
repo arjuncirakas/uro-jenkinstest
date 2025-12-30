@@ -146,17 +146,43 @@ app.use('/api', auditMiddleware);
 // This protects ALL /api/* routes except public auth endpoints
 app.use(protectApiRoutes);
 
-// Debug logging for all API requests
+// Debug logging for all API requests - with special handling for file requests
 app.use('/api', (req, res, next) => {
-  console.log(`🌐 [API Request] ${req.method} ${req.originalUrl}`);
-  console.log(`🌐 [API Request] Path: ${req.path}`);
-  console.log(`🌐 [API Request] Base URL: ${req.baseUrl}`);
-  console.log(`🌐 [API Request] URL: ${req.url}`);
-  console.log(`🌐 [API Request] Headers:`, {
-    host: req.get('host'),
-    'x-forwarded-for': req.get('x-forwarded-for'),
-    'x-real-ip': req.get('x-real-ip')
-  });
+  const isFileRequest = req.originalUrl.includes('/files/') || 
+                        req.originalUrl.includes('/investigations/files/') ||
+                        req.path.includes('/files/') ||
+                        req.path.includes('/investigations/files/');
+  
+  if (isFileRequest) {
+    console.log('📁 [FILE REQUEST DETECTED] ==========================================');
+    console.log('📁 [FILE REQUEST DETECTED] Method:', req.method);
+    console.log('📁 [FILE REQUEST DETECTED] Original URL:', req.originalUrl);
+    console.log('📁 [FILE REQUEST DETECTED] Path:', req.path);
+    console.log('📁 [FILE REQUEST DETECTED] Base URL:', req.baseUrl);
+    console.log('📁 [FILE REQUEST DETECTED] URL:', req.url);
+    console.log('📁 [FILE REQUEST DETECTED] Query:', req.query);
+    console.log('📁 [FILE REQUEST DETECTED] Params:', req.params);
+    console.log('📁 [FILE REQUEST DETECTED] Headers:', {
+      host: req.get('host'),
+      'x-forwarded-for': req.get('x-forwarded-for'),
+      'x-real-ip': req.get('x-real-ip'),
+      'user-agent': req.get('user-agent'),
+      'accept': req.get('accept'),
+      'content-type': req.get('content-type')
+    });
+    console.log('📁 [FILE REQUEST DETECTED] IP:', req.ip);
+    console.log('📁 [FILE REQUEST DETECTED] ==========================================');
+  } else {
+    console.log(`🌐 [API Request] ${req.method} ${req.originalUrl}`);
+    console.log(`🌐 [API Request] Path: ${req.path}`);
+    console.log(`🌐 [API Request] Base URL: ${req.baseUrl}`);
+    console.log(`🌐 [API Request] URL: ${req.url}`);
+    console.log(`🌐 [API Request] Headers:`, {
+      host: req.get('host'),
+      'x-forwarded-for': req.get('x-forwarded-for'),
+      'x-real-ip': req.get('x-real-ip')
+    });
+  }
   next();
 });
 

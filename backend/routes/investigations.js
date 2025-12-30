@@ -126,14 +126,24 @@ router.options('/investigations/files/:filePath(*)', (req, res) => {
 router.get('/investigations/files/:filePath(*)',
   (req, res, next) => {
     console.log('🛣️ [investigations route] ==========================================');
-    console.log('🛣️ [investigations route] Route matched: /investigations/files/:filePath(*)');
+    console.log('🛣️ [investigations route] ✅✅✅ ROUTE MATCHED! ✅✅✅');
+    console.log('🛣️ [investigations route] Route pattern: /investigations/files/:filePath(*)');
     console.log('🛣️ [investigations route] Method:', req.method);
     console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
     console.log('🛣️ [investigations route] Path:', req.path);
     console.log('🛣️ [investigations route] Base URL:', req.baseUrl);
     console.log('🛣️ [investigations route] URL:', req.url);
-    console.log('🛣️ [investigations route] Params:', req.params);
+    console.log('🛣️ [investigations route] Params:', JSON.stringify(req.params, null, 2));
     console.log('🛣️ [investigations route] filePath param:', req.params.filePath);
+    console.log('🛣️ [investigations route] Query:', JSON.stringify(req.query, null, 2));
+    console.log('🛣️ [investigations route] Headers:', {
+      host: req.get('host'),
+      'x-forwarded-for': req.get('x-forwarded-for'),
+      'x-real-ip': req.get('x-real-ip'),
+      'user-agent': req.get('user-agent'),
+      'accept': req.get('accept')
+    });
+    console.log('🛣️ [investigations route] ==========================================');
     
     next();
   },
@@ -169,8 +179,25 @@ router.options('/files/:filePath(*)', (req, res) => {
 
 router.get('/files/:filePath(*)',
   (req, res, next) => {
-    console.log('🛣️ [investigations route] Old route matched: /files/:filePath(*)');
+    console.log('🛣️ [investigations route] ==========================================');
+    console.log('🛣️ [investigations route] ✅✅✅ OLD ROUTE MATCHED! ✅✅✅');
+    console.log('🛣️ [investigations route] Route pattern: /files/:filePath(*)');
+    console.log('🛣️ [investigations route] Method:', req.method);
+    console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
+    console.log('🛣️ [investigations route] Path:', req.path);
+    console.log('🛣️ [investigations route] Base URL:', req.baseUrl);
+    console.log('🛣️ [investigations route] URL:', req.url);
+    console.log('🛣️ [investigations route] Params:', JSON.stringify(req.params, null, 2));
     console.log('🛣️ [investigations route] filePath param:', req.params.filePath);
+    console.log('🛣️ [investigations route] Query:', JSON.stringify(req.query, null, 2));
+    console.log('🛣️ [investigations route] Headers:', {
+      host: req.get('host'),
+      'x-forwarded-for': req.get('x-forwarded-for'),
+      'x-real-ip': req.get('x-real-ip'),
+      'user-agent': req.get('user-agent'),
+      'accept': req.get('accept')
+    });
+    console.log('🛣️ [investigations route] ==========================================');
     next();
   },
   generalLimiter,
