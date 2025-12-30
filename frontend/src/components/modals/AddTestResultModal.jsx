@@ -222,12 +222,30 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                   className="hidden"
                 />
                 <label htmlFor="testFile" className="cursor-pointer block">
-                  <IoCloudUpload className={`w-8 h-8 mx-auto mb-2 ${errors.file ? 'text-red-500' : testFile ? 'text-blue-500' : 'text-gray-400'
-                    }`} />
-                  <p className={`text-sm ${errors.file ? 'text-red-600' : testFile ? 'text-blue-700 font-medium' : 'text-gray-600'
-                    }`}>
-                    {testFile ? testFile.name : 'Click to upload or drag and drop'}
-                  </p>
+                  {(() => {
+                    let uploadIconColor = 'text-gray-400';
+                    if (errors.file) {
+                      uploadIconColor = 'text-red-500';
+                    } else if (testFile) {
+                      uploadIconColor = 'text-blue-500';
+                    }
+                    return <IoCloudUpload className={`w-8 h-8 mx-auto mb-2 ${uploadIconColor}`} />;
+                  })()}
+                  {(() => {
+                    let textColor = 'text-gray-600';
+                    let textWeight = '';
+                    if (errors.file) {
+                      textColor = 'text-red-600';
+                    } else if (testFile) {
+                      textColor = 'text-blue-700';
+                      textWeight = 'font-medium';
+                    }
+                    return (
+                      <p className={`text-sm ${textColor} ${textWeight}`}>
+                        {testFile ? testFile.name : 'Click to upload or drag and drop'}
+                      </p>
+                    );
+                  })()}
                   <p className="text-xs text-gray-500 mt-1">
                     PDF, DOC, DOCX up to 10MB
                   </p>

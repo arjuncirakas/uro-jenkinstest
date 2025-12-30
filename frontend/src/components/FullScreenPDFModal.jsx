@@ -67,7 +67,7 @@ const FullScreenPDFModal = ({ isOpen, onClose, pdfUrl, fileName }) => {
       // Cleanup after 60 seconds to give plenty of time for printing
       setTimeout(() => {
         if (iframeRef.current?.parentNode) {
-          document.body.removeChild(iframeRef.current);
+          iframeRef.current.remove();
           iframeRef.current = null;
         }
       }, 60000);

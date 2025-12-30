@@ -209,19 +209,25 @@ describe('UrologistPatientDetailsModal - Active Monitoring Pathway Transfer', ()
         />
       );
 
+      await waitFor(() => {
+        expect(screen.getByText('Test Patient')).toBeInTheDocument();
+      });
+
       // Open pathway transfer modal
       const transferButton = screen.queryByText(/transfer|pathway/i);
       if (transferButton) {
         fireEvent.click(transferButton);
+        
+        // Try to find the Active Monitoring option
+        await waitFor(() => {
+          const activeMonitoringButton = screen.queryByText('Active Monitoring');
+          if (activeMonitoringButton) {
+            fireEvent.click(activeMonitoringButton);
+            // Verify modal content appears
+            expect(screen.queryByText(/clinical justification|schedule follow-up/i)).toBeInTheDocument();
+          }
+        }, { timeout: 2000 });
       }
-
-      // Try to find the Active Monitoring option
-      await waitFor(() => {
-        const activeMonitoringButton = screen.queryByText('Active Monitoring');
-        if (activeMonitoringButton) {
-          fireEvent.click(activeMonitoringButton);
-        }
-      });
     });
 
     it('should display check-up frequency dropdown with only Monthly, Every 3 months, and Every 6 months options', async () => {

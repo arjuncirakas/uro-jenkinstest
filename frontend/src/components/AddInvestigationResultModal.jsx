@@ -170,34 +170,6 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     }) || null;
   };
 
-  // Helper function to check if a name matches the normalized test name
-  const matchesTestName = (name, normalizedTestName) => {
-    if (!name) return false;
-    return name.toUpperCase().trim() === normalizedTestName;
-  };
-
-  // Helper function to check if consent form matches by template ID
-  const matchesByTemplateId = (cf, templateId) => {
-    if (!templateId) return false;
-    return cf.consent_form_id === templateId || cf.template_id === templateId;
-  };
-
-  // Helper function to check if consent form matches by template
-  const matchesByTemplate = (cf, normalizedTestName) => {
-    const template = consentFormTemplates.find(t =>
-      t.id === cf.template_id ||
-      t.id === cf.consent_form_id ||
-      cf.template_id === t.id ||
-      cf.consent_form_id === t.id
-    );
-
-    if (!template) return false;
-
-    const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
-    const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
-    return (templateTestName === normalizedTestName) || (templateProcName === normalizedTestName);
-  };
-
   // Get patient consent form for the investigation - EXACT MATCH ONLY
   const getPatientConsentForm = (testName, templateId = null) => {
     if (!testName) return null;
@@ -967,7 +939,8 @@ AddInvestigationResultModal.propTypes = {
   investigationRequest: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     investigationName: PropTypes.string,
-    investigation_name: PropTypes.string
+    investigation_name: PropTypes.string,
+    status: PropTypes.string
   }),
   patient: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),

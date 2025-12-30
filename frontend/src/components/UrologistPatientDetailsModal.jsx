@@ -1556,7 +1556,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         if (timeStr.match(/^\d{2}:\d{2}$/)) {
           const [hours, minutes] = timeStr.split(':');
           const hour24 = parseInt(hours, 10);
-          const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+          let hour12;
+          if (hour24 === 0) {
+            hour12 = 12;
+          } else if (hour24 > 12) {
+            hour12 = hour24 - 12;
+          } else {
+            hour12 = hour24;
+          }
           const ampm = hour24 >= 12 ? 'PM' : 'AM';
           return `${hour12}:${minutes} ${ampm}`;
         }
@@ -2107,6 +2114,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         med.id === id ? { ...med, [field]: value } : med
       )
     }));
+  };
+
+  // Helper function to get frequency text from interval
+  const getFrequencyText = (interval, intervalMonths) => {
+    if (interval === '1') return 'Monthly';
+    if (interval === '3') return 'Every 3 months';
+    if (interval === '6') return 'Every 6 months';
+    return `Every ${intervalMonths} months`;
   };
 
   // Handle transfer actions
@@ -6442,10 +6457,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      <label htmlFor={`medication-name-${medication.id}`} className="block text-sm font-medium text-gray-700 mb-1">
                                         Medication Name *
                                       </label>
                                       <input
+                                        id={`medication-name-${medication.id}`}
                                         type="text"
                                         value={medication.name}
                                         onChange={(e) => updateMedication(medication.id, 'name', e.target.value)}
@@ -6455,10 +6471,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      <label htmlFor={`medication-dosage-${medication.id}`} className="block text-sm font-medium text-gray-700 mb-1">
                                         Dosage *
                                       </label>
                                       <input
+                                        id={`medication-dosage-${medication.id}`}
                                         type="text"
                                         value={medication.dosage}
                                         onChange={(e) => updateMedication(medication.id, 'dosage', e.target.value)}
@@ -6468,10 +6485,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      <label htmlFor={`medication-frequency-${medication.id}`} className="block text-sm font-medium text-gray-700 mb-1">
                                         Frequency *
                                       </label>
                                       <input
+                                        id={`medication-frequency-${medication.id}`}
                                         type="text"
                                         value={medication.frequency}
                                         onChange={(e) => updateMedication(medication.id, 'frequency', e.target.value)}
@@ -6481,10 +6499,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      <label htmlFor={`medication-duration-${medication.id}`} className="block text-sm font-medium text-gray-700 mb-1">
                                         Duration
                                       </label>
                                       <input
+                                        id={`medication-duration-${medication.id}`}
                                         type="text"
                                         value={medication.duration}
                                         onChange={(e) => updateMedication(medication.id, 'duration', e.target.value)}
@@ -6495,10 +6514,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                   </div>
 
                                   <div className="mt-3">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label htmlFor={`medication-instructions-${medication.id}`} className="block text-sm font-medium text-gray-700 mb-1">
                                       Special Instructions
                                     </label>
                                     <textarea
+                                      id={`medication-instructions-${medication.id}`}
                                       value={medication.instructions}
                                       onChange={(e) => updateMedication(medication.id, 'instructions', e.target.value)}
                                       placeholder="Any special instructions..."
@@ -6916,9 +6936,7 @@ ${transferDetails.additionalNotes}` : ''}
                               
                               if (hasSelectedDate && (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance')) {
                                 const intervalMonths = parseInt(recurringAppointments.interval) || 3;
-                                const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' :
-                                  recurringAppointments.interval === '3' ? 'Every 3 months' :
-                                    recurringAppointments.interval === '6' ? 'Every 6 months' : `Every ${intervalMonths} months`;
+                                const frequencyText = getFrequencyText(recurringAppointments.interval, intervalMonths);
                                 const dateDisplay = new Date(appointmentBooking.appointmentDate).toLocaleDateString('en-US', {
                                   year: 'numeric',
                                   month: 'long',
@@ -6939,13 +6957,15 @@ Follow-up Appointments Scheduled:
                                   medicationDetails.medications.some(med => med.name.trim() && med.dosage.trim() && med.frequency.trim())) {
                                 const medicationsText = medicationDetails.medications
                                   .filter(med => med.name.trim() && med.dosage.trim() && med.frequency.trim())
-                                  .map((med, index) =>
-                                    `${index + 1}. ${med.name}
+                                  .map((med, index) => {
+                                    const durationLine = med.duration ? `- Duration: ${med.duration}` : '';
+                                    const instructionsLine = med.instructions ? `- Instructions: ${med.instructions}` : '';
+                                    return `${index + 1}. ${med.name}
    - Dosage: ${med.dosage}
    - Frequency: ${med.frequency}
-   ${med.duration ? `- Duration: ${med.duration}` : ''}
-   ${med.instructions ? `- Instructions: ${med.instructions}` : ''}`
-                                  ).join('\n\n');
+${durationLine ? `   ${durationLine}` : ''}
+${instructionsLine ? `   ${instructionsLine}` : ''}`;
+                                  }).join('\n\n');
                                 
                                 medicationSection = `
 
@@ -7055,9 +7075,7 @@ ${transferDetails.additionalNotes}` : ''}
                             const intervalMonths = parseInt(recurringAppointments.interval) || 3;
                             const numberOfAppointments = 12 / intervalMonths;
 
-                            const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' :
-                              recurringAppointments.interval === '3' ? 'Every 3 months' :
-                                recurringAppointments.interval === '6' ? 'Every 6 months' : `Every ${intervalMonths} months`;
+                            const frequencyText = getFrequencyText(recurringAppointments.interval, intervalMonths);
 
                             appointmentDetails = {
                               date: aptDate,
@@ -7079,9 +7097,7 @@ ${transferDetails.additionalNotes}` : ''}
                             const intervalMonths = parseInt(recurringAppointments.interval) || 3;
                             const numberOfAppointments = 12 / intervalMonths;
 
-                            const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' :
-                              recurringAppointments.interval === '3' ? 'Every 3 months' :
-                                recurringAppointments.interval === '6' ? 'Every 6 months' : `Every ${intervalMonths} months`;
+                            const frequencyText = getFrequencyText(recurringAppointments.interval, intervalMonths);
 
                             appointmentDetails = {
                               date: aptDate,

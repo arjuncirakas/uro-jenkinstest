@@ -38,65 +38,57 @@ const InvestigationRequestItem = ({
   fetchInvestigationRequests,
   showErrorAlert = false
 }) => {
-  const handleViewClick = () => {
-    console.log('🔍 [InvestigationRequestItem] handleViewClick called');
-    console.log('🔍 [InvestigationRequestItem] uploadedResult:', uploadedResult);
-    console.log('🔍 [InvestigationRequestItem] uploadedResult?.filePath:', uploadedResult?.filePath);
-    console.log('🔍 [InvestigationRequestItem] handleViewFile provided:', !!handleViewFile);
+  // Helper function to encode file path for URL
+  const encodeFilePath = (filePath) => {
+    let normalizedPath = filePath;
+    if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('uploads\\')) {
+      normalizedPath = normalizedPath.replace(/^uploads[/\\]/, '');
+    }
     
-    if (uploadedResult?.filePath) {
-      if (handleViewFile) {
-        console.log('🔍 [InvestigationRequestItem] Using handleViewFile prop');
-        console.log('🔍 [InvestigationRequestItem] Calling handleViewFile with:', uploadedResult.filePath);
-        handleViewFile(uploadedResult.filePath);
-      } else {
-        console.log('🔍 [InvestigationRequestItem] handleViewFile not provided, constructing URL directly');
-        // Normalize the file path - remove 'uploads/' prefix if present
-        // The backend middleware expects paths relative to uploads directory
-        let normalizedPath = uploadedResult.filePath;
-        console.log('🔍 [InvestigationRequestItem] Original filePath:', normalizedPath);
-        
-        if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('uploads\\')) {
-          normalizedPath = normalizedPath.replace(/^uploads[/\\]/, '');
-          console.log('🔍 [InvestigationRequestItem] Removed uploads/ prefix, normalizedPath:', normalizedPath);
-        }
-        
-        // Encode the file path properly for URL
-        let encodedPath = normalizedPath;
-        if (normalizedPath.includes('/')) {
-          const pathSegments = normalizedPath.split('/');
-          encodedPath = pathSegments
-            .map(segment => segment ? encodeURIComponent(segment) : '')
-            .filter(segment => segment !== '')
-            .join('/');
-          console.log('🔍 [InvestigationRequestItem] Path segments:', pathSegments);
-          console.log('🔍 [InvestigationRequestItem] Encoded path segments:', encodedPath);
-        } else {
-          encodedPath = encodeURIComponent(normalizedPath);
-          console.log('🔍 [InvestigationRequestItem] Encoded single segment:', encodedPath);
-        }
-        
-        const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
-        const fileUrl = uploadedResult.filePath.startsWith('http')
-          ? uploadedResult.filePath
-          : `${baseURL}/investigations/files/${encodedPath}`;
-        
-        console.log('🔍 [InvestigationRequestItem] Base URL:', baseURL);
-        console.log('🔍 [InvestigationRequestItem] Final file URL:', fileUrl);
-        console.log('🔍 [InvestigationRequestItem] Opening file in new window');
-        window.open(fileUrl, '_blank');
-      }
+    if (normalizedPath.includes('/')) {
+      const pathSegments = normalizedPath.split('/');
+      return pathSegments
+        .map(segment => segment ? encodeURIComponent(segment) : '')
+        .filter(segment => segment !== '')
+        .join('/');
+    }
+    return encodeURIComponent(normalizedPath);
+  };
+
+  // Helper function to construct file URL
+  const constructFileUrl = (filePath) => {
+    if (filePath.startsWith('http')) {
+      return filePath;
+    }
+    const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
+    const encodedPath = encodeFilePath(filePath);
+    return `${baseURL}/investigations/files/${encodedPath}`;
+  };
+
+  // Helper function to handle file viewing when no handleViewFile prop
+  const handleViewFileDirectly = (filePath) => {
+    const fileUrl = constructFileUrl(filePath);
+    window.open(fileUrl, '_blank');
+  };
+
+  // Helper function to scroll to result element
+  const scrollToResult = () => {
+    const resultElement = document.querySelector(`[data-result-id="${uploadedResult?.id}"]`);
+    if (resultElement) {
+      resultElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleViewClick = () => {
+    if (!uploadedResult?.filePath) {
+      scrollToResult();
+      return;
+    }
+
+    if (handleViewFile) {
+      handleViewFile(uploadedResult.filePath);
     } else {
-      console.log('🔍 [InvestigationRequestItem] No filePath found, scrolling to result');
-      // If no filePath, scroll to results or show a message
-      // The results are already visible below, so we can just ensure they're in view
-      const resultElement = document.querySelector(`[data-result-id="${uploadedResult?.id}"]`);
-      if (resultElement) {
-        console.log('🔍 [InvestigationRequestItem] Found result element, scrolling into view');
-        resultElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        console.log('🔍 [InvestigationRequestItem] Result element not found');
-      }
+      handleViewFileDirectly(uploadedResult.filePath);
     }
   };
 
@@ -156,7 +148,7 @@ const InvestigationRequestItem = ({
     if (!request.id || request.isClinicalInvestigation) return;
     try {
       const result = await investigationService.updateInvestigationRequestStatus(request.id, newStatus);
-      if (result && result.success) {
+      if (result?.success) {
         fetchInvestigationRequests();
         window.dispatchEvent(new CustomEvent('investigationStatusUpdated', {
           detail: { patientId: patient?.id, testName: investigationName, status: newStatus }
