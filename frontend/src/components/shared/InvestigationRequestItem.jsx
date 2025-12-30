@@ -39,15 +39,26 @@ const InvestigationRequestItem = ({
   showErrorAlert = false
 }) => {
   const handleViewClick = () => {
+    console.log('🔍 [InvestigationRequestItem] handleViewClick called');
+    console.log('🔍 [InvestigationRequestItem] uploadedResult:', uploadedResult);
+    console.log('🔍 [InvestigationRequestItem] uploadedResult?.filePath:', uploadedResult?.filePath);
+    console.log('🔍 [InvestigationRequestItem] handleViewFile provided:', !!handleViewFile);
+    
     if (uploadedResult?.filePath) {
       if (handleViewFile) {
+        console.log('🔍 [InvestigationRequestItem] Using handleViewFile prop');
+        console.log('🔍 [InvestigationRequestItem] Calling handleViewFile with:', uploadedResult.filePath);
         handleViewFile(uploadedResult.filePath);
       } else {
+        console.log('🔍 [InvestigationRequestItem] handleViewFile not provided, constructing URL directly');
         // Normalize the file path - remove 'uploads/' prefix if present
         // The backend middleware expects paths relative to uploads directory
         let normalizedPath = uploadedResult.filePath;
+        console.log('🔍 [InvestigationRequestItem] Original filePath:', normalizedPath);
+        
         if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('uploads\\')) {
           normalizedPath = normalizedPath.replace(/^uploads[/\\]/, '');
+          console.log('🔍 [InvestigationRequestItem] Removed uploads/ prefix, normalizedPath:', normalizedPath);
         }
         
         // Encode the file path properly for URL
@@ -58,21 +69,33 @@ const InvestigationRequestItem = ({
             .map(segment => segment ? encodeURIComponent(segment) : '')
             .filter(segment => segment !== '')
             .join('/');
+          console.log('🔍 [InvestigationRequestItem] Path segments:', pathSegments);
+          console.log('🔍 [InvestigationRequestItem] Encoded path segments:', encodedPath);
         } else {
           encodedPath = encodeURIComponent(normalizedPath);
+          console.log('🔍 [InvestigationRequestItem] Encoded single segment:', encodedPath);
         }
         
+        const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
         const fileUrl = uploadedResult.filePath.startsWith('http')
           ? uploadedResult.filePath
-          : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${encodedPath}`;
+          : `${baseURL}/investigations/files/${encodedPath}`;
+        
+        console.log('🔍 [InvestigationRequestItem] Base URL:', baseURL);
+        console.log('🔍 [InvestigationRequestItem] Final file URL:', fileUrl);
+        console.log('🔍 [InvestigationRequestItem] Opening file in new window');
         window.open(fileUrl, '_blank');
       }
     } else {
+      console.log('🔍 [InvestigationRequestItem] No filePath found, scrolling to result');
       // If no filePath, scroll to results or show a message
       // The results are already visible below, so we can just ensure they're in view
       const resultElement = document.querySelector(`[data-result-id="${uploadedResult?.id}"]`);
       if (resultElement) {
+        console.log('🔍 [InvestigationRequestItem] Found result element, scrolling into view');
         resultElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        console.log('🔍 [InvestigationRequestItem] Result element not found');
       }
     }
   };

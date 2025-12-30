@@ -1389,16 +1389,22 @@ export const deleteInvestigationRequest = async (req, res) => {
 // Serve investigation files
 export const serveFile = async (req, res) => {
   try {
+    console.log('📁 [serveFile] ==========================================');
     console.log('📁 [serveFile] Request received');
     console.log('📁 [serveFile] Method:', req.method);
     console.log('📁 [serveFile] Original URL:', req.originalUrl);
     console.log('📁 [serveFile] Path:', req.path);
     console.log('📁 [serveFile] Params:', req.params);
+    console.log('📁 [serveFile] Params.filePath:', req.params.filePath);
+    console.log('📁 [serveFile] Headers:', JSON.stringify(req.headers, null, 2));
 
     // Get the validated file path from middleware (already normalized and validated)
     const fullPath = req.validatedFilePath;
 
+    console.log('📁 [serveFile] Step 1 - validatedFilePath from middleware:', fullPath);
+
     if (!fullPath) {
+      console.log('📁 [serveFile] ERROR - No validated file path from middleware');
       setCorsHeaders(req, res);
       return res.status(400).json({
         success: false,
@@ -1406,17 +1412,34 @@ export const serveFile = async (req, res) => {
       });
     }
 
-    console.log('📁 [serveFile] Requested file path (raw):', req.params.filePath);
-    console.log('✅ [serveFile] Using validated path from middleware:', fullPath);
+    console.log('📁 [serveFile] Step 2 - Requested file path (raw):', req.params.filePath);
+    console.log('📁 [serveFile] Step 2 - Using validated path from middleware:', fullPath);
+    console.log('📁 [serveFile] Step 2 - Full path type:', typeof fullPath);
+    console.log('📁 [serveFile] Step 2 - Full path length:', fullPath?.length);
 
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
-    console.log('✅ [SSRF Protection] Validated file path:', fullPath);
-    console.log('📁 [serveFile] File exists:', fs.existsSync(fullPath));
+    console.log('📁 [serveFile] Step 3 - CORS headers set');
+    console.log('📁 [serveFile] Step 3 - Validated file path:', fullPath);
+    console.log('📁 [serveFile] Step 3 - File exists check:', fs.existsSync(fullPath));
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
-      console.log('File not found:', fullPath);
+      console.log('📁 [serveFile] ERROR - File not found:', fullPath);
+      console.log('📁 [serveFile] ERROR - Current working directory:', process.cwd());
+      console.log('📁 [serveFile] ERROR - Uploads directory exists:', fs.existsSync('uploads'));
+      console.log('📁 [serveFile] ERROR - Uploads/investigations directory exists:', fs.existsSync('uploads/investigations'));
+      
+      // Try to list files in uploads/investigations for debugging
+      try {
+        if (fs.existsSync('uploads/investigations')) {
+          const files = fs.readdirSync('uploads/investigations');
+          console.log('📁 [serveFile] ERROR - Files in uploads/investigations:', files.slice(0, 10));
+        }
+      } catch (listError) {
+        console.log('📁 [serveFile] ERROR - Could not list files:', listError);
+      }
+      
       // Ensure CORS headers are set even in error responses
       setCorsHeaders(req, res);
       return res.status(404).json({
@@ -1425,10 +1448,13 @@ export const serveFile = async (req, res) => {
       });
     }
 
-    console.log('Serving file:', fullPath);
+    console.log('📁 [serveFile] Step 4 - File exists, preparing to serve');
+    console.log('📁 [serveFile] Step 4 - Serving file:', fullPath);
 
     // Set appropriate headers for file download/viewing
     const ext = path.extname(fullPath).toLowerCase();
+    console.log('📁 [serveFile] Step 5 - File extension:', ext);
+    
     const mimeTypes = {
       '.pdf': 'application/pdf',
       '.jpg': 'image/jpeg',
@@ -1439,20 +1465,38 @@ export const serveFile = async (req, res) => {
     };
 
     const mimeType = mimeTypes[ext] || 'application/octet-stream';
-    console.log('Setting Content-Type:', mimeType);
+    console.log('📁 [serveFile] Step 5 - MIME type:', mimeType);
+    console.log('📁 [serveFile] Step 5 - Setting Content-Type header:', mimeType);
+    
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
     res.setHeader('Cache-Control', 'no-cache');
+    console.log('📁 [serveFile] Step 5 - Headers set:', {
+      'Content-Type': mimeType,
+      'Content-Disposition': `inline; filename="${path.basename(fullPath)}"`,
+      'Cache-Control': 'no-cache'
+    });
 
     // Get file stats for logging
     const stats = fs.statSync(fullPath);
-    console.log('File size:', stats.size, 'bytes');
+    console.log('📁 [serveFile] Step 6 - File stats:', {
+      size: stats.size,
+      sizeInKB: (stats.size / 1024).toFixed(2) + ' KB',
+      created: stats.birthtime,
+      modified: stats.mtime
+    });
 
     // Stream the file with error handling
+    console.log('📁 [serveFile] Step 7 - Creating file stream');
     const fileStream = fs.createReadStream(fullPath);
 
     fileStream.on('error', (error) => {
-      console.error('Error reading file stream:', error);
+      console.error('📁 [serveFile] ERROR - Error reading file stream:', error);
+      console.error('📁 [serveFile] ERROR - Error details:', {
+        code: error.code,
+        message: error.message,
+        path: error.path
+      });
       if (!res.headersSent) {
         setCorsHeaders(req, res);
         res.status(500).json({
@@ -1463,20 +1507,32 @@ export const serveFile = async (req, res) => {
     });
 
     fileStream.on('open', () => {
-      console.log('File stream opened successfully');
+      console.log('📁 [serveFile] Step 8 - File stream opened successfully');
+    });
+
+    fileStream.on('data', (chunk) => {
+      console.log('📁 [serveFile] Step 9 - Streaming chunk, size:', chunk.length, 'bytes');
+    });
+
+    fileStream.on('end', () => {
+      console.log('📁 [serveFile] Step 10 - File stream ended');
     });
 
     res.on('close', () => {
-      console.log('Response closed, destroying file stream');
+      console.log('📁 [serveFile] Step 11 - Response closed, destroying file stream');
       if (!fileStream.destroyed) {
         fileStream.destroy();
       }
     });
 
+    console.log('📁 [serveFile] Step 7 - Piping file stream to response');
     fileStream.pipe(res);
+    console.log('📁 [serveFile] Step 7 - File stream piped, response should start streaming');
 
   } catch (error) {
-    console.error('Serve file error:', error);
+    console.error('📁 [serveFile] ERROR - Exception caught:', error);
+    console.error('📁 [serveFile] ERROR - Error stack:', error.stack);
+    console.error('📁 [serveFile] ERROR - Error message:', error.message);
     // Ensure CORS headers are set even in error responses
     setCorsHeaders(req, res);
     res.status(500).json({

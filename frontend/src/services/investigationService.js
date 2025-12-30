@@ -267,16 +267,27 @@ export const investigationService = {
 
   // View/download investigation file
   viewFile: async (filePath) => {
+    console.log('📁 [investigationService.viewFile] ==========================================');
+    console.log('📁 [investigationService.viewFile] Called with filePath:', filePath);
+    console.log('📁 [investigationService.viewFile] filePath type:', typeof filePath);
+    console.log('📁 [investigationService.viewFile] filePath length:', filePath?.length);
+    
     if (filePath) {
-      console.log('Attempting to view file:', filePath);
+      console.log('📁 [investigationService.viewFile] Starting file view process');
       
       try {
         // Normalize the file path - remove 'uploads/' prefix if present
         // The backend middleware expects paths relative to uploads directory
         let normalizedPath = filePath;
+        console.log('📁 [investigationService.viewFile] Step 1 - Original file path:', normalizedPath);
+        
         if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('uploads\\')) {
           normalizedPath = normalizedPath.replace(/^uploads[/\\]/, '');
+          console.log('📁 [investigationService.viewFile] Step 2 - Removed uploads/ prefix');
+        } else {
+          console.log('📁 [investigationService.viewFile] Step 2 - No uploads/ prefix to remove');
         }
+        console.log('📁 [investigationService.viewFile] Step 2 - Normalized file path:', normalizedPath);
         
         // Encode the file path properly for URL
         // Split by '/' and encode each segment separately to preserve path structure
@@ -284,71 +295,96 @@ export const investigationService = {
         let encodedPath = normalizedPath;
         if (normalizedPath.includes('/')) {
           const pathSegments = normalizedPath.split('/');
+          console.log('📁 [investigationService.viewFile] Step 3 - Path segments:', pathSegments);
           encodedPath = pathSegments
             .map(segment => segment ? encodeURIComponent(segment) : '')
             .filter(segment => segment !== '')
             .join('/');
+          console.log('📁 [investigationService.viewFile] Step 3 - Encoded path segments:', encodedPath);
         } else {
           encodedPath = encodeURIComponent(normalizedPath);
+          console.log('📁 [investigationService.viewFile] Step 3 - Encoded single segment:', encodedPath);
         }
-        
-        // Log for debugging
-        console.log('Original file path:', filePath);
-        console.log('Normalized file path:', normalizedPath);
-        console.log('Encoded file path:', encodedPath);
+        console.log('📁 [investigationService.viewFile] Step 3 - Final encoded file path:', encodedPath);
         
         // Construct full URL for testing
         const baseURL = import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api';
         const fullURL = `${baseURL}/investigations/files/${encodedPath}`;
-        console.log('🔗 Full URL to test in browser:', fullURL);
-        console.log('🔗 Make sure you are logged in and have a valid token!');
+        console.log('📁 [investigationService.viewFile] Step 4 - Base URL:', baseURL);
+        console.log('📁 [investigationService.viewFile] Step 4 - Full URL:', fullURL);
+        console.log('📁 [investigationService.viewFile] Step 4 - VITE_API_URL env:', import.meta.env.VITE_API_URL);
         
         // Fetch the file with proper authentication and MIME type
         // Use /investigations/files to match the backend route
         // The router is mounted at /api, so this becomes /api/investigations/files/:filePath(*)
+        console.log('📁 [investigationService.viewFile] Step 5 - Making API request');
+        console.log('📁 [investigationService.viewFile] Step 5 - Request URL:', `/investigations/files/${encodedPath}`);
+        console.log('📁 [investigationService.viewFile] Step 5 - Request config:', { responseType: 'blob' });
+        
         let response;
         try {
           response = await apiClient.get(`/investigations/files/${encodedPath}`, {
             responseType: 'blob'
           });
+          console.log('📁 [investigationService.viewFile] Step 6 - API request successful');
         } catch (error) {
+          console.log('📁 [investigationService.viewFile] Step 6 - API request failed');
+          console.log('📁 [investigationService.viewFile] Step 6 - Error:', error);
+          console.log('📁 [investigationService.viewFile] Step 6 - Error response status:', error.response?.status);
+          console.log('📁 [investigationService.viewFile] Step 6 - Error response data:', error.response?.data);
+          
           // If the main route fails, try the backward compatibility route
           if (error.response?.status === 404) {
-            console.log('Main route failed, trying backward compatibility route /files/...');
-            response = await apiClient.get(`/files/${encodedPath}`, {
-              responseType: 'blob'
-            });
+            console.log('📁 [investigationService.viewFile] Step 6 - Trying backward compatibility route /files/...');
+            try {
+              response = await apiClient.get(`/files/${encodedPath}`, {
+                responseType: 'blob'
+              });
+              console.log('📁 [investigationService.viewFile] Step 6 - Backward compatibility route succeeded');
+            } catch (backupError) {
+              console.log('📁 [investigationService.viewFile] Step 6 - Backward compatibility route also failed');
+              throw backupError;
+            }
           } else {
             throw error;
           }
         }
         
-        console.log('File fetched successfully');
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers);
-        console.log('Response data size:', response.data?.size || 'unknown');
-        console.log('Response data type:', response.data?.constructor?.name || 'unknown');
+        console.log('📁 [investigationService.viewFile] Step 7 - File fetched successfully');
+        console.log('📁 [investigationService.viewFile] Step 7 - Response status:', response.status);
+        console.log('📁 [investigationService.viewFile] Step 7 - Response headers:', response.headers);
+        console.log('📁 [investigationService.viewFile] Step 7 - Response Content-Type:', response.headers['content-type'] || response.headers['Content-Type']);
+        console.log('📁 [investigationService.viewFile] Step 7 - Response data size:', response.data?.size || 'unknown');
+        console.log('📁 [investigationService.viewFile] Step 7 - Response data type:', response.data?.constructor?.name || 'unknown');
         
         // Log first few bytes for debugging (if it's a blob)
         if (response.data && response.data.size > 0) {
+          console.log('📁 [investigationService.viewFile] Step 8 - Checking response content');
           try {
-            const preview = response.data.slice(0, 50);
+            const preview = response.data.slice(0, 100);
             preview.text().then(text => {
-              console.log('First 50 bytes of response:', text);
+              console.log('📁 [investigationService.viewFile] Step 8 - First 100 bytes of response:', text);
+              console.log('📁 [investigationService.viewFile] Step 8 - Starts with < (HTML?):', text.trim().startsWith('<'));
+              console.log('📁 [investigationService.viewFile] Step 8 - Starts with { (JSON?):', text.trim().startsWith('{'));
             }).catch(e => {
-              console.log('Could not read preview (might be binary data)');
+              console.log('📁 [investigationService.viewFile] Step 8 - Could not read preview (might be binary data):', e);
             });
           } catch (e) {
-            console.log('Could not create preview');
+            console.log('📁 [investigationService.viewFile] Step 8 - Could not create preview:', e);
           }
+        } else {
+          console.log('📁 [investigationService.viewFile] Step 8 - Response data is empty or null');
         }
         
         // Get file name and extension from path
         const fileName = filePath.split('/').pop() || 'file';
         const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+        console.log('📁 [investigationService.viewFile] Step 9 - File name:', fileName);
+        console.log('📁 [investigationService.viewFile] Step 9 - File extension:', fileExtension);
         
         // Get the content type from response headers, with fallback based on file extension
         let contentType = response.headers['content-type'] || response.headers['Content-Type'] || 'application/octet-stream';
+        console.log('📁 [investigationService.viewFile] Step 9 - Content-Type from headers:', contentType);
         
         // Check if blob is empty
         if (!response.data || response.data.size === 0) {
