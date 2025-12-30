@@ -43,9 +43,28 @@ const InvestigationRequestItem = ({
       if (handleViewFile) {
         handleViewFile(uploadedResult.filePath);
       } else {
+        // Normalize the file path - remove 'uploads/' prefix if present
+        // The backend middleware expects paths relative to uploads directory
+        let normalizedPath = uploadedResult.filePath;
+        if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('uploads\\')) {
+          normalizedPath = normalizedPath.replace(/^uploads[/\\]/, '');
+        }
+        
+        // Encode the file path properly for URL
+        let encodedPath = normalizedPath;
+        if (normalizedPath.includes('/')) {
+          const pathSegments = normalizedPath.split('/');
+          encodedPath = pathSegments
+            .map(segment => segment ? encodeURIComponent(segment) : '')
+            .filter(segment => segment !== '')
+            .join('/');
+        } else {
+          encodedPath = encodeURIComponent(normalizedPath);
+        }
+        
         const fileUrl = uploadedResult.filePath.startsWith('http')
           ? uploadedResult.filePath
-          : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${uploadedResult.filePath}`;
+          : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${encodedPath}`;
         window.open(fileUrl, '_blank');
       }
     } else {
