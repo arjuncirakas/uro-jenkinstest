@@ -48,6 +48,13 @@ const InvestigationRequestItem = ({
           : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${uploadedResult.filePath}`;
         window.open(fileUrl, '_blank');
       }
+    } else {
+      // If no filePath, scroll to results or show a message
+      // The results are already visible below, so we can just ensure they're in view
+      const resultElement = document.querySelector(`[data-result-id="${uploadedResult?.id}"]`);
+      if (resultElement) {
+        resultElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
   };
 
@@ -57,16 +64,24 @@ const InvestigationRequestItem = ({
 
   const renderActionButtons = () => {
     if (hasResults) {
-      if (uploadedResult?.filePath) {
-        return (
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={handleViewClick}
-              className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
-            >
-              <Eye className="w-3 h-3" />
-              View {investigationName} Result
-            </button>
+      // Show View button if there are results, regardless of filePath
+      // Show Edit button only if there's a filePath to edit
+      const hasFilePath = uploadedResult?.filePath;
+      return (
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleViewClick}
+            className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors flex items-center gap-1.5 ${
+              hasFilePath
+                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 opacity-75 cursor-pointer'
+            }`}
+            title={hasFilePath ? `View ${investigationName} result file` : 'View result details'}
+          >
+            <Eye className="w-3 h-3" />
+            View {investigationName} Result
+          </button>
+          {hasFilePath && (
             <button
               onClick={handleEditClick}
               className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded border border-teal-200 hover:bg-teal-100 transition-colors flex items-center gap-1.5"
@@ -74,10 +89,9 @@ const InvestigationRequestItem = ({
             >
               <Edit className="w-3 h-3" />
             </button>
-          </div>
-        );
-      }
-      return null;
+          )}
+        </div>
+      );
     }
     return renderUploadButton(request, investigationName);
   };
