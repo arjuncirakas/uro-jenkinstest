@@ -6375,7 +6375,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 <option value="1">Monthly</option>
                                 <option value="3">Every 3 months</option>
                                 <option value="6">Every 6 months</option>
-                                <option value="12">Annual</option>
                               </select>
                             </div>
 
@@ -6387,13 +6386,122 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                     {recurringAppointments.interval === '1' && 'Monthly Check-ups'}
                                     {recurringAppointments.interval === '3' && 'Quarterly Check-ups'}
                                     {recurringAppointments.interval === '6' && 'Bi-annual Check-ups'}
-                                    {recurringAppointments.interval === '12' && 'Annual Check-ups'}
                                   </p>
                                   <p className="text-xs text-gray-600">
                                     Follow-up appointments will be automatically scheduled
                                   </p>
                                 </div>
                               </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Medication Details Section */}
+                      {(selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') && (
+                        <div className="mb-6">
+                          <div className="bg-white border border-gray-200 rounded p-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center">
+                                <div className="w-8 h-8 bg-teal-600 rounded flex items-center justify-center mr-3">
+                                  <FaPills className="h-4 w-4 text-white" />
+                                </div>
+                                <div>
+                                  <h4 className="text-base font-semibold text-gray-900">Medication Details</h4>
+                                  <p className="text-sm text-gray-600">Prescribe medications for patient</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={addMedication}
+                                className="flex items-center px-3 py-1.5 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors text-sm"
+                              >
+                                <span className="mr-1">+</span> Add
+                              </button>
+                            </div>
+
+                            <div className="space-y-3">
+                              {medicationDetails.medications.map((medication, index) => (
+                                <div key={medication.id} className="bg-gray-50 border border-gray-200 rounded p-3">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <h5 className="font-medium text-gray-900 text-sm">Medication {index + 1}</h5>
+                                    {medicationDetails.medications.length > 1 && (
+                                      <button
+                                        onClick={() => removeMedication(medication.id)}
+                                        className="text-red-600 hover:text-red-700 p-1"
+                                      >
+                                        <IoClose className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Medication Name *
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={medication.name}
+                                        onChange={(e) => updateMedication(medication.id, 'name', e.target.value)}
+                                        placeholder="Enter medication name..."
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Dosage *
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={medication.dosage}
+                                        onChange={(e) => updateMedication(medication.id, 'dosage', e.target.value)}
+                                        placeholder="e.g., 5mg, 10ml"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Frequency *
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={medication.frequency}
+                                        onChange={(e) => updateMedication(medication.id, 'frequency', e.target.value)}
+                                        placeholder="e.g., Once daily"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Duration
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={medication.duration}
+                                        onChange={(e) => updateMedication(medication.id, 'duration', e.target.value)}
+                                        placeholder="e.g., 30 days, 2 weeks, As needed"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Special Instructions
+                                    </label>
+                                    <textarea
+                                      value={medication.instructions}
+                                      onChange={(e) => updateMedication(medication.id, 'instructions', e.target.value)}
+                                      placeholder="Any special instructions..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm resize-none"
+                                    />
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -6798,10 +6906,13 @@ ${transferDetails.additionalNotes}` : ''}
                             } else {
                               // Handle all other pathways
                               let appointmentSection = '';
+                              let medicationSection = '';
+                              
                               if (hasSelectedDate && (selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance')) {
+                                const intervalMonths = parseInt(recurringAppointments.interval) || 3;
                                 const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' :
                                   recurringAppointments.interval === '3' ? 'Every 3 months' :
-                                    recurringAppointments.interval === '6' ? 'Every 6 months' : 'Annual';
+                                    recurringAppointments.interval === '6' ? 'Every 6 months' : `Every ${intervalMonths} months`;
                                 const dateDisplay = new Date(appointmentBooking.appointmentDate).toLocaleDateString('en-US', {
                                   year: 'numeric',
                                   month: 'long',
@@ -6813,6 +6924,27 @@ Follow-up Appointments Scheduled:
 - Start Date: ${dateDisplay}
 - Frequency: ${frequencyText}
 - Appointments will be automatically scheduled starting from the selected date`;
+                              }
+
+                              // Add medication section for Active Monitoring if medications are provided
+                              if ((selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') && 
+                                  medicationDetails.medications && 
+                                  medicationDetails.medications.length > 0 &&
+                                  medicationDetails.medications.some(med => med.name.trim() && med.dosage.trim() && med.frequency.trim())) {
+                                const medicationsText = medicationDetails.medications
+                                  .filter(med => med.name.trim() && med.dosage.trim() && med.frequency.trim())
+                                  .map((med, index) =>
+                                    `${index + 1}. ${med.name}
+   - Dosage: ${med.dosage}
+   - Frequency: ${med.frequency}
+   ${med.duration ? `- Duration: ${med.duration}` : ''}
+   ${med.instructions ? `- Instructions: ${med.instructions}` : ''}`
+                                  ).join('\n\n');
+                                
+                                medicationSection = `
+
+Prescribed Medications:
+${medicationsText}`;
                               }
 
                               // Add Post-op Followup appointment section if scheduled
@@ -6853,7 +6985,7 @@ Reason for Transfer:
 ${transferDetails.reason || 'Not specified'}
 
 Clinical Rationale:
-${transferDetails.clinicalRationale || 'Not specified'}${appointmentSection}${postOpAppointmentSection}${surgeryAppointmentSection}
+${transferDetails.clinicalRationale || 'Not specified'}${appointmentSection}${medicationSection}${postOpAppointmentSection}${surgeryAppointmentSection}
 ${transferDetails.additionalNotes ? `
 
 Additional Notes:
@@ -6919,8 +7051,7 @@ ${transferDetails.additionalNotes}` : ''}
 
                             const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' :
                               recurringAppointments.interval === '3' ? 'Every 3 months' :
-                                recurringAppointments.interval === '6' ? 'Every 6 months' :
-                                  recurringAppointments.interval === '12' ? 'Annual' : `Every ${intervalMonths} months`;
+                                recurringAppointments.interval === '6' ? 'Every 6 months' : `Every ${intervalMonths} months`;
 
                             appointmentDetails = {
                               date: aptDate,
@@ -6944,8 +7075,7 @@ ${transferDetails.additionalNotes}` : ''}
 
                             const frequencyText = recurringAppointments.interval === '1' ? 'Monthly' :
                               recurringAppointments.interval === '3' ? 'Every 3 months' :
-                                recurringAppointments.interval === '6' ? 'Every 6 months' :
-                                  recurringAppointments.interval === '12' ? 'Annual' : `Every ${intervalMonths} months`;
+                                recurringAppointments.interval === '6' ? 'Every 6 months' : `Every ${intervalMonths} months`;
 
                             appointmentDetails = {
                               date: aptDate,

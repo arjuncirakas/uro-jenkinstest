@@ -492,7 +492,7 @@ const Patients = () => {
                     <tr className="border-b border-gray-200 bg-gray-50">
                       <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT NAME</th>
                       <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">PATIENT ID / MRN</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">CARE PATHWAY</th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">AGE</th>
                       <th className="text-left py-4 px-6 font-semibold text-gray-700 text-sm">ACTION</th>
                     </tr>
                   </thead>
@@ -528,9 +528,9 @@ const Patients = () => {
                           </div>
                         </td>
                         <td className="py-4 px-6">
-                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
-                            {patient.carePathway || 'Not Assigned'}
-                          </span>
+                          <div className="text-sm text-gray-600">
+                            {patient.age ? `${patient.age} years old` : 'N/A'}
+                          </div>
                         </td>
                         <td className="py-4 px-6">
                           <button
