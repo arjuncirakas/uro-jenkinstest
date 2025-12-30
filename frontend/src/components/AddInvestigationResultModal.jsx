@@ -108,11 +108,11 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
   useEffect(() => {
     const handleOpenImageViewer = (event) => {
       const { imageUrl, fileName } = event.detail;
-      
+
       if (!imageUrl) {
         return;
       }
-      
+
       setImageViewerUrl(imageUrl);
       setImageViewerFileName(fileName || 'Image');
       setIsImageViewerModalOpen(true);
@@ -120,11 +120,11 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
     const handleOpenPDFViewer = (event) => {
       const { pdfUrl, fileName } = event.detail;
-      
+
       if (!pdfUrl) {
         return;
       }
-      
+
       setPdfViewerUrl(pdfUrl);
       setPdfViewerFileName(fileName || 'PDF');
       setIsPDFViewerModalOpen(true);
@@ -152,19 +152,19 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     if (!testName) return null;
     const normalizedTestName = testName.toUpperCase().trim();
     const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
-    
+
     return consentFormTemplates.find(t => {
       const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
       const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
       const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
       const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
-      
+
       // Only match if names are exactly equal (with or without spaces)
       return (templateTestName && (
-        templateTestName === normalizedTestName || 
+        templateTestName === normalizedTestName ||
         templateTestNameNoSpaces === normalizedTestNameNoSpaces
       )) || (templateProcName && (
-        templateProcName === normalizedTestName || 
+        templateProcName === normalizedTestName ||
         templateProcNameNoSpaces === normalizedTestNameNoSpaces
       ));
     }) || null;
@@ -184,15 +184,15 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
   // Helper function to check if consent form matches by template
   const matchesByTemplate = (cf, normalizedTestName) => {
-    const template = consentFormTemplates.find(t => 
-      t.id === cf.template_id || 
+    const template = consentFormTemplates.find(t =>
+      t.id === cf.template_id ||
       t.id === cf.consent_form_id ||
       cf.template_id === t.id ||
       cf.consent_form_id === t.id
     );
-    
+
     if (!template) return false;
-    
+
     const templateTestName = template.test_name ? template.test_name.toUpperCase().trim() : '';
     const templateProcName = template.procedure_name ? template.procedure_name.toUpperCase().trim() : '';
     return (templateTestName === normalizedTestName) || (templateProcName === normalizedTestName);
@@ -203,44 +203,44 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     if (!testName) return null;
     const normalizedTestName = testName.toUpperCase().trim();
     const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
-    
+
     const foundForm = patientConsentForms.find(cf => {
       // First, try matching by consent_form_name - EXACT MATCH ONLY
       if (cf.consent_form_name) {
         const consentFormName = cf.consent_form_name.toUpperCase().trim();
         const consentFormNameNoSpaces = consentFormName.replace(/\s+/g, '');
-        if (consentFormName === normalizedTestName || 
-            consentFormNameNoSpaces === normalizedTestNameNoSpaces) {
+        if (consentFormName === normalizedTestName ||
+          consentFormNameNoSpaces === normalizedTestNameNoSpaces) {
           return true;
         }
       }
-      
+
       // Second, try matching by template - EXACT MATCH ONLY
-      const template = consentFormTemplates.find(t => 
-        t.id === cf.template_id || 
+      const template = consentFormTemplates.find(t =>
+        t.id === cf.template_id ||
         t.id === cf.consent_form_id ||
         (templateId && (t.id === templateId))
       );
-      
+
       if (template) {
         const templateTestName = template.test_name?.toUpperCase().trim() || '';
         const templateProcName = template.procedure_name?.toUpperCase().trim() || '';
         const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
         const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
-        
+
         // Only match if names are exactly equal
         return (templateTestName && (
-          templateTestName === normalizedTestName || 
+          templateTestName === normalizedTestName ||
           templateTestNameNoSpaces === normalizedTestNameNoSpaces
         )) || (templateProcName && (
-          templateProcName === normalizedTestName || 
+          templateProcName === normalizedTestName ||
           templateProcNameNoSpaces === normalizedTestNameNoSpaces
         ));
       }
-      
+
       return false;
     });
-    
+
     return foundForm || null;
   };
 
@@ -257,22 +257,22 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
     try {
       const result = await getConsentFormBlobUrl(template, testName, patient);
-      
+
       if (result.success && result.blobUrl) {
         setPdfViewerUrl(result.blobUrl);
         setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
         setIsPDFViewerModalOpen(true);
       } else {
-        setConsentFormNotification({ 
-          type: 'error', 
-          message: result.error || 'Failed to load consent form' 
+        setConsentFormNotification({
+          type: 'error',
+          message: result.error || 'Failed to load consent form'
         });
         setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
       }
     } catch (error) {
-      setConsentFormNotification({ 
-        type: 'error', 
-        message: 'Failed to load consent form. Please try again.' 
+      setConsentFormNotification({
+        type: 'error',
+        message: 'Failed to load consent form. Please try again.'
       });
       setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
     } finally {
@@ -297,11 +297,11 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       const result = await consentFormService.uploadConsentForm(patientId, template.id, file);
       if (result.success) {
         console.log('✅ Consent form uploaded successfully:', result.data);
-        
+
         // Wait for backend to process, then refresh once
         await new Promise(resolve => setTimeout(resolve, 1000));
         await fetchConsentForms();
-        
+
         setConsentFormNotification({ type: 'success', message: `${testName} signed consent form uploaded successfully` });
         // Clear notification after 5 seconds
         setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
@@ -324,28 +324,28 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       console.error('No consent form provided to handleViewConsentForm');
       return;
     }
-    
-    const filePath = consentForm.file_path || 
-                     consentForm.filePath || 
-                     consentForm.signed_file_path || 
-                     consentForm.signed_filePath;
-    
+
+    const filePath = consentForm.file_path ||
+      consentForm.filePath ||
+      consentForm.signed_file_path ||
+      consentForm.signed_filePath;
+
     if (!filePath) {
       console.error('No file path found in consent form:', consentForm);
       setConsentFormNotification({ type: 'error', message: 'No file available to view' });
       setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
       return;
     }
-    
+
     const normalizedPath = filePath.replace(/\\/g, '/');
     let relativePath = normalizedPath;
     if (relativePath.startsWith('uploads/')) {
       relativePath = relativePath.replace(/^uploads\//, '');
     }
-    
+
     const fileExtension = normalizedPath.split('.').pop().toLowerCase();
     const fileName = consentForm.file_name || consentForm.fileName || 'Consent Form';
-    
+
     try {
       const response = await consentFormService.getConsentFormFile(relativePath);
 
@@ -355,7 +355,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
 
       const blob = response.data;
       const blobUrl = URL.createObjectURL(blob);
-      
+
       if (fileExtension === 'pdf') {
         setPdfViewerUrl(blobUrl);
         setPdfViewerFileName(fileName);
@@ -392,19 +392,19 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     const consentTemplate = getConsentFormTemplate(investigationName);
     const patientConsentForm = getPatientConsentForm(investigationName, consentTemplate?.id);
     const isNotRequired = (investigationRequest?.status || '').toLowerCase() === 'not_required';
-    
+
     // Check if form has been uploaded
     const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath || patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
     const fileName = patientConsentForm?.file_name || patientConsentForm?.fileName || 'Consent Form';
-    
+
     // Check if form is uploaded (not a template reference)
-    const hasUploadedForm = !!(patientConsentForm && 
-                           filePath && 
-                           typeof filePath === 'string' &&
-                           filePath.trim() !== '' &&
-                           !filePath.toLowerCase().includes('template') &&
-                           !filePath.toLowerCase().includes('auto-generated'));
-    
+    const hasUploadedForm = !!(patientConsentForm &&
+      filePath &&
+      typeof filePath === 'string' &&
+      filePath.trim() !== '' &&
+      !filePath.toLowerCase().includes('template') &&
+      !filePath.toLowerCase().includes('auto-generated'));
+
     // Get button title text
     const getButtonTitle = () => {
       if (isNotRequired) {
@@ -434,11 +434,10 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
           </div>
 
           {consentFormNotification.message && (
-            <div className={`mb-2 p-1.5 rounded text-xs ${
-              consentFormNotification.type === 'success' 
-                ? 'bg-gray-50 text-gray-700 border border-gray-200' 
+            <div className={`mb-2 p-1.5 rounded text-xs ${consentFormNotification.type === 'success'
+                ? 'bg-gray-50 text-gray-700 border border-gray-200'
                 : 'bg-gray-50 text-gray-700 border border-gray-200'
-            }`}>
+              }`}>
               {consentFormNotification.message}
             </div>
           )}
@@ -465,11 +464,10 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                 type="button"
                 onClick={() => consentTemplate && !isNotRequired && handlePrintConsentForm(consentTemplate, investigationName)}
                 disabled={!consentTemplate || loadingConsentForms || printingConsentForm || isNotRequired}
-                className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
-                  consentTemplate && !loadingConsentForms && !printingConsentForm && !isNotRequired
+                className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${consentTemplate && !loadingConsentForms && !printingConsentForm && !isNotRequired
                     ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
                     : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-                }`}
+                  }`}
                 title={getButtonTitle()}
               >
                 {printingConsentForm ? (
@@ -485,24 +483,23 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                 )}
               </button>
 
-              <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${
-                consentTemplate && !loadingConsentForms && !uploadingConsentForm && !isNotRequired
+              <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${consentTemplate && !loadingConsentForms && !uploadingConsentForm && !isNotRequired
                   ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 cursor-pointer'
                   : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-              }`}
-              title={isNotRequired 
-                ? 'Test is marked as Not Required. Consent form actions are disabled.' 
-                : !consentTemplate 
-                  ? 'Consent form template not available. Please create one in the superadmin panel.' 
-                  : hasUploadedForm 
-                    ? 'Re-upload signed consent form' 
-                    : 'Upload signed consent form'}
+                }`}
+                title={isNotRequired
+                  ? 'Test is marked as Not Required. Consent form actions are disabled.'
+                  : !consentTemplate
+                    ? 'Consent form template not available. Please create one in the superadmin panel.'
+                    : hasUploadedForm
+                      ? 'Re-upload signed consent form'
+                      : 'Upload signed consent form'}
               >
                 <IoCloudUpload className="w-3.5 h-3.5" />
                 <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
                 <input
                   type="file"
-                  accept=".pdf,image/*"
+                  accept=".pdf,.doc,.docx"
                   onChange={(e) => {
                     const file = e.target.files[0];
                     if (file && consentTemplate && !isNotRequired) {
@@ -570,11 +567,11 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     if (selectedFile) {
       // Clear removeExistingFile flag when new file is selected (new file will replace old one)
       setRemoveExistingFile(false);
-      
-      // Validate file type
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+
+      // Validate file type (image formats not supported due to reverse proxy limitations)
+      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
       if (!allowedTypes.includes(selectedFile.type)) {
-        setError('Only PDF, JPG, PNG, DOC, and DOCX files are allowed');
+        setError('Only PDF, DOC, and DOCX files are allowed. Image files are not supported.');
         return;
       }
 
@@ -829,7 +826,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                       type="file"
                       id="report-upload"
                       onChange={handleFileChange}
-                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      accept=".pdf,.doc,.docx"
                       className="hidden"
                     />
                     <label
@@ -841,7 +838,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                         {hasExistingFile ? 'Click to replace existing file or drag and drop' : 'Click to upload or drag and drop'}
                       </p>
                       <p className="text-xs text-gray-500">
-                        PDF, JPG, PNG, DOC, DOCX (max 10MB)
+                        PDF, DOC, DOCX (max 10MB)
                       </p>
                     </label>
                   </div>

@@ -41,13 +41,13 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  
+
   // Consent form state
   const [consentFormTemplates, setConsentFormTemplates] = useState([]);
   const [patientConsentForms, setPatientConsentForms] = useState([]);
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
   const [printingConsentForm, setPrintingConsentForm] = useState(false);
-  
+
   // PDF viewer state
   const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
   const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
@@ -97,19 +97,19 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
     if (!testName) return null;
     const normalizedTestName = testName.toUpperCase().trim();
     const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
-    
+
     return consentFormTemplates.find(t => {
       const templateTestName = t.test_name ? t.test_name.toUpperCase().trim() : '';
       const templateProcName = t.procedure_name ? t.procedure_name.toUpperCase().trim() : '';
       const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
       const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
-      
+
       // Only match if names are exactly equal (with or without spaces)
       return (templateTestName && (
-        templateTestName === normalizedTestName || 
+        templateTestName === normalizedTestName ||
         templateTestNameNoSpaces === normalizedTestNameNoSpaces
       )) || (templateProcName && (
-        templateProcName === normalizedTestName || 
+        templateProcName === normalizedTestName ||
         templateProcNameNoSpaces === normalizedTestNameNoSpaces
       ));
     }) || null;
@@ -120,18 +120,18 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
     if (!testName) return null;
     const normalizedTestName = testName.toUpperCase().trim();
     const normalizedTestNameNoSpaces = normalizedTestName.replace(/\s+/g, '');
-    
+
     return patientConsentForms.find(cf => {
       // First, try matching by consent_form_name - EXACT MATCH ONLY
       if (cf.consent_form_name) {
         const consentFormName = cf.consent_form_name.toUpperCase().trim();
         const consentFormNameNoSpaces = consentFormName.replace(/\s+/g, '');
-        if (consentFormName === normalizedTestName || 
-            consentFormNameNoSpaces === normalizedTestNameNoSpaces) {
+        if (consentFormName === normalizedTestName ||
+          consentFormNameNoSpaces === normalizedTestNameNoSpaces) {
           return true;
         }
       }
-      
+
       // Second, try matching by template - EXACT MATCH ONLY
       const template = consentFormTemplates.find(t => t.id === cf.template_id || t.id === cf.consent_form_id);
       if (template) {
@@ -139,13 +139,13 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
         const templateProcName = template.procedure_name?.toUpperCase().trim() || '';
         const templateTestNameNoSpaces = templateTestName.replace(/\s+/g, '');
         const templateProcNameNoSpaces = templateProcName.replace(/\s+/g, '');
-        
+
         // Only match if names are exactly equal
         return (templateTestName && (
-          templateTestName === normalizedTestName || 
+          templateTestName === normalizedTestName ||
           templateTestNameNoSpaces === normalizedTestNameNoSpaces
         )) || (templateProcName && (
-          templateProcName === normalizedTestName || 
+          templateProcName === normalizedTestName ||
           templateProcNameNoSpaces === normalizedTestNameNoSpaces
         ));
       }
@@ -170,7 +170,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
 
     try {
       const result = await getConsentFormBlobUrl(template, testName, patient);
-      
+
       if (result.success && result.blobUrl) {
         setPdfViewerUrl(result.blobUrl);
         setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
@@ -185,7 +185,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
       setPrintingConsentForm(false);
     }
   };
-  
+
   // Close PDF viewer and cleanup
   const handleClosePDFViewer = () => {
     setIsPDFViewerModalOpen(false);
@@ -220,12 +220,12 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (isSubmitting) return;
-    
+
     setError('');
     setIsSubmitting(true);
-    
+
     try {
       // Validate patient ID
       // NOSONAR: patient.id is validated in PropTypes.shape()
@@ -243,7 +243,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
       // Collect all test names for all selected investigation types
       const allTests = [];
       const investigationTypesList = [];
-      
+
       selectedInvestigationTypes.forEach(invType => {
         if (invType === 'custom') {
           const customName = customTestNames[invType];
@@ -262,7 +262,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
           }
         }
       });
-      
+
       if (allTests.length === 0) {
         handleValidationError('Please select at least one test/procedure for the selected investigation type(s)');
         return;
@@ -279,7 +279,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
 
       // Determine priority based on checkbox
       const priority = isUrgent ? 'urgent' : 'routine';
-      
+
       // Create clinical note content for clinical investigation
       const noteContent = `CLINICAL INVESTIGATION
 
@@ -313,10 +313,10 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
         noteContent,
         noteType: 'clinical_investigation'
       });
-      
+
       if (result.success) {
         console.log('✅ Clinical investigation note created:', result.data);
-        
+
         // Create consent form templates if needed
         if (consentFormPromises.length > 0) {
           try {
@@ -327,12 +327,12 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
             // Don't fail the whole operation if consent form creation fails
           }
         }
-        
+
         // Call success callback
         if (onSuccess) {
           onSuccess('Clinical investigation added successfully!');
         }
-        
+
         // Reset form and close
         handleClose();
       } else {
@@ -387,7 +387,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
     if (testName === 'other') {
       return;
     }
-    
+
     setTestNamesByType(prev => {
       const testsForType = prev[invType] || [];
       if (testsForType.includes(testName)) {
@@ -416,11 +416,11 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
             {patient && (() => {
               // Try multiple possible property names for patient name
               // NOSONAR: patient.name, patient.patientName, patient.fullName, patient.first_name, patient.last_name, patient.firstName, and patient.lastName are validated in PropTypes.shape()
-              const patientName = patient.name || 
-                                patient.patientName || 
-                                patient.fullName ||
-                                (patient.first_name && patient.last_name ? `${patient.first_name} ${patient.last_name}` : null) ||
-                                (patient.firstName && patient.lastName ? `${patient.firstName} ${patient.lastName}` : null);
+              const patientName = patient.name ||
+                patient.patientName ||
+                patient.fullName ||
+                (patient.first_name && patient.last_name ? `${patient.first_name} ${patient.last_name}` : null) ||
+                (patient.firstName && patient.lastName ? `${patient.firstName} ${patient.lastName}` : null);
               return patientName ? (
                 <p className="text-sm font-medium text-white mt-1">
                   {patientName}
@@ -439,339 +439,335 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
         {/* Scrollable Form Content */}
         <div className="flex-1 overflow-y-auto bg-white">
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Investigation Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Investigation Type <span className="text-red-500">*</span>
-            </label>
-            <div className="space-y-3">
-              {/* Standard Investigation Types */}
-              <div className="grid grid-cols-2 gap-3">
-                {standardTypes.map((type) => {
-                  const Icon = type.icon;
-                  const isSelected = selectedInvestigationTypes.includes(type.value);
-                  const testsForType = testNamesByType[type.value] || [];
-                  
-                  return (
-                    <div key={type.value} className="flex flex-col">
-                    <label className="cursor-pointer">
-                      <div className={`p-3 rounded-lg border transition-colors flex items-center gap-3 ${
-                        isSelected
-                          ? 'border-teal-500 bg-teal-50 text-teal-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400 hover:bg-teal-50/30'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleInvestigationTypeToggle(type.value)}
-                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
-                        />
-                        <Icon className={`text-lg ${isSelected ? 'text-teal-600' : 'text-gray-500'}`} />
-                        <span className="font-medium text-sm">{type.label}</span>
-                      </div>
-                    </label>
-                    
-                    {/* Show Test Name multi-select checkboxes directly below selected investigation type */}
-                    {isSelected && (
-                      <div className="mt-3">
-                        <label className="block text-xs font-semibold text-gray-700 mb-2">
-                          Test/Procedure Name <span className="text-red-500">*</span>
-                          <span className="text-gray-400 text-xs ml-1 font-normal">(Select one or more)</span>
-                        </label>
-                        <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
-                          {commonTests[type.value]?.map((test) => {
-                            const isChecked = testsForType.includes(test);
-                            const consentTemplate = getConsentFormTemplate(test);
-                            const patientConsentForm = getPatientConsentForm(test);
-                            // Check for uploaded signed form - only consider it signed if it's manually uploaded
-                            // Auto-attached forms have file_path set to template paths, which should not be considered "signed"
-                            const filePath = patientConsentForm?.file_path || 
-                                             patientConsentForm?.filePath ||
-                                             patientConsentForm?.signed_file_path ||
-                                             patientConsentForm?.signed_filePath;
-                            
-                            // Only consider it signed if the file path indicates a manually uploaded file
-                            // (starts with 'uploads/consent-forms/patients/') and not a template reference
-                            const hasUploadedForm = filePath && 
-                              filePath.startsWith('uploads/consent-forms/patients/') &&
-                              !filePath.includes('templates/') &&
-                              !filePath.includes('auto-generated');
-                            const requiresConsent = ['biopsy', 'trus', 'mri'].includes(type.value.toLowerCase());
-                            
-                            return (
-                              <div key={test} className="mb-2">
-                                <label className="flex items-center p-2.5 hover:bg-teal-50 rounded-lg cursor-pointer transition-colors">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleTestNameToggle(type.value, test)}
-                                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
-                                  />
-                                  <span className="ml-3 text-sm text-gray-700 font-medium flex-1">{test}</span>
-                                </label>
-                                
-                                {/* Consent Form Section for Biopsy, TRUS, MRI */}
-                                {isChecked && requiresConsent && (
-                                  <div className="ml-7 mt-2 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-xs font-semibold text-gray-700">Consent Form</span>
-                                      {hasUploadedForm && (
-                                        <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                                          Signed
-                                        </span>
-                                      )}
-                                      {!consentTemplate && (
-                                        <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
-                                          Template Not Available
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <button
-                                        type="button"
-                                        onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, test)}
-                                        disabled={!consentTemplate || printingConsentForm}
-                                        className={`px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
-                                          consentTemplate && !printingConsentForm
-                                            ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
-                                            : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                        }`}
-                                        title={getPrintButtonTitle(consentTemplate, printingConsentForm)}
-                                      >
-                                        {printingConsentForm ? (
-                                          <>
-                                            <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                                            <span>Loading...</span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <IoPrint className="w-3 h-3" />
-                                            Print
-                                          </>
-                                        )}
-                                      </button>
-                                      <label className={`px-2 py-1 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1 ${
-                                        consentTemplate
-                                          ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
-                                          : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-                                      }`}>
-                                        <IoCloudUpload className="w-3 h-3" />
-                                        {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
-                                        <input
-                                          type="file"
-                                          accept=".pdf,image/*"
-                                          onChange={async (e) => {
-                                            const file = e.target.files[0];
-                                            // NOSONAR: patient.id is validated in PropTypes.shape()
-                                            if (file && consentTemplate && patient?.id) {
-                                              const result = await consentFormService.uploadConsentForm(patient.id, consentTemplate.id, file);
-                                              if (result.success) {
-                                                await fetchConsentForms();
-                                                alert('Consent form uploaded successfully');
-                                              } else {
-                                                alert('Failed to upload consent form: ' + result.error);
-                                              }
-                                            }
-                                            e.target.value = '';
-                                          }}
-                                          className="hidden"
-                                          disabled={!consentTemplate}
-                                        />
-                                      </label>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                          {testsForType.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-gray-200">
-                              <p className="text-xs text-gray-500">
-                                {testsForType.length} test{testsForType.length !== 1 ? 's' : ''} selected
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        {testsForType.length === 0 && (
-                          <p className="text-xs text-red-500 mt-1">Please select at least one test</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              </div>
-              
-              {/* Custom Test Section - Full Width */}
-              {customType && (() => {
-                const Icon = customType.icon;
-                const isSelected = selectedInvestigationTypes.includes(customType.value);
-                const customNameForType = customTestNames[customType.value] || '';
-                
-                return (
-                  <div className="w-full">
-                    <label className="cursor-pointer">
-                      <div className={`p-3 rounded-lg border transition-colors flex items-center gap-3 ${
-                        isSelected
-                          ? 'border-teal-500 bg-teal-50 text-teal-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400 hover:bg-teal-50/30'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleInvestigationTypeToggle(customType.value)}
-                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
-                        />
-                        <Icon className={`text-lg ${isSelected ? 'text-teal-600' : 'text-gray-500'}`} />
-                        <span className="font-medium text-sm">{customType.label}</span>
-                      </div>
-                    </label>
-                    
-                    {/* Show Custom Test Name input directly below Custom Test button */}
-                    {isSelected && (
-                      <div className="mt-3 space-y-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-2">
-                            Custom Test Name <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={customNameForType}
-                            onChange={(e) => setCustomTestNames(prev => ({
-                              ...prev,
-                              [customType.value]: e.target.value
-                            }))}
-                            placeholder="Enter custom test name..."
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all bg-white"
-                            required
-                          />
-                        </div>
-                        
-                        {/* Consent Required Checkbox */}
-                        <div className="bg-purple-50 rounded-lg border border-purple-200 p-3">
-                          <label className="flex items-center cursor-pointer">
+            {/* Investigation Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Investigation Type <span className="text-red-500">*</span>
+              </label>
+              <div className="space-y-3">
+                {/* Standard Investigation Types */}
+                <div className="grid grid-cols-2 gap-3">
+                  {standardTypes.map((type) => {
+                    const Icon = type.icon;
+                    const isSelected = selectedInvestigationTypes.includes(type.value);
+                    const testsForType = testNamesByType[type.value] || [];
+
+                    return (
+                      <div key={type.value} className="flex flex-col">
+                        <label className="cursor-pointer">
+                          <div className={`p-3 rounded-lg border transition-colors flex items-center gap-3 ${isSelected
+                              ? 'border-teal-500 bg-teal-50 text-teal-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400 hover:bg-teal-50/30'
+                            }`}>
                             <input
                               type="checkbox"
-                              checked={customTestConsentRequired[customType.value] || false}
-                              onChange={(e) => {
-                                setCustomTestConsentRequired(prev => ({
-                                  ...prev,
-                                  [customType.value]: e.target.checked
-                                }));
-                                if (!e.target.checked) {
-                                  // Clear consent data if unchecked
-                                  setCustomTestConsentData(prev => {
-                                    const newData = { ...prev };
-                                    delete newData[customType.value];
-                                    return newData;
-                                  });
-                                }
-                              }}
-                              className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 focus:ring-2 cursor-pointer"
+                              checked={isSelected}
+                              onChange={() => handleInvestigationTypeToggle(type.value)}
+                              className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
                             />
-                            <div className="ml-3">
-                              <span className="text-sm font-medium text-gray-800">Consent Form Required</span>
-                              <p className="text-xs text-gray-600 mt-0.5">
-                                This test requires a consent form
-                              </p>
-                            </div>
-                          </label>
-                        </div>
-                        
-                        {/* Consent Form Options (if consent required) */}
-                        {customTestConsentRequired[customType.value] && customNameForType && (
-                          <div className="bg-blue-50 rounded-lg border border-blue-200 p-3 space-y-3">
-                            <label className="block text-xs font-semibold text-gray-700">
-                              Consent Form Template
+                            <Icon className={`text-lg ${isSelected ? 'text-teal-600' : 'text-gray-500'}`} />
+                            <span className="font-medium text-sm">{type.label}</span>
+                          </div>
+                        </label>
+
+                        {/* Show Test Name multi-select checkboxes directly below selected investigation type */}
+                        {isSelected && (
+                          <div className="mt-3">
+                            <label className="block text-xs font-semibold text-gray-700 mb-2">
+                              Test/Procedure Name <span className="text-red-500">*</span>
+                              <span className="text-gray-400 text-xs ml-1 font-normal">(Select one or more)</span>
                             </label>
-                            
-                            {/* Upload Template Option */}
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-2">
-                                Upload Template File (PDF)
-                              </label>
-                              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-teal-500 transition-colors bg-white">
-                                <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                                <label className="cursor-pointer">
-                                  <span className="text-teal-600 hover:text-teal-700 font-medium text-xs">
-                                    Choose a file
-                                  </span>
-                                  <input
-                                    type="file"
-                                    accept=".pdf"
-                                    onChange={(e) => {
-                                      const file = e.target.files[0];
-                                      if (file) {
-                                        if (file.type !== 'application/pdf') {
-                                          alert('Only PDF files are allowed');
-                                          return;
-                                        }
-                                        if (file.size > 10 * 1024 * 1024) {
-                                          alert('File size must be less than 10MB');
-                                          return;
-                                        }
-                                        setCustomTestConsentData(prev => ({
-                                          ...prev,
-                                          [customType.value]: {
-                                            ...prev[customType.value],
-                                            template_file: file
-                                          }
-                                        }));
-                                      }
-                                      e.target.value = '';
-                                    }}
-                                    className="hidden"
-                                  />
-                                </label>
-                                <p className="text-xs text-gray-500 mt-1">PDF up to 10MB</p>
-                                {customTestConsentData[customType.value]?.template_file && (
-                                  <div className="mt-2 text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded inline-block">
-                                    {customTestConsentData[customType.value].template_file.name}
+                            <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
+                              {commonTests[type.value]?.map((test) => {
+                                const isChecked = testsForType.includes(test);
+                                const consentTemplate = getConsentFormTemplate(test);
+                                const patientConsentForm = getPatientConsentForm(test);
+                                // Check for uploaded signed form - only consider it signed if it's manually uploaded
+                                // Auto-attached forms have file_path set to template paths, which should not be considered "signed"
+                                const filePath = patientConsentForm?.file_path ||
+                                  patientConsentForm?.filePath ||
+                                  patientConsentForm?.signed_file_path ||
+                                  patientConsentForm?.signed_filePath;
+
+                                // Only consider it signed if the file path indicates a manually uploaded file
+                                // (starts with 'uploads/consent-forms/patients/') and not a template reference
+                                const hasUploadedForm = filePath &&
+                                  filePath.startsWith('uploads/consent-forms/patients/') &&
+                                  !filePath.includes('templates/') &&
+                                  !filePath.includes('auto-generated');
+                                const requiresConsent = ['biopsy', 'trus', 'mri'].includes(type.value.toLowerCase());
+
+                                return (
+                                  <div key={test} className="mb-2">
+                                    <label className="flex items-center p-2.5 hover:bg-teal-50 rounded-lg cursor-pointer transition-colors">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleTestNameToggle(type.value, test)}
+                                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
+                                      />
+                                      <span className="ml-3 text-sm text-gray-700 font-medium flex-1">{test}</span>
+                                    </label>
+
+                                    {/* Consent Form Section for Biopsy, TRUS, MRI */}
+                                    {isChecked && requiresConsent && (
+                                      <div className="ml-7 mt-2 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <span className="text-xs font-semibold text-gray-700">Consent Form</span>
+                                          {hasUploadedForm && (
+                                            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                                              Signed
+                                            </span>
+                                          )}
+                                          {!consentTemplate && (
+                                            <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
+                                              Template Not Available
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <button
+                                            type="button"
+                                            onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, test)}
+                                            disabled={!consentTemplate || printingConsentForm}
+                                            className={`px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 ${consentTemplate && !printingConsentForm
+                                                ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
+                                                : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                              }`}
+                                            title={getPrintButtonTitle(consentTemplate, printingConsentForm)}
+                                          >
+                                            {printingConsentForm ? (
+                                              <>
+                                                <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                                <span>Loading...</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <IoPrint className="w-3 h-3" />
+                                                Print
+                                              </>
+                                            )}
+                                          </button>
+                                          <label className={`px-2 py-1 text-xs font-medium rounded transition-colors cursor-pointer flex items-center gap-1 ${consentTemplate
+                                              ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                                              : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                                            }`}>
+                                            <IoCloudUpload className="w-3 h-3" />
+                                            {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
+                                            <input
+                                              type="file"
+                                              accept=".pdf,.doc,.docx"
+                                              onChange={async (e) => {
+                                                const file = e.target.files[0];
+                                                // NOSONAR: patient.id is validated in PropTypes.shape()
+                                                if (file && consentTemplate && patient?.id) {
+                                                  const result = await consentFormService.uploadConsentForm(patient.id, consentTemplate.id, file);
+                                                  if (result.success) {
+                                                    await fetchConsentForms();
+                                                    alert('Consent form uploaded successfully');
+                                                  } else {
+                                                    alert('Failed to upload consent form: ' + result.error);
+                                                  }
+                                                }
+                                                e.target.value = '';
+                                              }}
+                                              className="hidden"
+                                              disabled={!consentTemplate}
+                                            />
+                                          </label>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
+                                );
+                              })}
+                              {testsForType.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                  <p className="text-xs text-gray-500">
+                                    {testsForType.length} test{testsForType.length !== 1 ? 's' : ''} selected
+                                  </p>
+                                </div>
+                              )}
                             </div>
+                            {testsForType.length === 0 && (
+                              <p className="text-xs text-red-500 mt-1">Please select at least one test</p>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
+                    );
+                  })}
+                </div>
 
-          {/* Urgent Checkbox */}
-          <div className="bg-gray-50 rounded-lg border border-gray-300 p-4">
-            <label className="flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isUrgent}
-                onChange={(e) => setIsUrgent(e.target.checked)}
-                className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500 focus:ring-2 cursor-pointer"
-              />
-              <div className="ml-3">
-                <span className="text-sm font-medium text-gray-800">Urgent</span>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  Requires immediate attention - typically within 24-48 hours
-                </p>
+                {/* Custom Test Section - Full Width */}
+                {customType && (() => {
+                  const Icon = customType.icon;
+                  const isSelected = selectedInvestigationTypes.includes(customType.value);
+                  const customNameForType = customTestNames[customType.value] || '';
+
+                  return (
+                    <div className="w-full">
+                      <label className="cursor-pointer">
+                        <div className={`p-3 rounded-lg border transition-colors flex items-center gap-3 ${isSelected
+                            ? 'border-teal-500 bg-teal-50 text-teal-700'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400 hover:bg-teal-50/30'
+                          }`}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleInvestigationTypeToggle(customType.value)}
+                            className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
+                          />
+                          <Icon className={`text-lg ${isSelected ? 'text-teal-600' : 'text-gray-500'}`} />
+                          <span className="font-medium text-sm">{customType.label}</span>
+                        </div>
+                      </label>
+
+                      {/* Show Custom Test Name input directly below Custom Test button */}
+                      {isSelected && (
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-2">
+                              Custom Test Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={customNameForType}
+                              onChange={(e) => setCustomTestNames(prev => ({
+                                ...prev,
+                                [customType.value]: e.target.value
+                              }))}
+                              placeholder="Enter custom test name..."
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all bg-white"
+                              required
+                            />
+                          </div>
+
+                          {/* Consent Required Checkbox */}
+                          <div className="bg-purple-50 rounded-lg border border-purple-200 p-3">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={customTestConsentRequired[customType.value] || false}
+                                onChange={(e) => {
+                                  setCustomTestConsentRequired(prev => ({
+                                    ...prev,
+                                    [customType.value]: e.target.checked
+                                  }));
+                                  if (!e.target.checked) {
+                                    // Clear consent data if unchecked
+                                    setCustomTestConsentData(prev => {
+                                      const newData = { ...prev };
+                                      delete newData[customType.value];
+                                      return newData;
+                                    });
+                                  }
+                                }}
+                                className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 focus:ring-2 cursor-pointer"
+                              />
+                              <div className="ml-3">
+                                <span className="text-sm font-medium text-gray-800">Consent Form Required</span>
+                                <p className="text-xs text-gray-600 mt-0.5">
+                                  This test requires a consent form
+                                </p>
+                              </div>
+                            </label>
+                          </div>
+
+                          {/* Consent Form Options (if consent required) */}
+                          {customTestConsentRequired[customType.value] && customNameForType && (
+                            <div className="bg-blue-50 rounded-lg border border-blue-200 p-3 space-y-3">
+                              <label className="block text-xs font-semibold text-gray-700">
+                                Consent Form Template
+                              </label>
+
+                              {/* Upload Template Option */}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-2">
+                                  Upload Template File (PDF)
+                                </label>
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-teal-500 transition-colors bg-white">
+                                  <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                                  <label className="cursor-pointer">
+                                    <span className="text-teal-600 hover:text-teal-700 font-medium text-xs">
+                                      Choose a file
+                                    </span>
+                                    <input
+                                      type="file"
+                                      accept=".pdf"
+                                      onChange={(e) => {
+                                        const file = e.target.files[0];
+                                        if (file) {
+                                          if (file.type !== 'application/pdf') {
+                                            alert('Only PDF files are allowed');
+                                            return;
+                                          }
+                                          if (file.size > 10 * 1024 * 1024) {
+                                            alert('File size must be less than 10MB');
+                                            return;
+                                          }
+                                          setCustomTestConsentData(prev => ({
+                                            ...prev,
+                                            [customType.value]: {
+                                              ...prev[customType.value],
+                                              template_file: file
+                                            }
+                                          }));
+                                        }
+                                        e.target.value = '';
+                                      }}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  <p className="text-xs text-gray-500 mt-1">PDF up to 10MB</p>
+                                  {customTestConsentData[customType.value]?.template_file && (
+                                    <div className="mt-2 text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded inline-block">
+                                      {customTestConsentData[customType.value].template_file.name}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
-            </label>
-          </div>
+            </div>
 
-          {/* Clinical Notes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Clinical Notes / Reason for Investigation
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={5}
-              placeholder="Enter clinical indication, symptoms, or reason for investigation..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none transition-all bg-white"
-            />
-          </div>
+            {/* Urgent Checkbox */}
+            <div className="bg-gray-50 rounded-lg border border-gray-300 p-4">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isUrgent}
+                  onChange={(e) => setIsUrgent(e.target.checked)}
+                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500 focus:ring-2 cursor-pointer"
+                />
+                <div className="ml-3">
+                  <span className="text-sm font-medium text-gray-800">Urgent</span>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Requires immediate attention - typically within 24-48 hours
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Clinical Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Clinical Notes / Reason for Investigation
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={5}
+                placeholder="Enter clinical indication, symptoms, or reason for investigation..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none transition-all bg-white"
+              />
+            </div>
 
           </form>
         </div>
@@ -784,7 +780,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
               <p className="text-sm text-red-700 font-medium">{error}</p>
             </div>
           )}
-          
+
           <div className="flex gap-3">
             <button
               type="button"
@@ -827,7 +823,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
           </div>
         </div>
       </div>
-      
+
       {/* PDF Viewer Modal */}
       <FullScreenPDFModal
         isOpen={isPDFViewerModalOpen}

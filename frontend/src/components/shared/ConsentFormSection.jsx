@@ -44,8 +44,8 @@ const ConsentFormSection = ({
           className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && !printingConsentForm && !isNotRequired
             ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
             : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
-          title={isNotRequired 
-            ? 'Test is marked as Not Required. Consent form actions are disabled.' 
+          title={isNotRequired
+            ? 'Test is marked as Not Required. Consent form actions are disabled.'
             : getPrintButtonTitle(templateToUse, printingConsentForm)}
         >
           {printingConsentForm ? (
@@ -60,17 +60,16 @@ const ConsentFormSection = ({
             </>
           )}
         </button>
-        <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-          templateToUse && !isNotRequired
+        <label className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && !isNotRequired
             ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 cursor-pointer'
             : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
-        }`}
+          }`}
         >
           <IoCloudUpload className="w-3 h-3" />
           {hasUploadedForm ? `Re-upload Signed ${investigationName}` : `Upload Signed ${investigationName}`}
           <input
             type="file"
-            accept=".pdf,image/*"
+            accept=".pdf,.doc,.docx"
             onChange={(e) => {
               const file = e.target.files[0];
               if (file && templateToUse && !isNotRequired) {

@@ -23,21 +23,22 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // Allow PDF, DOC, DOCX, XLS, XLSX, CSV, and image files (PNG, JPEG, JPG)
-  const allowedTypes = /pdf|doc|docx|xls|xlsx|csv|png|jpeg|jpg/;
+  // Allow PDF, DOC, DOCX, XLS, XLSX, and CSV files only
+  // Note: Image formats (PNG, JPEG, JPG) are not supported due to reverse proxy limitations
+  const allowedTypes = /pdf|doc|docx|xls|xlsx|csv/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowedTypes.test(file.mimetype) ||
+    file.mimetype === 'application/pdf' ||
+    file.mimetype === 'application/msword' ||
+    file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     file.mimetype === 'application/vnd.ms-excel' ||
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    file.mimetype === 'text/csv' ||
-    file.mimetype === 'image/png' ||
-    file.mimetype === 'image/jpeg' ||
-    file.mimetype === 'image/jpg';
+    file.mimetype === 'text/csv';
 
   if ((mimetype || extname) && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only PDF, DOC, DOCX, XLS, XLSX, CSV, PNG, JPEG, and JPG files are allowed'));
+    cb(new Error('Only PDF, DOC, DOCX, XLS, XLSX, and CSV files are allowed. Image files (PNG, JPEG, JPG) are not supported.'));
   }
 };
 
@@ -1429,7 +1430,7 @@ export const serveFile = async (req, res) => {
       console.log('📁 [serveFile] ERROR - Current working directory:', process.cwd());
       console.log('📁 [serveFile] ERROR - Uploads directory exists:', fs.existsSync('uploads'));
       console.log('📁 [serveFile] ERROR - Uploads/investigations directory exists:', fs.existsSync('uploads/investigations'));
-      
+
       // Try to list files in uploads/investigations for debugging
       try {
         if (fs.existsSync('uploads/investigations')) {
@@ -1439,7 +1440,7 @@ export const serveFile = async (req, res) => {
       } catch (listError) {
         console.log('📁 [serveFile] ERROR - Could not list files:', listError);
       }
-      
+
       // Ensure CORS headers are set even in error responses
       setCorsHeaders(req, res);
       return res.status(404).json({
@@ -1454,7 +1455,7 @@ export const serveFile = async (req, res) => {
     // Set appropriate headers for file download/viewing
     const ext = path.extname(fullPath).toLowerCase();
     console.log('📁 [serveFile] Step 5 - File extension:', ext);
-    
+
     const mimeTypes = {
       '.pdf': 'application/pdf',
       '.jpg': 'image/jpeg',
@@ -1467,7 +1468,7 @@ export const serveFile = async (req, res) => {
     const mimeType = mimeTypes[ext] || 'application/octet-stream';
     console.log('📁 [serveFile] Step 5 - MIME type:', mimeType);
     console.log('📁 [serveFile] Step 5 - Setting Content-Type header:', mimeType);
-    
+
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
     res.setHeader('Cache-Control', 'no-cache');

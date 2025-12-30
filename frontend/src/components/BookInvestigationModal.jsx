@@ -41,7 +41,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     biopsy: null
   });
   const [printingConsentForm, setPrintingConsentForm] = useState(false);
-  
+
   // PDF viewer state
   const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
   const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
@@ -412,7 +412,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
     try {
       const result = await getConsentFormBlobUrl(template, testName, patient);
-      
+
       if (result.success && result.blobUrl) {
         setPdfViewerUrl(result.blobUrl);
         setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
@@ -427,7 +427,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       setPrintingConsentForm(false);
     }
   };
-  
+
   // Close PDF viewer and cleanup
   const handleClosePDFViewer = () => {
     setIsPDFViewerModalOpen(false);
@@ -443,9 +443,9 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const handleUploadSignedForm = async (testType, template, file) => {
     if (!file || !template || !patient) return;
 
-    // Validate file type
-    if (file.type !== 'application/pdf' && !file.type.includes('image')) {
-      alert('Please upload a PDF or image file');
+    // Validate file type (image formats not supported due to reverse proxy limitations)
+    if (file.type !== 'application/pdf' && file.type !== 'application/msword' && !file.type.includes('openxmlformats')) {
+      alert('Please upload a PDF, DOC, or DOCX file. Image files are not supported.');
       return;
     }
 
@@ -884,7 +884,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           {uploadedSignedForms.mri ? 'Re-upload' : 'Upload Signed'}
                           <input
                             type="file"
-                            accept=".pdf,image/*"
+                            accept=".pdf,.doc,.docx"
                             onChange={(e) => handleFileInputChange('mri', mriConsentForm, e)}
                             className="hidden"
                             disabled={uploadingForms.mri}
@@ -975,7 +975,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           {uploadedSignedForms.trus ? 'Re-upload' : 'Upload Signed'}
                           <input
                             type="file"
-                            accept=".pdf,image/*"
+                            accept=".pdf,.doc,.docx"
                             onChange={(e) => handleFileInputChange('trus', trusConsentForm, e)}
                             className="hidden"
                             disabled={uploadingForms.trus}
@@ -1066,7 +1066,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           {uploadedSignedForms.biopsy ? 'Re-upload' : 'Upload Signed'}
                           <input
                             type="file"
-                            accept=".pdf,image/*"
+                            accept=".pdf,.doc,.docx"
                             onChange={(e) => handleFileInputChange('biopsy', biopsyConsentForm, e)}
                             className="hidden"
                             disabled={uploadingForms.biopsy}
@@ -1129,7 +1129,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
         title="Unsaved Changes"
         message="You have unsaved changes. Do you want to save before closing?"
       />
-      
+
       {/* PDF Viewer Modal */}
       <FullScreenPDFModal
         isOpen={isPDFViewerModalOpen}

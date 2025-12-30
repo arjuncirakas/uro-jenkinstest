@@ -20,12 +20,12 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({
@@ -38,16 +38,16 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      // Validate file type (image formats not supported due to reverse proxy limitations)
+      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
       if (!allowedTypes.includes(file.type)) {
         setErrors(prev => ({
           ...prev,
-          file: 'Please select a PDF, DOC, DOCX, JPG, or PNG file'
+          file: 'Please select a PDF, DOC, or DOCX file. Image files are not supported.'
         }));
         return;
       }
-      
+
       // Validate file size (10MB limit)
       if (file.size > 10 * 1024 * 1024) {
         setErrors(prev => ({
@@ -56,7 +56,7 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
         }));
         return;
       }
-      
+
       setTestFile(file);
       setErrors(prev => ({
         ...prev,
@@ -67,11 +67,11 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.testName) {
       newErrors.testName = 'Test name is required';
     }
-    
+
     if (!formData.testDate) {
       newErrors.testDate = 'Test date is required';
     }
@@ -86,21 +86,21 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
       const submitData = {
         ...formData,
         testFile: testFile
       };
-      
+
       const result = await investigationService.addOtherTestResult(patient.id, submitData);
-      
+
       if (result.success) {
         onSuccess('Test result added successfully!');
         setFormData({
@@ -109,7 +109,7 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
           notes: ''
         });
         setTestFile(null);
-        
+
         // Trigger custom event to refresh tables
         const refreshEvent = new CustomEvent('testResultAdded', {
           detail: {
@@ -119,7 +119,7 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
           }
         });
         window.dispatchEvent(refreshEvent);
-        
+
         onClose();
       } else {
         setErrors({ submit: result.error || 'Failed to add test result' });
@@ -166,9 +166,8 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                 name="testName"
                 value={formData.testName}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.testName ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.testName ? 'border-red-500' : 'border-gray-300'
+                  }`}
               >
                 <option value="">Select test name</option>
                 {testNames.map(test => (
@@ -193,9 +192,8 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                   name="testDate"
                   value={formData.testDate}
                   onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.testDate ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.testDate ? 'border-red-500' : 'border-gray-300'
+                    }`}
                 />
                 <IoCalendar className="absolute right-3 top-2.5 w-5 h-5 text-gray-400 pointer-events-none" />
               </div>
@@ -210,31 +208,28 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Attach Document *
               </label>
-              <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
-                errors.file 
-                  ? 'border-red-500 bg-red-50' 
-                  : testFile 
-                    ? 'border-blue-400 bg-blue-50' 
+              <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${errors.file
+                  ? 'border-red-500 bg-red-50'
+                  : testFile
+                    ? 'border-blue-400 bg-blue-50'
                     : 'border-gray-300 hover:border-blue-400'
-              }`}>
+                }`}>
                 <input
                   type="file"
                   id="testFile"
                   onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  accept=".pdf,.doc,.docx"
                   className="hidden"
                 />
                 <label htmlFor="testFile" className="cursor-pointer block">
-                  <IoCloudUpload className={`w-8 h-8 mx-auto mb-2 ${
-                    errors.file ? 'text-red-500' : testFile ? 'text-blue-500' : 'text-gray-400'
-                  }`} />
-                  <p className={`text-sm ${
-                    errors.file ? 'text-red-600' : testFile ? 'text-blue-700 font-medium' : 'text-gray-600'
-                  }`}>
+                  <IoCloudUpload className={`w-8 h-8 mx-auto mb-2 ${errors.file ? 'text-red-500' : testFile ? 'text-blue-500' : 'text-gray-400'
+                    }`} />
+                  <p className={`text-sm ${errors.file ? 'text-red-600' : testFile ? 'text-blue-700 font-medium' : 'text-gray-600'
+                    }`}>
                     {testFile ? testFile.name : 'Click to upload or drag and drop'}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    PDF, DOC, DOCX, JPG, PNG up to 10MB
+                    PDF, DOC, DOCX up to 10MB
                   </p>
                 </label>
               </div>
