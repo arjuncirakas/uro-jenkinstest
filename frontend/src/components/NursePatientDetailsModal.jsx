@@ -4589,7 +4589,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         {(() => {
-                          const chartData = psaHistory.slice(0, 5).reverse();
+                          // Sort by date (oldest first) and show all data points
+                          const chartData = [...psaHistory].sort((a, b) => {
+                            const dateA = a.dateObj || (a.date ? new Date(a.date) : new Date(0));
+                            const dateB = b.dateObj || (b.date ? new Date(b.date) : new Date(0));
+                            return dateA.getTime() - dateB.getTime();
+                          });
                           const rechartsData = chartData.map((psaItem, index) => {
                             const psaValue = psaItem.numericValue || 0;
                             // Use the date field which is already formatted correctly (e.g., "Nov 25, 2025")
@@ -4619,15 +4624,16 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                           return (
                             <LineChart
                               data={rechartsData}
-                              margin={{ top: 35, right: 20, left: 50, bottom: 30 }}
+                              margin={{ top: 35, right: 20, left: 50, bottom: rechartsData.length > 10 ? 60 : 30 }}
                             >
                               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                               <XAxis
                                 dataKey="date"
                                 stroke="#6b7280"
                                 style={{ fontSize: '12px' }}
-                                tick={{ fill: '#6b7280' }}
+                                tick={{ fill: '#6b7280', angle: rechartsData.length > 10 ? -45 : 0 }}
                                 padding={{ left: 20, right: 20 }}
+                                interval={rechartsData.length > 15 ? 'preserveStartEnd' : 0}
                               />
                               <YAxis
                                 domain={yDomain}
@@ -4747,8 +4753,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                       ) : (
                         <ResponsiveContainer width="100%" height="100%">
                           {(() => {
-                            // Get the last 5 PSA results for the chart, sorted by date (oldest first for chart)
-                            const chartData = psaHistory.slice(0, 5).reverse();
+                            // Sort by date (oldest first) and show all data points
+                            const chartData = [...psaHistory].sort((a, b) => {
+                              const dateA = a.dateObj || (a.date ? new Date(a.date) : new Date(0));
+                              const dateB = b.dateObj || (b.date ? new Date(b.date) : new Date(0));
+                              return dateA.getTime() - dateB.getTime();
+                            });
 
                             // Build chart data directly from API response
                             // Each point will have its unique PSA value from the API
@@ -4796,14 +4806,16 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                             return (
                               <LineChart
                                 data={rechartsData}
-                                margin={{ top: 5, right: 20, left: 50, bottom: 30 }}
+                                margin={{ top: 5, right: 20, left: 50, bottom: rechartsData.length > 10 ? 60 : 30 }}
                               >
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                 <XAxis
                                   dataKey="date"
                                   stroke="#6b7280"
                                   style={{ fontSize: '12px' }}
-                                  tick={{ fill: '#6b7280' }}
+                                  tick={{ fill: '#6b7280', angle: rechartsData.length > 10 ? -45 : 0 }}
+                                  padding={{ left: 20, right: 20 }}
+                                  interval={rechartsData.length > 15 ? 'preserveStartEnd' : 0}
                                 />
                                 <YAxis
                                   domain={yDomain}
