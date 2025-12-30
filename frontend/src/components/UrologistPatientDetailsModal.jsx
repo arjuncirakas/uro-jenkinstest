@@ -6958,13 +6958,16 @@ Follow-up Appointments Scheduled:
                                 const medicationsText = medicationDetails.medications
                                   .filter(med => med.name.trim() && med.dosage.trim() && med.frequency.trim())
                                   .map((med, index) => {
-                                    const durationLine = med.duration ? `- Duration: ${med.duration}` : '';
-                                    const instructionsLine = med.instructions ? `- Instructions: ${med.instructions}` : '';
-                                    return `${index + 1}. ${med.name}
-   - Dosage: ${med.dosage}
-   - Frequency: ${med.frequency}
-${durationLine ? `   ${durationLine}` : ''}
-${instructionsLine ? `   ${instructionsLine}` : ''}`;
+                                    const durationLine = med.duration ? `   - Duration: ${med.duration}` : '';
+                                    const instructionsLine = med.instructions ? `   - Instructions: ${med.instructions}` : '';
+                                    const lines = [
+                                      `${index + 1}. ${med.name}`,
+                                      `   - Dosage: ${med.dosage}`,
+                                      `   - Frequency: ${med.frequency}`
+                                    ];
+                                    if (durationLine) lines.push(durationLine);
+                                    if (instructionsLine) lines.push(instructionsLine);
+                                    return lines.join('\n');
                                   }).join('\n\n');
                                 
                                 medicationSection = `

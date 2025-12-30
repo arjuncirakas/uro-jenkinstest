@@ -356,6 +356,49 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     }, 300);
   };
 
+  // Helper function to check if form is uploaded
+  const checkHasUploadedForm = (patientConsentForm) => {
+    if (!patientConsentForm) return false;
+    
+    const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath || 
+                     patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
+    
+    if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') {
+      return false;
+    }
+    
+    const lowerPath = filePath.toLowerCase();
+    return !lowerPath.includes('template') && !lowerPath.includes('auto-generated');
+  };
+
+  // Helper function to get button className
+  const getButtonClassName = (isEnabled) => {
+    const baseClasses = 'flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5';
+    if (isEnabled) {
+      return `${baseClasses} text-gray-700 bg-white border-gray-300 hover:bg-gray-50`;
+    }
+    return `${baseClasses} text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed`;
+  };
+
+  // Helper function to handle file upload
+  const handleFileUpload = (file, investigationName, consentTemplate, isNotRequired) => {
+    if (file && consentTemplate && !isNotRequired) {
+      handleConsentFormUpload(investigationName, consentTemplate, file);
+    } else if (file && !consentTemplate) {
+      setConsentFormNotification({ 
+        type: 'error', 
+        message: 'Consent form template not available. Please create one in the superadmin panel first.' 
+      });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+    } else if (file && isNotRequired) {
+      setConsentFormNotification({ 
+        type: 'error', 
+        message: 'Test is marked as Not Required. Consent form actions are disabled.' 
+      });
+      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
+    }
+  };
+
   // Render consent form section - extracted to reduce cognitive complexity
   const renderConsentFormSection = () => {
     if (isPSATest) return null;
@@ -364,18 +407,8 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     const consentTemplate = getConsentFormTemplate(investigationName);
     const patientConsentForm = getPatientConsentForm(investigationName, consentTemplate?.id);
     const isNotRequired = (investigationRequest?.status || '').toLowerCase() === 'not_required';
-
-    // Check if form has been uploaded
-    const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath || patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
+    const hasUploadedForm = checkHasUploadedForm(patientConsentForm);
     const fileName = patientConsentForm?.file_name || patientConsentForm?.fileName || 'Consent Form';
-
-    // Check if form is uploaded (not a template reference)
-    const hasUploadedForm = !!(patientConsentForm &&
-      filePath &&
-      typeof filePath === 'string' &&
-      filePath.trim() !== '' &&
-      !filePath.toLowerCase().includes('template') &&
-      !filePath.toLowerCase().includes('auto-generated'));
 
     // Get button title text
     const getButtonTitle = () => {
@@ -390,6 +423,23 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       }
       return 'View consent form';
     };
+
+    // Get upload button title text
+    const getUploadButtonTitle = () => {
+      if (isNotRequired) {
+        return 'Test is marked as Not Required. Consent form actions are disabled.';
+      }
+      if (!consentTemplate) {
+        return 'Consent form template not available. Please create one in the superadmin panel.';
+      }
+      if (hasUploadedForm) {
+        return 'Re-upload signed consent form';
+      }
+      return 'Upload signed consent form';
+    };
+
+    const isPrintButtonEnabled = consentTemplate && !loadingConsentForms && !printingConsentForm && !isNotRequired;
+    const isUploadButtonEnabled = consentTemplate && !loadingConsentForms && !uploadingConsentForm && !isNotRequired;
 
     return (
       <div className="px-4 pb-2 mt-2">
@@ -406,10 +456,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
           </div>
 
           {consentFormNotification.message && (
-            <div className={`mb-2 p-1.5 rounded text-xs ${consentFormNotification.type === 'success'
-                ? 'bg-gray-50 text-gray-700 border border-gray-200'
-                : 'bg-gray-50 text-gray-700 border border-gray-200'
-              }`}>
+            <div className="mb-2 p-1.5 rounded text-xs bg-gray-50 text-gray-700 border border-gray-200">
               {consentFormNotification.message}
             </div>
           )}
@@ -435,11 +482,8 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
               <button
                 type="button"
                 onClick={() => consentTemplate && !isNotRequired && handlePrintConsentForm(consentTemplate, investigationName)}
-                disabled={!consentTemplate || loadingConsentForms || printingConsentForm || isNotRequired}
-                className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${consentTemplate && !loadingConsentForms && !printingConsentForm && !isNotRequired
-                    ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-                    : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-                  }`}
+                disabled={!isPrintButtonEnabled}
+                className={getButtonClassName(isPrintButtonEnabled)}
                 title={getButtonTitle()}
               >
                 {printingConsentForm ? (
@@ -455,17 +499,9 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                 )}
               </button>
 
-              <label className={`flex-1 px-3 py-2 text-xs font-medium rounded border transition-colors flex items-center justify-center gap-1.5 ${consentTemplate && !loadingConsentForms && !uploadingConsentForm && !isNotRequired
-                  ? 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 cursor-pointer'
-                  : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-                }`}
-                title={isNotRequired
-                  ? 'Test is marked as Not Required. Consent form actions are disabled.'
-                  : !consentTemplate
-                    ? 'Consent form template not available. Please create one in the superadmin panel.'
-                    : hasUploadedForm
-                      ? 'Re-upload signed consent form'
-                      : 'Upload signed consent form'}
+              <label 
+                className={`${getButtonClassName(isUploadButtonEnabled)} ${isUploadButtonEnabled ? 'cursor-pointer' : ''}`}
+                title={getUploadButtonTitle()}
               >
                 <IoCloudUpload className="w-3.5 h-3.5" />
                 <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
@@ -474,19 +510,11 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                   accept=".pdf,.doc,.docx"
                   onChange={(e) => {
                     const file = e.target.files[0];
-                    if (file && consentTemplate && !isNotRequired) {
-                      handleConsentFormUpload(investigationName, consentTemplate, file);
-                    } else if (file && !consentTemplate) {
-                      setConsentFormNotification({ type: 'error', message: 'Consent form template not available. Please create one in the superadmin panel first.' });
-                      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
-                    } else if (file && isNotRequired) {
-                      setConsentFormNotification({ type: 'error', message: 'Test is marked as Not Required. Consent form actions are disabled.' });
-                      setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);
-                    }
+                    handleFileUpload(file, investigationName, consentTemplate, isNotRequired);
                     e.target.value = '';
                   }}
                   className="hidden"
-                  disabled={!consentTemplate || loadingConsentForms || uploadingConsentForm || isNotRequired}
+                  disabled={!isUploadButtonEnabled}
                 />
               </label>
             </div>

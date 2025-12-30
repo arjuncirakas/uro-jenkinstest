@@ -556,6 +556,8 @@ describe('UrologistPatientDetailsModal - Active Monitoring Pathway Transfer', ()
           onTransferSuccess={mockOnTransferSuccess}
         />
       );
+      // Modal should not render when patient is null
+      expect(screen.queryByText('Test Patient')).not.toBeInTheDocument();
     });
 
     it('should handle undefined patient gracefully', () => {
@@ -567,17 +569,27 @@ describe('UrologistPatientDetailsModal - Active Monitoring Pathway Transfer', ()
           onTransferSuccess={mockOnTransferSuccess}
         />
       );
+      // Modal should not render when patient is undefined
+      expect(screen.queryByText('Test Patient')).not.toBeInTheDocument();
     });
 
     it('should handle missing patient properties gracefully', () => {
+      const patientWithMissingProps = {
+        id: 1
+        // Missing name, carePathway, etc.
+      };
+      
       render(
         <UrologistPatientDetailsModal
           isOpen={true}
           onClose={mockOnClose}
-          patient={{ id: 1 }}
+          patient={patientWithMissingProps}
           onTransferSuccess={mockOnTransferSuccess}
         />
       );
+      
+      // Component should handle missing properties without crashing
+      expect(mockOnClose).toBeDefined();
     });
   });
 

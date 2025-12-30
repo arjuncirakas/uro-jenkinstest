@@ -89,44 +89,30 @@ const Patients = () => {
     new: 'new'
   };
 
+  // Helper function to fetch patients for a category
+  const fetchPatientsForCategory = React.useCallback(async (cat, setLoadingState, setErrorState, setDataState) => {
+    setLoadingState(true);
+    setErrorState(null);
+    const res = await patientService.getAssignedPatients(cat);
+    if (res.success) {
+      setDataState(res.data || []);
+    } else {
+      setErrorState(res.error || `Failed to fetch patients for ${cat}`);
+      setDataState([]);
+    }
+    setLoadingState(false);
+  }, []);
+
   const fetchPatients = React.useCallback(async () => {
     if (category === 'patients-under-me') {
       // Fetch both new patients and my patients separately
-      setLoadingNewPatients(true);
-      setErrorNewPatients(null);
-      const newRes = await patientService.getAssignedPatients('new');
-      if (newRes.success) {
-        setNewPatients(newRes.data || []);
-      } else {
-        setErrorNewPatients(newRes.error || 'Failed to fetch new patients');
-        setNewPatients([]);
-      }
-      setLoadingNewPatients(false);
-
-      setLoadingMyPatients(true);
-      setErrorMyPatients(null);
-      const myRes = await patientService.getAssignedPatients('my-patients');
-      if (myRes.success) {
-        setMyPatients(myRes.data || []);
-      } else {
-        setErrorMyPatients(myRes.error || 'Failed to fetch my patients');
-        setMyPatients([]);
-      }
-      setLoadingMyPatients(false);
+      await fetchPatientsForCategory('new', setLoadingNewPatients, setErrorNewPatients, setNewPatients);
+      await fetchPatientsForCategory('my-patients', setLoadingMyPatients, setErrorMyPatients, setMyPatients);
     } else {
-      setLoading(true);
-      setError(null);
       const cat = apiCategoryMap[category] || 'all';
-      const res = await patientService.getAssignedPatients(cat);
-      if (res.success) {
-        setPatients(res.data || []);
-      } else {
-        setError(res.error || 'Failed to fetch patients');
-        setPatients([]);
-      }
-      setLoading(false);
+      await fetchPatientsForCategory(cat, setLoading, setError, setPatients);
     }
-  }, [category]);
+  }, [category, fetchPatientsForCategory]);
 
   useEffect(() => {
     fetchPatients();
@@ -194,20 +180,8 @@ const Patients = () => {
     } else {
       console.log('🔄 Refreshing patient list to ensure accuracy');
       // Refresh the list to ensure accuracy
-      const fetchPatients = async () => {
-        setLoading(true);
-        setError(null);
-        const cat = apiCategoryMap[category] || 'all';
-        const res = await patientService.getAssignedPatients(cat);
-        if (res.success) {
-          setPatients(res.data || []);
-        } else {
-          setError(res.error || 'Failed to fetch patients');
-          setPatients([]);
-        }
-        setLoading(false);
-      };
-      fetchPatients();
+      const cat = apiCategoryMap[category] || 'all';
+      await fetchPatientsForCategory(cat, setLoading, setError, setPatients);
     }
   };
 

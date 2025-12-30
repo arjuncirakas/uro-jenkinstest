@@ -112,22 +112,20 @@ router.get('/patients/:patientId/investigations',
 // IMPORTANT: File serving routes must be registered BEFORE other /investigations routes
 // to avoid route conflicts. Express matches routes in order.
 
-// Handle OPTIONS preflight for file requests with secure origin validation
-router.options('/investigations/files/:filePath(*)', (req, res) => {
-  console.log('🛣️ [investigations route] OPTIONS request for file');
-  setPreflightCorsHeaders(req, res);
-  res.status(200).end();
-});
+// Helper function to create file serving route handlers (reduces duplication)
+const createFileRouteHandlers = (routePath, routeLabel) => {
+  // OPTIONS handler
+  const optionsHandler = (req, res) => {
+    console.log(`🛣️ [investigations route] OPTIONS request for ${routeLabel}`);
+    setPreflightCorsHeaders(req, res);
+    res.status(200).end();
+  };
 
-// Serve investigation files - MUST be before /investigations route
-// Use /investigations/files to avoid conflicts with other routes
-// SSRF Protection: validateFilePathMiddleware prevents path traversal attacks
-// Using :filePath(*) to match paths with slashes (e.g., investigations/file.png)
-router.get('/investigations/files/:filePath(*)',
-  (req, res, next) => {
+  // GET handler middleware
+  const getHandlerMiddleware = (req, res, next) => {
     console.log('🛣️ [investigations route] ==========================================');
-    console.log('🛣️ [investigations route] ✅✅✅ ROUTE MATCHED! ✅✅✅');
-    console.log('🛣️ [investigations route] Route pattern: /investigations/files/:filePath(*)');
+    console.log(`🛣️ [investigations route] ✅✅✅ ${routeLabel.toUpperCase()} ROUTE MATCHED! ✅✅✅`);
+    console.log(`🛣️ [investigations route] Route pattern: ${routePath}`);
     console.log('🛣️ [investigations route] Method:', req.method);
     console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
     console.log('🛣️ [investigations route] Path:', req.path);
@@ -144,9 +142,24 @@ router.get('/investigations/files/:filePath(*)',
       'accept': req.get('accept')
     });
     console.log('🛣️ [investigations route] ==========================================');
-    
     next();
-  },
+  };
+
+  return { optionsHandler, getHandlerMiddleware };
+};
+
+// Create handlers for new route
+const newRouteHandlers = createFileRouteHandlers('/investigations/files/:filePath(*)', 'route');
+
+// Handle OPTIONS preflight for file requests with secure origin validation
+router.options('/investigations/files/:filePath(*)', newRouteHandlers.optionsHandler);
+
+// Serve investigation files - MUST be before /investigations route
+// Use /investigations/files to avoid conflicts with other routes
+// SSRF Protection: validateFilePathMiddleware prevents path traversal attacks
+// Using :filePath(*) to match paths with slashes (e.g., investigations/file.png)
+router.get('/investigations/files/:filePath(*)',
+  newRouteHandlers.getHandlerMiddleware,
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
@@ -171,35 +184,12 @@ router.delete('/investigations/:resultId',
 );
 
 // Also support the old route for backward compatibility
-router.options('/files/:filePath(*)', (req, res) => {
-  console.log('🛣️ [investigations route] OPTIONS request for /files');
-  setPreflightCorsHeaders(req, res);
-  res.status(200).end();
-});
+const oldRouteHandlers = createFileRouteHandlers('/files/:filePath(*)', 'old route');
+
+router.options('/files/:filePath(*)', oldRouteHandlers.optionsHandler);
 
 router.get('/files/:filePath(*)',
-  (req, res, next) => {
-    console.log('🛣️ [investigations route] ==========================================');
-    console.log('🛣️ [investigations route] ✅✅✅ OLD ROUTE MATCHED! ✅✅✅');
-    console.log('🛣️ [investigations route] Route pattern: /files/:filePath(*)');
-    console.log('🛣️ [investigations route] Method:', req.method);
-    console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
-    console.log('🛣️ [investigations route] Path:', req.path);
-    console.log('🛣️ [investigations route] Base URL:', req.baseUrl);
-    console.log('🛣️ [investigations route] URL:', req.url);
-    console.log('🛣️ [investigations route] Params:', JSON.stringify(req.params, null, 2));
-    console.log('🛣️ [investigations route] filePath param:', req.params.filePath);
-    console.log('🛣️ [investigations route] Query:', JSON.stringify(req.query, null, 2));
-    console.log('🛣️ [investigations route] Headers:', {
-      host: req.get('host'),
-      'x-forwarded-for': req.get('x-forwarded-for'),
-      'x-real-ip': req.get('x-real-ip'),
-      'user-agent': req.get('user-agent'),
-      'accept': req.get('accept')
-    });
-    console.log('🛣️ [investigations route] ==========================================');
-    next();
-  },
+  oldRouteHandlers.getHandlerMiddleware,
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),

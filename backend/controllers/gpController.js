@@ -1,297 +1,319 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import pool from '../config/database.js';
 import { sendPasswordEmail } from '../services/emailService.js';
 import { validationResult } from 'express-validator';
+import { withDatabaseClient } from '../utils/dbHelper.js';
+
+// Helper function to generate secure password
+const generateSecurePassword = () => {
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  const allChars = lowercase + uppercase + numbers + special;
+
+  // Ensure at least one of each required character type using crypto.randomInt
+  let password = '';
+  password += lowercase[crypto.randomInt(lowercase.length)];
+  password += uppercase[crypto.randomInt(uppercase.length)];
+  password += numbers[crypto.randomInt(numbers.length)];
+  password += special[crypto.randomInt(special.length)];
+
+  // Fill the rest to meet minimum 14 characters requirement
+  const remainingLength = 10 + crypto.randomInt(6); // 10-15 more chars = 14-19 total
+  for (let i = 0; i < remainingLength; i++) {
+    password += allChars[crypto.randomInt(allChars.length)];
+  }
+
+  // Secure shuffle using Fisher-Yates algorithm with crypto.randomInt
+  const passwordArray = password.split('');
+  for (let i = passwordArray.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [passwordArray[i], passwordArray[j]] = [passwordArray[j], passwordArray[i]];
+  }
+  return passwordArray.join('');
+};
+
+// Helper function to validate GP request
+const validateGPRequest = (req, client) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return {
+      isValid: false,
+      response: {
+        status: 400,
+        json: {
+          success: false,
+          error: 'Validation failed',
+          details: errors.array()
+        }
+      }
+    };
+  }
+  return { isValid: true };
+};
+
+// Helper function to check if user exists
+const checkUserExists = async (client, email, phone) => {
+  const existingUser = await client.query(
+    'SELECT id FROM users WHERE email = $1',
+    [email]
+  );
+
+  if (existingUser.rows.length > 0) {
+    return {
+      exists: true,
+      response: {
+        status: 409,
+        json: {
+          success: false,
+          error: 'User with this email already exists'
+        }
+      }
+    };
+  }
+
+  if (phone) {
+    const existingPhone = await client.query(
+      'SELECT id FROM users WHERE phone = $1',
+      [phone]
+    );
+
+    if (existingPhone.rows.length > 0) {
+      return {
+        exists: true,
+        response: {
+          status: 409,
+          json: {
+            success: false,
+            error: 'Phone number is already in use'
+          }
+        }
+      };
+    }
+  }
+
+  return { exists: false };
+};
+
+// Helper function to send password email with logging
+const sendPasswordEmailWithLogging = async (email, firstName, tempPassword) => {
+  let emailSent = false;
+  let emailError = null;
+
+  try {
+    console.log(`📧 ========== Starting email send process ==========`);
+    console.log(`📧 Recipient: ${email}`);
+    console.log(`📧 GP Name: ${firstName}`);
+    console.log(`📧 Password length: ${tempPassword.length} characters`);
+
+    const emailResult = await sendPasswordEmail(email, firstName, tempPassword);
+    emailSent = emailResult.success;
+
+    if (emailResult.success) {
+      console.log(`✅ ========== Email sent successfully ==========`);
+      console.log(`✅ Message ID: ${emailResult.messageId}`);
+      console.log(`✅ Accepted recipients:`, emailResult.accepted);
+      console.log(`✅ SMTP Response:`, emailResult.response);
+    } else {
+      console.error(`❌ ========== Email send failed ==========`);
+      console.error(`❌ Error:`, emailResult.error || emailResult.message);
+      console.error(`❌ Accepted:`, emailResult.accepted);
+      console.error(`❌ Rejected:`, emailResult.rejected);
+      console.error(`❌ Response:`, emailResult.response);
+      emailError = emailResult.error || emailResult.message;
+    }
+  } catch (error) {
+    console.error('❌ ========== Exception during email send ==========');
+    console.error('❌ Exception type:', error.constructor.name);
+    console.error('❌ Exception message:', error.message);
+    console.error('❌ Exception code:', error.code);
+    console.error('❌ Exception command:', error.command);
+    console.error('❌ Exception response:', error.response);
+    console.error('❌ Exception responseCode:', error.responseCode);
+    console.error('❌ Error stack:', error.stack);
+    emailError = error.message || 'Unknown error';
+  }
+
+  return { emailSent, emailError };
+};
 
 // Get all GPs
 export const getAllGPs = async (req, res) => {
-  const client = await pool.connect();
+  await withDatabaseClient(async (client) => {
+    try {
+      const { is_active = true } = req.query;
 
-  try {
-    const { is_active = true } = req.query;
+      // When fetching for dropdown, we want all active GPs (regardless of verification status)
+      // This ensures newly created GPs appear immediately
+      const query = `
+        SELECT 
+          id, email, first_name, last_name, phone, organization, role,
+          is_active, is_verified, created_at, last_login_at
+        FROM users 
+        WHERE role = 'gp' AND is_active = $1
+        ORDER BY first_name, last_name
+      `;
 
-    // When fetching for dropdown, we want all active GPs (regardless of verification status)
-    // This ensures newly created GPs appear immediately
-    const query = `
-      SELECT 
-        id, email, first_name, last_name, phone, organization, role,
-        is_active, is_verified, created_at, last_login_at
-      FROM users 
-      WHERE role = 'gp' AND is_active = $1
-      ORDER BY first_name, last_name
-    `;
+      const result = await client.query(query, [is_active === 'true']);
 
-    const result = await client.query(query, [is_active === 'true']);
+      // Transform to camelCase format for frontend consistency
+      const gps = result.rows.map(gp => ({
+        id: gp.id,
+        email: gp.email,
+        firstName: gp.first_name,
+        lastName: gp.last_name,
+        fullName: `${gp.first_name} ${gp.last_name}`,
+        phone: gp.phone,
+        organization: gp.organization,
+        role: gp.role,
+        isActive: gp.is_active,
+        isVerified: gp.is_verified,
+        createdAt: gp.created_at,
+        lastLoginAt: gp.last_login_at
+      }));
 
-    // Transform to camelCase format for frontend consistency
-    const gps = result.rows.map(gp => ({
-      id: gp.id,
-      email: gp.email,
-      firstName: gp.first_name,
-      lastName: gp.last_name,
-      fullName: `${gp.first_name} ${gp.last_name}`,
-      phone: gp.phone,
-      organization: gp.organization,
-      role: gp.role,
-      isActive: gp.is_active,
-      isVerified: gp.is_verified,
-      createdAt: gp.created_at,
-      lastLoginAt: gp.last_login_at
-    }));
+      console.log(`📋 Returning ${gps.length} active GPs`);
 
-    console.log(`📋 Returning ${gps.length} active GPs`);
-
-    res.json({
-      success: true,
-      data: gps,
-      count: gps.length
-    });
-  } catch (error) {
-    console.error('Error fetching GPs:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch GPs'
-    });
-  } finally {
-    client.release();
-  }
+      res.json({
+        success: true,
+        data: gps,
+        count: gps.length
+      });
+    } catch (error) {
+      console.error('Error fetching GPs:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch GPs'
+      });
+    }
+  });
 };
 
 // Get GP by ID
 export const getGPById = async (req, res) => {
-  const client = await pool.connect();
+  await withDatabaseClient(async (client) => {
+    try {
+      const { id } = req.params;
 
-  try {
-    const { id } = req.params;
+      const result = await client.query(`
+        SELECT 
+          id, email, first_name, last_name, phone, organization, role,
+          is_active, is_verified, created_at, last_login_at
+        FROM users 
+        WHERE id = $1 AND role = 'gp'
+      `, [id]);
 
-    const result = await client.query(`
-      SELECT 
-        id, email, first_name, last_name, phone, organization, role,
-        is_active, is_verified, created_at, last_login_at
-      FROM users 
-      WHERE id = $1 AND role = 'gp'
-    `, [id]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'GP not found'
+        });
+      }
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+      res.json({
+        success: true,
+        data: result.rows[0]
+      });
+    } catch (error) {
+      console.error('Error fetching GP:', error);
+      res.status(500).json({
         success: false,
-        error: 'GP not found'
+        error: 'Failed to fetch GP'
       });
     }
-
-    res.json({
-      success: true,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error fetching GP:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch GP'
-    });
-  } finally {
-    client.release();
-  }
+  });
 };
 
 // Create new GP
 export const createGP = async (req, res) => {
-  const client = await pool.connect();
+  await withDatabaseClient(async (client) => {
+    try {
+      await client.query('BEGIN');
 
-  try {
-    await client.query('BEGIN');
+      // Validate request
+      const validation = validateGPRequest(req, client);
+      if (!validation.isValid) {
+        await client.query('ROLLBACK');
+        return res.status(validation.response.status).json(validation.response.json);
+      }
 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        error: 'Validation failed',
-        details: errors.array()
-      });
-    }
+      const { first_name, last_name, email, phone, organization } = req.body;
 
-    const { first_name, last_name, email, phone, organization } = req.body;
+      // Check if user already exists
+      const userCheck = await checkUserExists(client, email, phone);
+      if (userCheck.exists) {
+        await client.query('ROLLBACK');
+        return res.status(userCheck.response.status).json(userCheck.response.json);
+      }
 
-    // Check if user already exists
-    const existingUser = await client.query(
-      'SELECT id FROM users WHERE email = $1',
-      [email]
-    );
+      // Generate password and hash
+      const tempPassword = generateSecurePassword();
+      const saltRounds = 12;
+      const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
 
-    if (existingUser.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        success: false,
-        error: 'User with this email already exists'
-      });
-    }
-
-    // Check if phone number is already in use (if provided)
-    if (phone) {
-      const existingPhone = await client.query(
-        'SELECT id FROM users WHERE phone = $1',
-        [phone]
+      // Insert new GP
+      const result = await client.query(
+        `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+         RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
+        [email, passwordHash, first_name, last_name, phone, organization || null, 'gp', true, true]
       );
 
-      if (existingPhone.rows.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({
+      const newGP = result.rows[0];
+
+      // Send password email
+      const { emailSent, emailError } = await sendPasswordEmailWithLogging(email, first_name, tempPassword);
+
+      await client.query('COMMIT');
+
+      // Log the result
+      if (emailSent) {
+        console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), email sent to ${email}`);
+      } else {
+        console.warn(`⚠️ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), but email failed: ${emailError || 'Unknown error'}`);
+        console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
+      }
+
+      res.status(201).json({
+        success: true,
+        message: emailSent
+          ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
+          : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
+        data: {
+          userId: newGP.id,
+          email: newGP.email,
+          firstName: newGP.first_name,
+          lastName: newGP.last_name,
+          role: newGP.role,
+          emailSent,
+          emailError: emailError || null,
+          ...(emailSent ? {} : { tempPassword: tempPassword })
+        }
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error creating GP:', error);
+      if (error.code === '23505') {
+        res.status(409).json({
           success: false,
-          error: 'Phone number is already in use'
+          error: 'GP with this email or phone already exists'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to create GP'
         });
       }
     }
-
-    // Generate a temporary password that meets validation requirements:
-    // - Minimum 14 characters
-    // - At least one lowercase letter (a-z)
-    // - At least one uppercase letter (A-Z)
-    // - At least one number (0-9)
-    // - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
-    // - No spaces
-    // Uses crypto.randomInt for cryptographically secure random number generation
-    const generateSecurePassword = () => {
-      const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-      const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      const numbers = '0123456789';
-      const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-      const allChars = lowercase + uppercase + numbers + special;
-
-      // Ensure at least one of each required character type using crypto.randomInt
-      let password = '';
-      password += lowercase[crypto.randomInt(lowercase.length)];
-      password += uppercase[crypto.randomInt(uppercase.length)];
-      password += numbers[crypto.randomInt(numbers.length)];
-      password += special[crypto.randomInt(special.length)];
-
-      // Fill the rest to meet minimum 14 characters requirement
-      // We already have 4 characters, so we need at least 10 more
-      const remainingLength = 10 + crypto.randomInt(6); // 10-15 more chars = 14-19 total
-      for (let i = 0; i < remainingLength; i++) {
-        password += allChars[crypto.randomInt(allChars.length)];
-      }
-
-      // Secure shuffle using Fisher-Yates algorithm with crypto.randomInt
-      const passwordArray = password.split('');
-      for (let i = passwordArray.length - 1; i > 0; i--) {
-        const j = crypto.randomInt(i + 1);
-        [passwordArray[i], passwordArray[j]] = [passwordArray[j], passwordArray[i]];
-      }
-      return passwordArray.join('');
-    };
-
-    const tempPassword = generateSecurePassword();
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
-
-    // Insert new GP (active and verified by default when created via Add GP modal)
-    const result = await client.query(
-      `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-       RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-      [email, passwordHash, first_name, last_name, phone, organization || null, 'gp', true, true]
-    );
-
-    const newGP = result.rows[0];
-
-    // Send password email with auto-generated password
-    let emailSent = false;
-    let emailError = null;
-    let emailDetails = null;
-    try {
-      console.log(`📧 ========== Starting email send process ==========`);
-      console.log(`📧 Recipient: ${email}`);
-      console.log(`📧 GP Name: ${first_name} ${last_name}`);
-      console.log(`📧 Password length: ${tempPassword.length} characters`);
-
-      const emailResult = await sendPasswordEmail(email, first_name, tempPassword);
-      emailSent = emailResult.success;
-      emailDetails = {
-        messageId: emailResult.messageId,
-        accepted: emailResult.accepted,
-        rejected: emailResult.rejected,
-        response: emailResult.response
-      };
-
-      if (emailResult.success) {
-        console.log(`✅ ========== Email sent successfully ==========`);
-        console.log(`✅ Message ID: ${emailResult.messageId}`);
-        console.log(`✅ Accepted recipients:`, emailResult.accepted);
-        console.log(`✅ SMTP Response:`, emailResult.response);
-      } else {
-        console.error(`❌ ========== Email send failed ==========`);
-        console.error(`❌ Error:`, emailResult.error || emailResult.message);
-        console.error(`❌ Accepted:`, emailResult.accepted);
-        console.error(`❌ Rejected:`, emailResult.rejected);
-        console.error(`❌ Response:`, emailResult.response);
-        emailError = emailResult.error || emailResult.message;
-      }
-    } catch (emailError) {
-      console.error('❌ ========== Exception during email send ==========');
-      console.error('❌ Exception type:', emailError.constructor.name);
-      console.error('❌ Exception message:', emailError.message);
-      console.error('❌ Exception code:', emailError.code);
-      console.error('❌ Exception command:', emailError.command);
-      console.error('❌ Exception response:', emailError.response);
-      console.error('❌ Exception responseCode:', emailError.responseCode);
-      console.error('❌ Error stack:', emailError.stack);
-      emailError = emailError.message || 'Unknown error';
-    }
-
-    await client.query('COMMIT');
-
-    // Log the result
-    if (emailSent) {
-      console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), email sent to ${email}`);
-    } else {
-      console.warn(`⚠️ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), but email failed: ${emailError || 'Unknown error'}`);
-      console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
-    }
-
-    res.status(201).json({
-      success: true,
-      message: emailSent
-        ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
-        : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
-      data: {
-        userId: newGP.id,
-        email: newGP.email,
-        firstName: newGP.first_name,
-        lastName: newGP.last_name,
-        role: newGP.role,
-        emailSent,
-        emailError: emailError || null,
-        // Include password in response for debugging/admin purposes (only if email failed)
-        ...(emailSent ? {} : { tempPassword: tempPassword })
-      }
-    });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Error creating GP:', error);
-    if (error.code === '23505') {
-      res.status(409).json({
-        success: false,
-        error: 'GP with this email or phone already exists'
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create GP'
-      });
-    }
-  } finally {
-    client.release();
-  }
+  });
 };
 
 // Update GP
 export const updateGP = async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
+  await withDatabaseClient(async (client) => {
+    try {
+      await client.query('BEGIN');
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -371,58 +393,55 @@ export const updateGP = async (req, res) => {
       message: 'GP updated successfully',
       data: result.rows[0]
     });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Error updating GP:', error);
-    if (error.code === '23505') {
-      res.status(409).json({
-        success: false,
-        error: 'GP with this email or phone already exists'
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update GP'
-      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error updating GP:', error);
+      if (error.code === '23505') {
+        res.status(409).json({
+          success: false,
+          error: 'GP with this email or phone already exists'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update GP'
+        });
+      }
     }
-  } finally {
-    client.release();
-  }
+  });
 };
 
 // Delete GP (soft delete)
 export const deleteGP = async (req, res) => {
-  const client = await pool.connect();
+  await withDatabaseClient(async (client) => {
+    try {
+      const { id } = req.params;
 
-  try {
-    const { id } = req.params;
+      const result = await client.query(`
+        UPDATE users 
+        SET is_active = false, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND role = 'gp'
+        RETURNING id, first_name, last_name
+      `, [id]);
 
-    const result = await client.query(`
-      UPDATE users 
-      SET is_active = false, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1 AND role = 'gp'
-      RETURNING id, first_name, last_name
-    `, [id]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'GP not found'
+        });
+      }
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+      res.json({
+        success: true,
+        message: 'GP deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting GP:', error);
+      res.status(500).json({
         success: false,
-        error: 'GP not found'
+        error: 'Failed to delete GP'
       });
     }
-
-    res.json({
-      success: true,
-      message: 'GP deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting GP:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to delete GP'
-    });
-  } finally {
-    client.release();
-  }
+  });
 };
 
