@@ -135,15 +135,26 @@ router.options('/files/:filePath(*)', (req, res) => {
 // Serve investigation files
 // Use /investigations/files to avoid conflicts with other routes
 // SSRF Protection: validateFilePathMiddleware prevents path traversal attacks
-router.get('/investigations/files/:filePath(*)',
+// Note: Using * wildcard to match paths with slashes (e.g., investigations/file.png)
+router.get('/investigations/files/*',
   (req, res, next) => {
     console.log('🛣️ [investigations route] ==========================================');
-    console.log('🛣️ [investigations route] Route matched: /investigations/files/:filePath(*)');
+    console.log('🛣️ [investigations route] Route matched: /investigations/files/*');
     console.log('🛣️ [investigations route] Method:', req.method);
     console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
     console.log('🛣️ [investigations route] Path:', req.path);
     console.log('🛣️ [investigations route] Params:', req.params);
-    console.log('🛣️ [investigations route] filePath param:', req.params.filePath);
+    console.log('🛣️ [investigations route] req.params[0]:', req.params[0]);
+    
+    // Extract file path from the wildcard match
+    // The * wildcard captures everything after /investigations/files/
+    const matchedPath = req.params[0] || req.path.replace('/investigations/files/', '');
+    console.log('🛣️ [investigations route] Extracted file path:', matchedPath);
+    
+    // Set it as filePath param for the middleware
+    req.params.filePath = matchedPath;
+    console.log('🛣️ [investigations route] Set req.params.filePath:', req.params.filePath);
+    
     next();
   },
   generalLimiter,
@@ -154,7 +165,13 @@ router.get('/investigations/files/:filePath(*)',
 );
 
 // Also support the old route for backward compatibility
-router.get('/files/:filePath(*)',
+router.get('/files/*',
+  (req, res, next) => {
+    console.log('🛣️ [investigations route] Old route matched: /files/*');
+    const matchedPath = req.params[0] || req.path.replace('/files/', '');
+    req.params.filePath = matchedPath;
+    next();
+  },
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),

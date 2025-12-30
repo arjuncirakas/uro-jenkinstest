@@ -393,14 +393,63 @@ export const investigationService = {
           return;
         }
         
+        // Check if the response is actually HTML (wrong content type)
+        // This happens when a reverse proxy or static server serves index.html instead of the file
+        const isHTMLResponse = contentType.includes('text/html') || 
+          (response.data.size < 5000 && await (async () => {
+            try {
+              const preview = response.data.slice(0, 200);
+              const text = await preview.text();
+              return text.trim().toLowerCase().startsWith('<!doctype') || 
+                     text.trim().toLowerCase().startsWith('<html');
+            } catch (e) {
+              return false;
+            }
+          })());
+        
+        if (isHTMLResponse && !contentType.startsWith('image/')) {
+          console.error('📁 [investigationService.viewFile] ERROR - Received HTML instead of image file');
+          console.error('📁 [investigationService.viewFile] ERROR - This usually means the backend route is not matching');
+          console.error('📁 [investigationService.viewFile] ERROR - Requested URL:', fullURL);
+          console.error('📁 [investigationService.viewFile] ERROR - Response Content-Type:', contentType);
+          
+          // Try to read the HTML to see what was returned
+          try {
+            const text = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsText(response.data);
+            });
+            console.error('📁 [investigationService.viewFile] ERROR - HTML content received:', text.substring(0, 500));
+            
+            // Check if it's a JSON error wrapped in HTML
+            try {
+              const errorMatch = text.match(/\{"success":\s*false[^}]*\}/);
+              if (errorMatch) {
+                const errorData = JSON.parse(errorMatch[0]);
+                alert(`Error loading file: ${errorData.message || 'File not found or route not matching'}`);
+              } else {
+                alert(`Error: The server returned an HTML page instead of the image file.\n\nThis usually means:\n1. The backend route is not matching\n2. A reverse proxy is serving the frontend HTML\n3. The file path is incorrect\n\nRequested: ${fullURL}\n\nPlease check the backend server logs for route matching issues.`);
+              }
+            } catch (e) {
+              alert(`Error: The server returned an HTML page instead of the image file.\n\nRequested URL: ${fullURL}\n\nPlease check:\n1. Backend server logs for route matching\n2. Reverse proxy configuration\n3. File path correctness`);
+            }
+          } catch (e) {
+            console.error('📁 [investigationService.viewFile] ERROR - Could not read HTML response:', e);
+            alert(`Error: Received HTML response instead of image file. Please check backend logs.`);
+          }
+          return;
+        }
+        
         // Check if the response is actually an error (JSON response instead of file)
-        // Only check for JSON/HTML if content-type explicitly says so AND file is small
+        // Only check for JSON if content-type explicitly says so AND file is small
         // Don't block if content-type is image/* even if small (might be valid small image)
-        const isLikelyError = (contentType.includes('application/json') || contentType.includes('text/html')) 
+        const isJSONError = contentType.includes('application/json') 
           && !contentType.startsWith('image/')
           && response.data.size < 1024;
         
-        if (isLikelyError) {
+        if (isJSONError) {
           // Try to read as text to see the error message
           try {
             const text = await new Promise((resolve, reject) => {
@@ -409,7 +458,7 @@ export const investigationService = {
               reader.onerror = reject;
               reader.readAsText(response.data);
             });
-            console.error('Received error response instead of file:', text);
+            console.error('📁 [investigationService.viewFile] ERROR - Received JSON error response:', text);
             try {
               const errorData = JSON.parse(text);
               alert(`Error loading file: ${errorData.message || 'Unknown error'}`);
@@ -417,7 +466,7 @@ export const investigationService = {
               alert(`Error loading file: The server returned an error response instead of the file.`);
             }
           } catch (e) {
-            console.error('Error reading error response:', e);
+            console.error('📁 [investigationService.viewFile] ERROR - Error reading error response:', e);
             alert(`Error loading file: The server returned an error response instead of the file.`);
           }
           return;
