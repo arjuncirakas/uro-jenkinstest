@@ -24,17 +24,19 @@ const ConsentFormSection = ({
 }) => {
 
   return (
-    <div className="w-full mt-4 pt-4 border-t border-gray-200">
-      <div className="flex items-center justify-between mb-3">
+    <div className="w-full max-w-full mt-4 pt-4 border-t border-gray-200 box-border">
+      <div className="flex items-center justify-between mb-3 w-full">
         <span className="text-xs font-semibold text-gray-700">Consent Form</span>
-        {hasUploadedForm && (
-          <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Signed</span>
-        )}
-        {!templateToUse && (
-          <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">Template Not Available</span>
-        )}
+        <div className="flex items-center gap-2">
+          {hasUploadedForm && (
+            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Signed</span>
+          )}
+          {!templateToUse && (
+            <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">Template Not Available</span>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-2 flex-wrap mb-2">
+      <div className="flex items-center gap-2 flex-wrap mb-2 w-full">
         <button
           type="button"
           onClick={() => templateToUse && !isNotRequired && handlePrintConsentForm(templateToUse, investigationName)}

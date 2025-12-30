@@ -137,105 +137,103 @@ const InvestigationRequestItem = ({
   );
 
   return (
-    <div key={`request-${request.id}`} className="bg-gray-50 rounded-md p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-3">
-            <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
-            {(request.status || '').toLowerCase() === 'not_required' && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full border border-gray-200">
-                Not Required
-              </span>
-            )}
-          </div>
+    <div key={`request-${request.id}`} className="bg-gray-50 rounded-md p-4 border border-gray-200 hover:border-gray-300 transition-colors w-full">
+      <div className="flex items-start justify-between gap-4 mb-3 w-full">
+        <div className="flex items-center gap-2 flex-1">
+          <h5 className="font-semibold text-gray-900 text-base">{investigationName}</h5>
+          {(request.status || '').toLowerCase() === 'not_required' && (
+            <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full border border-gray-200">
+              Not Required
+            </span>
+          )}
+        </div>
+        <div className="flex-shrink-0">
+          {renderActionButtons()}
+        </div>
+      </div>
 
-          {/* Show all result details inline */}
-          {hasResults && sortedResults.length > 0 && (
-            <div className="space-y-3 mt-3">
+      <div className="w-full">
+        {/* Show all result details inline */}
+        {hasResults && sortedResults.length > 0 && (
+          <div className="space-y-3 w-full">
               {sortedResults.map((result, idx) => (
                 <InvestigationResultItem
                   key={result.id || idx}
                   result={result}
                   index={idx}
                   totalResults={sortedResults.length}
-                  onViewFile={handleViewFile}
                 />
               ))}
             </div>
-          )}
+        )}
 
-          {!hasResults && request.notes && (
-            <div className="text-sm text-gray-600 mb-2">
-              <span className="font-medium">Notes: </span>
-              <span>{request.notes}</span>
-            </div>
-          )}
+        {!hasResults && request.notes && (
+          <div className="text-sm text-gray-600 mb-2">
+            <span className="font-medium">Notes: </span>
+            <span>{request.notes}</span>
+          </div>
+        )}
 
-          {/* Toast Notification */}
-          {toastMessage && (
-            <div className={`mt-3 p-2.5 rounded-md border text-xs font-medium transition-all ${
-              toastType === 'success'
-                ? 'bg-green-50 text-green-700 border-green-200'
-                : 'bg-red-50 text-red-700 border-red-200'
-            }`}>
-              {toastMessage}
-            </div>
-          )}
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div className={`mt-3 p-2.5 rounded-md border text-xs font-medium transition-all ${
+            toastType === 'success'
+              ? 'bg-green-50 text-green-700 border-green-200'
+              : 'bg-red-50 text-red-700 border-red-200'
+          }`}>
+            {toastMessage}
+          </div>
+        )}
 
-          {/* Status update controls */}
-          {!hasResults && !request.isClinicalInvestigation && request.id && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              {(request.status || '').toLowerCase() === 'not_required' ? (
-                <button
-                  onClick={handleMarkAsRequired}
-                  className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-300"
-                >
-                  Required
-                </button>
-              ) : (
-                <button
-                  onClick={handleMarkAsNotRequired}
-                  className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300"
-                >
-                  Not Required
-                </button>
-              )}
-            </div>
-          )}
+        {/* Status update controls */}
+        {!hasResults && !request.isClinicalInvestigation && request.id && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {(request.status || '').toLowerCase() === 'not_required' ? (
+              <button
+                onClick={handleMarkAsRequired}
+                className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-300"
+              >
+                Required
+              </button>
+            ) : (
+              <button
+                onClick={handleMarkAsNotRequired}
+                className="px-3 py-1.5 text-xs font-medium rounded transition-colors bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-300"
+              >
+                Not Required
+              </button>
+            )}
+          </div>
+        )}
 
-          {/* Consent Form Section */}
-          {!consentFormData.isPSATest && (() => {
-            const handleErrorAlert = showErrorAlert ? (message) => {
-              setErrorModalTitle('Error');
-              setErrorModalMessage(message);
-              setIsErrorModalOpen(true);
-            } : undefined;
+        {/* Consent Form Section */}
+        {!consentFormData.isPSATest && (() => {
+          const handleErrorAlert = showErrorAlert ? (message) => {
+            setErrorModalTitle('Error');
+            setErrorModalMessage(message);
+            setIsErrorModalOpen(true);
+          } : undefined;
 
-            const isNotRequired = (request.status || '').toLowerCase() === 'not_required';
+          const isNotRequired = (request.status || '').toLowerCase() === 'not_required';
 
-            return (
-              <ConsentFormSection
-                investigationName={investigationName}
-                templateToUse={consentFormData.templateToUse}
-                hasUploadedForm={consentFormData.hasUploadedForm}
-                printingConsentForm={printingConsentForm}
-                uploadingConsentForms={uploadingConsentForms}
-                getPrintButtonTitle={getPrintButtonTitle}
-                handlePrintConsentForm={handlePrintConsentForm}
-                handleConsentFormUpload={handleConsentFormUpload}
-                handleViewConsentForm={handleViewConsentForm}
-                patientConsentForm={consentFormData.patientConsentForm}
-                showErrorAlert={showErrorAlert}
-                onErrorAlert={handleErrorAlert}
-                isNotRequired={isNotRequired}
-              />
-            );
-          })()}
-        </div>
-
-        <div className="flex-shrink-0">
-          {renderActionButtons()}
-        </div>
+          return (
+            <ConsentFormSection
+              investigationName={investigationName}
+              templateToUse={consentFormData.templateToUse}
+              hasUploadedForm={consentFormData.hasUploadedForm}
+              printingConsentForm={printingConsentForm}
+              uploadingConsentForms={uploadingConsentForms}
+              getPrintButtonTitle={getPrintButtonTitle}
+              handlePrintConsentForm={handlePrintConsentForm}
+              handleConsentFormUpload={handleConsentFormUpload}
+              handleViewConsentForm={handleViewConsentForm}
+              patientConsentForm={consentFormData.patientConsentForm}
+              showErrorAlert={showErrorAlert}
+              onErrorAlert={handleErrorAlert}
+              isNotRequired={isNotRequired}
+            />
+          );
+        })()}
       </div>
     </div>
   );

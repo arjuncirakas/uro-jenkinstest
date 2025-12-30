@@ -1,12 +1,11 @@
 import React from 'react';
-import { Eye } from 'lucide-react';
 import PropTypes from 'prop-types';
 
 /**
  * Shared component for rendering individual investigation result items
  * Reduces duplication between UrologistPatientDetailsModal and NursePatientDetailsModal
  */
-const InvestigationResultItem = ({ result, index, totalResults, onViewFile }) => {
+const InvestigationResultItem = ({ result, index, totalResults }) => {
   const resultDate = result.date ? new Date(result.date).toLocaleDateString('en-GB', {
     day: '2-digit',
     month: '2-digit',
@@ -22,22 +21,10 @@ const InvestigationResultItem = ({ result, index, totalResults, onViewFile }) =>
     return 'bg-blue-100 text-blue-700';
   };
 
-  const handleViewFileClick = () => {
-    if (!result.filePath) return;
-    const fileUrl = result.filePath.startsWith('http')
-      ? result.filePath
-      : `${import.meta.env.VITE_API_URL || 'https://uroprep.ahimsa.global/api'}/investigations/files/${result.filePath}`;
-    if (onViewFile) {
-      onViewFile(fileUrl);
-    } else {
-      window.open(fileUrl, '_blank');
-    }
-  };
-
   return (
-    <div className="bg-white rounded-md p-3 border border-gray-200">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
+    <div className="bg-white rounded-md p-3 border border-gray-200 w-full max-w-full box-border">
+      <div className="flex items-start justify-between mb-2 w-full">
+        <div className="flex items-center gap-2 flex-1">
           <span className="text-xs font-semibold text-gray-600">Result #{totalResults - index}</span>
           {result.status && (
             <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusClassName(result.status)}`}>
@@ -45,19 +32,9 @@ const InvestigationResultItem = ({ result, index, totalResults, onViewFile }) =>
             </span>
           )}
         </div>
-        {result.filePath && onViewFile ? (
-          <button
-            onClick={handleViewFileClick}
-            className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors flex items-center gap-1"
-            title="View file"
-          >
-            <Eye className="w-3 h-3" />
-            View File
-          </button>
-        ) : null}
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 w-full">
         <div className="text-xs text-gray-600">
           <span className="font-medium">Date: </span>
           <span className="text-gray-900">{resultDate}</span>
@@ -101,8 +78,7 @@ const InvestigationResultItem = ({ result, index, totalResults, onViewFile }) =>
 InvestigationResultItem.propTypes = {
   result: PropTypes.object.isRequired,
   index: PropTypes.number.isRequired,
-  totalResults: PropTypes.number.isRequired,
-  onViewFile: PropTypes.func
+  totalResults: PropTypes.number.isRequired
 };
 
 export default InvestigationResultItem;

@@ -23,18 +23,21 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // Allow PDF, DOC, DOCX, XLS, XLSX, CSV files
-  const allowedTypes = /pdf|doc|docx|xls|xlsx|csv/;
+  // Allow PDF, DOC, DOCX, XLS, XLSX, CSV, and image files (PNG, JPEG, JPG)
+  const allowedTypes = /pdf|doc|docx|xls|xlsx|csv|png|jpeg|jpg/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowedTypes.test(file.mimetype) ||
     file.mimetype === 'application/vnd.ms-excel' ||
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    file.mimetype === 'text/csv';
+    file.mimetype === 'text/csv' ||
+    file.mimetype === 'image/png' ||
+    file.mimetype === 'image/jpeg' ||
+    file.mimetype === 'image/jpg';
 
   if ((mimetype || extname) && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only PDF, DOC, DOCX, XLS, XLSX, and CSV files are allowed'));
+    cb(new Error('Only PDF, DOC, DOCX, XLS, XLSX, CSV, PNG, JPEG, and JPG files are allowed'));
   }
 };
 
