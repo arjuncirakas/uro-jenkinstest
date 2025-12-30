@@ -267,9 +267,25 @@ export const sanitizeFilePath = (filePath) => {
  */
 export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory = null) => {
   return (req, res, next) => {
+    console.log('🔒 [validateFilePathMiddleware] ==========================================');
+    console.log('🔒 [validateFilePathMiddleware] Middleware called');
+    console.log('🔒 [validateFilePathMiddleware] Method:', req.method);
+    console.log('🔒 [validateFilePathMiddleware] Original URL:', req.originalUrl);
+    console.log('🔒 [validateFilePathMiddleware] Path:', req.path);
+    console.log('🔒 [validateFilePathMiddleware] Base URL:', req.baseUrl);
+    console.log('🔒 [validateFilePathMiddleware] URL:', req.url);
+    console.log('🔒 [validateFilePathMiddleware] Params:', req.params);
+    console.log('🔒 [validateFilePathMiddleware] Param name:', paramName);
+    console.log('🔒 [validateFilePathMiddleware] Looking for param:', paramName);
+    
     let filePath = req.params[paramName] || req.body[paramName] || req.query[paramName];
+    console.log('🔒 [validateFilePathMiddleware] Extracted filePath:', filePath);
+    console.log('🔒 [validateFilePathMiddleware] filePath from params:', req.params[paramName]);
+    console.log('🔒 [validateFilePathMiddleware] filePath from body:', req.body[paramName]);
+    console.log('🔒 [validateFilePathMiddleware] filePath from query:', req.query[paramName]);
 
     if (!filePath) {
+      console.log('🔒 [validateFilePathMiddleware] ERROR - No file path found');
       return res.status(400).json({
         success: false,
         message: 'File path is required'
@@ -279,17 +295,22 @@ export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory
     // Decode URL encoding if present (Express should do this, but be safe)
     try {
       filePath = decodeURIComponent(filePath);
+      console.log('🔒 [validateFilePathMiddleware] Decoded filePath:', filePath);
     } catch (e) {
       // If decoding fails, use original path
-      console.warn('[SSRF Protection] Failed to decode file path:', filePath);
+      console.warn('🔒 [validateFilePathMiddleware] Failed to decode file path:', filePath, e);
     }
 
     // Normalize the file path - remove 'uploads/' prefix if present
     // File paths stored in DB might be 'uploads/investigations/file.pdf' or 'investigations/file.pdf'
     // We need to handle both formats
+    const originalFilePath = filePath;
     if (filePath.startsWith('uploads/') || filePath.startsWith('uploads\\')) {
       // Remove 'uploads/' prefix
       filePath = filePath.replace(/^uploads[/\\]/, '');
+      console.log('🔒 [validateFilePathMiddleware] Removed uploads/ prefix');
+      console.log('🔒 [validateFilePathMiddleware] Original:', originalFilePath);
+      console.log('🔒 [validateFilePathMiddleware] After removal:', filePath);
       // Update the param so serveFile can use it
       if (req.params[paramName]) {
         req.params[paramName] = filePath;
@@ -298,17 +319,20 @@ export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory
 
     // Use provided base directory or default to uploads directory
     const baseDir = baseDirectory || path.join(process.cwd(), 'uploads');
+    console.log('🔒 [validateFilePathMiddleware] Base directory:', baseDir);
+    console.log('🔒 [validateFilePathMiddleware] Current working directory:', process.cwd());
 
-    console.log('[SSRF Protection] Validating file path:', {
+    console.log('🔒 [validateFilePathMiddleware] Validating file path:', {
       original: req.params[paramName],
       decoded: filePath,
       baseDir: baseDir
     });
 
     const validation = validateFilePath(filePath, baseDir);
+    console.log('🔒 [validateFilePathMiddleware] Validation result:', validation);
 
     if (!validation.valid) {
-      console.warn(`[SSRF Protection] Invalid file path: ${filePath} - ${validation.error}`);
+      console.warn('🔒 [validateFilePathMiddleware] ERROR - Invalid file path:', filePath, '-', validation.error);
       return res.status(403).json({
         success: false,
         message: 'Invalid file path',
@@ -318,10 +342,11 @@ export const validateFilePathMiddleware = (paramName = 'filePath', baseDirectory
 
     // Attach validated path to request object
     req.validatedFilePath = validation.normalizedPath;
-    console.log('[SSRF Protection] Validated file path:', {
+    console.log('🔒 [validateFilePathMiddleware] Validated file path:', {
       normalized: validation.normalizedPath,
       exists: fs.existsSync(validation.normalizedPath)
     });
+    console.log('🔒 [validateFilePathMiddleware] Calling next()');
     next();
   };
 };

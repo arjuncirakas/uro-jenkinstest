@@ -136,6 +136,16 @@ router.options('/files/:filePath(*)', (req, res) => {
 // Use /investigations/files to avoid conflicts with other routes
 // SSRF Protection: validateFilePathMiddleware prevents path traversal attacks
 router.get('/investigations/files/:filePath(*)',
+  (req, res, next) => {
+    console.log('🛣️ [investigations route] ==========================================');
+    console.log('🛣️ [investigations route] Route matched: /investigations/files/:filePath(*)');
+    console.log('🛣️ [investigations route] Method:', req.method);
+    console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
+    console.log('🛣️ [investigations route] Path:', req.path);
+    console.log('🛣️ [investigations route] Params:', req.params);
+    console.log('🛣️ [investigations route] filePath param:', req.params.filePath);
+    next();
+  },
   generalLimiter,
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
