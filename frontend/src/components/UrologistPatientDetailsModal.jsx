@@ -88,6 +88,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
   const [uploadingConsentForms, setUploadingConsentForms] = useState({});
   const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  const [viewingConsentForm, setViewingConsentForm] = useState(false);
 
   // Transfer form states
   const [transferDetails, setTransferDetails] = useState({
@@ -723,6 +724,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
 
     setPrintingConsentForm(true);
+    let pdfViewerOpened = false;
 
     try {
       const result = await getConsentFormBlobUrl(template, testName, patient);
@@ -731,16 +733,23 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         setPdfViewerUrl(result.blobUrl);
         setPdfViewerFileName(result.fileName || `${testName} Consent Form`);
         setIsPDFViewerModalOpen(true);
-      } else {
+        pdfViewerOpened = true;
+      }
+      
+      // Only show error modal if PDF viewer didn't open
+      if (!pdfViewerOpened) {
         setErrorModalTitle('Error');
         setErrorModalMessage(result.error || 'Failed to load consent form');
         setIsErrorModalOpen(true);
       }
     } catch (error) {
       console.error('Error loading consent form:', error);
-      setErrorModalTitle('Error');
-      setErrorModalMessage('Failed to load consent form. Please try again.');
-      setIsErrorModalOpen(true);
+      // Only show error modal if PDF viewer didn't open
+      if (!pdfViewerOpened) {
+        setErrorModalTitle('Error');
+        setErrorModalMessage('Failed to load consent form. Please try again.');
+        setIsErrorModalOpen(true);
+      }
     } finally {
       setPrintingConsentForm(false);
     }
@@ -797,6 +806,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       return;
     }
 
+    setViewingConsentForm(true);
+    let viewerOpened = false;
+
     // Normalize Windows paths (replace backslashes with forward slashes)
     const normalizedPath = filePath.replace(/\\/g, '/');
 
@@ -825,16 +837,23 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         setPdfViewerUrl(blobUrl);
         setPdfViewerFileName(fileName);
         setIsPDFViewerModalOpen(true);
+        viewerOpened = true;
       } else {
         setImageViewerUrl(blobUrl);
         setImageViewerFileName(fileName);
         setIsImageViewerModalOpen(true);
+        viewerOpened = true;
       }
     } catch (error) {
       console.error('Error fetching consent form file:', error);
-      setErrorModalTitle('Error');
-      setErrorModalMessage(error.message || 'Failed to load consent form. Please try again.');
-      setIsErrorModalOpen(true);
+      // Only show error modal if viewer didn't open
+      if (!viewerOpened) {
+        setErrorModalTitle('Error');
+        setErrorModalMessage(error.message || 'Failed to load consent form. Please try again.');
+        setIsErrorModalOpen(true);
+      }
+    } finally {
+      setViewingConsentForm(false);
     }
   };
 
@@ -1868,6 +1887,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         consentFormTemplates={consentFormTemplates}
         printingConsentForm={printingConsentForm}
         uploadingConsentForms={uploadingConsentForms}
+        viewingConsentForm={viewingConsentForm}
         getConsentFormTemplate={getConsentFormTemplate}
         getPatientConsentForm={getPatientConsentForm}
         getPrintButtonTitle={getPrintButtonTitle}
@@ -1910,6 +1930,135 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     if (filePath) {
       investigationService.viewFile(filePath);
     }
+  };
+
+  // Helper function to handle edit result from grouped test history
+  const handleEditResultFromGroupedTest = (test, investigationRequests) => {
+    const testName = (test.testName || test.test_name || '').trim().toUpperCase();
+    const matchingRequest = investigationRequests.find(req => {
+      const reqName = (req.investigationName || req.investigation_name || '').trim().toUpperCase();
+      return reqName === testName;
+    });
+    
+    const requestToUse = createRequestFromMatchOrTest(matchingRequest, testName, test);
+    
+    setSelectedInvestigationRequest(requestToUse);
+    setSelectedExistingResult(prepareEditResultData(test));
+    setIsAddResultModalOpen(true);
+  };
+
+  // Helper function to render a single test item in grouped history
+  const renderTestItem = (test) => {
+    const handleViewClick = () => {
+      const filePath = test.filePath || test.file_path;
+      if (filePath) {
+        handleViewFile(filePath);
+      } else {
+        handleViewReport(test);
+      }
+    };
+
+    const handleEditClick = () => {
+      handleEditResultFromGroupedTest(test, investigationRequests);
+    };
+
+    return (
+      <div key={test.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h4 className="font-semibold text-gray-900">{(test.testName || '').toUpperCase()}</h4>
+              {test.status && (
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(test.status)}`}>
+                  {test.status}
+                </span>
+              )}
+            </div>
+            <div className="text-sm text-gray-600 mb-2">
+              Time: {test.date}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleViewClick}
+              className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
+            >
+              {(test.filePath || test.file_path) ? 'View File' : 'View'}
+            </button>
+            {(test.filePath || test.file_path) && (
+              <button
+                onClick={handleEditClick}
+                className="px-2.5 py-1 bg-teal-50 text-teal-700 text-sm rounded-md border border-teal-200 hover:bg-teal-100 transition-colors flex items-center gap-1"
+                title="Edit/Re-upload result"
+              >
+                <Edit className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+          {test.result && (
+            <div>
+              <span className="text-sm font-medium text-gray-700">Result:</span>
+              <span className="ml-2 text-sm text-gray-900">{test.result}</span>
+            </div>
+          )}
+          {test.referenceRange && (
+            <div>
+              <span className="text-sm font-medium text-gray-700">Reference Range:</span>
+              <span className="ml-2 text-sm text-gray-600">{test.referenceRange}</span>
+            </div>
+          )}
+        </div>
+
+        {test.notes && (
+          <div className="pt-3 border-t border-gray-200">
+            <span className="text-sm font-medium text-gray-700">Notes:</span>
+            <p className="text-sm text-gray-600 mt-1 break-words whitespace-pre-wrap overflow-wrap-anywhere">{test.notes}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Helper function to render grouped test history
+  const renderGroupedTestHistory = (testHistory) => {
+    const groupedTests = testHistory.reduce((groups, test) => {
+      const date = test.date;
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(test);
+      return groups;
+    }, {});
+
+    const sortedDates = Object.keys(groupedTests).sort((a, b) => new Date(b) - new Date(a));
+
+    return sortedDates.map((date) => (
+      <div key={date} className="space-y-4">
+        {/* Date Title */}
+        <div className="flex items-center">
+          <div className="flex-1 border-t border-gray-300"></div>
+          <div className="px-4">
+            <h3 className="text-lg font-semibold text-gray-800 bg-white px-3 py-1 rounded-lg border border-gray-200">
+              {new Date(date).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </h3>
+          </div>
+          <div className="flex-1 border-t border-gray-300"></div>
+        </div>
+
+        {/* Tests for this date */}
+        <div className="space-y-3">
+          {groupedTests[date].map(renderTestItem)}
+        </div>
+      </div>
+    ));
   };
 
   // Handle view test report
@@ -5189,88 +5338,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
               {/* Modal Content */}
               <div className="flex-1 overflow-y-auto p-6">
-                <div className="space-y-6">
-                  {/* Group tests by date */}
-                  {(() => {
-                    // Group tests by date
-                    const groupedTests = otherTestsHistory.reduce((groups, test) => {
-                      const date = test.date;
-                      if (!groups[date]) {
-                        groups[date] = [];
-                      }
-                      groups[date].push(test);
-                      return groups;
-                    }, {});
-
-                    // Sort dates in descending order (most recent first)
-                    const sortedDates = Object.keys(groupedTests).sort((a, b) => new Date(b) - new Date(a));
-
-                    return sortedDates.map((date) => (
-                      <div key={date} className="space-y-4">
-                        {/* Date Title */}
-                        <div className="flex items-center">
-                          <div className="flex-1 border-t border-gray-300"></div>
-                          <div className="px-4">
-                            <h3 className="text-lg font-semibold text-gray-800 bg-white px-3 py-1 rounded-lg border border-gray-200">
-                              {new Date(date).toLocaleDateString('en-US', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })}
-                            </h3>
-                          </div>
-                          <div className="flex-1 border-t border-gray-300"></div>
-                        </div>
-
-                        {/* Tests for this date */}
-                        <div className="space-y-3">
-                          {groupedTests[date].map((test) => (
-                            <div key={test.id} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <h4 className="font-semibold text-gray-900">{test.testName}</h4>
-                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(test.status)}`}>
-                                      {test.status}
-                                    </span>
-                                  </div>
-                                  <div className="text-sm text-gray-600 mb-2">
-                                    Time: {test.date}
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => handleViewReport(test)}
-                                  className="px-3 py-1 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors"
-                                >
-                                  View
-                                </button>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                                <div>
-                                  <span className="text-sm font-medium text-gray-700">Result:</span>
-                                  <span className="ml-2 text-sm text-gray-900">{test.result}</span>
-                                </div>
-                                <div>
-                                  <span className="text-sm font-medium text-gray-700">Reference Range:</span>
-                                  <span className="ml-2 text-sm text-gray-600">{test.referenceRange}</span>
-                                </div>
-                              </div>
-
-                              {test.notes && (
-                                <div className="pt-3 border-t border-gray-200">
-                                  <span className="text-sm font-medium text-gray-700">Notes:</span>
-                                  <p className="text-sm text-gray-600 mt-1">{test.notes}</p>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
+                {otherTestsHistory.length > 0 ? (
+                  <div className="space-y-6">
+                    {renderGroupedTestHistory(otherTestsHistory)}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No test results available.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

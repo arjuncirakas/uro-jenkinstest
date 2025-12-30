@@ -23,21 +23,18 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // Allow PDF, DOC, DOCX, XLS, XLSX, CSV, JPG, JPEG, PNG files
-  const allowedTypes = /pdf|doc|docx|xls|xlsx|csv|jpeg|jpg|png/;
+  // Allow PDF, DOC, DOCX, XLS, XLSX, CSV files
+  const allowedTypes = /pdf|doc|docx|xls|xlsx|csv/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowedTypes.test(file.mimetype) ||
     file.mimetype === 'application/vnd.ms-excel' ||
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    file.mimetype === 'text/csv' ||
-    file.mimetype === 'image/jpeg' ||
-    file.mimetype === 'image/jpg' ||
-    file.mimetype === 'image/png';
+    file.mimetype === 'text/csv';
 
   if ((mimetype || extname) && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only PDF, DOC, DOCX, XLS, XLSX, CSV, JPG, JPEG, and PNG files are allowed'));
+    cb(new Error('Only PDF, DOC, DOCX, XLS, XLSX, and CSV files are allowed'));
   }
 };
 
@@ -357,149 +354,6 @@ export const updatePSAResult = async (req, res) => {
   }
 };
 
-// Helper function to delete file if it exists
-const deleteFileIfExists = (filePath) => {
-  if (filePath && fs.existsSync(filePath)) {
-    try {
-      fs.unlinkSync(filePath);
-    } catch (err) {
-      console.error('Error deleting old file:', err);
-    }
-  }
-};
-
-// Helper function to handle file removal
-const handleFileRemoval = (filePath) => {
-  deleteFileIfExists(filePath);
-  return { filePath: null, fileName: null };
-};
-
-// Helper function to handle new file upload
-const handleNewFileUpload = (existingFilePath, newFile) => {
-  deleteFileIfExists(existingFilePath);
-  return {
-    filePath: newFile.path,
-    fileName: newFile.originalname
-  };
-};
-
-// Update other test result with file upload
-export const updateOtherTestResult = async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    const { resultId } = req.params;
-    const {
-      testDate,
-      result,
-      notes,
-      status,
-      removeFile
-    } = req.body;
-
-    // Validate resultId
-    const parsedResultId = parseInt(resultId, 10);
-    if (isNaN(parsedResultId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid result ID'
-      });
-    }
-
-    // Check if result exists
-    const resultCheck = await client.query(
-      `SELECT id, patient_id, file_path 
-       FROM investigation_results 
-       WHERE id = $1`,
-      [parsedResultId]
-    );
-
-    if (resultCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Test result not found'
-      });
-    }
-
-    const existingResult = resultCheck.rows[0];
-
-    // Handle file upload/removal - if new file is uploaded, replace old one
-    let filePath = existingResult.file_path;
-    let fileName = null;
-
-    // If removeFile flag is set, clear the file
-    if (removeFile === true || removeFile === 'true') {
-      const fileInfo = handleFileRemoval(filePath);
-      filePath = fileInfo.filePath;
-      fileName = fileInfo.fileName;
-    } else if (req.file) {
-      // New file uploaded - delete old file and use new one
-      const fileInfo = handleNewFileUpload(filePath, req.file);
-      filePath = fileInfo.filePath;
-      fileName = fileInfo.fileName;
-    }
-
-    // Prepare update parameters
-    const updateParams = [
-      testDate || null,
-      result || null,
-      status || null,
-      notes || null,
-      filePath,
-      fileName,
-      parsedResultId
-    ];
-
-    // Update test result
-    const updateQuery = await client.query(
-      `UPDATE investigation_results 
-       SET test_date = COALESCE($1, test_date), 
-           result = COALESCE($2, result), 
-           status = COALESCE($3, status),
-           notes = COALESCE($4, notes),
-           file_path = $5,
-           file_name = $6,
-           updated_at = NOW()
-       WHERE id = $7
-       RETURNING *`,
-      updateParams
-    );
-
-    const updatedResult = updateQuery.rows[0];
-
-    res.json({
-      success: true,
-      message: 'Test result updated successfully',
-      data: {
-        id: updatedResult.id,
-        patientId: updatedResult.patient_id,
-        testType: updatedResult.test_type,
-        testName: updatedResult.test_name,
-        testDate: updatedResult.test_date,
-        result: updatedResult.result,
-        referenceRange: updatedResult.reference_range,
-        status: updatedResult.status,
-        notes: updatedResult.notes,
-        filePath: updatedResult.file_path,
-        fileName: updatedResult.file_name,
-        authorName: updatedResult.author_name,
-        authorRole: updatedResult.author_role,
-        createdAt: updatedResult.created_at,
-        updatedAt: updatedResult.updated_at
-      }
-    });
-
-  } catch (error) {
-    console.error('Update test result error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Internal server error'
-    });
-  } finally {
-    client.release();
-  }
-};
-
 // Add other test result with file upload
 export const addOtherTestResult = async (req, res) => {
   const client = await pool.connect();
@@ -605,7 +459,7 @@ export const addOtherTestResult = async (req, res) => {
     console.error('Add test result error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Internal server error'
+      message: 'Internal server error'
     });
   } finally {
     client.release();

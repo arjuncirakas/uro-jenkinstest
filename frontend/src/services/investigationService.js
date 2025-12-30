@@ -92,52 +92,9 @@ export const investigationService = {
       return { success: true, data: response.data.data };
     } catch (error) {
       console.error('Error adding test result:', error);
-      // Extract error message from response
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Failed to add test result';
       return {
         success: false,
-        error: errorMessage,
-        details: error.response?.data?.errors
-      };
-    }
-  },
-
-  // Update other test result with file upload
-  updateOtherTestResult: async (resultId, testData) => {
-    try {
-      const formData = new FormData();
-      
-      // Add text fields
-      Object.keys(testData).forEach(key => {
-        if (key !== 'testFile' && testData[key] !== null && testData[key] !== undefined) {
-          formData.append(key, testData[key]);
-        }
-      });
-      
-      // Add file if present
-      if (testData.testFile) {
-        formData.append('testFile', testData.testFile);
-      }
-
-      const response = await apiClient.patch(`/test-results/${resultId}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return { success: true, data: response.data.data };
-    } catch (error) {
-      console.error('Error updating test result:', error);
-      // Extract error message from response
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Failed to update test result';
-      return {
-        success: false,
-        error: errorMessage,
+        error: error.response?.data?.message || error.message,
         details: error.response?.data?.errors
       };
     }
@@ -468,11 +425,16 @@ export const investigationService = {
           contentType = extensionMimeTypes[fileExtension] || 'application/octet-stream';
         }
         
+        console.log('Content type:', contentType);
+        console.log('File extension:', fileExtension);
+        console.log('Blob size:', response.data.size, 'bytes');
+        
         // Create blob with proper MIME type
         const blob = new Blob([response.data], { type: contentType });
         
         // Create object URL
         const blobUrl = URL.createObjectURL(blob);
+        console.log('Created blob URL:', blobUrl);
         
         // Determine how to display based on content type
         if (contentType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension)) {
