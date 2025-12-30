@@ -109,7 +109,42 @@ router.get('/patients/:patientId/investigations',
   getInvestigationResults
 );
 
-// Get all investigations
+// IMPORTANT: File serving routes must be registered BEFORE other /investigations routes
+// to avoid route conflicts. Express matches routes in order.
+
+// Handle OPTIONS preflight for file requests with secure origin validation
+router.options('/investigations/files/:filePath(*)', (req, res) => {
+  console.log('🛣️ [investigations route] OPTIONS request for file');
+  setPreflightCorsHeaders(req, res);
+  res.status(200).end();
+});
+
+// Serve investigation files - MUST be before /investigations route
+// Use /investigations/files to avoid conflicts with other routes
+// SSRF Protection: validateFilePathMiddleware prevents path traversal attacks
+// Using :filePath(*) to match paths with slashes (e.g., investigations/file.png)
+router.get('/investigations/files/:filePath(*)',
+  (req, res, next) => {
+    console.log('🛣️ [investigations route] ==========================================');
+    console.log('🛣️ [investigations route] Route matched: /investigations/files/:filePath(*)');
+    console.log('🛣️ [investigations route] Method:', req.method);
+    console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
+    console.log('🛣️ [investigations route] Path:', req.path);
+    console.log('🛣️ [investigations route] Base URL:', req.baseUrl);
+    console.log('🛣️ [investigations route] URL:', req.url);
+    console.log('🛣️ [investigations route] Params:', req.params);
+    console.log('🛣️ [investigations route] filePath param:', req.params.filePath);
+    
+    next();
+  },
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
+  validateFilePathMiddleware('filePath', path.join(process.cwd(), 'uploads')),
+  serveFile
+);
+
+// Get all investigations (must be after /investigations/files route)
 router.get('/investigations',
   generalLimiter,
   authenticateToken,
@@ -125,51 +160,17 @@ router.delete('/investigations/:resultId',
   deleteInvestigationResult
 );
 
-// Handle OPTIONS preflight for file requests with secure origin validation
+// Also support the old route for backward compatibility
 router.options('/files/:filePath(*)', (req, res) => {
-  // Use secure CORS helper that validates origin against allowlist
+  console.log('🛣️ [investigations route] OPTIONS request for /files');
   setPreflightCorsHeaders(req, res);
   res.status(200).end();
 });
 
-// Serve investigation files
-// Use /investigations/files to avoid conflicts with other routes
-// SSRF Protection: validateFilePathMiddleware prevents path traversal attacks
-// Note: Using * wildcard to match paths with slashes (e.g., investigations/file.png)
-router.get('/investigations/files/*',
+router.get('/files/:filePath(*)',
   (req, res, next) => {
-    console.log('🛣️ [investigations route] ==========================================');
-    console.log('🛣️ [investigations route] Route matched: /investigations/files/*');
-    console.log('🛣️ [investigations route] Method:', req.method);
-    console.log('🛣️ [investigations route] Original URL:', req.originalUrl);
-    console.log('🛣️ [investigations route] Path:', req.path);
-    console.log('🛣️ [investigations route] Params:', req.params);
-    console.log('🛣️ [investigations route] req.params[0]:', req.params[0]);
-    
-    // Extract file path from the wildcard match
-    // The * wildcard captures everything after /investigations/files/
-    const matchedPath = req.params[0] || req.path.replace('/investigations/files/', '');
-    console.log('🛣️ [investigations route] Extracted file path:', matchedPath);
-    
-    // Set it as filePath param for the middleware
-    req.params.filePath = matchedPath;
-    console.log('🛣️ [investigations route] Set req.params.filePath:', req.params.filePath);
-    
-    next();
-  },
-  generalLimiter,
-  authenticateToken,
-  requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
-  validateFilePathMiddleware('filePath', path.join(process.cwd(), 'uploads')),
-  serveFile
-);
-
-// Also support the old route for backward compatibility
-router.get('/files/*',
-  (req, res, next) => {
-    console.log('🛣️ [investigations route] Old route matched: /files/*');
-    const matchedPath = req.params[0] || req.path.replace('/files/', '');
-    req.params.filePath = matchedPath;
+    console.log('🛣️ [investigations route] Old route matched: /files/:filePath(*)');
+    console.log('🛣️ [investigations route] filePath param:', req.params.filePath);
     next();
   },
   generalLimiter,
