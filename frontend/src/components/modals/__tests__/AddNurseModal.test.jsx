@@ -1,13 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import AddNurseModal from '../AddNurseModal';
-import { nursesService } from '../../../services/nursesService';
 
+// ALL MOCKS MUST BE AT THE TOP - BEFORE COMPONENT IMPORTS
 // Don't mock BaseUserModal - test with real component to ensure renderExtraFields and handleSubmit execute
 // vi.mock('../BaseUserModal', ...) - REMOVED to test actual component code
 
-// Mock SuccessModal and ErrorModal (required by BaseUserModal)
 vi.mock('../SuccessModal', () => ({
     default: ({ isOpen, message }) => isOpen ? <div data-testid="success-modal">{message}</div> : null
 }));
@@ -16,14 +14,12 @@ vi.mock('../ErrorModal', () => ({
     default: ({ isOpen, message }) => isOpen ? <div data-testid="error-modal">{message}</div> : null
 }));
 
-// Mock nursesService
 vi.mock('../../../services/nursesService', () => ({
     nursesService: {
         createNurse: vi.fn()
     }
 }));
 
-// Mock lucide-react icons - include all icons used by BaseUserModal
 vi.mock('lucide-react', () => ({
     Stethoscope: ({ className }) => <div data-testid="stethoscope-icon" className={className}>Stethoscope</div>,
     Building2: ({ className }) => <div data-testid="building-icon" className={className}>Building2</div>,
@@ -32,6 +28,10 @@ vi.mock('lucide-react', () => ({
     Phone: ({ className }) => <div data-testid="phone-icon" className={className}>Phone</div>,
     User: ({ className }) => <div data-testid="user-icon" className={className}>User</div>
 }));
+
+// NOW import components and services AFTER all mocks
+import AddNurseModal from '../AddNurseModal';
+import { nursesService } from '../../../services/nursesService';
 
 describe('AddNurseModal', () => {
     const mockOnClose = vi.fn();

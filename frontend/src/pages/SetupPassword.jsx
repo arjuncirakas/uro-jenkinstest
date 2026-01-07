@@ -439,7 +439,7 @@ const SetupPassword = () => {
       {showSuccessModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={handleSuccessModalClose}></div>
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={handleSuccessModalClose} data-testid="success-modal-backdrop"></div>
             <div className="relative inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-6 pt-6 pb-4">
                 <div className="flex items-center justify-center mb-4">
@@ -473,6 +473,7 @@ const SetupPassword = () => {
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
             <div
               className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+              data-testid="error-modal-backdrop"
               onClick={() => {
                 // Only allow closing by clicking outside if token is invalid
                 // For other errors, user must click the button to stay on page

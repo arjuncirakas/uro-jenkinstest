@@ -3,15 +3,17 @@
  * Ensures 100% coverage including all branches, error cases, and edge cases
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { printConsentForm, getConsentFormBlobUrl } from '../consentFormUtils';
-import { consentFormService } from '../../services/consentFormService';
 
-// Mock consentFormService
+// ALL MOCKS MUST BE AT THE TOP - BEFORE FUNCTION IMPORTS
 vi.mock('../../services/consentFormService', () => ({
   consentFormService: {
     getConsentFormFile: vi.fn()
   }
 }));
+
+// NOW import functions AFTER all mocks
+import { printConsentForm, getConsentFormBlobUrl } from '../consentFormUtils';
+import { consentFormService } from '../../services/consentFormService';
 
 describe('consentFormUtils', () => {
   let mockWindow;

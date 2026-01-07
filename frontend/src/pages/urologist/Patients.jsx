@@ -161,7 +161,7 @@ const Patients = () => {
     patientDetailsModalRef.current?.openPatientDetails(patient.name, null, category);
   };
 
-  const handleTransferSuccess = (patientId, newPathway) => {
+  const handleTransferSuccess = async (patientId, newPathway) => {
     console.log('🔄 handleTransferSuccess called:', { patientId, newPathway, currentCategory: category });
 
     // Immediately remove patient from current list if they don't belong in this category anymore

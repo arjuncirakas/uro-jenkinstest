@@ -12,9 +12,12 @@
     "test:e2e:update-snapshots": "playwright test --update-snapshots",
     "test:coverage:frontend": "cd frontend && npm run test:coverage -- --run",
     "test:coverage:backend": "cd backend && npm run test:coverage",
-    "test:coverage:all": "npm run test:coverage:frontend && npm run test:coverage:backend",
+    "test:coverage:all": "npm run test:coverage:frontend && npm run test:coverage:backend && npm run fix:lcov-paths",
     "fix:lcov-paths": "node scripts/fix-lcov-paths.js",
-    "sonar:scan": "npm run test:coverage:all && npm run fix:lcov-paths && generate-coverage-and-scan.bat"
+    "check:coverage-paths": "node scripts/check-coverage-paths.js",
+    "sonar:prepare": "node scripts/prepare-sonar-scan.js",
+    "sonar:verify": "node scripts/verify-coverage.js",
+    "sonar:scan": "npm run sonar:prepare && generate-coverage-and-scan.bat"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0"

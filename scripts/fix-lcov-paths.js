@@ -1,9 +1,3 @@
-#!/usr/bin/env node
-/**
- * Script to fix absolute paths in lcov.info files to relative paths
- * This ensures SonarQube can properly match coverage data with source files
- */
-
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,116 +6,218 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
-function normalizeLcovPaths(filePath) {
-  if (!fs.existsSync(filePath)) {
-    console.log(`File not found: ${filePath}`);
-    return;
+/**
+ * Fix paths in LCOV file to be relative to project root
+ * @param {string} lcovPath - Path to the LCOV file
+ * @param {string} prefix - Prefix to add to paths (e.g., 'backend' or 'frontend/src')
+ * @param {string} baseDir - Base directory for resolving relative paths (e.g., 'backend' or 'frontend')
+ */
+function fixLcovPaths(lcovPath, prefix, baseDir = null) {
+  if (!fs.existsSync(lcovPath)) {
+    console.log(`⚠️  Coverage file not found: ${lcovPath}`);
+    return false;
   }
 
-  console.log(`Processing: ${filePath}`);
-  let content = fs.readFileSync(filePath, 'utf8');
-  const originalContent = content;
+  console.log(`📝 Fixing paths in: ${lcovPath}`);
+  console.log(`   Adding prefix: ${prefix}`);
 
-  // Get the directory of the lcov file
-  const lcovDir = path.dirname(filePath);
+  let content = fs.readFileSync(lcovPath, 'utf8');
+  let modified = false;
+  let lineCount = 0;
 
-  // Normalize paths: convert absolute Windows paths to relative paths
-  // Match patterns like: SF:D:\Work Files\latesturology\frontend\src\...
-  // or: SF:D:/Work Files/latesturology/backend/controllers/...
-  const absolutePathPattern = /^SF:(.+)$/gm;
+  // Get the directory containing the lcov file for resolving relative paths
+  const lcovDir = path.dirname(lcovPath);
+  const baseDirPath = baseDir ? path.join(projectRoot, baseDir) : lcovDir;
 
-  // Determine prefix based on lcov file location
-  const isFrontendCoverage = filePath.includes('frontend');
-  const isBackendCoverage = filePath.includes('backend') && !filePath.includes('frontend');
-
-  content = content.replace(absolutePathPattern, (match, srcFilePath) => {
-    // Normalize path separators FIRST - convert all backslashes to forward slashes
-    let normalizedPath = srcFilePath.replace(/\\/g, '/');
-
-    // Check if path is already relative and correct
-    if (normalizedPath.startsWith('frontend/src/') || normalizedPath.startsWith('backend/')) {
-      return `SF:${normalizedPath}`; // Already correct, but ensure SF: prefix
-    }
-
-    // Handle paths that start with 'src/' - these are from frontend coverage run from frontend directory
-    if (normalizedPath.startsWith('src/') && isFrontendCoverage) {
-      return `SF:frontend/${normalizedPath}`;
-    }
-
-    // Handle paths that start with controllers/, middleware/, etc. - these are from backend coverage
-    const backendDirs = ['controllers/', 'middleware/', 'routes/', 'services/', 'utils/', 'schedulers/'];
-    for (const dir of backendDirs) {
-      if (normalizedPath.startsWith(dir)) {
-        return `SF:backend/${normalizedPath}`;
+  // Split into lines and process each line
+  const lines = content.split('\n');
+  const fixedLines = lines.map((line) => {
+    // Match SF: (source file) lines
+    if (line.startsWith('SF:')) {
+      const filePath = line.substring(3); // Remove 'SF:' prefix
+      
+      // Normalize backslashes to forward slashes FIRST
+      let normalizedPath = filePath.replace(/\\/g, '/');
+      
+      // Skip if already has the correct prefix (after normalization)
+      if (normalizedPath.startsWith(prefix + '/')) {
+        return line;
       }
-    }
-
-    // Handle absolute Windows paths (e.g., D:/Work Files/... or D:\\Work Files\\...)
-    if (/^[A-Z]:/.test(normalizedPath)) {
-      // Remove drive letter
-      normalizedPath = normalizedPath.replace(/^[A-Z]:/, '');
-    }
-
-    // Try to extract the relevant part from the path using safe string operations
-    // Avoid regex to prevent DoS vulnerabilities from catastrophic backtracking
-    const frontendMarker = 'frontend/src/';
-    const frontendIndex = normalizedPath.indexOf(frontendMarker);
-    if (frontendIndex !== -1) {
-      const relativePath = normalizedPath.substring(frontendIndex);
-      return `SF:${relativePath}`;
-    }
-
-    const backendMarker = 'backend/';
-    const backendIndex = normalizedPath.indexOf(backendMarker);
-    if (backendIndex !== -1) {
-      let relativePath = normalizedPath.substring(backendIndex);
-      // Remove 'coverage/' from paths like 'backend/coverage/controllers/...'
-      relativePath = relativePath.replace('backend/coverage/', 'backend/');
-      return `SF:${relativePath}`;
-    }
-
-    // Try to convert to relative path from project root
-    try {
-      // Handle both absolute and relative paths
-      let absolutePath;
+      
+      // Handle absolute paths - convert to relative
       if (path.isAbsolute(filePath)) {
-        absolutePath = filePath;
-      } else {
-        absolutePath = path.resolve(lcovDir, filePath);
+        // Try to make it relative to project root
+        try {
+          normalizedPath = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+        } catch (e) {
+          // If that fails, try relative to baseDir
+          if (baseDir) {
+            try {
+              normalizedPath = path.relative(baseDirPath, filePath).replace(/\\/g, '/');
+            } catch (e2) {
+              console.warn(`⚠️  Could not normalize absolute path: ${filePath}`);
+            }
+          }
+        }
       }
-
-      const relativePath = path.relative(projectRoot, absolutePath).replace(/\\/g, '/');
-
-      // Ensure paths match SonarQube expectations
-      if (relativePath.startsWith('frontend/src/') || relativePath.startsWith('backend/')) {
-        return `SF:${relativePath}`;
+      
+      // Remove leading ./ or .\ if present
+      normalizedPath = normalizedPath.replace(/^\.\//, '').replace(/^\.\\/, '');
+      
+      // For backend: detect all backend files comprehensively
+      if (prefix === 'backend') {
+        // Check if it's a backend file (server.js or files in backend directories)
+        const isBackendFile = normalizedPath === 'server.js' || 
+          normalizedPath.match(/^(config|controllers|middleware|services|schedulers|utils|routes)\//);
+        
+        if (isBackendFile && !normalizedPath.startsWith('backend/')) {
+          normalizedPath = `backend/${normalizedPath}`;
+          modified = true;
+          lineCount++;
+        }
       }
+      // For frontend: handle frontend paths
+      else if (prefix === 'frontend/src') {
+        // Handle paths like 'src/components/...' -> 'frontend/src/components/...'
+        if (normalizedPath.startsWith('src/') && !normalizedPath.startsWith('frontend/')) {
+          normalizedPath = `frontend/${normalizedPath}`;
+          modified = true;
+          lineCount++;
+        }
+        // Handle absolute paths that might include 'frontend/src' already
+        else if (normalizedPath.includes('frontend/src/')) {
+          // Extract the part after 'frontend/src/'
+          const match = normalizedPath.match(/frontend\/src\/(.+)$/);
+          if (match) {
+            normalizedPath = `frontend/src/${match[1]}`;
+            modified = true;
+            lineCount++;
+          }
+        }
+        // Handle paths that are already relative to frontend directory but missing prefix
+        else if (!normalizedPath.startsWith('frontend/') && !normalizedPath.startsWith('src/')) {
+          normalizedPath = `${prefix}/${normalizedPath}`;
+          modified = true;
+          lineCount++;
+        }
+      }
+      
+      // Ensure we use forward slashes (redundant but safe)
+      normalizedPath = normalizedPath.replace(/\\/g, '/');
 
-      // Fallback: return as-is if we can't normalize
-      console.warn(`Warning: Could not normalize path: ${filePath}`);
-      return match;
-    } catch (error) {
-      console.warn(`Warning: Error processing path ${filePath}: ${error.message}`);
-      return match;
+      return `SF:${normalizedPath}`;
     }
+
+    return line;
   });
 
-  if (content !== originalContent) {
-    fs.writeFileSync(filePath, content, 'utf8');
-    console.log(`✓ Fixed paths in ${filePath}`);
+  if (modified) {
+    fs.writeFileSync(lcovPath, fixedLines.join('\n'), 'utf8');
+    console.log(`✅ Fixed ${lineCount} paths in ${lcovPath}`);
+    return true;
   } else {
-    console.log(`✓ No changes needed in ${filePath}`);
+    console.log(`ℹ️  No changes needed in ${lcovPath}`);
+    return false;
   }
 }
 
-// Process all lcov.info files
-const lcovFiles = [
-  path.join(projectRoot, 'frontend', 'coverage', 'lcov.info'),
-  path.join(projectRoot, 'backend', 'coverage', 'lcov.info'),
-  path.join(projectRoot, 'coverage', 'lcov.info')
-];
+// Main execution
+console.log('🔧 Fixing LCOV file paths for SonarQube...\n');
 
-console.log('Fixing lcov.info file paths...\n');
-lcovFiles.forEach(normalizeLcovPaths);
-console.log('\nDone!');
+let anyFixed = false;
 
+// Fix backend coverage
+const backendLcov = path.join(projectRoot, 'backend', 'coverage', 'lcov.info');
+if (fixLcovPaths(backendLcov, 'backend', 'backend')) {
+  anyFixed = true;
+}
+
+// Fix frontend coverage
+const frontendLcov = path.join(projectRoot, 'frontend', 'coverage', 'lcov.info');
+if (fixLcovPaths(frontendLcov, 'frontend/src', 'frontend')) {
+  anyFixed = true;
+}
+
+// Fix root coverage (if it exists, ensure paths are correct)
+// Root coverage might have mixed backend and frontend files
+const rootLcov = path.join(projectRoot, 'coverage', 'lcov.info');
+if (fs.existsSync(rootLcov)) {
+  console.log(`\n📝 Checking root coverage file: ${rootLcov}`);
+  let content = fs.readFileSync(rootLcov, 'utf8');
+  const lines = content.split('\n');
+  let needsFix = false;
+  let fixedContent = [];
+  let lineCount = 0;
+  
+  lines.forEach((line) => {
+    if (line.startsWith('SF:')) {
+      const filePath = line.substring(3);
+      // Normalize backslashes to forward slashes FIRST
+      let normalizedPath = filePath.replace(/\\/g, '/');
+      const originalNormalized = normalizedPath;
+      
+      // Handle absolute paths - convert to relative
+      if (path.isAbsolute(filePath)) {
+        try {
+          normalizedPath = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+        } catch (e) {
+          // Keep original if can't resolve
+        }
+      }
+      
+      // Remove leading ./ or .\ if present
+      normalizedPath = normalizedPath.replace(/^\.\//, '').replace(/^\.\\/, '');
+      
+      // Check if it's a backend file (server.js or files in backend directories)
+      const isBackendFile = normalizedPath === 'server.js' || 
+        normalizedPath.match(/^(config|controllers|middleware|services|schedulers|utils|routes)\//);
+      
+      // Check if it's a frontend file
+      const isFrontendFile = normalizedPath.startsWith('src/') || 
+        normalizedPath.startsWith('frontend/src/');
+      
+      // Fix backend files
+      if (isBackendFile && !normalizedPath.startsWith('backend/')) {
+        normalizedPath = `backend/${normalizedPath}`;
+        needsFix = true;
+        lineCount++;
+      }
+      // Fix frontend files
+      else if (isFrontendFile && !normalizedPath.startsWith('frontend/')) {
+        if (normalizedPath.startsWith('src/')) {
+          normalizedPath = `frontend/${normalizedPath}`;
+        } else if (normalizedPath.startsWith('frontend/src/')) {
+          // Already correct, but ensure format is consistent
+          normalizedPath = normalizedPath;
+        }
+        needsFix = true;
+        lineCount++;
+      }
+      
+      // Ensure we use forward slashes
+      normalizedPath = normalizedPath.replace(/\\/g, '/');
+      
+      if (normalizedPath !== originalNormalized) {
+        fixedContent.push(`SF:${normalizedPath}`);
+      } else {
+        fixedContent.push(line);
+      }
+    } else {
+      fixedContent.push(line);
+    }
+  });
+  
+  if (needsFix) {
+    fs.writeFileSync(rootLcov, fixedContent.join('\n'), 'utf8');
+    console.log(`✅ Fixed ${lineCount} paths in root coverage file`);
+    anyFixed = true;
+  } else {
+    console.log(`ℹ️  Root coverage file paths are already correct`);
+  }
+}
+
+if (anyFixed) {
+  console.log('\n✅ LCOV path fixing completed!');
+} else {
+  console.log('\nℹ️  All LCOV files already have correct paths.');
+}

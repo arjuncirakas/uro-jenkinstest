@@ -17,11 +17,13 @@ jest.unstable_mockModule('../services/emailService.js', () => ({
     sendPasswordEmail: mockEmailService.sendPasswordEmail
 }));
 
+const mockValidationResult = jest.fn(() => ({
+    isEmpty: () => true,
+    array: () => []
+}));
+
 jest.unstable_mockModule('express-validator', () => ({
-    validationResult: jest.fn(() => ({
-        isEmpty: () => true,
-        array: () => []
-    }))
+    validationResult: mockValidationResult
 }));
 
 describe('GP Controller', () => {
@@ -78,6 +80,82 @@ describe('GP Controller', () => {
             }));
         });
 
+        it('should return inactive GPs when is_active is false', async () => {
+            const req = { query: { is_active: 'false' } };
+            const res = {
+                json: jest.fn()
+            };
+
+            const mockGPs = [
+                {
+                    id: 2,
+                    email: 'gp2@example.com',
+                    first_name: 'Jane',
+                    last_name: 'Smith',
+                    phone: '0987654321',
+                    organization: 'Test Org 2',
+                    role: 'gp',
+                    is_active: false,
+                    is_verified: true,
+                    created_at: new Date(),
+                    last_login_at: new Date()
+                }
+            ];
+
+            mockClient.query.mockResolvedValue({ rows: mockGPs });
+
+            await gpController.getAllGPs(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith(
+                expect.stringContaining('WHERE role = \'gp\' AND is_active = $1'),
+                [false]
+            );
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                data: expect.arrayContaining([
+                    expect.objectContaining({
+                        id: 2,
+                        email: 'gp2@example.com'
+                    })
+                ])
+            }));
+        });
+
+        it('should default to active GPs when is_active is not provided', async () => {
+            const req = { query: {} };
+            const res = {
+                json: jest.fn()
+            };
+
+            const mockGPs = [
+                {
+                    id: 1,
+                    email: 'gp1@example.com',
+                    first_name: 'John',
+                    last_name: 'Doe',
+                    phone: '1234567890',
+                    organization: 'Test Org',
+                    role: 'gp',
+                    is_active: true,
+                    is_verified: true,
+                    created_at: new Date(),
+                    last_login_at: new Date()
+                }
+            ];
+
+            mockClient.query.mockResolvedValue({ rows: mockGPs });
+
+            await gpController.getAllGPs(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith(
+                expect.stringContaining('WHERE role = \'gp\' AND is_active = $1'),
+                [true]
+            );
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true
+            }));
+        });
+
         it('should handle errors', async () => {
             const req = { query: {} };
             const res = {
@@ -130,6 +208,24 @@ describe('GP Controller', () => {
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
                 error: 'GP not found'
+            });
+        });
+
+        it('should handle database errors', async () => {
+            const req = { params: { id: 1 } };
+            const res = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            };
+
+            mockClient.query.mockRejectedValue(new Error('DB Error'));
+
+            await gpController.getGPById(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                error: 'Failed to fetch GP'
             });
         });
     });
@@ -240,6 +336,113 @@ describe('GP Controller', () => {
             }));
         });
 
+        it('should handle validation errors', async () => {
+            mockValidationResult.mockReturnValueOnce({
+                isEmpty: () => false,
+                array: () => [{ path: 'email', msg: 'Invalid email' }]
+            });
+
+            const req = {
+                body: {
+                    first_name: 'Jane',
+                    last_name: 'Doe',
+                    email: 'invalid-email',
+                    phone: '0987654321'
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }); // BEGIN
+
+            await gpController.createGP(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: false,
+                error: 'Validation failed'
+            }));
+        });
+
+        it('should handle email sending failure', async () => {
+            const req = {
+                body: {
+                    first_name: 'Jane',
+                    last_name: 'Doe',
+                    email: 'jane@example.com',
+                    phone: '0987654321',
+                    organization: 'New Org'
+                }
+            };
+            const res = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            };
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }) // BEGIN
+                .mockResolvedValueOnce({ rows: [] }) // Email check
+                .mockResolvedValueOnce({ rows: [] }) // Phone check
+                .mockResolvedValueOnce({
+                    rows: [{
+                        id: 2,
+                        email: 'jane@example.com',
+                        first_name: 'Jane',
+                        last_name: 'Doe',
+                        role: 'gp'
+                    }]
+                }) // Insert
+                .mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+            mockEmailService.sendPasswordEmail.mockResolvedValue({ 
+                success: false, 
+                error: 'Email service unavailable' 
+            });
+
+            await gpController.createGP(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                data: expect.objectContaining({
+                    emailSent: false,
+                    emailError: 'Email service unavailable',
+                    tempPassword: expect.any(String)
+                })
+            }));
+        });
+
+        it('should handle database error code 23505 (unique constraint)', async () => {
+            const req = {
+                body: {
+                    first_name: 'Jane',
+                    last_name: 'Doe',
+                    email: 'jane@example.com',
+                    phone: '0987654321'
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            const dbError = new Error('Duplicate key');
+            dbError.code = '23505';
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }) // BEGIN
+                .mockResolvedValueOnce({ rows: [] }) // Email check
+                .mockResolvedValueOnce({ rows: [] }) // Phone check
+                .mockRejectedValueOnce(dbError); // Insert fails with unique constraint
+
+            await gpController.createGP(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+            expect(res.status).toHaveBeenCalledWith(409);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: false,
+                error: 'GP with this email or phone already exists'
+            }));
+        });
+
         it('should handle database error during creation', async () => {
             const req = { body: {} };
             const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -336,6 +539,170 @@ describe('GP Controller', () => {
                 error: 'Phone number is already in use'
             }));
         });
+
+        it('should return 404 when GP not found', async () => {
+            const req = {
+                params: { id: 999 },
+                body: { first_name: 'Updated' }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }) // BEGIN
+                .mockResolvedValueOnce({ rows: [] }); // Get existing (not found)
+
+            await gpController.updateGP(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+            expect(res.status).toHaveBeenCalledWith(404);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: false,
+                error: 'GP not found'
+            }));
+        });
+
+        it('should handle validation errors', async () => {
+            mockValidationResult.mockReturnValueOnce({
+                isEmpty: () => false,
+                array: () => [{ path: 'email', msg: 'Invalid email' }]
+            });
+
+            const req = {
+                params: { id: 1 },
+                body: { email: 'invalid-email' }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }); // BEGIN
+
+            await gpController.updateGP(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: false,
+                error: 'Validation failed'
+            }));
+        });
+
+        it('should update GP without changing email', async () => {
+            const req = {
+                params: { id: 1 },
+                body: {
+                    first_name: 'Updated',
+                    last_name: 'Name'
+                    // No email provided, so it should keep the same
+                }
+            };
+            const res = {
+                json: jest.fn()
+            };
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }) // BEGIN
+                .mockResolvedValueOnce({ rows: [{ email: 'old@example.com', is_active: true }] }) // Get existing
+                .mockResolvedValueOnce({
+                    rows: [{
+                        id: 1,
+                        first_name: 'Updated',
+                        last_name: 'Name',
+                        email: 'old@example.com'
+                    }]
+                }) // Update
+                .mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+            await gpController.updateGP(req, res);
+
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                message: 'GP updated successfully'
+            }));
+        });
+
+        it('should update GP with is_active change', async () => {
+            const req = {
+                params: { id: 1 },
+                body: {
+                    first_name: 'Updated',
+                    is_active: false
+                }
+            };
+            const res = {
+                json: jest.fn()
+            };
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }) // BEGIN
+                .mockResolvedValueOnce({ rows: [{ email: 'old@example.com', is_active: true }] }) // Get existing
+                .mockResolvedValueOnce({
+                    rows: [{
+                        id: 1,
+                        first_name: 'Updated',
+                        email: 'old@example.com',
+                        is_active: false
+                    }]
+                }) // Update
+                .mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+            await gpController.updateGP(req, res);
+
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                message: 'GP updated successfully'
+            }));
+        });
+
+        it('should handle database error code 23505 (unique constraint)', async () => {
+            const req = {
+                params: { id: 1 },
+                body: {
+                    first_name: 'Updated',
+                    email: 'existing@example.com'
+                }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            const dbError = new Error('Duplicate key');
+            dbError.code = '23505';
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }) // BEGIN
+                .mockResolvedValueOnce({ rows: [{ email: 'old@example.com', is_active: true }] }) // Get existing
+                .mockResolvedValueOnce({ rows: [] }) // Check email unique
+                .mockRejectedValueOnce(dbError); // Update fails with unique constraint
+
+            await gpController.updateGP(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+            expect(res.status).toHaveBeenCalledWith(409);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: false,
+                error: 'GP with this email or phone already exists'
+            }));
+        });
+
+        it('should handle database errors', async () => {
+            const req = {
+                params: { id: 1 },
+                body: { first_name: 'Updated' }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            mockClient.query
+                .mockResolvedValueOnce({ rows: [] }) // BEGIN
+                .mockResolvedValueOnce({ rows: [{ email: 'old@example.com', is_active: true }] }) // Get existing
+                .mockRejectedValueOnce(new Error('DB Error')); // Update fails
+
+            await gpController.updateGP(req, res);
+
+            expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: false,
+                error: 'Failed to update GP'
+            }));
+        });
     });
 
 
@@ -353,6 +720,42 @@ describe('GP Controller', () => {
             expect(res.json).toHaveBeenCalledWith({
                 success: true,
                 message: 'GP deleted successfully'
+            });
+        });
+
+        it('should return 404 when GP not found', async () => {
+            const req = { params: { id: 999 } };
+            const res = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            };
+
+            mockClient.query.mockResolvedValue({ rows: [] });
+
+            await gpController.deleteGP(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(404);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                error: 'GP not found'
+            });
+        });
+
+        it('should handle database errors', async () => {
+            const req = { params: { id: 1 } };
+            const res = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            };
+
+            mockClient.query.mockRejectedValue(new Error('DB Error'));
+
+            await gpController.deleteGP(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                error: 'Failed to delete GP'
             });
         });
     });

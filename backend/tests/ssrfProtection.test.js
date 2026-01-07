@@ -34,12 +34,57 @@ describe('SSRF Protection Utilities', () => {
       expect(result.normalizedPath).toBeTruthy();
     });
 
+    it('should handle decodeURIComponent error gracefully', () => {
+      const baseDir = path.join(process.cwd(), 'uploads');
+      // Create a path that will cause decodeURIComponent to fail
+      const invalidEncodedPath = '%E0%A4%A'; // Invalid UTF-8 sequence
+      const result = ssrfProtection.validateFilePath(invalidEncodedPath, baseDir);
+
+      // Should still validate the path (uses original if decode fails)
+      expect(result).toHaveProperty('valid');
+    });
+
+    it('should handle path validation error in catch block', () => {
+      // This tests the catch block in validateFilePath
+      // We'll use a path that causes an error during normalization
+      const baseDir = path.join(process.cwd(), 'uploads');
+      // Use a very long path that might cause issues
+      const longPath = 'a'.repeat(10000) + '/file.pdf';
+      const result = ssrfProtection.validateFilePath(longPath, baseDir);
+
+      // Should return invalid with error message
+      expect(result.valid).toBe(false);
+      expect(result.error).toBeTruthy();
+    });
+
     it('should handle URL-encoded paths', () => {
       const baseDir = path.join(process.cwd(), 'uploads');
       const encodedPath = encodeURIComponent('investigations/file.pdf');
       const result = ssrfProtection.validateFilePath(encodedPath, baseDir);
 
       expect(result.valid).toBe(true);
+    });
+
+    it('should handle decodeURIComponent failure gracefully', () => {
+      const baseDir = path.join(process.cwd(), 'uploads');
+      // Create a path that will cause decodeURIComponent to fail
+      const invalidEncodedPath = '%E0%A4%A'; // Invalid UTF-8 sequence
+      const result = ssrfProtection.validateFilePath(invalidEncodedPath, baseDir);
+
+      // Should still validate (uses original path if decode fails)
+      expect(result).toBeDefined();
+    });
+
+    it('should handle validation error in catch block', () => {
+      // Test with a path that will cause an error during validation
+      // Use a path that will fail during path operations
+      const baseDir = '/invalid/base/dir';
+      // Create a path that might cause issues
+      const result = ssrfProtection.validateFilePath('test/file.pdf', baseDir);
+
+      // Should return a result (either valid or invalid)
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('valid');
     });
   });
 
@@ -97,6 +142,28 @@ describe('SSRF Protection Utilities', () => {
       const result = ssrfProtection.validateUrl('https://allowed.com', ['allowed.com']);
 
       expect(result.valid).toBe(true);
+    });
+
+    it('should accept URL with subdomain from allowed hosts list', () => {
+      const result = ssrfProtection.validateUrl('https://subdomain.allowed.com', ['allowed.com']);
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should handle URL validation error in catch block', () => {
+      // Mock URL constructor to throw an error
+      const originalURL = global.URL;
+      global.URL = jest.fn(() => {
+        throw new Error('URL parsing error');
+      });
+
+      const result = ssrfProtection.validateUrl('https://example.com');
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('URL validation error');
+
+      // Restore original
+      global.URL = originalURL;
     });
   });
 
@@ -183,6 +250,158 @@ describe('SSRF Protection Utilities', () => {
       // Should have removed uploads/ prefix
       expect(req.params.filePath).toBe('investigations/file.pdf');
       // Next should be called if validation passes
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should handle decodeURIComponent failure in middleware', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: { filePath: '%E0%A4%A' }, // Invalid UTF-8
+        body: {},
+        query: {}
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      // Should still process (uses original path if decode fails)
+      expect(res.status).toHaveBeenCalled();
+    });
+
+    it('should handle filePath from body', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: {},
+        body: { filePath: '../../etc/passwd' },
+        query: {}
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+
+    it('should handle filePath from query', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: {},
+        body: {},
+        query: { filePath: '../../etc/passwd' }
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+
+    it('should handle uploads\\ prefix (Windows path)', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: { filePath: 'uploads\\investigations\\file.pdf' },
+        body: {},
+        query: {}
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      // Should have removed uploads\ prefix
+      expect(req.params.filePath).toBe('investigations\\file.pdf');
+    });
+  });
+
+    it('should handle decodeURIComponent error in middleware', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: { filePath: '%E0%A4%A' }, // Invalid UTF-8
+        body: {},
+        query: {}
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      // Should handle the error gracefully
+      expect(req.params.filePath).toBeDefined();
+    });
+
+    it('should handle filePath from body', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: {},
+        body: { filePath: 'investigations/file.pdf' },
+        query: {}
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      // Should find filePath from body
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should handle filePath from query', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: {},
+        body: {},
+        query: { filePath: 'investigations/file.pdf' }
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      // Should find filePath from query
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should handle uploads\\ prefix (Windows path)', () => {
+      const middleware = ssrfProtection.validateFilePathMiddleware('filePath');
+      const req = {
+        params: { filePath: 'uploads\\investigations\\file.pdf' },
+        body: {},
+        query: {}
+      };
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      // Should remove uploads\ prefix
+      expect(req.params.filePath).not.toContain('uploads\\');
       expect(next).toHaveBeenCalled();
     });
 

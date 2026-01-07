@@ -537,7 +537,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }

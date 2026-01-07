@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import AdminSidebarLayout from '../AdminSidebarLayout';
 import { BarChart3, Download } from 'lucide-react';
 import React from 'react';
 
-// Mock services
+// ALL MOCKS MUST BE AT THE TOP - BEFORE COMPONENT IMPORTS
 vi.mock('../../services/authService.js', () => ({
     default: {
         logout: vi.fn().mockResolvedValue(true),
@@ -29,6 +28,9 @@ vi.mock('react-router-dom', async () => {
         Outlet: () => <div data-testid="outlet">Page Content</div>
     };
 });
+
+// NOW import component AFTER all mocks
+import AdminSidebarLayout from '../AdminSidebarLayout';
 
 describe('AdminSidebarLayout', () => {
     const mockNavigation = [

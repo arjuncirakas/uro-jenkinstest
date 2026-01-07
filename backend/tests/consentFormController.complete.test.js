@@ -75,6 +75,378 @@ describe('Consent Form Controller - Complete Coverage Tests', () => {
     consentFormController = await import('../controllers/consentFormController.js');
   });
 
+  describe('getConsentFormTemplates', () => {
+    it('should retrieve all consent form templates successfully', async () => {
+      const mockTemplates = [
+        {
+          id: 1,
+          name: 'Biopsy',
+          procedure_name: 'Biopsy',
+          test_name: null,
+          is_auto_generated: false,
+          template_file_path: 'uploads/consent-forms/templates/template-1.pdf',
+          template_file_name: 'Biopsy.pdf',
+          template_file_size: 1024,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01'
+        },
+        {
+          id: 2,
+          name: 'MRI',
+          procedure_name: null,
+          test_name: 'MRI',
+          is_auto_generated: true,
+          template_file_path: null,
+          template_file_name: null,
+          template_file_size: null,
+          created_at: '2024-01-02',
+          updated_at: '2024-01-02'
+        }
+      ];
+
+      mockClient.query.mockResolvedValue({ rows: mockTemplates });
+
+      await consentFormController.getConsentFormTemplates(mockReq, mockRes);
+
+      expect(mockClient.query).toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Consent form templates retrieved successfully',
+        data: {
+          templates: expect.arrayContaining([
+            expect.objectContaining({
+              id: 1,
+              template_file_url: expect.stringContaining('/api/consent-forms/files/')
+            }),
+            expect.objectContaining({
+              id: 2,
+              template_file_url: null
+            })
+          ])
+        }
+      });
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('should handle templates with Windows path separators', async () => {
+      const mockTemplates = [
+        {
+          id: 1,
+          name: 'Test',
+          procedure_name: 'Test',
+          test_name: null,
+          is_auto_generated: false,
+          template_file_path: 'uploads\\consent-forms\\templates\\test.pdf',
+          template_file_name: 'test.pdf',
+          template_file_size: 1024,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01'
+        }
+      ];
+
+      mockClient.query.mockResolvedValue({ rows: mockTemplates });
+
+      await consentFormController.getConsentFormTemplates(mockReq, mockRes);
+
+      const responseData = mockRes.json.mock.calls[0][0];
+      expect(responseData.data.templates[0].template_file_url).toContain('consent-forms/templates/test.pdf');
+    });
+
+    it('should handle templates with uploads/ prefix', async () => {
+      const mockTemplates = [
+        {
+          id: 1,
+          name: 'Test',
+          procedure_name: 'Test',
+          test_name: null,
+          is_auto_generated: false,
+          template_file_path: 'uploads/consent-forms/templates/test.pdf',
+          template_file_name: 'test.pdf',
+          template_file_size: 1024,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01'
+        }
+      ];
+
+      mockClient.query.mockResolvedValue({ rows: mockTemplates });
+
+      await consentFormController.getConsentFormTemplates(mockReq, mockRes);
+
+      const responseData = mockRes.json.mock.calls[0][0];
+      expect(responseData.data.templates[0].template_file_url).not.toContain('uploads/uploads/');
+    });
+
+    it('should handle empty templates list', async () => {
+      mockClient.query.mockResolvedValue({ rows: [] });
+
+      await consentFormController.getConsentFormTemplates(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Consent form templates retrieved successfully',
+        data: { templates: [] }
+      });
+    });
+
+    it('should handle database errors', async () => {
+      const dbError = new Error('Database connection failed');
+      mockClient.query.mockRejectedValue(dbError);
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await consentFormController.getConsentFormTemplates(mockReq, mockRes);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching consent form templates:', dbError);
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Failed to fetch consent form templates',
+        error: 'Database connection failed'
+      });
+      expect(mockClient.release).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('createConsentFormTemplate', () => {
+    it('should create template successfully with procedure_name and file', async () => {
+      mockReq.body = {
+        procedure_name: 'Biopsy',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        originalname: 'Biopsy Template.pdf',
+        size: 2048
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] }) // No existing template
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Biopsy',
+            procedure_name: 'Biopsy',
+            test_name: null,
+            is_auto_generated: false,
+            template_file_path: 'uploads/consent-forms/templates/template-123.pdf',
+            template_file_name: 'Biopsy Template.pdf',
+            template_file_size: 2048
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Consent form template created successfully',
+        data: {
+          template: expect.objectContaining({
+            name: 'Biopsy',
+            template_file_url: expect.stringContaining('/api/consent-forms/files/')
+          })
+        }
+      });
+    });
+
+    it('should create template successfully with test_name and auto-generated', async () => {
+      mockReq.body = {
+        procedure_name: null,
+        test_name: 'MRI',
+        is_auto_generated: 'true'
+      };
+      mockReq.file = null;
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] }) // No existing template
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 2,
+            name: 'MRI',
+            procedure_name: null,
+            test_name: 'MRI',
+            is_auto_generated: true,
+            template_file_path: null,
+            template_file_name: null,
+            template_file_size: null
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      const responseData = mockRes.json.mock.calls[0][0];
+      expect(responseData.data.template.template_file_url).toBeNull();
+    });
+
+    it('should return 400 when neither procedure_name nor test_name provided', async () => {
+      mockReq.body = {
+        procedure_name: '',
+        test_name: '',
+        is_auto_generated: 'false'
+      };
+      mockReq.file = null;
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Either procedure name or test name is required'
+      });
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('should return 400 when procedure_name is null and test_name is null', async () => {
+      mockReq.body = {
+        procedure_name: null,
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = null;
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('should return 400 when file is required but not provided', async () => {
+      mockReq.body = {
+        procedure_name: 'Biopsy',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = null;
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Template file is required when auto-generation is disabled'
+      });
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('should return 400 when template already exists', async () => {
+      mockReq.body = {
+        procedure_name: 'Biopsy',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        originalname: 'Biopsy.pdf',
+        size: 1024
+      };
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: 1 }] // Existing template found
+      });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'A template with this name already exists'
+      });
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('should handle is_auto_generated as boolean true', async () => {
+      mockReq.body = {
+        procedure_name: 'MRI',
+        test_name: null,
+        is_auto_generated: true
+      };
+      mockReq.file = null;
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'MRI',
+            procedure_name: 'MRI',
+            test_name: null,
+            is_auto_generated: true,
+            template_file_path: null,
+            template_file_name: null,
+            template_file_size: null
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+    });
+
+    it('should handle database errors', async () => {
+      mockReq.body = {
+        procedure_name: 'Biopsy',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        originalname: 'Biopsy.pdf',
+        size: 1024
+      };
+
+      mockClient.query.mockRejectedValueOnce(new Error('Database error'));
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error creating consent form template:', expect.any(Error));
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockClient.release).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should handle template with Windows path in file path', async () => {
+      mockReq.body = {
+        procedure_name: 'Test',
+        test_name: null,
+        is_auto_generated: 'false'
+      };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        originalname: 'Test.pdf',
+        size: 1024
+      };
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Test',
+            procedure_name: 'Test',
+            test_name: null,
+            is_auto_generated: false,
+            template_file_path: 'uploads\\consent-forms\\templates\\template-123.pdf',
+            template_file_name: 'Test.pdf',
+            template_file_size: 1024
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      const responseData = mockRes.json.mock.calls[0][0];
+      expect(responseData.data.template.template_file_url).toContain('consent-forms/templates/template-123.pdf');
+    });
+  });
+
   describe('updateConsentFormTemplate', () => {
     it('should update template successfully without file', async () => {
       mockReq.params = { templateId: '1' };
@@ -1465,6 +1837,795 @@ describe('Consent Form Controller - Complete Coverage Tests', () => {
       fileFilter({}, file, cb);
 
       expect(cb).toHaveBeenCalledWith(null, true);
+    });
+  });
+
+  describe('getConsentFormTemplates - path handling edge cases', () => {
+    it('should handle template_file_path without uploads/ prefix', async () => {
+      mockClient.query.mockResolvedValue({
+        rows: [{
+          id: 1,
+          name: 'Template 1',
+          template_file_path: 'consent-forms/templates/template-1.pdf',
+          template_file_name: 'template-1.pdf',
+          template_file_size: 1024,
+          procedure_name: 'Biopsy',
+          test_name: null,
+          is_auto_generated: false,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01'
+        }]
+      });
+
+      await consentFormController.getConsentFormTemplates(mockReq, mockRes);
+
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            templates: expect.arrayContaining([
+              expect.objectContaining({
+                template_file_url: expect.stringContaining('consent-forms/templates/template-1.pdf')
+              })
+            ])
+          })
+        })
+      );
+    });
+
+    it('should handle template_file_path with backslashes', async () => {
+      mockClient.query.mockResolvedValue({
+        rows: [{
+          id: 1,
+          name: 'Template 1',
+          template_file_path: 'uploads\\consent-forms\\templates\\template-1.pdf',
+          template_file_name: 'template-1.pdf',
+          template_file_size: 1024,
+          procedure_name: 'Biopsy',
+          test_name: null,
+          is_auto_generated: false,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01'
+        }]
+      });
+
+      await consentFormController.getConsentFormTemplates(mockReq, mockRes);
+
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true
+        })
+      );
+    });
+  });
+
+  describe('createConsentFormTemplate - additional edge cases', () => {
+    it('should handle templateFilePath without uploads/ prefix', async () => {
+      mockReq.body = { procedure_name: 'Procedure 1', test_name: null };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        path: 'consent-forms/templates/template-123.pdf',
+        size: 1024
+      };
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] }) // existingTemplate check
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Procedure 1',
+            procedure_name: 'Procedure 1',
+            test_name: null,
+            template_file_path: 'consent-forms/templates/template-123.pdf',
+            template_file_name: 'template-123.pdf',
+            template_file_size: 1024
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+    });
+
+    it('should handle auto-generated template without file', async () => {
+      mockReq.body = { procedure_name: 'Procedure 1', test_name: null, is_auto_generated: 'true' };
+      mockReq.file = null;
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] }) // existingTemplate check
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Procedure 1',
+            procedure_name: 'Procedure 1',
+            test_name: null,
+            template_file_path: null,
+            template_file_name: null,
+            template_file_size: null
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            template: expect.objectContaining({
+              template_file_url: null
+            })
+          })
+        })
+      );
+    });
+
+    it('should handle is_auto_generated as boolean true', async () => {
+      mockReq.body = { procedure_name: 'Procedure 1', test_name: null, is_auto_generated: true };
+      mockReq.file = null;
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Procedure 1',
+            procedure_name: 'Procedure 1',
+            test_name: null,
+            template_file_path: null,
+            template_file_name: null,
+            template_file_size: null
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+    });
+
+    it('should handle procedure_name with whitespace', async () => {
+      mockReq.body = { procedure_name: '  Procedure 1  ', test_name: null };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        path: 'uploads/template-123.pdf',
+        size: 1024
+      };
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Procedure 1',
+            procedure_name: 'Procedure 1',
+            test_name: null
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining(['Procedure 1'])
+      );
+    });
+
+    it('should handle test_name with whitespace', async () => {
+      mockReq.body = { procedure_name: null, test_name: '  Test 1  ' };
+      mockReq.file = {
+        filename: 'template-123.pdf',
+        path: 'uploads/template-123.pdf',
+        size: 1024
+      };
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Test 1',
+            procedure_name: null,
+            test_name: 'Test 1'
+          }]
+        });
+
+      await consentFormController.createConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining([null, 'Test 1'])
+      );
+    });
+  });
+
+  describe('updateConsentFormTemplate - additional edge cases', () => {
+    it('should handle update without file (keep existing file)', async () => {
+      mockReq.params.templateId = '1';
+      mockReq.body = { procedure_name: 'Updated Procedure', test_name: null };
+      mockReq.file = null;
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            template_file_path: 'uploads/consent-forms/templates/existing.pdf'
+          }]
+        }) // templateCheck
+        .mockResolvedValueOnce({ rows: [] }) // duplicateCheck
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            procedure_name: 'Updated Procedure',
+            test_name: null,
+            template_file_path: 'uploads/consent-forms/templates/existing.pdf',
+            template_file_name: 'existing.pdf',
+            template_file_size: 1024
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining([
+          'Updated Procedure',
+          null,
+          false,
+          'uploads/consent-forms/templates/existing.pdf',
+          null, // templateFileName
+          null  // templateFileSize
+        ])
+      );
+    });
+
+    it('should handle update with new file (delete old file)', async () => {
+      mockReq.params.templateId = '1';
+      mockReq.body = { procedure_name: 'Updated Procedure', test_name: null };
+      mockReq.file = {
+        filename: 'new-template-123.pdf',
+        originalname: 'new.pdf',
+        size: 2048
+      };
+      mockFs.existsSync.mockReturnValue(true);
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            template_file_path: 'uploads/consent-forms/templates/old.pdf'
+          }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            template_file_path: 'uploads/consent-forms/templates/new-template-123.pdf'
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockFs.unlinkSync).toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    it('should handle update with new file when old file does not exist', async () => {
+      mockReq.params.templateId = '1';
+      mockReq.body = { procedure_name: 'Updated Procedure', test_name: null };
+      mockReq.file = {
+        filename: 'new-template-123.pdf',
+        originalname: 'new.pdf',
+        size: 2048
+      };
+      mockFs.existsSync.mockReturnValue(false); // old file doesn't exist
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            template_file_path: 'uploads/consent-forms/templates/old.pdf'
+          }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            template_file_path: 'uploads/consent-forms/templates/new-template-123.pdf'
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockFs.unlinkSync).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    it('should handle update when existingFilePath is null', async () => {
+      mockReq.params.templateId = '1';
+      mockReq.body = { procedure_name: 'Updated Procedure', test_name: null };
+      mockReq.file = {
+        filename: 'new-template-123.pdf',
+        originalname: 'new.pdf',
+        size: 2048
+      };
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            template_file_path: null
+          }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            template_file_path: 'uploads/consent-forms/templates/new-template-123.pdf'
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockFs.unlinkSync).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    it('should handle templateFilePath without uploads/ prefix in constructTemplateFileUrl', async () => {
+      mockReq.params.templateId = '1';
+      mockReq.body = { procedure_name: 'Updated Procedure', test_name: null };
+      mockReq.file = {
+        filename: 'new-template-123.pdf',
+        originalname: 'new.pdf',
+        size: 2048
+      };
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            template_file_path: null
+          }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            template_file_path: 'consent-forms/templates/new-template-123.pdf'
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            template: expect.objectContaining({
+              template_file_url: expect.stringContaining('consent-forms/templates/new-template-123.pdf')
+            })
+          })
+        })
+      );
+    });
+
+    it('should handle is_auto_generated as boolean true in update', async () => {
+      mockReq.params.templateId = '1';
+      mockReq.body = { procedure_name: 'Updated Procedure', test_name: null, is_auto_generated: true };
+      mockReq.file = null;
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            template_file_path: 'uploads/consent-forms/templates/existing.pdf'
+          }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            name: 'Updated Procedure',
+            template_file_path: 'uploads/consent-forms/templates/existing.pdf'
+          }]
+        });
+
+      await consentFormController.updateConsentFormTemplate(mockReq, mockRes);
+
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining([true])
+      );
+    });
+  });
+
+  describe('uploadPatientConsentForm - additional edge cases', () => {
+    it('should handle existing upload without old file_path', async () => {
+      mockReq.params.patientId = '1';
+      mockReq.body = { consentFormId: '1' };
+      mockReq.file = {
+        filename: 'new-consent-123.pdf',
+        originalname: 'new.pdf',
+        size: 2048
+      };
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // patientCheck
+        .mockResolvedValueOnce({ rows: [{ id: 1, name: 'Form 1' }] }) // formCheck
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // existingUpload
+        .mockResolvedValueOnce({ rows: [{ file_path: null }] }) // oldFile - no file_path
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            patient_id: 1,
+            consent_form_id: 1,
+            file_path: 'uploads/consent-forms/patients/new-consent-123.pdf',
+            file_name: 'new.pdf',
+            file_size: 2048
+          }]
+        });
+
+      await consentFormController.uploadPatientConsentForm(mockReq, mockRes);
+
+      expect(mockFs.unlinkSync).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    it('should handle existing upload with old file that does not exist', async () => {
+      mockReq.params.patientId = '1';
+      mockReq.body = { consentFormId: '1' };
+      mockReq.file = {
+        filename: 'new-consent-123.pdf',
+        originalname: 'new.pdf',
+        size: 2048
+      };
+      mockFs.existsSync.mockReturnValue(false);
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+        .mockResolvedValueOnce({ rows: [{ id: 1, name: 'Form 1' }] })
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+        .mockResolvedValueOnce({ rows: [{ file_path: 'uploads/consent-forms/patients/old.pdf' }] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            patient_id: 1,
+            consent_form_id: 1,
+            file_path: 'uploads/consent-forms/patients/new-consent-123.pdf',
+            file_name: 'new.pdf',
+            file_size: 2048
+          }]
+        });
+
+      await consentFormController.uploadPatientConsentForm(mockReq, mockRes);
+
+      expect(mockFs.unlinkSync).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    it('should handle new upload (else branch)', async () => {
+      mockReq.params.patientId = '1';
+      mockReq.body = { consentFormId: '1' };
+      mockReq.file = {
+        filename: 'new-consent-123.pdf',
+        originalname: 'new.pdf',
+        size: 2048
+      };
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+        .mockResolvedValueOnce({ rows: [{ id: 1, name: 'Form 1' }] })
+        .mockResolvedValueOnce({ rows: [] }) // existingUpload - no existing upload
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            patient_id: 1,
+            consent_form_id: 1,
+            file_path: 'uploads/consent-forms/patients/new-consent-123.pdf',
+            file_name: 'new.pdf',
+            file_size: 2048
+          }]
+        });
+
+      await consentFormController.uploadPatientConsentForm(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: 'Consent form file uploaded successfully'
+        })
+      );
+    });
+  });
+
+  describe('serveConsentFormFile - additional edge cases', () => {
+    it('should handle file stream error when headers already sent', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.pdf';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'error') {
+            setTimeout(() => handler(new Error('Stream error')), 0);
+          }
+          return mockFileStream;
+        }),
+        pipe: jest.fn(),
+        destroy: jest.fn(),
+        destroyed: false
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+      mockRes.headersSent = true;
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockSetCorsHeaders).toHaveBeenCalled();
+      expect(mockRes.json).not.toHaveBeenCalled();
+    });
+
+    it('should handle file stream already destroyed on close', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.pdf';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'open') setTimeout(() => handler(), 0);
+          if (event === 'end') setTimeout(() => handler(), 0);
+          return mockFileStream;
+        }),
+        pipe: jest.fn().mockReturnValue(mockRes),
+        destroy: jest.fn(),
+        destroyed: true
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+      mockRes.on.mockImplementation((event, handler) => {
+        if (event === 'close') setTimeout(() => handler(), 0);
+        return mockRes;
+      });
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(mockFileStream.destroy).not.toHaveBeenCalled();
+    });
+
+    it('should handle different file extensions', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.jpg';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'open') setTimeout(() => handler(), 0);
+          if (event === 'end') setTimeout(() => handler(), 0);
+          return mockFileStream;
+        }),
+        pipe: jest.fn().mockReturnValue(mockRes),
+        destroy: jest.fn(),
+        destroyed: false
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
+    });
+
+    it('should handle JPEG file extension', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.jpeg';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'open') setTimeout(() => handler(), 0);
+          if (event === 'end') setTimeout(() => handler(), 0);
+          return mockFileStream;
+        }),
+        pipe: jest.fn().mockReturnValue(mockRes),
+        destroy: jest.fn(),
+        destroyed: false
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
+    });
+
+    it('should handle PNG file extension', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.png';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'open') setTimeout(() => handler(), 0);
+          if (event === 'end') setTimeout(() => handler(), 0);
+          return mockFileStream;
+        }),
+        pipe: jest.fn().mockReturnValue(mockRes),
+        destroy: jest.fn(),
+        destroyed: false
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png');
+    });
+
+    it('should handle DOC file extension', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.doc';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'open') setTimeout(() => handler(), 0);
+          if (event === 'end') setTimeout(() => handler(), 0);
+          return mockFileStream;
+        }),
+        pipe: jest.fn().mockReturnValue(mockRes),
+        destroy: jest.fn(),
+        destroyed: false
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/msword');
+    });
+
+    it('should handle DOCX file extension', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.docx';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'open') setTimeout(() => handler(), 0);
+          if (event === 'end') setTimeout(() => handler(), 0);
+          return mockFileStream;
+        }),
+        pipe: jest.fn().mockReturnValue(mockRes),
+        destroy: jest.fn(),
+        destroyed: false
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    });
+
+    it('should handle unknown file extension', async () => {
+      mockReq.validatedFilePath = 'uploads/consent-forms/templates/test.unknown';
+      mockFs.existsSync.mockReturnValue(true);
+      const mockFileStream = {
+        on: jest.fn((event, handler) => {
+          if (event === 'open') setTimeout(() => handler(), 0);
+          if (event === 'end') setTimeout(() => handler(), 0);
+          return mockFileStream;
+        }),
+        pipe: jest.fn().mockReturnValue(mockRes),
+        destroy: jest.fn(),
+        destroyed: false
+      };
+      mockFs.createReadStream.mockReturnValue(mockFileStream);
+
+      await consentFormController.serveConsentFormFile(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/octet-stream');
+    });
+  });
+
+  describe('patientConsentFileFilter - comprehensive tests', () => {
+    it('should accept file with matching mimetype and extname', () => {
+      const file = {
+        originalname: 'test.pdf',
+        mimetype: 'application/pdf'
+      };
+      const cb = jest.fn();
+      const fileFilter = consentFormController.uploadPatientConsent._fileFilter || 
+                         consentFormController.uploadPatientConsent.storage._fileFilter;
+      
+      if (fileFilter) {
+        fileFilter(null, file, cb);
+        expect(cb).toHaveBeenCalledWith(null, true);
+      }
+    });
+
+    it('should reject file with non-matching mimetype', () => {
+      const file = {
+        originalname: 'test.pdf',
+        mimetype: 'application/octet-stream'
+      };
+      const cb = jest.fn();
+      const fileFilter = consentFormController.uploadPatientConsent._fileFilter || 
+                         consentFormController.uploadPatientConsent.storage._fileFilter;
+      
+      if (fileFilter) {
+        fileFilter(null, file, cb);
+        expect(cb).toHaveBeenCalledWith(expect.any(Error), false);
+      }
+    });
+
+    it('should reject file with non-matching extname', () => {
+      const file = {
+        originalname: 'test.txt',
+        mimetype: 'application/pdf'
+      };
+      const cb = jest.fn();
+      const fileFilter = consentFormController.uploadPatientConsent._fileFilter || 
+                         consentFormController.uploadPatientConsent.storage._fileFilter;
+      
+      if (fileFilter) {
+        fileFilter(null, file, cb);
+        expect(cb).toHaveBeenCalledWith(expect.any(Error), false);
+      }
+    });
+
+    it('should accept JPG file', () => {
+      const file = {
+        originalname: 'test.jpg',
+        mimetype: 'image/jpeg'
+      };
+      const cb = jest.fn();
+      const fileFilter = consentFormController.uploadPatientConsent._fileFilter || 
+                         consentFormController.uploadPatientConsent.storage._fileFilter;
+      
+      if (fileFilter) {
+        fileFilter(null, file, cb);
+        expect(cb).toHaveBeenCalledWith(null, true);
+      }
+    });
+
+    it('should accept JPEG file', () => {
+      const file = {
+        originalname: 'test.jpeg',
+        mimetype: 'image/jpeg'
+      };
+      const cb = jest.fn();
+      const fileFilter = consentFormController.uploadPatientConsent._fileFilter || 
+                         consentFormController.uploadPatientConsent.storage._fileFilter;
+      
+      if (fileFilter) {
+        fileFilter(null, file, cb);
+        expect(cb).toHaveBeenCalledWith(null, true);
+      }
+    });
+
+    it('should accept PNG file', () => {
+      const file = {
+        originalname: 'test.png',
+        mimetype: 'image/png'
+      };
+      const cb = jest.fn();
+      const fileFilter = consentFormController.uploadPatientConsent._fileFilter || 
+                         consentFormController.uploadPatientConsent.storage._fileFilter;
+      
+      if (fileFilter) {
+        fileFilter(null, file, cb);
+        expect(cb).toHaveBeenCalledWith(null, true);
+      }
+    });
+  });
+
+  describe('getPatientConsentForms - additional edge cases', () => {
+    it('should handle consent forms without file_path', async () => {
+      mockClient.query.mockResolvedValue({
+        rows: [{
+          id: 1,
+          patient_id: 1,
+          consent_form_id: 1,
+          file_path: null,
+          file_name: null,
+          file_size: null,
+          uploaded_at: '2024-01-01',
+          consent_form_name: 'Form 1',
+          procedure_name: 'Biopsy',
+          test_name: null
+        }]
+      });
+
+      await consentFormController.getPatientConsentForms(mockReq, mockRes);
+
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            consentForms: expect.arrayContaining([
+              expect.objectContaining({
+                file_url: null
+              })
+            ])
+          })
+        })
+      );
     });
   });
 });

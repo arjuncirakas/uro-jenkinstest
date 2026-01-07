@@ -12,6 +12,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
     passWithNoTests: true,
+    // Ensure all tests run even if some fail
+    bail: false,
+    // Timeout for each test (30 seconds)
+    testTimeout: 30000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

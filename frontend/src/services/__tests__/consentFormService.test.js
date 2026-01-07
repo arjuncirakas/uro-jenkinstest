@@ -589,8 +589,49 @@ describe('consentFormService', () => {
 
       expect(result.success).toBe(false);
       // When error.message is undefined and error.response?.data?.message is undefined,
-      // it falls back to 'Failed to fetch consent form file'
-      expect(result.error).toBe('Failed to fetch consent form file');
+      // it falls back to the default message in the service
+      expect(result.error).toBe('Unable to load the consent form file. Please try again or contact support if the problem persists.');
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle errors with response.data.message', async () => {
+      const filePath = 'invalid/path.pdf';
+      const mockError = {
+        response: {
+          data: {
+            message: 'Custom error message'
+          },
+          status: 500
+        }
+      };
+
+      apiClient.get.mockRejectedValue(mockError);
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await consentFormService.getConsentFormFile(filePath);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Custom error message');
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle errors with response but no data.message', async () => {
+      const filePath = 'invalid/path.pdf';
+      const mockError = {
+        message: 'Network error',
+        response: {
+          data: {},
+          status: 500
+        }
+      };
+
+      apiClient.get.mockRejectedValue(mockError);
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await consentFormService.getConsentFormFile(filePath);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Unable to load the consent form file. Please try again or contact support if the problem persists.');
       consoleSpy.mockRestore();
     });
 

@@ -114,11 +114,7 @@ const Calendar = ({
     setRefreshKey(prev => prev + 1);
   }, [appointments, allAppointments]);
 
-  // Debug logging
-  console.log('Calendar Debug - appointments:', appointments);
-  console.log('Calendar Debug - allAppointments:', allAppointments);
-  console.log('Calendar Debug - appointmentsToUse:', appointmentsToUse);
-  console.log('Calendar Debug - appointmentsToUse length:', appointmentsToUse?.length);
+  // Debug logging removed
 
   // Use external loading/error states if provided, otherwise use internal states
   const isLoading = externalLoading || loadingAppointments;
@@ -258,13 +254,11 @@ const Calendar = ({
     const data = appointments || appointmentsToUse;
     // Format the date string to match appointment date format (YYYY-MM-DD)
     const dateString = typeof date === 'string' ? date : formatDate(date);
-    console.log(`Calendar Debug - getAppointmentsByDate for ${dateString}:`, data);
     const filtered = data.filter(appointment => {
       // Handle both 'date' and 'appointment_date' fields
       const aptDate = appointment.date || appointment.appointment_date;
       return aptDate === dateString;
     });
-    console.log(`Calendar Debug - filtered appointments for ${dateString}:`, filtered);
     return filtered;
   };
 
@@ -451,11 +445,7 @@ const Calendar = ({
       const newDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const newTime = draggedAppointment.time; // Keep same time for now
 
-      console.log('=== CALENDAR DEBUG ===');
-      console.log('Target date object:', targetDate);
-      console.log('Year:', year, 'Month:', month, 'Day:', day);
-      console.log('Formatted newDate being passed:', newDate);
-      console.log('=== END CALENDAR DEBUG ===');
+      // Log removed
 
       // Store the dragged appointment before clearing it
       const appointmentToReschedule = draggedAppointment;
@@ -476,12 +466,6 @@ const Calendar = ({
   // NOTE: The RescheduleConfirmationModal already calls the API, so this function
   // only needs to handle the refresh logic after successful reschedule
   const handleRescheduleConfirm = async (appointmentId, newDate, newTime, selectedDoctor) => {
-    console.log('=== CONFIRMATION DEBUG ===');
-    console.log('Appointment ID:', appointmentId);
-    console.log('New Date:', newDate);
-    console.log('New Time:', newTime);
-    console.log('Selected Doctor:', selectedDoctor);
-
     // The API call was already made by RescheduleConfirmationModal
     // We just need to refresh the appointments and close the modal
 
@@ -490,26 +474,19 @@ const Calendar = ({
 
     // Refresh appointments data - prioritize onRefresh if available (for external appointments)
     if (onRefresh) {
-      console.log('Calling onRefresh callback...');
       await onRefresh();
-      console.log('onRefresh callback completed');
     } else {
       // If no external refresh callback, use internal fetch
-      console.log('Calling fetchAppointments...');
       await fetchAppointments();
-      console.log('fetchAppointments completed');
     }
 
     // Force re-render to show updated appointments - do this after refresh
-    console.log('Forcing calendar re-render...');
     setRefreshKey(prev => prev + 1);
 
     // Small delay to ensure state updates propagate
     setTimeout(() => {
       setRefreshKey(prev => prev + 1);
     }, 100);
-
-    console.log('=== END CONFIRMATION DEBUG ===');
   };
 
   // Handle reschedule cancel

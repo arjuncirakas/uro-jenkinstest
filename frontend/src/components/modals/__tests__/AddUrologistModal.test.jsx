@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import AddUrologistModal from '../AddUrologistModal';
 import React from 'react';
 
-// Mock services
+// ALL MOCKS MUST BE AT THE TOP - BEFORE COMPONENT IMPORTS
 vi.mock('../../../services/doctorsService', () => ({
     doctorsService: {
         createDoctor: vi.fn().mockResolvedValue({ success: true }),
@@ -24,6 +23,9 @@ vi.mock('../SuccessModal', () => ({
 vi.mock('../ErrorModal', () => ({
     default: ({ isOpen, title }) => isOpen ? <div data-testid="error-modal">{title}</div> : null
 }));
+
+// NOW import component AFTER all mocks
+import AddUrologistModal from '../AddUrologistModal';
 
 describe('AddUrologistModal', () => {
     const mockOnClose = vi.fn();

@@ -214,6 +214,7 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-white hover:bg-white/10 p-2 rounded transition-colors"
           >
             <IoClose className="w-6 h-6" />

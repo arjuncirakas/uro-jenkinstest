@@ -118,9 +118,17 @@ describe('AddUser', () => {
 
   it('should navigate back when back arrow is clicked', () => {
     renderComponent();
-    const backButton = screen.getByRole('button', { name: /back/i });
-    fireEvent.click(backButton);
-    expect(mockNavigate).toHaveBeenCalledWith('/superadmin/users');
+    // Find button containing ArrowLeft icon (back button)
+    const buttons = screen.getAllByRole('button');
+    const backButton = buttons.find(btn => {
+      const svg = btn.querySelector('svg');
+      return svg && svg.getAttribute('class')?.includes('lucide-arrow-left');
+    });
+    expect(backButton).toBeDefined();
+    if (backButton) {
+      fireEvent.click(backButton);
+      expect(mockNavigate).toHaveBeenCalledWith('/superadmin/users');
+    }
   });
 
   it('should execute all lines including export statement', () => {
@@ -129,6 +137,10 @@ describe('AddUser', () => {
     expect(screen.getByText('Add New User')).toBeInTheDocument();
   });
 });
+
+
+
+
 
 
 

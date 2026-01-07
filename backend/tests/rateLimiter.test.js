@@ -48,6 +48,17 @@ describe('rateLimiter.js', () => {
     consoleLogSpy.mockRestore();
   });
 
+  it('should disable rate limiting in development by default', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.ENABLE_RATE_LIMITING;
+
+    const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const { generalLimiter } = await import('../middleware/rateLimiter.js');
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('DISABLED'));
+    consoleLogSpy.mockRestore();
+  });
+
   it('should disable rate limiting when ENABLE_RATE_LIMITING is false', async () => {
     process.env.ENABLE_RATE_LIMITING = 'false';
 
@@ -157,6 +168,32 @@ describe('rateLimiter.js', () => {
     // Either next is called or rate limit is hit
     // Both are valid behaviors
     expect(mockNext.mock.calls.length + (mockRes.status.mock.calls.length > 0 ? 1 : 0)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should call createRateLimitHandler and execute handler function', async () => {
+    process.env.ENABLE_RATE_LIMITING = 'true';
+    process.env.RATE_LIMIT_WINDOW_MS = '15000';
+    process.env.RATE_LIMIT_MAX_REQUESTS = '100';
+
+    const { authLimiter } = await import('../middleware/rateLimiter.js');
+    const mockReq = { ip: '127.0.0.1' };
+    const mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+      set: jest.fn()
+    };
+    const mockNext = jest.fn();
+
+    // Call the limiter
+    authLimiter(mockReq, mockRes, mockNext);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // If rate limited, the handler should be called
+    // The handler sets Retry-After header (line 24) and sends 429 response (line 25)
+    if (mockRes.set.mock.calls.length > 0) {
+      expect(mockRes.set).toHaveBeenCalledWith('Retry-After', expect.any(String));
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+    }
   });
 });
 

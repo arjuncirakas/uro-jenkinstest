@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Outlet } from 'react-router-dom';
-import BaseLayout from '../BaseLayout';
 import React from 'react';
 
+// ALL MOCKS MUST BE AT THE TOP - BEFORE COMPONENT IMPORTS
 // Create mock components for testing
 let mockOnErrorHandler;
 const MockAddPatientModal = vi.fn(({ isOpen, onClose, onPatientAdded, onError }) => {
@@ -50,7 +50,6 @@ const MockErrorModal = vi.fn(({ isOpen, onClose, onConfirm, title }) => {
     );
 });
 
-// Mock the component imports
 vi.mock('../../components/AddPatientModal', () => ({
     default: (props) => MockAddPatientModal(props)
 }));
@@ -63,7 +62,6 @@ vi.mock('../../components/modals/ErrorModal', () => ({
     default: (props) => MockErrorModal(props)
 }));
 
-// Mock Outlet
 vi.mock('react-router-dom', async () => {
     const actual = await vi.importActual('react-router-dom');
     return {
@@ -71,6 +69,9 @@ vi.mock('react-router-dom', async () => {
         Outlet: () => <div data-testid="outlet">Outlet Content</div>
     };
 });
+
+// NOW import component AFTER all mocks
+import BaseLayout from '../BaseLayout';
 
 // Mock sidebar component
 const MockSidebar = ({ isOpen, onClose, onOpenAddPatient }) => (

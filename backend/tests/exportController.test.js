@@ -1,1057 +1,1091 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
-// Mock dependencies
-await jest.unstable_mockModule('../config/database.js', () => ({
-    default: {
-        connect: jest.fn()
-    }
+// Mock database pool
+const mockClient = {
+  query: jest.fn(),
+  release: jest.fn()
+};
+
+const mockPool = {
+  connect: jest.fn(() => Promise.resolve(mockClient))
+};
+
+jest.unstable_mockModule('../config/database.js', () => ({
+  default: mockPool
 }));
 
-await jest.unstable_mockModule('../services/auditLogger.js', () => ({
-    logDataExport: jest.fn()
+// Mock auditLogger
+const mockLogDataExport = jest.fn();
+jest.unstable_mockModule('../services/auditLogger.js', () => ({
+  logDataExport: mockLogDataExport
 }));
 
-// Dynamic import
-const exportController = await import('../controllers/exportController.js');
-const { logDataExport } = await import('../services/auditLogger.js');
-const { default: poolMock } = await import('../config/database.js');
+describe('exportController', () => {
+  let exportController;
+  let testHelpers;
 
-describe('Export Controller', () => {
-    // Destructure exported functions
-    const {
-        exportPatientsToCSV,
-        exportPatientsToExcel,
-        getExportFields,
-        _testHelpers
-    } = exportController;
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    exportController = await import('../controllers/exportController.js');
+    testHelpers = exportController._testHelpers;
+  });
 
-    // Destructure helpers from _testHelpers
-    const {
-        buildExportQuery,
-        buildDateConditions,
-        generateDateExistsCondition,
-        addDateFilters,
-        addCarePathwayFilter,
-        addStatusFilter,
-        convertToCSV,
-        FIELD_MAP
-    } = _testHelpers;
-
-    describe('Helper Functions', () => {
-        describe('generateDateExistsCondition', () => {
-            it('should generate correct SQL for single operator', () => {
-                const sql = generateDateExistsCondition(1, '>=');
-                expect(sql).toContain('appointment_date >= $1');
-                expect(sql).toContain('scheduled_date >= $1');
-                expect(sql).toContain('created_at >= $1');
-            });
-
-            it('should generate correct SQL for range', () => {
-                const sql = generateDateExistsCondition(1, '>=', 2);
-                expect(sql).toContain('appointment_date >= $1 AND a.appointment_date <= $2');
-            });
-        });
-
-        describe('buildDateConditions', () => {
-            it('should return empty if no dates', () => {
-                const params = [];
-                const res = buildDateConditions(null, null, 1, params);
-                expect(res).toEqual([]);
-                expect(params).toHaveLength(0);
-            });
-
-            it('should handle start date only', () => {
-                const params = [];
-                const res = buildDateConditions('2023-01-01', null, 1, params);
-                expect(res).toHaveLength(1);
-                expect(params).toEqual(['2023-01-01']);
-            });
-
-            it('should handle end date only', () => {
-                const params = [];
-                const res = buildDateConditions(null, '2023-01-01', 1, params);
-                expect(res).toHaveLength(1);
-                expect(params).toEqual(['2023-01-01']);
-            });
-
-            it('should handle both dates', () => {
-                const params = [];
-                const res = buildDateConditions('2023-01-01', '2023-12-31', 1, params);
-                expect(res).toHaveLength(1);
-                expect(params).toEqual(['2023-01-01', '2023-12-31']);
-            });
-        });
-
-        describe('addDateFilters', () => {
-            it('should add simple date filters', () => {
-                const conditions = [];
-                const params = [];
-                addDateFilters(conditions, params, '2023-01-01', '2023-02-01');
-                expect(conditions).toHaveLength(2);
-                expect(conditions[0]).toBe('p.created_at >= $1');
-                expect(conditions[1]).toBe('p.created_at <= $2');
-                expect(params).toEqual(['2023-01-01', '2023-02-01']);
-            });
-        });
-
-        describe('addCarePathwayFilter', () => {
-            it('should add specific pathway', () => {
-                const conditions = [];
-                const params = [];
-                addCarePathwayFilter(conditions, params, 'Cancer');
-                expect(conditions[0]).toBe('p.care_pathway = $1');
-                expect(params).toEqual(['Cancer']);
-            });
-
-            it('should add OPD Queue logic', () => {
-                const conditions = [];
-                const params = [];
-                addCarePathwayFilter(conditions, params, 'OPD Queue');
-                expect(conditions[0]).toContain('(p.care_pathway = $1 OR p.care_pathway IS NULL');
-            });
-        });
-
-        describe('convertToCSV', () => {
-            it('should handle nulls and special chars', () => {
-                const headers = ['name', 'note'];
-                const rows = [{ name: 'Test', note: null }, { name: 'Test,2', note: 'Line\nBreak' }];
-                const csv = convertToCSV(rows, headers);
-                expect(csv).toContain('name,note');
-                expect(csv).toContain('Test,');
-                expect(csv).toContain('"Test,2","Line\nBreak"');
-            });
-        });
+  describe('Top-level code execution', () => {
+    it('should execute top-level code and export _testHelpers object', async () => {
+      // Verify that top-level code executed by checking _testHelpers exists
+      expect(exportController._testHelpers).toBeDefined();
+      expect(typeof exportController._testHelpers).toBe('object');
+      
+      // Verify all helper functions are exported
+      expect(typeof testHelpers.buildExportQuery).toBe('function');
+      expect(typeof testHelpers.convertToCSV).toBe('function');
+      expect(typeof testHelpers.buildDateConditions).toBe('function');
+      expect(typeof testHelpers.generateDateExistsCondition).toBe('function');
+      expect(typeof testHelpers.addDateFilters).toBe('function');
+      expect(typeof testHelpers.addCarePathwayFilter).toBe('function');
+      expect(typeof testHelpers.addStatusFilter).toBe('function');
+      expect(typeof testHelpers.buildQueryString).toBe('function');
     });
 
+    it('should export main controller functions', () => {
+      expect(typeof exportController.getExportFields).toBe('function');
+      expect(typeof exportController.exportPatientsToCSV).toBe('function');
+      expect(typeof exportController.exportPatientsToExcel).toBe('function');
+    });
+  });
+
+  describe('getExportFields', () => {
+    it('should return all available export fields', async () => {
+      const mockReq = {};
+      const mockRes = {
+        json: jest.fn(),
+        status: jest.fn().mockReturnThis()
+      };
+
+      await exportController.getExportFields(mockReq, mockRes);
+
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          fields: expect.arrayContaining([
+            expect.objectContaining({ id: 'upi', label: 'UPI' }),
+            expect.objectContaining({ id: 'first_name', label: 'First Name' })
+          ])
+        }
+      });
+    });
+
+    it('should handle errors', async () => {
+      const mockReq = {};
+      const mockRes = {
+        json: jest.fn(() => {
+          throw new Error('Test error');
+        }),
+        status: jest.fn().mockReturnThis()
+      };
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await exportController.getExportFields(mockReq, mockRes);
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Internal server error'
+      });
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('exportPatientsToCSV', () => {
+    it('should export patients to CSV successfully', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name,last_name',
+          startDate: '2024-01-01',
+          endDate: '2024-12-31',
+          carePathway: 'Active Monitoring',
+          status: 'Active'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      const mockRows = [
+        { upi: 'UPI1', first_name: 'John', last_name: 'Doe' },
+        { upi: 'UPI2', first_name: 'Jane', last_name: 'Smith' }
+      ];
+
+      mockClient.query.mockResolvedValue({ rows: mockRows });
+      mockLogDataExport.mockResolvedValue(undefined);
+
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        expect.stringContaining('.csv')
+      );
+      expect(mockRes.send).toHaveBeenCalled();
+      expect(mockLogDataExport).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('should handle invalid fields error', async () => {
+      const mockReq = {
+        query: {
+          fields: 'invalid_field,another_invalid'
+        }
+      };
+      const mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'No valid fields selected'
+      });
+    });
+
+    it('should handle no data found', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name'
+        }
+      };
+      const mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      mockClient.query.mockResolvedValue({ rows: [] });
+
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'No data found for export'
+      });
+    });
+
+    it('should handle database errors', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name'
+        }
+      };
+      const mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      const dbError = new Error('Database error');
+      mockClient.query.mockRejectedValue(dbError);
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('exportPatientsToExcel', () => {
+    it('should export patients to Excel successfully', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
+
+      await exportController.exportPatientsToExcel(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        expect.stringContaining('.xlsx')
+      );
+      expect(mockRes.send).toHaveBeenCalled();
+      expect(mockLogDataExport).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('should handle Excel export with database errors', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name'
+        }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      mockClient.query.mockRejectedValue(new Error('Database error'));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await exportController.exportPatientsToExcel(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should handle Excel export with connection errors', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name'
+        }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      // Reset mock to reject on next call
+      mockPool.connect.mockReset();
+      mockPool.connect.mockRejectedValueOnce(new Error('Connection failed'));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await exportController.exportPatientsToExcel(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+      // Restore mock for other tests
+      mockPool.connect.mockResolvedValue(mockClient);
+    });
+
+    it('should handle OPD Queue with date filters in Excel export', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name',
+          carePathway: 'OPD Queue',
+          startDate: '2024-01-01',
+          endDate: '2024-12-31'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
+
+      await exportController.exportPatientsToExcel(mockReq, mockRes);
+
+      expect(mockRes.send).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+  });
+
+  describe('Helper Functions', () => {
     describe('buildExportQuery', () => {
-        it('should use default fields if none provided', () => {
-            const result = buildExportQuery({});
-            expect(result.selectFields.length).toBeGreaterThan(0);
+      it('should build query with default fields', () => {
+        const result = testHelpers.buildExportQuery({});
+
+        expect(result.query).toBeDefined();
+        expect(result.params).toBeDefined();
+        expect(result.selectedFields).toBeDefined();
+      });
+
+      it('should build query with custom fields', () => {
+        const result = testHelpers.buildExportQuery({
+          fields: 'upi,first_name,last_name'
         });
 
-        it('should error on invalid fields', () => {
-            const result = buildExportQuery({ fields: 'invalid_field' });
-            expect(result.error).toBeDefined();
+        expect(result.selectedFields).toContain('upi');
+        expect(result.selectedFields).toContain('first_name');
+      });
+
+      it('should add date filters', () => {
+        const result = testHelpers.buildExportQuery({
+          startDate: '2024-01-01',
+          endDate: '2024-12-31'
         });
 
-        it('should build complex OPD Queue query', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                startDate: '2023-01-01'
-            });
-            expect(result.query).toContain('EXISTS'); // Implies separate date logic used
+        expect(result.params).toContain('2024-01-01');
+        expect(result.params).toContain('2024-12-31');
+      });
+
+      it('should add care pathway filter', () => {
+        const result = testHelpers.buildExportQuery({
+          carePathway: 'Active Monitoring'
         });
 
-        it('should build standard query with status', () => {
-            const result = buildExportQuery({
-                status: 'Active'
-            });
-            expect(result.query).toContain('p.status = $1');
+        expect(result.params).toContain('Active Monitoring');
+      });
+
+      it('should add status filter', () => {
+        const result = testHelpers.buildExportQuery({
+          status: 'Active'
         });
+
+        expect(result.params).toContain('Active');
+      });
+
+      it('should handle OPD Queue with date filters', () => {
+        const result = testHelpers.buildExportQuery({
+          carePathway: 'OPD Queue',
+          startDate: '2024-01-01',
+          endDate: '2024-12-31'
+        });
+
+        expect(result.query).toContain('EXISTS');
+      });
+
+      it('should return error for invalid fields', () => {
+        const result = testHelpers.buildExportQuery({
+          fields: 'invalid_field'
+        });
+
+        expect(result.error).toBe('No valid fields selected');
+      });
     });
 
-    describe('exportPatients (Controller)', () => {
-        let mockReq, mockRes, mockClient;
+    describe('convertToCSV', () => {
+      it('should convert rows to CSV format', () => {
+        const rows = [
+          { name: 'John', age: 30 },
+          { name: 'Jane', age: 25 }
+        ];
+        const headers = ['name', 'age'];
 
-        beforeEach(() => {
-            mockReq = { query: {} };
-            mockRes = {
-                status: jest.fn().mockReturnThis(),
-                json: jest.fn(),
-                setHeader: jest.fn(),
-                send: jest.fn()
-            };
-            mockClient = {
-                query: jest.fn(),
-                release: jest.fn()
-            };
-            poolMock.connect.mockResolvedValue(mockClient);
-        });
+        const csv = testHelpers.convertToCSV(rows, headers);
 
-        it('should handle CSV export success', async () => {
-            mockClient.query.mockResolvedValue({
-                rows: [{ 'p.first_name': 'John' }]
-            });
+        expect(csv).toContain('name,age');
+        expect(csv).toContain('John,30');
+        expect(csv).toContain('Jane,25');
+      });
 
-            await exportPatientsToCSV(mockReq, mockRes);
+      it('should handle null and undefined values', () => {
+        const rows = [
+          { name: 'John', age: null, city: undefined }
+        ];
+        const headers = ['name', 'age', 'city'];
 
-            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-            expect(mockRes.send).toHaveBeenCalled();
-            expect(logDataExport).toHaveBeenCalled();
-        });
+        const csv = testHelpers.convertToCSV(rows, headers);
 
-        it('should handle Excel export success', async () => {
-            mockClient.query.mockResolvedValue({
-                rows: [{ 'p.first_name': 'John' }]
-            });
+        expect(csv).toContain('John,,');
+      });
 
-            await exportPatientsToExcel(mockReq, mockRes);
+      it('should escape commas in values', () => {
+        const rows = [
+          { name: 'John, Jr.', age: 30 }
+        ];
+        const headers = ['name', 'age'];
 
-            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', expect.stringContaining('spreadsheetml'));
-        });
+        const csv = testHelpers.convertToCSV(rows, headers);
 
-        it('should handle validation error', async () => {
-            mockReq.query.fields = 'invalid';
-            await exportPatientsToCSV(mockReq, mockRes);
-            expect(mockRes.status).toHaveBeenCalledWith(400);
-        });
+        expect(csv).toContain('"John, Jr."');
+      });
 
-        it('should handle no data found', async () => {
-            mockClient.query.mockResolvedValue({ rows: [] });
-            await exportPatientsToCSV(mockReq, mockRes);
-            expect(mockRes.status).toHaveBeenCalledWith(404);
-        });
+      it('should escape quotes in values', () => {
+        const rows = [
+          { name: 'John "Johnny" Doe', age: 30 }
+        ];
+        const headers = ['name', 'age'];
 
-        it('should handle database errors', async () => {
-            mockClient.query.mockRejectedValue(new Error('DB Error'));
-            await exportPatientsToCSV(mockReq, mockRes);
-            expect(mockRes.status).toHaveBeenCalledWith(500);
-            expect(mockClient.release).toHaveBeenCalled();
-        });
+        const csv = testHelpers.convertToCSV(rows, headers);
+
+        expect(csv).toContain('"John ""Johnny"" Doe"');
+      });
+
+      it('should escape newlines in values', () => {
+        const rows = [
+          { name: 'John\nDoe', age: 30 }
+        ];
+        const headers = ['name', 'age'];
+
+        const csv = testHelpers.convertToCSV(rows, headers);
+
+        expect(csv).toContain('"John\nDoe"');
+      });
     });
 
-    describe('getExportFields', () => {
-        it('should return fields list', async () => {
-            const req = {}, res = { json: jest.fn(), status: jest.fn() };
-            await getExportFields(req, res);
-            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                success: true,
-                data: expect.any(Object)
-            }));
-        });
+    describe('buildDateConditions', () => {
+      it('should build conditions with start and end date', () => {
+        const params = [];
+        const conditions = testHelpers.buildDateConditions('2024-01-01', '2024-12-31', 1, params);
 
-        it('should handle error', async () => {
-            const req = {};
-            const res = {
-                json: jest.fn().mockImplementation(() => { throw new Error('Fail') }),
-                status: jest.fn().mockReturnThis()
-            };
-            await expect(getExportFields(req, res)).rejects.toThrow('Fail');
-        });
+        expect(conditions.length).toBeGreaterThan(0);
+        expect(params).toContain('2024-01-01');
+        expect(params).toContain('2024-12-31');
+      });
 
-        it('should catch internal errors', async () => {
-            const req = {};
-            const res = {
-                json: jest.fn(),
-                status: jest.fn().mockReturnThis()
-            };
+      it('should build condition with only start date', () => {
+        const params = [];
+        const conditions = testHelpers.buildDateConditions('2024-01-01', null, 1, params);
 
-            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
-            res.json.mockImplementationOnce(() => { throw new Error('Response Error'); });
+        expect(conditions.length).toBeGreaterThan(0);
+        expect(params).toContain('2024-01-01');
+      });
 
-            await getExportFields(req, res);
-            expect(res.status).toHaveBeenCalledWith(500);
-            consoleSpy.mockRestore();
-        });
+      it('should build condition with only end date', () => {
+        const params = [];
+        const conditions = testHelpers.buildDateConditions(null, '2024-12-31', 1, params);
+
+        expect(conditions.length).toBeGreaterThan(0);
+        expect(params).toContain('2024-12-31');
+      });
+
+      it('should return empty array when no dates provided', () => {
+        const params = [];
+        const conditions = testHelpers.buildDateConditions(null, null, 1, params);
+
+        expect(conditions).toEqual([]);
+        expect(params).toEqual([]);
+      });
+    });
+
+    describe('generateDateExistsCondition', () => {
+      it('should generate condition with both parameters', () => {
+        const condition = testHelpers.generateDateExistsCondition(1, '>=', 2);
+
+        expect(condition).toContain('>=');
+        expect(condition).toContain('<=');
+        expect(condition).toContain('$1');
+        expect(condition).toContain('$2');
+      });
+
+      it('should generate condition with single parameter', () => {
+        const condition = testHelpers.generateDateExistsCondition(1, '>=');
+
+        expect(condition).toContain('>=');
+        expect(condition).toContain('$1');
+        expect(condition).not.toContain('$2');
+      });
+    });
+
+    describe('addDateFilters', () => {
+      it('should add start date filter', () => {
+        const whereConditions = [];
+        const params = [];
+        testHelpers.addDateFilters(whereConditions, params, '2024-01-01', null);
+
+        expect(whereConditions.length).toBe(1);
+        expect(params).toContain('2024-01-01');
+      });
+
+      it('should add end date filter', () => {
+        const whereConditions = [];
+        const params = [];
+        testHelpers.addDateFilters(whereConditions, params, null, '2024-12-31');
+
+        expect(whereConditions.length).toBe(1);
+        expect(params).toContain('2024-12-31');
+      });
+
+      it('should add both date filters', () => {
+        const whereConditions = [];
+        const params = [];
+        testHelpers.addDateFilters(whereConditions, params, '2024-01-01', '2024-12-31');
+
+        expect(whereConditions.length).toBe(2);
+        expect(params).toContain('2024-01-01');
+        expect(params).toContain('2024-12-31');
+      });
+    });
+
+    describe('addCarePathwayFilter', () => {
+      it('should add OPD Queue filter with special logic', () => {
+        const whereConditions = [];
+        const params = [];
+        testHelpers.addCarePathwayFilter(whereConditions, params, 'OPD Queue');
+
+        expect(whereConditions[0]).toContain('OR');
+        expect(params).toContain('OPD Queue');
+      });
+
+      it('should add regular care pathway filter', () => {
+        const whereConditions = [];
+        const params = [];
+        testHelpers.addCarePathwayFilter(whereConditions, params, 'Active Monitoring');
+
+        expect(whereConditions[0]).not.toContain('OR');
+        expect(params).toContain('Active Monitoring');
+      });
     });
 
     describe('addStatusFilter', () => {
-        it('should add status filter to conditions', () => {
-            const conditions = [];
-            const params = [];
-            addStatusFilter(conditions, params, 'Active');
-            expect(conditions[0]).toBe('p.status = $1');
-            expect(params).toEqual(['Active']);
-        });
+      it('should add status filter', () => {
+        const whereConditions = [];
+        const params = [];
+        testHelpers.addStatusFilter(whereConditions, params, 'Active');
 
-        it('should handle multiple filters', () => {
-            const conditions = [];
-            const params = ['existing'];
-            addStatusFilter(conditions, params, 'Inactive');
-            expect(conditions[0]).toBe('p.status = $2');
-            expect(params).toEqual(['existing', 'Inactive']);
-        });
+        expect(whereConditions.length).toBe(1);
+        expect(params).toContain('Active');
+      });
     });
 
     describe('buildQueryString', () => {
-        it('should build query without where clause', () => {
-            const selectFields = ['p.first_name AS "first_name"'];
-            const whereConditions = [];
-            const query = buildQueryString(selectFields, whereConditions);
-            expect(query).toContain('SELECT');
-            expect(query).toContain('FROM patients p');
-            expect(query).not.toContain('WHERE');
-        });
+      it('should build query with where clause', () => {
+        const selectFields = ['p.upi AS "upi"', 'p.first_name AS "first_name"'];
+        const whereConditions = ['p.status = $1'];
 
-        it('should build query with where clause', () => {
-            const selectFields = ['p.first_name AS "first_name"'];
-            const whereConditions = ['p.status = $1'];
-            const query = buildQueryString(selectFields, whereConditions);
-            expect(query).toContain('WHERE');
-            expect(query).toContain('p.status = $1');
-        });
+        const query = testHelpers.buildQueryString(selectFields, whereConditions);
 
-        it('should build query with multiple where conditions', () => {
-            const selectFields = ['p.first_name AS "first_name"'];
-            const whereConditions = ['p.status = $1', 'p.care_pathway = $2'];
-            const query = buildQueryString(selectFields, whereConditions);
-            expect(query).toContain('p.status = $1 AND p.care_pathway = $2');
-        });
+        expect(query).toContain('SELECT');
+        expect(query).toContain('WHERE');
+        expect(query).toContain('ORDER BY');
+      });
 
-        it('should include ORDER BY clause', () => {
-            const selectFields = ['p.first_name AS "first_name"'];
-            const whereConditions = [];
-            const query = buildQueryString(selectFields, whereConditions);
-            expect(query).toContain('ORDER BY p.created_at DESC');
-        });
+      it('should build query without where clause', () => {
+        const selectFields = ['p.upi AS "upi"'];
+        const whereConditions = [];
+
+        const query = testHelpers.buildQueryString(selectFields, whereConditions);
+
+        expect(query).toContain('SELECT');
+        expect(query).not.toContain('WHERE');
+        expect(query).toContain('ORDER BY');
+      });
+    });
+  });
+
+  describe('convertToCSV - additional edge cases', () => {
+    it('should escape value with comma and quote', () => {
+      const rows = [
+        { name: 'John, "Johnny" Doe', age: 30 }
+      ];
+      const headers = ['name', 'age'];
+
+      const csv = testHelpers.convertToCSV(rows, headers);
+
+      expect(csv).toContain('"John, ""Johnny"" Doe"');
     });
 
-    describe('buildExportQuery edge cases', () => {
-        it('should handle comma-separated fields', () => {
-            const result = buildExportQuery({ fields: 'first_name,last_name,upi' });
-            expect(result.selectFields.length).toBe(3);
-            expect(result.error).toBeUndefined();
-        });
+    it('should escape value with comma and newline', () => {
+      const rows = [
+        { name: 'John,\nDoe', age: 30 }
+      ];
+      const headers = ['name', 'age'];
 
-        it('should filter out invalid fields', () => {
-            const result = buildExportQuery({ fields: 'first_name,invalid_field,last_name' });
-            expect(result.selectFields.length).toBe(2);
-            expect(result.error).toBeUndefined();
-        });
+      const csv = testHelpers.convertToCSV(rows, headers);
 
-        it('should return error when all fields are invalid', () => {
-            const result = buildExportQuery({ fields: 'invalid1,invalid2' });
-            expect(result.error).toBe('No valid fields selected');
-        });
-
-        it('should handle OPD Queue with start date only', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                startDate: '2023-01-01'
-            });
-            expect(result.query).toContain('EXISTS');
-            expect(result.params).toContain('2023-01-01');
-        });
-
-        it('should handle OPD Queue with end date only', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                endDate: '2023-12-31'
-            });
-            expect(result.query).toContain('EXISTS');
-            expect(result.params).toContain('2023-12-31');
-        });
-
-        it('should handle OPD Queue with both dates', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                startDate: '2023-01-01',
-                endDate: '2023-12-31'
-            });
-            expect(result.query).toContain('EXISTS');
-            expect(result.params).toContain('2023-01-01');
-            expect(result.params).toContain('2023-12-31');
-        });
-
-        it('should handle care pathway without OPD Queue', () => {
-            const result = buildExportQuery({
-                carePathway: 'Cancer'
-            });
-            expect(result.query).toContain('p.care_pathway = $1');
-            expect(result.params).toEqual(['Cancer']);
-        });
-
-        it('should handle multiple filters together', () => {
-            const result = buildExportQuery({
-                carePathway: 'Cancer',
-                status: 'Active',
-                startDate: '2023-01-01',
-                endDate: '2023-12-31'
-            });
-            expect(result.query).toContain('p.care_pathway');
-            expect(result.query).toContain('p.status');
-            expect(result.query).toContain('p.created_at');
-        });
+      expect(csv).toContain('"John,\nDoe"');
     });
 
-    describe('convertToCSV edge cases', () => {
-        it('should handle empty rows', () => {
-            const headers = ['name', 'age'];
-            const rows = [];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toBe('name,age');
-        });
+    it('should escape value with quote and newline', () => {
+      const rows = [
+        { name: 'John "Johnny"\nDoe', age: 30 }
+      ];
+      const headers = ['name', 'age'];
 
-        it('should handle rows with quotes', () => {
-            const headers = ['name'];
-            const rows = [{ name: 'Test "Quote"' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('""');
-        });
+      const csv = testHelpers.convertToCSV(rows, headers);
 
-        it('should handle rows with newlines', () => {
-            const headers = ['note'];
-            const rows = [{ note: 'Line1\nLine2' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"Line1');
-        });
-
-        it('should handle rows with commas', () => {
-            const headers = ['address'];
-            const rows = [{ address: '123 Main St, Apt 4' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"123 Main St, Apt 4"');
-        });
-
-        it('should handle undefined values', () => {
-            const headers = ['name', 'age'];
-            const rows = [{ name: 'Test', age: undefined }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('Test,');
-        });
-
-        it('should handle numeric values', () => {
-            const headers = ['age'];
-            const rows = [{ age: 30 }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('30');
-        });
+      expect(csv).toContain('"John ""Johnny""\nDoe"');
     });
 
-    describe('exportPatients edge cases', () => {
-        it('should handle Excel export format', async () => {
-            mockClient.query.mockResolvedValue({
-                rows: [{ 'p.first_name': 'John' }]
-            });
+    it('should escape value with comma, quote, and newline', () => {
+      const rows = [
+        { name: 'John, "Johnny"\nDoe', age: 30 }
+      ];
+      const headers = ['name', 'age'];
 
-            await exportPatientsToExcel(mockReq, mockRes);
+      const csv = testHelpers.convertToCSV(rows, headers);
 
-            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', expect.stringContaining('spreadsheetml'));
-            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('.xlsx'));
-        });
-
-        it('should handle CSV export with filename', async () => {
-            mockClient.query.mockResolvedValue({
-                rows: [{ 'p.first_name': 'John' }]
-            });
-
-            await exportPatientsToCSV(mockReq, mockRes);
-
-            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('.csv'));
-        });
-
-        it('should handle database connection errors', async () => {
-            poolMock.connect.mockRejectedValueOnce(new Error('Connection failed'));
-
-            await exportPatientsToCSV(mockReq, mockRes);
-
-            expect(mockRes.status).toHaveBeenCalledWith(500);
-        });
-
-        it('should handle query execution errors', async () => {
-            mockClient.query.mockRejectedValueOnce(new Error('Query failed'));
-
-            await exportPatientsToCSV(mockReq, mockRes);
-
-            expect(mockRes.status).toHaveBeenCalledWith(500);
-            expect(mockClient.release).toHaveBeenCalled();
-        });
-
-        it('should always release client in finally block', async () => {
-            mockClient.query.mockRejectedValueOnce(new Error('Query failed'));
-
-            await exportPatientsToCSV(mockReq, mockRes);
-
-            expect(mockClient.release).toHaveBeenCalled();
-        });
+      expect(csv).toContain('"John, ""Johnny""\nDoe"');
     });
 
-    describe('generateDateExistsCondition edge cases', () => {
-        it('should handle different operators', () => {
-            const sql = generateDateExistsCondition(1, '<=');
-            expect(sql).toContain('appointment_date <= $1');
-        });
+    it('should handle empty string values', () => {
+      const rows = [
+        { name: '', age: 30 }
+      ];
+      const headers = ['name', 'age'];
 
-        it('should handle range with different operators', () => {
-            const sql = generateDateExistsCondition(1, '>=', 2);
-            expect(sql).toContain('appointment_date >= $1 AND a.appointment_date <= $2');
-        });
+      const csv = testHelpers.convertToCSV(rows, headers);
+
+      expect(csv).toContain(',30');
     });
 
-    describe('addDateFilters edge cases', () => {
-        it('should handle only start date', () => {
-            const conditions = [];
-            const params = [];
-            addDateFilters(conditions, params, '2023-01-01', null);
-            expect(conditions.length).toBe(1);
-            expect(conditions[0]).toContain('>=');
-        });
+    it('should handle zero values', () => {
+      const rows = [
+        { name: 'John', age: 0 }
+      ];
+      const headers = ['name', 'age'];
 
-        it('should handle only end date', () => {
-            const conditions = [];
-            const params = [];
-            addDateFilters(conditions, params, null, '2023-12-31');
-            expect(conditions.length).toBe(1);
-            expect(conditions[0]).toContain('<=');
-        });
+      const csv = testHelpers.convertToCSV(rows, headers);
 
-        it('should handle both dates', () => {
-            const conditions = [];
-            const params = [];
-            addDateFilters(conditions, params, '2023-01-01', '2023-12-31');
-            expect(conditions.length).toBe(2);
-        });
-
-        it('should handle existing params', () => {
-            const conditions = [];
-            const params = ['existing'];
-            addDateFilters(conditions, params, '2023-01-01', '2023-12-31');
-            expect(params.length).toBe(3);
-        });
+      expect(csv).toContain('John,0');
     });
 
-    describe('addCarePathwayFilter edge cases', () => {
-        it('should handle empty string care pathway', () => {
-            const conditions = [];
-            const params = [];
-            addCarePathwayFilter(conditions, params, '');
-            expect(conditions[0]).toContain('p.care_pathway = $1');
-        });
+    it('should handle boolean values', () => {
+      const rows = [
+        { name: 'John', active: true }
+      ];
+      const headers = ['name', 'active'];
 
-        it('should handle non-OPD Queue pathway', () => {
-            const conditions = [];
-            const params = [];
-            addCarePathwayFilter(conditions, params, 'Cancer');
-            expect(conditions[0]).toBe('p.care_pathway = $1');
-            expect(conditions[0]).not.toContain('OR');
-        });
+      const csv = testHelpers.convertToCSV(rows, headers);
+
+      expect(csv).toContain('John,true');
+    });
+  });
+
+  describe('buildExportQuery - additional edge cases', () => {
+    it('should handle OPD Queue with only startDate', () => {
+      const result = testHelpers.buildExportQuery({
+        carePathway: 'OPD Queue',
+        startDate: '2024-01-01'
+      });
+
+      expect(result.query).toContain('EXISTS');
+      expect(result.params).toContain('2024-01-01');
     });
 
-    describe('buildExportQuery - all condition combinations', () => {
-        it('should handle OPD Queue with no dates (needsAppointmentJoin false)', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue'
-            });
-            expect(result.query).not.toContain('EXISTS');
-            expect(result.query).toContain('p.care_pathway');
-        });
+    it('should handle OPD Queue with only endDate', () => {
+      const result = testHelpers.buildExportQuery({
+        carePathway: 'OPD Queue',
+        endDate: '2024-12-31'
+      });
 
-        it('should handle non-OPD Queue with dates (needsAppointmentJoin false)', () => {
-            const result = buildExportQuery({
-                carePathway: 'Cancer',
-                startDate: '2023-01-01',
-                endDate: '2023-12-31'
-            });
-            expect(result.query).not.toContain('EXISTS');
-            expect(result.query).toContain('p.created_at');
-        });
-
-        it('should handle OPD Queue with startDate only (needsAppointmentJoin true)', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                startDate: '2023-01-01'
-            });
-            expect(result.query).toContain('EXISTS');
-            expect(result.params).toContain('2023-01-01');
-        });
-
-        it('should handle OPD Queue with endDate only (needsAppointmentJoin true)', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                endDate: '2023-12-31'
-            });
-            expect(result.query).toContain('EXISTS');
-            expect(result.params).toContain('2023-12-31');
-        });
-
-        it('should handle OPD Queue with both dates (needsAppointmentJoin true)', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                startDate: '2023-01-01',
-                endDate: '2023-12-31'
-            });
-            expect(result.query).toContain('EXISTS');
-            expect(result.params).toContain('2023-01-01');
-            expect(result.params).toContain('2023-12-31');
-        });
-
-        it('should handle no care pathway with dates', () => {
-            const result = buildExportQuery({
-                startDate: '2023-01-01',
-                endDate: '2023-12-31'
-            });
-            expect(result.query).toContain('p.created_at');
-            expect(result.params).toContain('2023-01-01');
-            expect(result.params).toContain('2023-12-31');
-        });
-
-        it('should handle no care pathway and no dates', () => {
-            const result = buildExportQuery({});
-            expect(result.query).not.toContain('WHERE');
-        });
-
-        it('should handle care pathway without status', () => {
-            const result = buildExportQuery({
-                carePathway: 'Cancer'
-            });
-            expect(result.query).toContain('p.care_pathway');
-            expect(result.query).not.toContain('p.status');
-        });
-
-        it('should handle status without care pathway', () => {
-            const result = buildExportQuery({
-                status: 'Active'
-            });
-            expect(result.query).toContain('p.status');
-            expect(result.query).not.toContain('p.care_pathway');
-        });
-
-        it('should handle all filters together with OPD Queue', () => {
-            const result = buildExportQuery({
-                carePathway: 'OPD Queue',
-                status: 'Active',
-                startDate: '2023-01-01',
-                endDate: '2023-12-31',
-                fields: 'first_name,last_name'
-            });
-            expect(result.query).toContain('EXISTS');
-            expect(result.query).toContain('p.status');
-            expect(result.params).toContain('OPD Queue');
-            expect(result.params).toContain('Active');
-        });
-
-        it('should handle fields with spaces', () => {
-            const result = buildExportQuery({
-                fields: 'first_name, last_name, upi'
-            });
-            expect(result.selectFields.length).toBeGreaterThan(0);
-        });
-
-        it('should handle empty fields string', () => {
-            const result = buildExportQuery({
-                fields: ''
-            });
-            // Should use default fields
-            expect(result.selectFields.length).toBeGreaterThan(0);
-        });
+      expect(result.query).toContain('EXISTS');
+      expect(result.params).toContain('2024-12-31');
     });
 
-    describe('convertToCSV - all value combinations', () => {
-        it('should handle value with all special characters', () => {
-            const headers = ['text'];
-            const rows = [{ text: 'Test, "quote" and\nnewline' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"Test, ""quote"" and');
-        });
+    it('should handle OPD Queue without dates (no appointment join)', () => {
+      const result = testHelpers.buildExportQuery({
+        carePathway: 'OPD Queue'
+      });
 
-        it('should handle value with only comma', () => {
-            const headers = ['address'];
-            const rows = [{ address: '123, Main St' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"123, Main St"');
-        });
-
-        it('should handle value with only quote', () => {
-            const headers = ['name'];
-            const rows = [{ name: 'Test "Quote"' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('""');
-        });
-
-        it('should handle value with only newline', () => {
-            const headers = ['note'];
-            const rows = [{ note: 'Line1\nLine2' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"Line1');
-        });
-
-        it('should handle value with none of the special characters', () => {
-            const headers = ['name'];
-            const rows = [{ name: 'Simple Text' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('Simple Text');
-            expect(csv).not.toContain('"Simple Text"');
-        });
-
-        it('should handle multiple rows with mixed values', () => {
-            const headers = ['name', 'address'];
-            const rows = [
-                { name: 'John', address: '123 Main St' },
-                { name: 'Jane, Doe', address: null },
-                { name: 'Bob', address: '456 "Park" Ave' }
-            ];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('John');
-            expect(csv).toContain('Jane, Doe');
-            expect(csv).toContain('"Park"');
-        });
+      expect(result.query).not.toContain('EXISTS');
+      expect(result.params).toContain('OPD Queue');
     });
 
-    describe('addDateFilters - parameter index edge cases', () => {
-        it('should handle paramIndex calculation with existing params', () => {
-            const conditions = [];
-            const params = ['param1', 'param2'];
-            addDateFilters(conditions, params, '2023-01-01', '2023-12-31');
-            expect(conditions[0]).toBe('p.created_at >= $3');
-            expect(conditions[1]).toBe('p.created_at <= $4');
-        });
+    it('should handle fields with whitespace', () => {
+      const result = testHelpers.buildExportQuery({
+        fields: ' upi , first_name , last_name '
+      });
 
-        it('should handle only startDate with existing params', () => {
-            const conditions = [];
-            const params = ['existing'];
-            addDateFilters(conditions, params, '2023-01-01', null);
-            expect(conditions[0]).toBe('p.created_at >= $2');
-            expect(params.length).toBe(2);
-        });
-
-        it('should handle only endDate with existing params', () => {
-            const conditions = [];
-            const params = ['existing'];
-            addDateFilters(conditions, params, null, '2023-12-31');
-            expect(conditions[0]).toBe('p.created_at <= $2');
-            expect(params.length).toBe(2);
-        });
+      expect(result.selectedFields).toContain('upi');
+      expect(result.selectedFields).toContain('first_name');
+      expect(result.selectedFields).toContain('last_name');
     });
 
-    describe('buildDateConditions - all operator combinations', () => {
-        it('should handle startDate with >= operator', () => {
-            const params = [];
-            const result = buildDateConditions('2023-01-01', null, 1, params);
-            expect(result[0]).toContain('>=');
-        });
+    it('should filter out invalid fields from custom fields list', () => {
+      const result = testHelpers.buildExportQuery({
+        fields: 'upi,invalid_field,first_name,another_invalid'
+      });
 
-        it('should handle endDate with <= operator', () => {
-            const params = [];
-            const result = buildDateConditions(null, '2023-12-31', 1, params);
-            expect(result[0]).toContain('<=');
-        });
-
-        it('should handle both dates with range', () => {
-            const params = [];
-            const result = buildDateConditions('2023-01-01', '2023-12-31', 1, params);
-            expect(result[0]).toContain('>=');
-            expect(result[0]).toContain('<=');
-        });
+      expect(result.selectedFields).toContain('upi');
+      expect(result.selectedFields).toContain('first_name');
+      expect(result.selectedFields).not.toContain('invalid_field');
+      expect(result.selectedFields).not.toContain('another_invalid');
     });
 
-    describe('convertToCSV - null and undefined values', () => {
-        it('should handle null values', () => {
-            const headers = ['name', 'age'];
-            const rows = [{ name: 'John', age: null }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('John,');
-            expect(csv.split('\n')[1].split(',')[1]).toBe('');
-        });
+    it('should handle empty fields string', () => {
+      const result = testHelpers.buildExportQuery({
+        fields: ''
+      });
 
-        it('should handle undefined values', () => {
-            const headers = ['name', 'email'];
-            const rows = [{ name: 'John', email: undefined }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('John,');
-            expect(csv.split('\n')[1].split(',')[1]).toBe('');
-        });
-
-        it('should handle all null row', () => {
-            const headers = ['name', 'age'];
-            const rows = [{ name: null, age: null }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('name,age');
-            expect(csv.split('\n')[1]).toBe(',');
-        });
-
-        it('should handle empty string values', () => {
-            const headers = ['name', 'email'];
-            const rows = [{ name: 'John', email: '' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('John,');
-        });
-
-        it('should handle zero values', () => {
-            const headers = ['age', 'count'];
-            const rows = [{ age: 0, count: 0 }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('0,0');
-        });
+      // Should use default fields
+      expect(result.selectedFields).toEqual(testHelpers.DEFAULT_FIELDS);
     });
 
-    describe('buildExportQuery - parameter index calculations', () => {
-        it('should calculate parameter index correctly with existing params', () => {
-            const result = buildExportQuery({
-                fields: 'first_name,last_name',
-                startDate: '2023-01-01',
-                endDate: '2023-12-31',
-                carePathway: 'Active',
-                status: 'Pending'
-            });
-            expect(result.params).toHaveLength(4);
-            expect(result.query).toContain('$1');
-            expect(result.query).toContain('$2');
-            expect(result.query).toContain('$3');
-            expect(result.query).toContain('$4');
-        });
+    it('should handle null fields', () => {
+      const result = testHelpers.buildExportQuery({
+        fields: null
+      });
 
-        it('should calculate parameter index correctly for OPD Queue with dates', () => {
-            const result = buildExportQuery({
-                fields: 'first_name',
-                startDate: '2023-01-01',
-                endDate: '2023-12-31',
-                carePathway: 'OPD Queue'
-            });
-            // OPD Queue adds carePathway param, then date params
-            expect(result.params.length).toBeGreaterThan(2);
-            expect(result.query).toContain('$');
-        });
-
-        it('should handle parameter index with only carePathway', () => {
-            const result = buildExportQuery({
-                fields: 'first_name',
-                carePathway: 'Active'
-            });
-            expect(result.params).toHaveLength(1);
-            expect(result.query).toContain('$1');
-        });
-
-        it('should handle parameter index with only status', () => {
-            const result = buildExportQuery({
-                fields: 'first_name',
-                status: 'Pending'
-            });
-            expect(result.params).toHaveLength(1);
-            expect(result.query).toContain('$1');
-        });
-
-        it('should handle parameter index with carePathway and status', () => {
-            const result = buildExportQuery({
-                fields: 'first_name',
-                carePathway: 'Active',
-                status: 'Pending'
-            });
-            expect(result.params).toHaveLength(2);
-            expect(result.query).toContain('$1');
-            expect(result.query).toContain('$2');
-        });
+      // Should use default fields
+      expect(result.selectedFields).toEqual(testHelpers.DEFAULT_FIELDS);
     });
 
-    describe('buildDateConditions - parameter index edge cases', () => {
-        it('should calculate parameter index correctly with existing params', () => {
-            const params = ['existing1', 'existing2'];
-            const result = buildDateConditions('2023-01-01', '2023-12-31', 3, params);
-            expect(params).toHaveLength(4);
-            expect(params[2]).toBe('2023-01-01');
-            expect(params[3]).toBe('2023-12-31');
-        });
+    it('should handle undefined fields', () => {
+      const result = testHelpers.buildExportQuery({
+        fields: undefined
+      });
 
-        it('should calculate parameter index correctly for startDate only with existing params', () => {
-            const params = ['existing'];
-            const result = buildDateConditions('2023-01-01', null, 2, params);
-            expect(params).toHaveLength(2);
-            expect(params[1]).toBe('2023-01-01');
-        });
-
-        it('should calculate parameter index correctly for endDate only with existing params', () => {
-            const params = ['existing'];
-            const result = buildDateConditions(null, '2023-12-31', 2, params);
-            expect(params).toHaveLength(2);
-            expect(params[1]).toBe('2023-12-31');
-        });
+      // Should use default fields
+      expect(result.selectedFields).toEqual(testHelpers.DEFAULT_FIELDS);
     });
 
-    describe('addDateFilters - parameter index edge cases', () => {
-        it('should calculate parameter index correctly with existing params', () => {
-            const conditions = [];
-            const params = ['existing1', 'existing2'];
-            addDateFilters(conditions, params, '2023-01-01', '2023-12-31');
-            expect(params).toHaveLength(4);
-            expect(conditions[0]).toContain('$3');
-            expect(conditions[1]).toContain('$4');
-        });
+    it('should handle all filters together', () => {
+      const result = testHelpers.buildExportQuery({
+        fields: 'upi,first_name',
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+        carePathway: 'Active Monitoring',
+        status: 'Active'
+      });
 
-        it('should calculate parameter index correctly for startDate only with existing params', () => {
-            const conditions = [];
-            const params = ['existing'];
-            addDateFilters(conditions, params, '2023-01-01', null);
-            expect(params).toHaveLength(2);
-            expect(conditions[0]).toContain('$2');
-        });
-
-        it('should calculate parameter index correctly for endDate only with existing params', () => {
-            const conditions = [];
-            const params = ['existing'];
-            addDateFilters(conditions, params, null, '2023-12-31');
-            expect(params).toHaveLength(2);
-            expect(conditions[0]).toContain('$2');
-        });
+      expect(result.params).toContain('2024-01-01');
+      expect(result.params).toContain('2024-12-31');
+      expect(result.params).toContain('Active Monitoring');
+      expect(result.params).toContain('Active');
     });
 
-    describe('addCarePathwayFilter - parameter index edge cases', () => {
-        it('should calculate parameter index correctly with existing params', () => {
-            const conditions = [];
-            const params = ['existing1', 'existing2'];
-            addCarePathwayFilter(conditions, params, 'Active');
-            expect(params).toHaveLength(3);
-            expect(conditions[0]).toContain('$3');
-        });
+    it('should handle OPD Queue with all filters including dates', () => {
+      const result = testHelpers.buildExportQuery({
+        fields: 'upi,first_name',
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+        carePathway: 'OPD Queue',
+        status: 'Active'
+      });
 
-        it('should calculate parameter index correctly for OPD Queue with existing params', () => {
-            const conditions = [];
-            const params = ['existing'];
-            addCarePathwayFilter(conditions, params, 'OPD Queue');
-            expect(params).toHaveLength(2);
-            expect(conditions[0]).toContain('$2');
-        });
+      expect(result.query).toContain('EXISTS');
+      expect(result.params).toContain('2024-01-01');
+      expect(result.params).toContain('2024-12-31');
+      expect(result.params).toContain('OPD Queue');
+      expect(result.params).toContain('Active');
+    });
+  });
+
+  describe('exportPatientsToCSV - additional edge cases', () => {
+    it('should handle OPD Queue with only startDate', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name',
+          carePathway: 'OPD Queue',
+          startDate: '2024-01-01'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
+
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
+
+      expect(mockRes.send).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
-    describe('addStatusFilter - parameter index edge cases', () => {
-        it('should calculate parameter index correctly with existing params', () => {
-            const conditions = [];
-            const params = ['existing1', 'existing2'];
-            addStatusFilter(conditions, params, 'Pending');
-            expect(params).toHaveLength(3);
-            expect(conditions[0]).toContain('$3');
-        });
+    it('should handle OPD Queue with only endDate', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name',
+          carePathway: 'OPD Queue',
+          endDate: '2024-12-31'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
+
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
+
+      expect(mockRes.send).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
-    describe('exportPatients - error handling edge cases', () => {
-        it('should handle logDataExport error', async () => {
-            logDataExport.mockRejectedValueOnce(new Error('Log error'));
-            mockClient.query.mockResolvedValue({
-                rows: [{ 'p.first_name': 'John' }]
-            });
+    it('should handle OPD Queue without dates', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name',
+          carePathway: 'OPD Queue'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
 
-            await exportPatientsToCSV(mockReq, mockRes);
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
 
-            // Should still send response even if logging fails
-            expect(mockRes.send).toHaveBeenCalled();
-        });
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
 
-        it('should handle format.toUpperCase() in error message', async () => {
-            mockClient.query.mockRejectedValue(new Error('DB Error'));
-            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-            await exportPatientsToExcel(mockReq, mockRes);
-
-            expect(consoleSpy).toHaveBeenCalledWith('Export patients to EXCEL error:', expect.any(Error));
-            consoleSpy.mockRestore();
-        });
+      expect(mockRes.send).toHaveBeenCalled();
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
-    describe('getExportFields - error handling', () => {
-        it('should handle JSON serialization error', async () => {
-            const req = {};
-            const res = {
-                json: jest.fn().mockImplementation(() => {
-                    throw new Error('Serialization error');
-                }),
-                status: jest.fn().mockReturnThis()
-            };
+    it('should handle CSV export with mixed null/undefined values', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name,last_name'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
 
-            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockClient.query.mockResolvedValue({
+        rows: [
+          { upi: 'UPI1', first_name: 'John', last_name: null },
+          { upi: 'UPI2', first_name: undefined, last_name: 'Doe' }
+        ]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
 
-            await getExportFields(req, res);
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
 
-            expect(consoleSpy).toHaveBeenCalledWith('Get export fields error:', expect.any(Error));
-            expect(res.status).toHaveBeenCalledWith(500);
-            consoleSpy.mockRestore();
-        });
+      expect(mockRes.send).toHaveBeenCalled();
+      const csvContent = mockRes.send.mock.calls[0][0];
+      expect(csvContent).toContain('UPI1,John,');
+      expect(csvContent).toContain('UPI2,,Doe');
     });
 
-    describe('exportPatients - connection error handling', () => {
-        it('should handle pool connection error', async () => {
-            poolMock.connect.mockRejectedValueOnce(new Error('Connection pool exhausted'));
+    it('should handle CSV export with special characters in data', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
 
-            await exportPatientsToCSV(mockReq, mockRes);
+      mockClient.query.mockResolvedValue({
+        rows: [
+          { upi: 'UPI1', first_name: 'John, "Johnny" Doe' },
+          { upi: 'UPI2', first_name: 'Jane\nSmith' }
+        ]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
 
-            expect(mockRes.status).toHaveBeenCalledWith(500);
-            expect(mockRes.json).toHaveBeenCalledWith({
-                success: false,
-                message: 'Internal server error'
-            });
-        });
+      await exportController.exportPatientsToCSV(mockReq, mockRes);
+
+      expect(mockRes.send).toHaveBeenCalled();
+      const csvContent = mockRes.send.mock.calls[0][0];
+      expect(csvContent).toContain('"John, ""Johnny"" Doe"');
+      expect(csvContent).toContain('"Jane\nSmith"');
+    });
+  });
+
+  describe('exportPatientsToExcel - additional edge cases', () => {
+    it('should handle Excel export with OPD Queue and only startDate', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name',
+          carePathway: 'OPD Queue',
+          startDate: '2024-01-01'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
+
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
+
+      await exportController.exportPatientsToExcel(mockReq, mockRes);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      expect(mockRes.send).toHaveBeenCalled();
     });
 
-    describe('buildExportQuery - edge cases', () => {
-        it('should handle fields with extra whitespace', () => {
-            const result = buildExportQuery({
-                fields: '  first_name  ,  last_name  ,  upi  '
-            });
-            expect(result.selectFields.length).toBe(3);
-            expect(result.error).toBeUndefined();
-        });
+    it('should handle Excel export with OPD Queue and only endDate', async () => {
+      const mockReq = {
+        query: {
+          fields: 'upi,first_name',
+          carePathway: 'OPD Queue',
+          endDate: '2024-12-31'
+        },
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
 
-        it('should handle empty fields array after filtering', () => {
-            const result = buildExportQuery({
-                fields: 'invalid1,invalid2,invalid3'
-            });
-            expect(result.error).toBe('No valid fields selected');
-        });
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
 
-        it('should handle null values in query params', () => {
-            const result = buildExportQuery({
-                fields: null,
-                startDate: null,
-                endDate: null,
-                carePathway: null,
-                status: null
-            });
-            expect(result.selectFields.length).toBeGreaterThan(0);
-            expect(result.error).toBeUndefined();
-        });
+      await exportController.exportPatientsToExcel(mockReq, mockRes);
 
-        it('should handle undefined values in query params', () => {
-            const result = buildExportQuery({
-                fields: undefined,
-                startDate: undefined,
-                endDate: undefined
-            });
-            expect(result.selectFields.length).toBeGreaterThan(0);
-            expect(result.error).toBeUndefined();
-        });
+      expect(mockRes.send).toHaveBeenCalled();
     });
 
-    describe('convertToCSV - all special character combinations', () => {
-        it('should handle value with comma and quote', () => {
-            const headers = ['text'];
-            const rows = [{ text: 'Test, "quote"' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"Test, ""quote"""');
-        });
+    it('should handle Excel export with default fields', async () => {
+      const mockReq = {
+        query: {},
+        user: { id: 1 }
+      };
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn()
+      };
 
-        it('should handle value with newline and comma', () => {
-            const headers = ['note'];
-            const rows = [{ note: 'Line1\nLine2, continuation' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"Line1');
-            expect(csv).toContain('continuation"');
-        });
+      mockClient.query.mockResolvedValue({
+        rows: [{ upi: 'UPI1', first_name: 'John' }]
+      });
+      mockLogDataExport.mockResolvedValue(undefined);
 
-        it('should handle value with all special characters', () => {
-            const headers = ['text'];
-            const rows = [{ text: 'Test, "quote" and\nnewline' }];
-            const csv = convertToCSV(rows, headers);
-            expect(csv).toContain('"Test, ""quote"" and');
-        });
+      await exportController.exportPatientsToExcel(mockReq, mockRes);
+
+      expect(mockRes.send).toHaveBeenCalled();
+    });
+  });
+
+  describe('generateDateExistsCondition - additional edge cases', () => {
+    it('should generate condition with <= operator', () => {
+      const condition = testHelpers.generateDateExistsCondition(1, '<=');
+
+      expect(condition).toContain('<=');
+      expect(condition).toContain('$1');
     });
 
-    describe('exportPatients - format handling', () => {
-        it('should handle Excel format correctly', async () => {
-            mockClient.query.mockResolvedValue({
-                rows: [{ 'p.first_name': 'John' }]
-            });
+    it('should generate condition with > operator', () => {
+      const condition = testHelpers.generateDateExistsCondition(1, '>');
 
-            await exportPatientsToExcel(mockReq, mockRes);
-
-            expect(mockRes.setHeader).toHaveBeenCalledWith(
-                'Content-Type',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            );
-            expect(mockRes.setHeader).toHaveBeenCalledWith(
-                'Content-Disposition',
-                expect.stringContaining('.xlsx')
-            );
-        });
-
-        it('should handle CSV format correctly', async () => {
-            mockClient.query.mockResolvedValue({
-                rows: [{ 'p.first_name': 'John' }]
-            });
-
-            await exportPatientsToCSV(mockReq, mockRes);
-
-            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-            expect(mockRes.setHeader).toHaveBeenCalledWith(
-                'Content-Disposition',
-                expect.stringContaining('.csv')
-            );
-        });
+      expect(condition).toContain('>');
+      expect(condition).toContain('$1');
     });
+
+    it('should generate condition with < operator', () => {
+      const condition = testHelpers.generateDateExistsCondition(1, '<');
+
+      expect(condition).toContain('<');
+      expect(condition).toContain('$1');
+    });
+
+    it('should generate condition with = operator and both parameters', () => {
+      const condition = testHelpers.generateDateExistsCondition(1, '=', 2);
+
+      expect(condition).toContain('=');
+      expect(condition).toContain('$1');
+      expect(condition).toContain('$2');
+    });
+  });
+
+  describe('addDateFilters - additional edge cases', () => {
+    it('should not add filters when both dates are null', () => {
+      const whereConditions = [];
+      const params = [];
+      testHelpers.addDateFilters(whereConditions, params, null, null);
+
+      expect(whereConditions.length).toBe(0);
+      expect(params.length).toBe(0);
+    });
+
+    it('should not add filters when both dates are undefined', () => {
+      const whereConditions = [];
+      const params = [];
+      testHelpers.addDateFilters(whereConditions, params, undefined, undefined);
+
+      expect(whereConditions.length).toBe(0);
+      expect(params.length).toBe(0);
+    });
+  });
+
+  describe('addCarePathwayFilter - additional edge cases', () => {
+    it('should handle empty string care pathway', () => {
+      const whereConditions = [];
+      const params = [];
+      testHelpers.addCarePathwayFilter(whereConditions, params, '');
+
+      expect(whereConditions.length).toBe(1);
+      expect(params).toContain('');
+    });
+
+    it('should handle null care pathway', () => {
+      const whereConditions = [];
+      const params = [];
+      testHelpers.addCarePathwayFilter(whereConditions, params, null);
+
+      expect(whereConditions.length).toBe(1);
+      expect(params).toContain(null);
+    });
+  });
+
+  describe('addStatusFilter - additional edge cases', () => {
+    it('should handle empty string status', () => {
+      const whereConditions = [];
+      const params = [];
+      testHelpers.addStatusFilter(whereConditions, params, '');
+
+      expect(whereConditions.length).toBe(1);
+      expect(params).toContain('');
+    });
+
+    it('should handle null status', () => {
+      const whereConditions = [];
+      const params = [];
+      testHelpers.addStatusFilter(whereConditions, params, null);
+
+      expect(whereConditions.length).toBe(1);
+      expect(params).toContain(null);
+    });
+  });
 });

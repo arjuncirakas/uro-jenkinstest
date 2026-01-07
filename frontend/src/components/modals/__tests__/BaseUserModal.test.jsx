@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import BaseUserModal, { validateField } from '../BaseUserModal';
 import { User, Mail } from 'lucide-react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
+// ALL MOCKS MUST BE AT THE TOP - BEFORE COMPONENT IMPORTS
 // Mock child modals - but capture onClose to test it
 let successModalOnClose;
 let errorModalOnClose;
@@ -21,6 +21,9 @@ vi.mock('../ErrorModal', () => ({
         return isOpen ? <div data-testid="error-modal">{message}</div> : null;
     }
 }));
+
+// NOW import component AFTER all mocks
+import BaseUserModal, { validateField } from '../BaseUserModal';
 
 describe('BaseUserModal', () => {
     const mockOnClose = vi.fn();

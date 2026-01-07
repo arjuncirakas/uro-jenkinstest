@@ -63,6 +63,16 @@ describe('nursesController', () => {
     jest.clearAllMocks();
   });
 
+  describe('Module exports', () => {
+    it('should export all controller functions', () => {
+      expect(typeof nursesController.getAllNurses).toBe('function');
+      expect(typeof nursesController.getNurseById).toBe('function');
+      expect(typeof nursesController.createNurse).toBe('function');
+      expect(typeof nursesController.updateNurse).toBe('function');
+      expect(typeof nursesController.deleteNurse).toBe('function');
+    });
+  });
+
   describe('getAllNurses', () => {
     it('should get all active nurses by default', async () => {
       userControllerHelper.getAllUsersByRole.mockResolvedValue({
