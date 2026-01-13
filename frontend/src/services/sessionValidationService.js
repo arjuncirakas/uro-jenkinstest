@@ -27,10 +27,10 @@ class SessionValidationService {
     this.onSessionTerminated = onSessionTerminated;
     this.isActive = true;
 
-    // Run initial check after 5 seconds
+    // Run initial check immediately (after a short delay to ensure app is ready)
     setTimeout(() => {
       this.checkSession();
-    }, 5000);
+    }, 2000);
 
     // Check periodically
     this.checkInterval = setInterval(() => {

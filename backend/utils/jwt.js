@@ -1,12 +1,20 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 
-// Generate access token
-export const generateAccessToken = (user) => {
+// Generate access token with session identifier for single device login
+export const generateAccessToken = (user, refreshToken = null) => {
+  // Create session hash from refresh token to link access token to active session
+  let sessionHash = null;
+  if (refreshToken) {
+    sessionHash = crypto.createHash('sha256').update(refreshToken).digest('hex').substring(0, 16);
+  }
+
   return jwt.sign(
     {
       userId: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      sessionHash // Link access token to refresh token session
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
@@ -27,8 +35,9 @@ export const generateRefreshToken = (user) => {
 
 // Generate both tokens
 export const generateTokens = (user) => {
-  const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
+  // Generate access token with session hash linked to refresh token
+  const accessToken = generateAccessToken(user, refreshToken);
   
   return {
     accessToken,
@@ -38,20 +47,12 @@ export const generateTokens = (user) => {
 
 // Verify access token
 export const verifyAccessToken = (token) => {
-  try {
-    return jwt.verify(token, process.env.JWT_SECRET);
-  } catch (error) {
-    throw error;
-  }
+  return jwt.verify(token, process.env.JWT_SECRET);
 };
 
 // Verify refresh token
 export const verifyRefreshToken = (token) => {
-  try {
-    return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-  } catch (error) {
-    throw error;
-  }
+  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 };
 
 // Cookie configuration helper

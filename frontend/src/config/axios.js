@@ -71,6 +71,18 @@ apiClient.interceptors.response.use(
     
     // Handle 401 errors (unauthorized) - but NOT for auth endpoints
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Check if this is a SESSION_TERMINATED error (single device login)
+      if (error.response?.data?.code === 'SESSION_TERMINATED' || 
+          error.response?.data?.code === 'SESSION_VALIDATION_ERROR') {
+        console.warn('🔒 [Axios] Session terminated - user logged in from another device');
+        // Don't try to refresh - session is terminated
+        // Let the session validation service handle the logout
+        const { default: tokenService } = await import('../services/tokenService.js');
+        tokenService.clearAuth();
+        // Redirect will be handled by session validation service
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
       
       try {

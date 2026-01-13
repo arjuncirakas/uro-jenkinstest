@@ -92,31 +92,82 @@ export const authenticateToken = async (req, res, next) => {
       }
 
       // Check if session is still valid (Single Device Login)
-      // Check if user has any valid active session
-      // Since we delete all previous sessions on login, there should only be one session per user
+      // Validate that the access token's session hash matches an active session
       try {
-        const sessionCheck = await client.query(
-          `SELECT id FROM active_sessions 
-           WHERE user_id = $1 
-           AND expires_at > NOW() 
-           ORDER BY created_at DESC 
-           LIMIT 1`,
-          [user.id]
-        );
+        const crypto = await import('node:crypto');
+        const sessionHash = decoded.sessionHash;
+        
+        if (!sessionHash) {
+          // Legacy token without session hash - check if any active session exists
+          // If there's an active session, it means user logged in from another device
+          // (because new logins create tokens with sessionHash)
+          const sessionCheck = await client.query(
+            `SELECT id, session_token FROM active_sessions 
+             WHERE user_id = $1 
+             AND expires_at > NOW() 
+             ORDER BY created_at DESC 
+             LIMIT 1`,
+            [user.id]
+          );
 
-        // If no active session found, user was logged out from another device
-        if (sessionCheck.rows.length === 0) {
-          console.log(`❌ [Auth ${requestId}] No active session found - user logged in from another device`);
-          return res.status(401).json({
-            success: false,
-            message: 'Your session has been terminated. You have been logged in from another device.',
-            code: 'SESSION_TERMINATED'
-          });
+          if (sessionCheck.rows.length > 0) {
+            // There's an active session, but this token doesn't have a sessionHash
+            // This means it's an old token from before the new login
+            console.log(`❌ [Auth ${requestId}] Legacy token detected but active session exists - user logged in from another device`);
+            return res.status(401).json({
+              success: false,
+              message: 'Your session has been terminated. You have been logged in from another device.',
+              code: 'SESSION_TERMINATED'
+            });
+          }
+          // No active session and no sessionHash - allow through (might be very old token or edge case)
+          console.log(`⚠️ [Auth ${requestId}] Legacy token without session hash and no active session - allowing (edge case)`);
+        } else {
+          // Check if the session hash matches an active session's refresh token
+          const sessionCheck = await client.query(
+            `SELECT id, session_token FROM active_sessions 
+             WHERE user_id = $1 
+             AND expires_at > NOW() 
+             ORDER BY created_at DESC 
+             LIMIT 1`,
+            [user.id]
+          );
+
+          if (sessionCheck.rows.length === 0) {
+            console.log(`❌ [Auth ${requestId}] No active session found - user logged in from another device`);
+            return res.status(401).json({
+              success: false,
+              message: 'Your session has been terminated. You have been logged in from another device.',
+              code: 'SESSION_TERMINATED'
+            });
+          }
+
+          // Verify session hash matches the active session's refresh token
+          const activeSessionToken = sessionCheck.rows[0].session_token;
+          const activeSessionHash = crypto.createHash('sha256').update(activeSessionToken).digest('hex').substring(0, 16);
+          
+          console.log(`🔍 [Auth ${requestId}] Session validation - Token hash: ${sessionHash}, Active hash: ${activeSessionHash}`);
+          
+          if (sessionHash !== activeSessionHash) {
+            console.log(`❌ [Auth ${requestId}] Session hash mismatch - user logged in from another device`);
+            console.log(`❌ [Auth ${requestId}] Token session hash: ${sessionHash}, Active session hash: ${activeSessionHash}`);
+            return res.status(401).json({
+              success: false,
+              message: 'Your session has been terminated. You have been logged in from another device.',
+              code: 'SESSION_TERMINATED'
+            });
+          }
+          
+          console.log(`✅ [Auth ${requestId}] Session hash matches - session is valid`);
         }
       } catch (sessionError) {
         console.error(`❌ [Auth ${requestId}] Error checking active session:`, sessionError);
-        // Continue with authentication if session check fails (fail open for now)
-        // In production, you might want to fail closed
+        // Fail closed for security - if we can't verify the session, reject the request
+        return res.status(401).json({
+          success: false,
+          message: 'Session validation failed. Please log in again.',
+          code: 'SESSION_VALIDATION_ERROR'
+        });
       }
 
       // Add user info to request object
