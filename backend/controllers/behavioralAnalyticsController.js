@@ -2,6 +2,7 @@ import {
   calculateBaseline,
   getUserBaselines,
   getAnomalies,
+  getNotifiedAnomalies,
   updateAnomalyStatus,
   getAnomalyStatistics,
   detectAnomalies
@@ -94,6 +95,50 @@ export const getAnomaliesController = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve anomalies',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * Get notified anomalies (anomalies that have been converted to breach incidents)
+ * GET /api/superadmin/behavioral-analytics/anomalies/notified?severity=high&limit=50&offset=0
+ */
+export const getNotifiedAnomaliesController = async (req, res) => {
+  try {
+    const {
+      severity,
+      userId,
+      startDate,
+      endDate,
+      limit,
+      offset
+    } = req.query;
+
+    const filters = {};
+    if (severity) filters.severity = severity;
+    if (userId) filters.userId = parseInt(userId);
+    if (startDate) filters.startDate = new Date(startDate);
+    if (endDate) filters.endDate = new Date(endDate);
+    if (limit) filters.limit = parseInt(limit);
+    if (offset) filters.offset = parseInt(offset);
+
+    const result = await getNotifiedAnomalies(filters);
+
+    res.json({
+      success: true,
+      data: result.anomalies,
+      pagination: {
+        total: result.total,
+        limit: result.limit,
+        offset: result.offset
+      }
+    });
+  } catch (error) {
+    console.error('Error getting notified anomalies:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve notified anomalies',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

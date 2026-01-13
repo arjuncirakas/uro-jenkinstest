@@ -56,6 +56,33 @@ class BehavioralAnalyticsService {
   }
 
   /**
+   * Get notified anomalies (anomalies that have been converted to breach incidents)
+   * @param {Object} filters - Filter options { severity, userId, startDate, endDate, limit, offset }
+   */
+  async getNotifiedAnomalies(filters = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (filters.severity) params.append('severity', filters.severity);
+      if (filters.userId) params.append('userId', filters.userId);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.limit) params.append('limit', filters.limit);
+      if (filters.offset) params.append('offset', filters.offset);
+
+      const response = await apiClient.get(`/superadmin/behavioral-analytics/anomalies/notified?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching notified anomalies:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to fetch notified anomalies',
+        data: [],
+        pagination: {}
+      };
+    }
+  }
+
+  /**
    * Update anomaly status
    * @param {number} anomalyId - Anomaly ID
    * @param {string} status - New status

@@ -9,6 +9,7 @@ import {
   refreshToken, 
   logout, 
   getProfile,
+  checkSession,
   requestPasswordReset,
   verifyPasswordResetOTP,
   resetPassword
@@ -127,6 +128,12 @@ router.post('/reset-password',
 );
 
 // Protected routes
+router.get('/check-session', 
+  generalLimiter, 
+  authenticateToken, 
+  checkSession
+);
+
 router.get('/profile', 
   generalLimiter, 
   authenticateToken, 

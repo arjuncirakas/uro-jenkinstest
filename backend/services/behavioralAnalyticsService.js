@@ -430,10 +430,104 @@ export const getAnomalies = async (filters = {}) => {
       params.push(endDate);
     }
 
+    // Get total count - exclude anomalies that have been converted to incidents
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM behavioral_anomalies ba
+      LEFT JOIN users u ON ba.user_id = u.id
+      LEFT JOIN breach_incidents bi ON ba.id = bi.anomaly_id
+      ${whereClause}
+      AND bi.anomaly_id IS NULL
+    `;
+    const countResult = await client.query(countQuery, params);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Build main query - exclude anomalies that have been converted to incidents
+    let query = `
+      SELECT ba.*, u.email as user_email, u.first_name, u.last_name
+      FROM behavioral_anomalies ba
+      LEFT JOIN users u ON ba.user_id = u.id
+      LEFT JOIN breach_incidents bi ON ba.id = bi.anomaly_id
+      ${whereClause}
+      AND bi.anomaly_id IS NULL
+    `;
+
+    // Get paginated results
+    query += ` ORDER BY ba.detected_at DESC`;
+    paramCount++;
+    query += ` LIMIT $${paramCount}`;
+    params.push(limit);
+    paramCount++;
+    query += ` OFFSET $${paramCount}`;
+    params.push(offset);
+
+    const result = await client.query(query, params);
+
+    return {
+      anomalies: result.rows,
+      total,
+      limit,
+      offset
+    };
+  } catch (error) {
+    console.error('Error getting anomalies:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Get notified anomalies (anomalies that have been converted to breach incidents)
+ * @param {Object} filters - Filter options { severity, userId, startDate, endDate, limit, offset }
+ * @returns {Promise<Object>} Object with anomalies array and total count
+ */
+export const getNotifiedAnomalies = async (filters = {}) => {
+  const client = await pool.connect();
+
+  try {
+    const {
+      severity,
+      userId,
+      startDate,
+      endDate,
+      limit = 50,
+      offset = 0
+    } = filters;
+
+    let whereClause = 'WHERE bi.anomaly_id IS NOT NULL';
+    const params = [];
+    let paramCount = 0;
+
+    if (severity) {
+      paramCount++;
+      whereClause += ` AND ba.severity = $${paramCount}`;
+      params.push(severity);
+    }
+
+    if (userId) {
+      paramCount++;
+      whereClause += ` AND ba.user_id = $${paramCount}`;
+      params.push(userId);
+    }
+
+    if (startDate) {
+      paramCount++;
+      whereClause += ` AND ba.detected_at >= $${paramCount}`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      paramCount++;
+      whereClause += ` AND ba.detected_at <= $${paramCount}`;
+      params.push(endDate);
+    }
+
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total
       FROM behavioral_anomalies ba
+      INNER JOIN breach_incidents bi ON ba.id = bi.anomaly_id
       LEFT JOIN users u ON ba.user_id = u.id
       ${whereClause}
     `;
@@ -442,8 +536,9 @@ export const getAnomalies = async (filters = {}) => {
 
     // Build main query
     let query = `
-      SELECT ba.*, u.email as user_email, u.first_name, u.last_name
+      SELECT ba.*, u.email as user_email, u.first_name, u.last_name, bi.id as incident_id
       FROM behavioral_anomalies ba
+      INNER JOIN breach_incidents bi ON ba.id = bi.anomaly_id
       LEFT JOIN users u ON ba.user_id = u.id
       ${whereClause}
     `;
@@ -466,7 +561,7 @@ export const getAnomalies = async (filters = {}) => {
       offset
     };
   } catch (error) {
-    console.error('Error getting anomalies:', error);
+    console.error('Error getting notified anomalies:', error);
     throw error;
   } finally {
     client.release();

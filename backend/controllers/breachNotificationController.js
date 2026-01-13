@@ -6,7 +6,8 @@ import {
   sendNotification,
   getNotifications,
   getRemediations,
-  addRemediation
+  addRemediation,
+  updateRemediation
 } from '../services/breachNotificationService.js';
 
 /**
@@ -26,7 +27,8 @@ export const createIncidentController = async (req, res) => {
       description,
       affected_users,
       affected_data_types,
-      detected_at
+      detected_at,
+      anomaly_id
     } = req.body;
 
     if (!incident_type || !severity || !description) {
@@ -44,7 +46,8 @@ export const createIncidentController = async (req, res) => {
       affected_data_types: affected_data_types || [],
       detected_at: detected_at ? new Date(detected_at) : new Date(),
       reported_by: req.user?.id || null,
-      status: 'draft'
+      status: 'draft',
+      anomaly_id: anomaly_id || null
     };
 
     const incident = await createIncident(incidentData);
@@ -318,6 +321,57 @@ export const getRemediationsController = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve remediations',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * Update remediation action
+ * PUT /api/superadmin/breach-remediations/:id
+ */
+export const updateRemediationController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      action_taken,
+      effectiveness,
+      notes
+    } = req.body;
+
+    if (!action_taken) {
+      return res.status(400).json({
+        success: false,
+        message: 'action_taken is required'
+      });
+    }
+
+    const remediationData = {
+      action_taken,
+      effectiveness: effectiveness || null,
+      notes: notes || null
+    };
+
+    const remediation = await updateRemediation(parseInt(id), remediationData);
+
+    res.json({
+      success: true,
+      data: remediation,
+      message: 'Remediation updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating remediation:', error);
+    
+    if (error.message === 'Remediation not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Remediation not found'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update remediation',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

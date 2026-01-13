@@ -562,15 +562,38 @@ export const verifyLoginOTP = async (req, res) => {
     // Generate tokens
     const tokens = generateTokens(user);
 
-    // Store refresh token in database
+    // Get IP address and user agent for monitoring
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    // INVALIDATE ALL PREVIOUS SESSIONS (Single Device Login)
+    // Revoke all previous refresh tokens for this user
+    try {
+      await client.query(
+        'UPDATE refresh_tokens SET is_revoked = true WHERE user_id = $1 AND is_revoked = false',
+        [user.id]
+      );
+      console.log(`🔒 [Single Device] Revoked all previous refresh tokens for user ${user.id}`);
+    } catch (revokeError) {
+      console.error('Error revoking previous refresh tokens:', revokeError);
+    }
+
+    // Delete all previous active sessions for this user
+    try {
+      await client.query(
+        'DELETE FROM active_sessions WHERE user_id = $1',
+        [user.id]
+      );
+      console.log(`🔒 [Single Device] Deleted all previous active sessions for user ${user.id}`);
+    } catch (sessionDeleteError) {
+      console.error('Error deleting previous active sessions:', sessionDeleteError);
+    }
+
+    // Store new refresh token in database
     await client.query(
       'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
       [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
     );
-
-    // Get IP address and user agent for monitoring
-    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
-    const userAgent = req.headers['user-agent'] || 'unknown';
     
     // Record login in user_login_history
     try {
@@ -584,13 +607,14 @@ export const verifyLoginOTP = async (req, res) => {
       console.error('Error recording login history:', historyError);
     }
     
-    // Record active session
+    // Record new active session
     try {
-      const sessionExpiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+      const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Match refresh token expiry
       await client.query(`
         INSERT INTO active_sessions (user_id, session_token, ip_address, user_agent, expires_at)
         VALUES ($1, $2, $3, $4, $5)
       `, [user.id, tokens.refreshToken, ipAddress, userAgent, sessionExpiresAt]);
+      console.log(`✅ [Single Device] Created new active session for user ${user.id}`);
     } catch (sessionError) {
       console.error('Error recording active session:', sessionError);
     }
@@ -781,11 +805,40 @@ export const refreshToken = async (req, res) => {
       [tokenData.id]
     );
 
+    // Delete old active session
+    await client.query(
+      'DELETE FROM active_sessions WHERE session_token = $1',
+      [refreshToken]
+    );
+
     // Store new refresh token
     await client.query(
       'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
       [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
     );
+
+    // Update active session with new refresh token
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Match refresh token expiry
+    
+    // Update existing session or insert new one
+    await client.query(
+      `UPDATE active_sessions 
+       SET session_token = $1, ip_address = $2, user_agent = $3, expires_at = $4, last_activity = CURRENT_TIMESTAMP
+       WHERE user_id = $5`,
+      [tokens.refreshToken, ipAddress, userAgent, sessionExpiresAt, user.id]
+    );
+
+    // If no session was updated, insert a new one
+    const updateResult = await client.query('SELECT id FROM active_sessions WHERE user_id = $1', [user.id]);
+    if (updateResult.rows.length === 0) {
+      await client.query(
+        `INSERT INTO active_sessions (user_id, session_token, ip_address, user_agent, expires_at)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [user.id, tokens.refreshToken, ipAddress, userAgent, sessionExpiresAt]
+      );
+    }
 
     console.log(`✅ Token refreshed successfully for user ${user.id} (${user.email})`);
 
@@ -860,6 +913,68 @@ export const logout = async (req, res) => {
 };
 
 // Get current user profile
+// Check if current session is still valid (for single device login)
+export const checkSession = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    const userId = req.user.id;
+
+    // Check if user has any valid active session
+    const sessionCheck = await client.query(
+      `SELECT id, session_token, expires_at, last_activity 
+       FROM active_sessions 
+       WHERE user_id = $1 
+       AND expires_at > NOW() 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (sessionCheck.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your session has been terminated. You have been logged in from another device.',
+        code: 'SESSION_TERMINATED',
+        valid: false
+      });
+    }
+
+    // Update last activity
+    await client.query(
+      'UPDATE active_sessions SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
+      [sessionCheck.rows[0].id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Session is valid',
+      valid: true,
+      data: {
+        expiresAt: sessionCheck.rows[0].expires_at,
+        lastActivity: sessionCheck.rows[0].last_activity
+      }
+    });
+
+  } catch (error) {
+    console.error('Session check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      valid: false
+    });
+  } finally {
+    client.release();
+  }
+};
+
 export const getProfile = async (req, res) => {
   try {
     const { password_hash, ...userWithoutPassword } = req.user;

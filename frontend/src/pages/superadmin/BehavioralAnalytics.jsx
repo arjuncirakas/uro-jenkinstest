@@ -25,7 +25,9 @@ import breachNotificationService from '../../services/breachNotificationService'
 
 const BehavioralAnalytics = () => {
   const [activeTab, setActiveTab] = useState('anomalies');
+  const [anomalySubTab, setAnomalySubTab] = useState('all'); // 'all' or 'notified'
   const [anomalies, setAnomalies] = useState([]);
+  const [notifiedAnomaliesList, setNotifiedAnomaliesList] = useState([]);
   const [baselines, setBaselines] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +35,11 @@ const BehavioralAnalytics = () => {
   const [userIdentifier, setUserIdentifier] = useState('');
   const [selectedBaselineType, setSelectedBaselineType] = useState('location');
   const [showFilters, setShowFilters] = useState(false);
+  const [showDismissConfirm, setShowDismissConfirm] = useState(false);
+  const [anomalyToDismiss, setAnomalyToDismiss] = useState(null);
+  const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
+  const [anomalyToNotify, setAnomalyToNotify] = useState(null);
+  const [isNotifying, setIsNotifying] = useState(false);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -57,6 +64,25 @@ const BehavioralAnalytics = () => {
       }
     } catch (err) {
       setError('Failed to fetch anomalies');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch notified anomalies
+  const fetchNotifiedAnomalies = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await behavioralAnalyticsService.getNotifiedAnomalies(filters);
+      if (response.success) {
+        setNotifiedAnomaliesList(response.data || []);
+      } else {
+        setError(response.error || 'Failed to fetch notified anomalies');
+      }
+    } catch (err) {
+      setError('Failed to fetch notified anomalies');
     } finally {
       setIsLoading(false);
     }
@@ -101,9 +127,13 @@ const BehavioralAnalytics = () => {
   useEffect(() => {
     fetchStatistics();
     if (activeTab === 'anomalies') {
-      fetchAnomalies();
+      if (anomalySubTab === 'notified') {
+        fetchNotifiedAnomalies();
+      } else {
+        fetchAnomalies();
+      }
     }
-  }, [activeTab, filters]);
+  }, [activeTab, anomalySubTab, filters]);
 
   const handleUpdateStatus = async (anomalyId, status) => {
     try {
@@ -116,6 +146,24 @@ const BehavioralAnalytics = () => {
     } catch (err) {
       setError('Failed to update anomaly status');
     }
+  };
+
+  const handleDismissClick = (anomaly) => {
+    setAnomalyToDismiss(anomaly);
+    setShowDismissConfirm(true);
+  };
+
+  const handleConfirmDismiss = async () => {
+    if (anomalyToDismiss) {
+      await handleUpdateStatus(anomalyToDismiss.id, 'dismissed');
+      setShowDismissConfirm(false);
+      setAnomalyToDismiss(null);
+    }
+  };
+
+  const handleCancelDismiss = () => {
+    setShowDismissConfirm(false);
+    setAnomalyToDismiss(null);
   };
 
   const handleCalculateBaseline = async () => {
@@ -145,25 +193,88 @@ const BehavioralAnalytics = () => {
     }
   };
 
-  const handleNotify = async (anomaly) => {
+  const handleNotifyClick = (anomaly) => {
+    setAnomalyToNotify(anomaly);
+    setShowNotifyConfirm(true);
+  };
+
+  // Format anomaly details for display
+  const formatAnomalyDetails = (anomaly) => {
+    if (!anomaly.details || typeof anomaly.details !== 'object') {
+      return 'No additional details available.';
+    }
+
+    const details = anomaly.details;
+    const parts = [];
+
+    if (details.eventHour !== undefined) {
+      parts.push(`Event Hour: ${details.eventHour}:00`);
+    }
+    if (details.averageHour !== undefined) {
+      parts.push(`Average Hour: ${details.averageHour}:00`);
+    }
+    if (details.expectedHours && Array.isArray(details.expectedHours)) {
+      parts.push(`Expected Hours: ${details.expectedHours.map(h => `${h}:00`).join(', ')}`);
+    }
+    if (details.eventType) {
+      parts.push(`Event Type: ${details.eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
+    }
+    if (details.ipAddress) {
+      parts.push(`IP Address: ${details.ipAddress}`);
+    }
+    if (details.location) {
+      parts.push(`Location: ${details.location}`);
+    }
+
+    return parts.length > 0 ? parts.join(' | ') : 'No additional details available.';
+  };
+
+  const handleConfirmNotify = async () => {
+    if (!anomalyToNotify || isNotifying) return;
+
+    setIsNotifying(true);
     try {
+      const anomalyTypeFormatted = anomalyToNotify.anomaly_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown';
+      const detailsFormatted = formatAnomalyDetails(anomalyToNotify);
+      
       const incidentData = {
         incident_type: 'security_incident',
-        severity: anomaly.severity === 'high' ? 'high' : anomaly.severity === 'medium' ? 'medium' : 'low',
-        description: `Behavioral anomaly detected: ${anomaly.anomaly_type} for user ${anomaly.user_id}. Details: ${JSON.stringify(anomaly.details)}`,
-        affected_users: [anomaly.user_id],
-        affected_data_types: ['PII', 'PHI']
+        severity: anomalyToNotify.severity === 'high' ? 'high' : anomalyToNotify.severity === 'medium' ? 'medium' : 'low',
+        description: `Behavioral anomaly detected: ${anomalyTypeFormatted} for user ${anomalyToNotify.user_email || anomalyToNotify.user_id}.\n\nDetails: ${detailsFormatted}`,
+        affected_users: [anomalyToNotify.user_id],
+        affected_data_types: ['PII', 'PHI'],
+        anomaly_id: anomalyToNotify.id
       };
 
       const response = await breachNotificationService.createIncident(incidentData);
       if (response.success) {
-        alert('Breach incident created successfully. You can manage it in the Breach Management section.');
+        setShowNotifyConfirm(false);
+        setAnomalyToNotify(null);
+        // Show success message
+        setError('');
+        // Refresh anomalies based on current tab
+        if (anomalySubTab === 'notified') {
+          await fetchNotifiedAnomalies();
+        } else {
+          await fetchAnomalies();
+        }
       } else {
         setError(response.error || 'Failed to create breach incident');
+        setShowNotifyConfirm(false);
+        setAnomalyToNotify(null);
       }
     } catch (err) {
       setError('Failed to create breach incident');
+      setShowNotifyConfirm(false);
+      setAnomalyToNotify(null);
+    } finally {
+      setIsNotifying(false);
     }
+  };
+
+  const handleCancelNotify = () => {
+    setShowNotifyConfirm(false);
+    setAnomalyToNotify(null);
   };
 
   const getSeverityColor = (severity) => {
@@ -227,7 +338,7 @@ const BehavioralAnalytics = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-2 sm:px-3 lg:px-4 py-4">
         {/* Professional Header */}
         <div className="mb-8">
           <div className="mb-4">
@@ -356,22 +467,55 @@ const BehavioralAnalytics = () => {
         {activeTab === 'anomalies' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Detected Anomalies</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Detected Anomalies</h2>
+              </div>
+              
+              {/* Sub-tabs for New and Notified */}
+              <div className="flex gap-2 border-b border-gray-200 -mb-4">
+                <button
+                  onClick={() => setAnomalySubTab('all')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer border-b-2 ${
+                    anomalySubTab === 'all'
+                      ? 'border-teal-600 text-teal-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  New Anomalies
+                </button>
+                <button
+                  onClick={() => setAnomalySubTab('notified')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer border-b-2 ${
+                    anomalySubTab === 'notified'
+                      ? 'border-teal-600 text-teal-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Notified
+                  {notifiedAnomaliesList.length > 0 && (
+                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-teal-100 text-teal-700">
+                      {notifiedAnomaliesList.length}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
 
             {isLoading ? (
               <div className="text-center py-12">
                 <div className="flex items-center justify-center space-x-2">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
-                  <span className="text-gray-600 text-sm">Loading anomalies...</span>
+                  <span className="text-gray-600 text-sm">Loading {anomalySubTab === 'notified' ? 'notified ' : ''}anomalies...</span>
                 </div>
               </div>
-            ) : anomalies.length === 0 ? (
+            ) : (anomalySubTab === 'notified' ? notifiedAnomaliesList : anomalies).length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-500 text-sm mb-2">
                   {hasActiveFilters 
-                    ? 'No anomalies match your filters'
-                    : 'No behavioral anomalies detected'}
+                    ? `No ${anomalySubTab === 'notified' ? 'notified ' : ''}anomalies match your filters`
+                    : anomalySubTab === 'notified' 
+                      ? 'No anomalies have been notified yet'
+                      : 'No behavioral anomalies detected'}
                 </div>
                 {hasActiveFilters && (
                   <button
@@ -384,7 +528,7 @@ const BehavioralAnalytics = () => {
               </div>
             ) : (
               <div className="p-4 space-y-3">
-                {anomalies.map((anomaly) => {
+                {(anomalySubTab === 'notified' ? notifiedAnomaliesList : anomalies).map((anomaly) => {
                   const severityColors = getSeverityColor(anomaly.severity);
                   const statusColors = getStatusColor(anomaly.status);
                   
@@ -407,6 +551,15 @@ const BehavioralAnalytics = () => {
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors.bg} ${statusColors.text}`}>
                                 {anomaly.status}
                               </span>
+                              {(anomalySubTab === 'notified' || anomaly.incident_id) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-700">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Notified
+                                  {anomaly.incident_id && (
+                                    <span className="text-green-600">(Incident #{anomaly.incident_id})</span>
+                                  )}
+                                </span>
+                              )}
                               <span className="text-xs text-gray-500">
                                 {formatDate(anomaly.detected_at)}
                               </span>
@@ -440,72 +593,41 @@ const BehavioralAnalytics = () => {
                         </div>
 
                         <div className="flex flex-col gap-1.5 flex-shrink-0">
-                          {anomaly.status === 'new' && (
+                          {anomalySubTab === 'notified' ? (
+                            <span className="px-3 py-1.5 text-xs rounded-md bg-green-100 text-green-700 font-medium whitespace-nowrap text-center">
+                              Already Notified
+                            </span>
+                          ) : (
                             <>
-                              <button
-                                onClick={() => handleUpdateStatus(anomaly.id, 'reviewed')}
-                                className="px-3 py-1.5 bg-white text-teal-600 text-xs rounded-md border border-teal-600 hover:bg-teal-50 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Review
-                              </button>
-                              <button
-                                onClick={() => handleNotify(anomaly)}
-                                className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Notify
-                              </button>
-                              <button
-                                onClick={() => handleUpdateStatus(anomaly.id, 'dismissed')}
-                                className="px-3 py-1.5 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Dismiss
-                              </button>
-                            </>
-                          )}
-                          {anomaly.status === 'reviewed' && (
-                            <>
-                              <button
-                                onClick={() => handleUpdateStatus(anomaly.id, 'escalated')}
-                                className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Escalate
-                              </button>
-                              <button
-                                onClick={() => handleUpdateStatus(anomaly.id, 'dismissed')}
-                                className="px-3 py-1.5 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Dismiss
-                              </button>
-                              <button
-                                onClick={() => handleNotify(anomaly)}
-                                className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Notify
-                              </button>
-                            </>
-                          )}
-                          {anomaly.status === 'dismissed' && (
-                            <button
-                              onClick={() => handleUpdateStatus(anomaly.id, 'reviewed')}
-                              className="px-3 py-1.5 bg-white text-teal-600 text-xs rounded-md border border-teal-600 hover:bg-teal-50 transition-colors cursor-pointer whitespace-nowrap"
-                            >
-                              Reopen
-                            </button>
-                          )}
-                          {anomaly.status === 'escalated' && (
-                            <>
-                              <button
-                                onClick={() => handleUpdateStatus(anomaly.id, 'reviewed')}
-                                className="px-3 py-1.5 bg-white text-teal-600 text-xs rounded-md border border-teal-600 hover:bg-teal-50 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Mark Reviewed
-                              </button>
-                              <button
-                                onClick={() => handleNotify(anomaly)}
-                                className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Notify
-                              </button>
+                              {(anomaly.status === 'new' || anomaly.status === 'reviewed' || anomaly.status === 'escalated') && (
+                                <>
+                                  <button
+                                    onClick={() => handleNotifyClick(anomaly)}
+                                    disabled={anomaly.incident_id}
+                                    className={`px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                                      anomaly.incident_id
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-teal-600 text-white hover:bg-teal-700'
+                                    }`}
+                                  >
+                                    {anomaly.incident_id ? 'Notified' : 'Notify'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDismissClick(anomaly)}
+                                    className="px-3 py-1.5 bg-teal-50 text-teal-600 text-xs rounded-md border border-teal-200 hover:bg-teal-100 transition-colors cursor-pointer whitespace-nowrap"
+                                  >
+                                    Dismiss
+                                  </button>
+                                </>
+                              )}
+                              {anomaly.status === 'dismissed' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(anomaly.id, 'new')}
+                                  className="px-3 py-1.5 bg-white text-teal-600 text-xs rounded-md border border-teal-600 hover:bg-teal-50 transition-colors cursor-pointer whitespace-nowrap"
+                                >
+                                  Reopen
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -760,6 +882,106 @@ const BehavioralAnalytics = () => {
           </div>
         )}
       </div>
+
+      {/* Dismiss Confirmation Modal */}
+      {showDismissConfirm && anomalyToDismiss && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={handleCancelDismiss}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Confirm Dismiss</h2>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to dismiss this anomaly? This action will mark it as dismissed.
+              </p>
+              {anomalyToDismiss.user_email && (
+                <p className="text-xs text-gray-500 mb-4">
+                  User: {anomalyToDismiss.user_email}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mb-4">
+                Type: {anomalyToDismiss.anomaly_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={handleCancelDismiss}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDismiss}
+                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition-colors"
+              >
+                Confirm Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notify Confirmation Modal */}
+      {showNotifyConfirm && anomalyToNotify && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={handleCancelNotify}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Confirm Notification</h2>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to create a breach incident notification for this anomaly? This will create an incident in the Breach Management section.
+              </p>
+              {anomalyToNotify.user_email && (
+                <p className="text-xs text-gray-500 mb-2">
+                  User: {anomalyToNotify.user_email}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mb-2">
+                Type: {anomalyToNotify.anomaly_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                Severity: <span className="font-medium">{anomalyToNotify.severity?.toUpperCase() || 'N/A'}</span>
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={handleCancelNotify}
+                disabled={isNotifying}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmNotify}
+                disabled={isNotifying}
+                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isNotifying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  'Confirm Notify'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

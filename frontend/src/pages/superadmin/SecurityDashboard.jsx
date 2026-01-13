@@ -104,7 +104,7 @@ const SecurityDashboard = () => {
 
   return (
     <div className="w-full min-h-screen overflow-x-hidden">
-      <div className="w-full p-4 sm:p-6 lg:p-8">
+      <div className="w-full p-2 sm:p-3 lg:p-4">
         {/* Header */}
         <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
           <div>

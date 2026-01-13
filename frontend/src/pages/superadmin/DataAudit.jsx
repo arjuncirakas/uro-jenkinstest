@@ -13,7 +13,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 import {
   LineChart,
@@ -44,6 +45,15 @@ const DataAudit = () => {
   const [processingActivities, setProcessingActivities] = useState({ activities: [] });
   const [retentionInfo, setRetentionInfo] = useState(null);
   const [thirdPartySharing, setThirdPartySharing] = useState({ sharingEvents: [] });
+  
+  // Modal states
+  const [showPHIUsersModal, setShowPHIUsersModal] = useState(false);
+  const [showDataExportsModal, setShowDataExportsModal] = useState(false);
+  const [showVerifiedUsersModal, setShowVerifiedUsersModal] = useState(false);
+  const [phiUsers, setPhiUsers] = useState([]);
+  const [dataExports, setDataExports] = useState([]);
+  const [verifiedUsers, setVerifiedUsers] = useState([]);
+  const [modalLoading, setModalLoading] = useState(false);
   
   // Filter states
   const [accessLogsFilters, setAccessLogsFilters] = useState({
@@ -244,6 +254,116 @@ const DataAudit = () => {
     }
   };
 
+  // Fetch unique users accessing PHI
+  const fetchPHIUsers = async () => {
+    setModalLoading(true);
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      
+      const response = await dataAuditService.getAccessLogs({
+        startDate,
+        resourceType: 'patient',
+        limit: 1000
+      });
+      
+      if (response.success && response.data.logs) {
+        // Get unique users from PHI access logs (filter by phi actions or patient resource type)
+        const uniqueUsersMap = new Map();
+        response.data.logs.forEach(log => {
+          const isPHIAccess = log.action?.includes('phi') || log.action?.includes('patient') || log.resource_type === 'patient';
+          if (isPHIAccess && log.user_id && log.user_email) {
+            if (!uniqueUsersMap.has(log.user_id)) {
+              uniqueUsersMap.set(log.user_id, {
+                id: log.user_id,
+                email: log.user_email,
+                role: log.user_role || 'N/A',
+                lastAccess: log.timestamp
+              });
+            } else {
+              // Update last access if this is more recent
+              const existing = uniqueUsersMap.get(log.user_id);
+              if (new Date(log.timestamp) > new Date(existing.lastAccess)) {
+                existing.lastAccess = log.timestamp;
+              }
+            }
+          }
+        });
+        setPhiUsers(Array.from(uniqueUsersMap.values()));
+      }
+    } catch (err) {
+      setError('Failed to fetch PHI users');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  // Fetch data exports
+  const fetchDataExports = async () => {
+    setModalLoading(true);
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      
+      const response = await dataAuditService.getAccessLogs({
+        startDate,
+        limit: 1000
+      });
+      
+      if (response.success && response.data.logs) {
+        // Filter logs that contain 'export' in the action
+        const exportLogs = response.data.logs.filter(log => 
+          log.action?.toLowerCase().includes('export') || 
+          log.action?.toLowerCase().includes('download')
+        );
+        setDataExports(exportLogs);
+      }
+    } catch (err) {
+      setError('Failed to fetch data exports');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  // Fetch verified users
+  const fetchVerifiedUsers = async () => {
+    setModalLoading(true);
+    try {
+      const response = await dataAuditService.getVerifiedUsers();
+      if (response.success && response.data) {
+        setVerifiedUsers(response.data);
+      }
+    } catch (err) {
+      setError('Failed to fetch verified users');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  // Handle modal opens
+  const handleViewPHIUsers = () => {
+    setShowPHIUsersModal(true);
+    if (phiUsers.length === 0) {
+      fetchPHIUsers();
+    }
+  };
+
+  const handleViewDataExports = () => {
+    setShowDataExportsModal(true);
+    if (dataExports.length === 0) {
+      fetchDataExports();
+    }
+  };
+
+  const handleViewVerifiedUsers = () => {
+    setShowVerifiedUsersModal(true);
+    if (verifiedUsers.length === 0) {
+      fetchVerifiedUsers();
+    }
+  };
+
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -254,6 +374,33 @@ const DataAudit = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Format IP address - handle IPv6 localhost and edge cases
+  const formatIPAddress = (ip) => {
+    if (!ip) return 'N/A';
+    
+    // Handle empty or invalid IPs
+    if (typeof ip !== 'string' || ip.trim() === '') return 'N/A';
+    
+    const trimmedIp = ip.trim();
+    
+    // Handle incomplete IPv6 localhost (like ":1")
+    if (trimmedIp === ':1' || trimmedIp === '::1' || trimmedIp === '::ffff:127.0.0.1') {
+      return '127.0.0.1';
+    }
+    
+    // Remove IPv6 prefix if present
+    if (trimmedIp.startsWith('::ffff:')) {
+      return trimmedIp.replace('::ffff:', '');
+    }
+    
+    // Handle IPv6 localhost variations
+    if (trimmedIp === '::' || trimmedIp.startsWith('::')) {
+      return '127.0.0.1';
+    }
+    
+    return trimmedIp;
   };
 
   // Info explanations
@@ -436,7 +583,7 @@ const DataAudit = () => {
 
   return (
     <div className="w-full min-h-screen overflow-x-hidden">
-      <div className="w-full max-w-full p-4 sm:p-6 lg:p-8">
+      <div className="w-full max-w-full p-2 sm:p-3 lg:p-4">
         {/* Header */}
         <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
           <div>
@@ -553,14 +700,32 @@ const DataAudit = () => {
                             <span className="text-sm text-gray-600">Unique Users Accessing PHI (30d)</span>
                             <InfoTooltip infoKey="unique-users-phi" ariaLabel="Info about Unique Users Accessing PHI" forcePosition="left" />
                           </div>
-                          <span className="text-sm font-medium text-gray-900">{complianceMetrics.uniqueUsersAccessingPHI30Days || 0}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{complianceMetrics.uniqueUsersAccessingPHI30Days || 0}</span>
+                            <button
+                              onClick={handleViewPHIUsers}
+                              className="ml-2 inline-flex items-center px-2.5 py-1 text-xs font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded transition-colors"
+                              title="View users"
+                            >
+                              View
+                            </button>
+                          </div>
                         </div>
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-600">Data Exports (30d)</span>
                             <InfoTooltip infoKey="data-exports" ariaLabel="Info about Data Exports" forcePosition="left" />
                           </div>
-                          <span className="text-sm font-medium text-gray-900">{complianceMetrics.dataExports30Days || 0}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{complianceMetrics.dataExports30Days || 0}</span>
+                            <button
+                              onClick={handleViewDataExports}
+                              className="ml-2 inline-flex items-center px-2.5 py-1 text-xs font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded transition-colors"
+                              title="View exports"
+                            >
+                              View
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -574,7 +739,16 @@ const DataAudit = () => {
                             <span className="text-sm text-gray-600">Total Verified Users</span>
                             <InfoTooltip infoKey="total-verified-users" ariaLabel="Info about Total Verified Users" />
                           </div>
-                          <span className="text-sm font-medium text-gray-900">{complianceMetrics.totalVerifiedUsers || 0}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{complianceMetrics.totalVerifiedUsers || 0}</span>
+                            <button
+                              onClick={handleViewVerifiedUsers}
+                              className="ml-2 inline-flex items-center px-2.5 py-1 text-xs font-medium text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded transition-colors"
+                              title="View users"
+                            >
+                              View
+                            </button>
+                          </div>
                         </div>
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
@@ -1015,18 +1189,31 @@ const DataAudit = () => {
                               return formatted;
                             };
 
-                            // Format IP address - handle IPv6 localhost
-                            const formatIPAddress = (ip) => {
+                            // Format IP address - handle IPv6 localhost and edge cases
+                            const formatIPAddressLocal = (ip) => {
                               if (!ip) return 'N/A';
-                              // Convert IPv6 localhost to IPv4
-                              if (ip === '::1' || ip === '::ffff:127.0.0.1') {
+                              
+                              // Handle empty or invalid IPs
+                              if (typeof ip !== 'string' || ip.trim() === '') return 'N/A';
+                              
+                              const trimmedIp = ip.trim();
+                              
+                              // Handle incomplete IPv6 localhost (like ":1")
+                              if (trimmedIp === ':1' || trimmedIp === '::1' || trimmedIp === '::ffff:127.0.0.1') {
                                 return '127.0.0.1';
                               }
+                              
                               // Remove IPv6 prefix if present
-                              if (ip.startsWith('::ffff:')) {
-                                return ip.replace('::ffff:', '');
+                              if (trimmedIp.startsWith('::ffff:')) {
+                                return trimmedIp.replace('::ffff:', '');
                               }
-                              return ip;
+                              
+                              // Handle IPv6 localhost variations
+                              if (trimmedIp === '::' || trimmedIp.startsWith('::')) {
+                                return '127.0.0.1';
+                              }
+                              
+                              return trimmedIp;
                             };
 
                             // Extract reason/ticket from metadata, error_message, or other fields
@@ -1111,7 +1298,7 @@ const DataAudit = () => {
                                 </td>
                                 <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 break-words">{formatAction(log.action)}</td>
                                 <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 break-words min-w-[150px]">{getReasonOrTicket(log)}</td>
-                                <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 font-mono whitespace-nowrap">{formatIPAddress(log.ip_address)}</td>
+                                <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 font-mono whitespace-nowrap">{formatIPAddressLocal(log.ip_address)}</td>
                                 <td className="px-3 md:px-4 py-3 text-xs md:text-sm whitespace-nowrap">
                                   <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                                     log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -1396,15 +1583,30 @@ const DataAudit = () => {
                               return formatted;
                             };
 
-                            const formatIPAddress = (ip) => {
+                            const formatIPAddressLocal = (ip) => {
                               if (!ip) return 'N/A';
-                              if (ip === '::1' || ip === '::ffff:127.0.0.1') {
+                              
+                              // Handle empty or invalid IPs
+                              if (typeof ip !== 'string' || ip.trim() === '') return 'N/A';
+                              
+                              const trimmedIp = ip.trim();
+                              
+                              // Handle incomplete IPv6 localhost (like ":1")
+                              if (trimmedIp === ':1' || trimmedIp === '::1' || trimmedIp === '::ffff:127.0.0.1') {
                                 return '127.0.0.1';
                               }
-                              if (ip.startsWith('::ffff:')) {
-                                return ip.replace('::ffff:', '');
+                              
+                              // Remove IPv6 prefix if present
+                              if (trimmedIp.startsWith('::ffff:')) {
+                                return trimmedIp.replace('::ffff:', '');
                               }
-                              return ip;
+                              
+                              // Handle IPv6 localhost variations
+                              if (trimmedIp === '::' || trimmedIp.startsWith('::')) {
+                                return '127.0.0.1';
+                              }
+                              
+                              return trimmedIp;
                             };
 
                             return (
@@ -1418,7 +1620,7 @@ const DataAudit = () => {
                                 </td>
                                 <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 break-words">{formatAction(event.action)}</td>
                                 <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 break-words">{event.resourceType || 'N/A'}</td>
-                                <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 font-mono whitespace-nowrap">{formatIPAddress(event.ipAddress)}</td>
+                                <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-gray-600 font-mono whitespace-nowrap">{formatIPAddressLocal(event.ipAddress)}</td>
                               </tr>
                             );
                           })
@@ -1438,6 +1640,210 @@ const DataAudit = () => {
           )}
         </div>
       </div>
+
+      {/* PHI Users Modal */}
+      {showPHIUsersModal && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowPHIUsersModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Unique Users Accessing PHI (Last 30 Days)</h2>
+              <button
+                onClick={() => setShowPHIUsersModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {modalLoading ? (
+                <div className="text-center py-12">
+                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                  <p className="mt-2 text-sm text-gray-500">Loading users...</p>
+                </div>
+              ) : phiUsers.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Email</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Last Access</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {phiUsers.map((user) => (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-gray-900">{user.email}</td>
+                          <td className="px-4 py-3 text-gray-600">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{formatDate(user.lastAccess)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-sm text-gray-500">
+                  No users found
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Data Exports Modal */}
+      {showDataExportsModal && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowDataExportsModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Data Exports (Last 30 Days)</h2>
+              <button
+                onClick={() => setShowDataExportsModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {modalLoading ? (
+                <div className="text-center py-12">
+                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                  <p className="mt-2 text-sm text-gray-500">Loading exports...</p>
+                </div>
+              ) : dataExports.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Timestamp</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">User</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Action</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">IP Address</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {dataExports.map((exportItem) => (
+                        <tr key={exportItem.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-gray-900 font-mono text-xs">{formatDate(exportItem.timestamp)}</td>
+                          <td className="px-4 py-3 text-gray-600">{exportItem.user_email || 'N/A'}</td>
+                          <td className="px-4 py-3 text-gray-600">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                              {exportItem.user_role || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{exportItem.action || 'N/A'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              exportItem.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {exportItem.status?.toUpperCase() || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 font-mono text-xs">{formatIPAddress(exportItem.ip_address)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-sm text-gray-500">
+                  No data exports found
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verified Users Modal */}
+      {showVerifiedUsersModal && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowVerifiedUsersModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Total Verified Users</h2>
+              <button
+                onClick={() => setShowVerifiedUsersModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {modalLoading ? (
+                <div className="text-center py-12">
+                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                  <p className="mt-2 text-sm text-gray-500">Loading users...</p>
+                </div>
+              ) : verifiedUsers.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Email</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Created At</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {verifiedUsers.map((user) => (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-gray-900">
+                            {user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{user.email || 'N/A'}</td>
+                          <td className="px-4 py-3 text-gray-600">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                              {user.role || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {user.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{formatDate(user.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-sm text-gray-500">
+                  No verified users found
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

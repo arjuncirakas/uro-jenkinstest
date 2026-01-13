@@ -41,6 +41,7 @@ import {
 import {
   getBaselines,
   getAnomaliesController,
+  getNotifiedAnomaliesController,
   updateAnomalyStatusController,
   calculateBaselineController,
   getStatistics
@@ -53,7 +54,8 @@ import {
   sendNotificationController,
   getNotificationsController,
   addRemediationController,
-  getRemediationsController
+  getRemediationsController,
+  updateRemediationController
 } from '../controllers/breachNotificationController.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { generalLimiter } from '../middleware/rateLimiter.js';
@@ -143,6 +145,7 @@ router.post('/dpo-contact', generalLimiter, setDPOContactInfo);
 // Behavioral Analytics routes
 router.get('/behavioral-analytics/baselines', generalLimiter, getBaselines);
 router.get('/behavioral-analytics/anomalies', generalLimiter, getAnomaliesController);
+router.get('/behavioral-analytics/anomalies/notified', generalLimiter, getNotifiedAnomaliesController);
 router.put('/behavioral-analytics/anomalies/:id', generalLimiter, updateAnomalyStatusController);
 router.post('/behavioral-analytics/baselines/calculate', generalLimiter, calculateBaselineController);
 router.get('/behavioral-analytics/statistics', generalLimiter, getStatistics);
@@ -156,5 +159,6 @@ router.get('/breach-incidents/:id/notifications', generalLimiter, getNotificatio
 router.post('/breach-notifications/:id/send', generalLimiter, sendNotificationController);
 router.post('/breach-incidents/:id/remediations', generalLimiter, addRemediationController);
 router.get('/breach-incidents/:id/remediations', generalLimiter, getRemediationsController);
+router.put('/breach-remediations/:id', generalLimiter, updateRemediationController);
 
 export default router;

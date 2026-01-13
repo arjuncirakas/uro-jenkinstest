@@ -483,7 +483,7 @@ const Users = () => {
   if (isLoading && isInitialLoad) {
     return (
       <div className="h-full overflow-y-auto">
-        <div className="p-4 sm:p-6 lg:p-8">
+        <div className="p-2 sm:p-3 lg:p-4">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
             <span className="ml-3 text-gray-600">Loading users...</span>
@@ -496,7 +496,7 @@ const Users = () => {
   return (
     <div className="h-full overflow-y-auto w-full">
       {/* Main Content Area - Full Width */}
-      <div className="w-full p-4 sm:p-6 lg:p-8">
+      <div className="w-full p-2 sm:p-3 lg:p-4">
         {/* Header */}
         <div className="mb-6 lg:mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
           <div>

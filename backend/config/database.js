@@ -1655,6 +1655,31 @@ export const initializeDatabase = async () => {
       `);
     } else {
       console.log('✅ Breach incidents table already exists');
+      
+      // Add anomaly_id column if it doesn't exist (for tracking which anomaly created the incident)
+      try {
+        const anomalyIdColumnExists = await client.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'breach_incidents'
+            AND column_name = 'anomaly_id'
+          );
+        `);
+        
+        if (!anomalyIdColumnExists.rows[0].exists) {
+          await client.query(`
+            ALTER TABLE breach_incidents
+            ADD COLUMN anomaly_id INTEGER REFERENCES behavioral_anomalies(id) ON DELETE SET NULL;
+          `);
+          await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_breach_incidents_anomaly_id ON breach_incidents(anomaly_id);
+          `);
+          console.log('✅ Added anomaly_id column to breach_incidents table');
+        }
+      } catch (err) {
+        console.warn('⚠️  Could not add anomaly_id column (may already exist):', err.message);
+      }
     }
 
     // Create breach_notifications table

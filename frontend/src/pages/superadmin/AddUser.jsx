@@ -453,7 +453,7 @@ const AddUser = () => {
   return (
     <div className="h-full overflow-y-auto">
       {/* Main Content Area */}
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className="p-2 sm:p-3 lg:p-4">
         {/* Header */}
         <div className="mb-6 lg:mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
           <div className="pl-12 lg:pl-0">

@@ -91,6 +91,34 @@ export const authenticateToken = async (req, res, next) => {
         });
       }
 
+      // Check if session is still valid (Single Device Login)
+      // Check if user has any valid active session
+      // Since we delete all previous sessions on login, there should only be one session per user
+      try {
+        const sessionCheck = await client.query(
+          `SELECT id FROM active_sessions 
+           WHERE user_id = $1 
+           AND expires_at > NOW() 
+           ORDER BY created_at DESC 
+           LIMIT 1`,
+          [user.id]
+        );
+
+        // If no active session found, user was logged out from another device
+        if (sessionCheck.rows.length === 0) {
+          console.log(`❌ [Auth ${requestId}] No active session found - user logged in from another device`);
+          return res.status(401).json({
+            success: false,
+            message: 'Your session has been terminated. You have been logged in from another device.',
+            code: 'SESSION_TERMINATED'
+          });
+        }
+      } catch (sessionError) {
+        console.error(`❌ [Auth ${requestId}] Error checking active session:`, sessionError);
+        // Continue with authentication if session check fails (fail open for now)
+        // In production, you might want to fail closed
+      }
+
       // Add user info to request object
       req.user = {
         id: user.id,
@@ -230,6 +258,23 @@ export const verifyRefreshToken = async (req, res, next) => {
         return res.status(401).json({
           success: false,
           message: 'Account is deactivated'
+        });
+      }
+
+      // Check if session is still active (Single Device Login)
+      const sessionCheck = await client.query(
+        `SELECT id FROM active_sessions 
+         WHERE user_id = $1 
+         AND session_token = $2 
+         AND expires_at > NOW()`,
+        [tokenData.id, refreshToken]
+      );
+
+      if (sessionCheck.rows.length === 0) {
+        return res.status(401).json({
+          success: false,
+          message: 'Your session has been terminated. You have been logged in from another device.',
+          code: 'SESSION_TERMINATED'
         });
       }
 

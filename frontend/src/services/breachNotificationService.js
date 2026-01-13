@@ -158,6 +158,24 @@ class BreachNotificationService {
       };
     }
   }
+
+  /**
+   * Update remediation action
+   * @param {number} remediationId - Remediation ID
+   * @param {Object} data - Remediation data
+   */
+  async updateRemediation(remediationId, data) {
+    try {
+      const response = await apiClient.put(`/superadmin/breach-remediations/${remediationId}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating remediation:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to update remediation'
+      };
+    }
+  }
 }
 
 export default new BreachNotificationService();

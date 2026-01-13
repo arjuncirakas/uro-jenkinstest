@@ -4,12 +4,37 @@
  */
 
 /**
+ * Clean incident description by removing technical debug information
+ * @param {string} description - Raw incident description
+ * @returns {string} Cleaned description
+ */
+const cleanIncidentDescription = (description) => {
+  if (!description) return 'No description provided.';
+  
+  // Remove technical debug patterns like "Event Hour: 17:00 | Average Hour: 2:00 | Expected Hours: 2:00"
+  let cleaned = description
+    .replace(/Event Hour:\s*\d{1,2}:\d{2}\s*\|\s*/gi, '')
+    .replace(/Average Hour:\s*\d{1,2}:\d{2}\s*\|\s*/gi, '')
+    .replace(/Expected Hours:\s*[\d:,\s]+\s*\|\s*/gi, '')
+    .replace(/\|\s*$/g, '')
+    .trim();
+  
+  // If description becomes empty after cleaning, provide a default
+  if (!cleaned || cleaned.length === 0) {
+    return 'A data security incident has been detected. Investigation and remediation measures are in progress.';
+  }
+  
+  return cleaned;
+};
+
+/**
  * Render GDPR Supervisory Authority notification template (72-hour requirement)
  * @param {Object} incident - Breach incident object
  * @param {Object} recipient - Recipient information { name, email }
+ * @param {Object} dpoInfo - DPO contact information { name, email, contact_number } (optional)
  * @returns {Object} Email object with subject and HTML body
  */
-export const renderGDPRSupervisoryTemplate = (incident, recipient) => {
+export const renderGDPRSupervisoryTemplate = (incident, recipient, dpoInfo = null) => {
   if (!incident || !recipient) {
     throw new Error('incident and recipient are required');
   }
@@ -24,86 +49,182 @@ export const renderGDPRSupervisoryTemplate = (incident, recipient) => {
 
   const affectedDataTypes = incident.affected_data_types?.join(', ') || 'Not specified';
   const affectedUsersCount = incident.affected_users?.length || 0;
+  const cleanedDescription = cleanIncidentDescription(incident.description);
+
+  // Format incident type for display
+  const formatIncidentType = (type) => {
+    if (!type) return 'Not specified';
+    return type
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
 
   const subject = `GDPR Data Breach Notification - Incident #${incident.id}`;
 
   const html = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>GDPR Data Breach Notification</title>
     </head>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
-      <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px; border-left: 4px solid #dc3545;">
-        <h1 style="color: #dc3545; margin-top: 0;">GDPR Data Breach Notification</h1>
-        <p style="font-size: 14px; color: #666; margin-bottom: 30px;">
-          This notification is sent in compliance with Article 33 of the GDPR (72-hour notification requirement).
-        </p>
-        
-        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-          <h2 style="color: #2c3e50; margin-top: 0; font-size: 18px;">Incident Details</h2>
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold; width: 200px;">Incident ID:</td>
-              <td style="padding: 8px 0;">#${incident.id}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Incident Type:</td>
-              <td style="padding: 8px 0;">${incident.incident_type || 'Not specified'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Severity:</td>
-              <td style="padding: 8px 0;">
-                <span style="background-color: ${getSeverityColor(incident.severity)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-                  ${incident.severity?.toUpperCase() || 'UNKNOWN'}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Detected At:</td>
-              <td style="padding: 8px 0;">${incidentDate}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Affected Data Types:</td>
-              <td style="padding: 8px 0;">${affectedDataTypes}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold;">Affected Individuals:</td>
-              <td style="padding: 8px 0;">${affectedUsersCount} individual(s)</td>
-            </tr>
-          </table>
-        </div>
+    <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background-color: #f5f5f5; margin: 0; padding: 0;">
+      <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5; padding: 20px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" style="max-width: 800px; width: 100%; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden;">
+              
+              <!-- Header -->
+              <tr>
+                <td style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); padding: 30px 40px; text-align: center;">
+                  <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600; letter-spacing: -0.5px;">
+                    GDPR Data Breach Notification
+                  </h1>
+                  <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; opacity: 0.95;">
+                    Article 33 Compliance - 72-Hour Notification Requirement
+                  </p>
+                </td>
+              </tr>
 
-        <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-          <h2 style="color: #2c3e50; margin-top: 0; font-size: 18px;">Description</h2>
-          <p style="margin: 0; white-space: pre-wrap;">${incident.description || 'No description provided.'}</p>
-        </div>
+              <!-- Compliance Notice -->
+              <tr>
+                <td style="padding: 20px 40px; background-color: #fff3cd; border-bottom: 1px solid #ffc107;">
+                  <p style="margin: 0; font-size: 13px; color: #856404; line-height: 1.5;">
+                    <strong>Compliance Notice:</strong> This notification is sent in compliance with Article 33 of the General Data Protection Regulation (GDPR), which requires data controllers to notify the supervisory authority of a personal data breach within 72 hours of becoming aware of it.
+                  </p>
+                </td>
+              </tr>
 
-        <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin-bottom: 20px;">
-          <h3 style="color: #856404; margin-top: 0; font-size: 16px;">⚠️ Next Steps</h3>
-          <ul style="margin: 0; padding-left: 20px; color: #856404;">
-            <li>Investigation is ongoing</li>
-            <li>Remediation measures are being implemented</li>
-            <li>Affected individuals will be notified as required</li>
-            <li>Additional information will be provided as it becomes available</li>
-          </ul>
-        </div>
+              <!-- Incident Details -->
+              <tr>
+                <td style="padding: 30px 40px;">
+                  <h2 style="color: #2c3e50; margin: 0 0 20px 0; font-size: 20px; font-weight: 600; border-bottom: 2px solid #dc3545; padding-bottom: 10px;">
+                    Incident Details
+                  </h2>
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+                    <tr>
+                      <td style="padding: 10px 0; font-weight: 600; width: 220px; color: #495057; vertical-align: top;">Incident ID:</td>
+                      <td style="padding: 10px 0; color: #212529;">#${incident.id}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0; font-weight: 600; color: #495057; vertical-align: top;">Incident Type:</td>
+                      <td style="padding: 10px 0; color: #212529;">${formatIncidentType(incident.incident_type)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0; font-weight: 600; color: #495057; vertical-align: top;">Severity Level:</td>
+                      <td style="padding: 10px 0;">
+                        <span style="display: inline-block; background-color: ${getSeverityColor(incident.severity)}; color: white; padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                          ${incident.severity?.toUpperCase() || 'UNKNOWN'}
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0; font-weight: 600; color: #495057; vertical-align: top;">Date & Time Detected:</td>
+                      <td style="padding: 10px 0; color: #212529;">${incidentDate}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0; font-weight: 600; color: #495057; vertical-align: top;">Affected Data Types:</td>
+                      <td style="padding: 10px 0; color: #212529;">${affectedDataTypes}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0; font-weight: 600; color: #495057; vertical-align: top;">Number of Affected Individuals:</td>
+                      <td style="padding: 10px 0; color: #212529;">${affectedUsersCount} individual(s)</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
 
-        <div style="background-color: #e7f3ff; padding: 15px; border-radius: 8px; border-left: 4px solid #0066cc; margin-top: 20px;">
-          <p style="margin: 0; font-size: 12px; color: #004085;">
-            <strong>Contact Information:</strong><br>
-            For questions regarding this incident, please contact our Data Protection Officer at the contact details provided in our privacy policy.
-          </p>
-        </div>
+              <!-- Description -->
+              <tr>
+                <td style="padding: 0 40px 30px 40px;">
+                  <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #6c757d;">
+                    <h3 style="color: #495057; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Incident Description</h3>
+                    <p style="margin: 0; color: #212529; white-space: pre-wrap; line-height: 1.7;">${cleanedDescription}</p>
+                  </div>
+                </td>
+              </tr>
 
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-        <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">
-          This is an automated notification sent in compliance with GDPR Article 33.<br>
-          Please do not reply to this email.
-        </p>
-      </div>
+              <!-- Remediation Actions -->
+              <tr>
+                <td style="padding: 0 40px 30px 40px;">
+                  <div style="background-color: #e7f3ff; padding: 25px; border-radius: 8px; border-left: 4px solid #0066cc;">
+                    <h3 style="color: #004085; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Remediation Actions & Next Steps</h3>
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <td style="padding: 8px 0; color: #004085;">
+                          <strong>1. Immediate Containment:</strong> The incident has been contained to prevent further unauthorized access or data exposure.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #004085;">
+                          <strong>2. Investigation:</strong> A comprehensive investigation is currently underway to determine the full scope and impact of the breach.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #004085;">
+                          <strong>3. Remediation Measures:</strong> Appropriate technical and organizational measures are being implemented to address the vulnerabilities identified.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #004085;">
+                          <strong>4. Individual Notification:</strong> Affected data subjects will be notified without undue delay, in accordance with Article 34 of the GDPR, where the breach is likely to result in a high risk to their rights and freedoms.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #004085;">
+                          <strong>5. Ongoing Monitoring:</strong> Enhanced monitoring and security measures have been implemented to prevent similar incidents in the future.
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Contact Information -->
+              <tr>
+                <td style="padding: 0 40px 30px 40px;">
+                  <div style="background-color: #d1ecf1; padding: 25px; border-radius: 8px; border-left: 4px solid #0c5460;">
+                    <h3 style="color: #0c5460; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Contact Information</h3>
+                    ${dpoInfo && dpoInfo.name ? `
+                      <p style="margin: 0 0 12px 0; color: #0c5460; font-size: 15px;">
+                        <strong>Data Protection Officer:</strong><br>
+                        ${dpoInfo.name}
+                      </p>
+                      <p style="margin: 0 0 12px 0; color: #0c5460; font-size: 15px;">
+                        <strong>Email:</strong> <a href="mailto:${dpoInfo.email}" style="color: #0066cc; text-decoration: none;">${dpoInfo.email}</a>
+                      </p>
+                      ${dpoInfo.contact_number ? `
+                        <p style="margin: 0; color: #0c5460; font-size: 15px;">
+                          <strong>Phone:</strong> ${dpoInfo.contact_number}
+                        </p>
+                      ` : ''}
+                    ` : `
+                      <p style="margin: 0; color: #0c5460; font-size: 15px; line-height: 1.6;">
+                        For questions regarding this incident, please contact our Data Protection Officer using the contact details provided in our privacy policy or through our official communication channels.
+                      </p>
+                    `}
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="padding: 30px 40px; background-color: #f8f9fa; border-top: 1px solid #dee2e6; text-align: center;">
+                  <p style="margin: 0; font-size: 12px; color: #6c757d; line-height: 1.6;">
+                    This is an automated notification sent in compliance with GDPR Article 33.<br>
+                    <strong>Please do not reply to this email.</strong> For inquiries, please use the contact information provided above.
+                  </p>
+                  <p style="margin: 15px 0 0 0; font-size: 11px; color: #adb5bd;">
+                    Urology Patient Management System | Data Protection & Compliance
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
   `;

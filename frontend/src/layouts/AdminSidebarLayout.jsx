@@ -207,7 +207,7 @@ const AdminSidebarLayout = ({
                 {/* Page content */}
                 <main className="flex-1 overflow-y-auto bg-gray-50">
                     <div className="py-6">
-                        <div className={`mx-auto ${isFullWidth ? 'max-w-full' : 'max-w-7xl'} px-4 sm:px-6 lg:px-8`}>
+                        <div className={`${isFullWidth ? 'max-w-full' : 'max-w-full'} px-2 sm:px-3 lg:px-4`}>
                             <Outlet />
                         </div>
                     </div>

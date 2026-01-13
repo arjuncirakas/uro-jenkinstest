@@ -173,6 +173,26 @@ export const dataAuditService = {
   },
 
   /**
+   * Get verified users list
+   */
+  getVerifiedUsers: async () => {
+    try {
+      const response = await apiClient.get('/superadmin/users?status=active&limit=1000');
+      return {
+        success: true,
+        data: response.data.data?.users || response.data.users || []
+      };
+    } catch (error) {
+      console.error('Error fetching verified users:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message || 'Failed to fetch verified users',
+        data: []
+      };
+    }
+  },
+
+  /**
    * Export audit report in specified format
    * @param {string} format - Export format ('csv' or 'pdf')
    * @param {Object} options - Export options (section, filters, etc.)
