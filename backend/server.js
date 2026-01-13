@@ -274,6 +274,12 @@ const startServer = async () => {
 
     console.log(`⏰ Auto appointment scheduler: Active (runs daily at 2:00 AM)`);
 
+    // Initialize baseline calculation scheduler
+    const { initBaselineCalculationScheduler } = await import('./schedulers/baselineCalculationScheduler.js');
+    initBaselineCalculationScheduler();
+
+    console.log(`⏰ Baseline calculation scheduler: Active (runs daily at 3:00 AM)`);
+
     // Start the server
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);

@@ -5,6 +5,9 @@ import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io
 import authService from '../services/authService.js';
 import tokenService from '../services/tokenService.js';
 import PropTypes from 'prop-types';
+import TermsAndConditionsModal from '../components/modals/TermsAndConditionsModal';
+import PrivacyPolicyModal from '../components/modals/PrivacyPolicyModal';
+import NoticeOfPrivacyPracticesModal from '../components/modals/NoticeOfPrivacyPracticesModal';
 
 /**
  * AdminSidebarLayout - Shared layout component for admin panels
@@ -19,6 +22,9 @@ const AdminSidebarLayout = ({
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+    const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+    const [isNPPModalOpen, setIsNPPModalOpen] = useState(false);
 
     // Proactive token refresh - check every 5 minutes
     useEffect(() => {
@@ -143,12 +149,48 @@ const AdminSidebarLayout = ({
 
                     {/* Powered by AhimsaGlobal */}
                     {!isCollapsed && (
-                        <div className="text-center pt-4 border-t border-gray-100">
+                        <div className="text-center pt-4 border-t border-gray-100 space-y-2">
                             <p className="text-xs text-gray-400">Powered by AhimsaGlobal</p>
+                            <div className="flex justify-center gap-3 text-xs">
+                                <button
+                                    onClick={() => setIsTermsModalOpen(true)}
+                                    className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+                                >
+                                    Terms
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                    onClick={() => setIsPrivacyModalOpen(true)}
+                                    className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+                                >
+                                    Privacy
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                    onClick={() => setIsNPPModalOpen(true)}
+                                    className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+                                >
+                                    NPP
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Modals */}
+            <TermsAndConditionsModal
+                isOpen={isTermsModalOpen}
+                onClose={() => setIsTermsModalOpen(false)}
+            />
+            <PrivacyPolicyModal
+                isOpen={isPrivacyModalOpen}
+                onClose={() => setIsPrivacyModalOpen(false)}
+            />
+            <NoticeOfPrivacyPracticesModal
+                isOpen={isNPPModalOpen}
+                onClose={() => setIsNPPModalOpen(false)}
+            />
 
             {/* Main content */}
             <div className="flex-1 flex flex-col overflow-hidden">

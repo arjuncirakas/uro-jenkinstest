@@ -172,6 +172,8 @@ const Login = () => {
               const retryToken = authService.isAuthenticated();
               const retryUser = authService.getCurrentUser();
               if (retryToken && retryUser) {
+                // Set sessionStorage flag to show cookie consent banner on this login session
+                sessionStorage.setItem('showCookieBanner', 'true');
                 setSuccessMessage('Login successful! Redirecting to your dashboard...');
                 const dashboardRoute = authService.getRoleRoutes();
                 console.log('📍 Navigating to:', dashboardRoute);
@@ -185,6 +187,9 @@ const Login = () => {
           }
 
           setSuccessMessage('Login successful! Redirecting to your dashboard...');
+
+          // Set sessionStorage flag to show cookie consent banner on this login session
+          sessionStorage.setItem('showCookieBanner', 'true');
 
           // Use authService to get the correct route for the user's role
           const dashboardRoute = authService.getRoleRoutes();
@@ -243,6 +248,8 @@ const Login = () => {
             const retryToken = authService.isAuthenticated();
             const retryUser = authService.getCurrentUser();
             if (retryToken && retryUser) {
+              // Set sessionStorage flag to show cookie consent banner on this login session
+              sessionStorage.setItem('showCookieBanner', 'true');
               setModalMessage('Login successful! Redirecting to your dashboard...');
               setShowSuccessModal(true);
               const dashboardRoute = authService.getRoleRoutes();
@@ -259,6 +266,9 @@ const Login = () => {
         // Show success modal
         setModalMessage('Login successful! Redirecting to your dashboard...');
         setShowSuccessModal(true);
+
+        // Set sessionStorage flag to show cookie consent banner on this login session
+        sessionStorage.setItem('showCookieBanner', 'true');
 
         // Use authService to get the correct route for the user's role
         const dashboardRoute = authService.getRoleRoutes();

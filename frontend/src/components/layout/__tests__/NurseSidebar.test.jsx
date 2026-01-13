@@ -160,4 +160,42 @@ describe('NurseSidebar', () => {
         expect(screen.getByText('Nurse Panel')).toBeInTheDocument();
         expect(screen.getByText('New Patient')).toBeInTheDocument();
     });
+
+    it('renders Terms, Privacy, and NPP links when expanded', () => {
+        render(
+            <MemoryRouter>
+                <NurseSidebar isOpen={true} onClose={mockOnClose} onOpenAddPatient={mockOnOpenAddPatient} />
+            </MemoryRouter>
+        );
+        expect(screen.getByText('Terms')).toBeInTheDocument();
+        expect(screen.getByText('Privacy')).toBeInTheDocument();
+        expect(screen.getByText('NPP')).toBeInTheDocument();
+    });
+
+    it('hides Terms, Privacy, and NPP links when collapsed', () => {
+        render(
+            <MemoryRouter>
+                <NurseSidebar isOpen={true} onClose={mockOnClose} onOpenAddPatient={mockOnOpenAddPatient} />
+            </MemoryRouter>
+        );
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        expect(screen.queryByText('Terms')).not.toBeInTheDocument();
+        expect(screen.queryByText('Privacy')).not.toBeInTheDocument();
+        expect(screen.queryByText('NPP')).not.toBeInTheDocument();
+    });
+
+    it('opens NPP modal when NPP button is clicked', () => {
+        render(
+            <MemoryRouter>
+                <NurseSidebar isOpen={true} onClose={mockOnClose} onOpenAddPatient={mockOnOpenAddPatient} />
+            </MemoryRouter>
+        );
+        const nppButton = screen.getByText('NPP');
+        fireEvent.click(nppButton);
+        
+        // Modal should be rendered
+        expect(screen.getByText('Notice of Privacy Practices')).toBeInTheDocument();
+    });
 });

@@ -45,10 +45,18 @@ import Departments from './pages/superadmin/Departments';
 import Doctors from './pages/superadmin/Doctors';
 import Nurses from './pages/superadmin/Nurses';
 import ConsentForms from './pages/superadmin/ConsentForms';
+import DataAudit from './pages/superadmin/DataAudit';
+import SecurityDashboard from './pages/superadmin/SecurityDashboard';
+import BehavioralAnalytics from './pages/superadmin/BehavioralAnalytics';
+import BreachManagement from './pages/superadmin/BreachManagement';
 
 // Department Admin Pages
 import DepartmentAdminDashboard from './pages/departmentadmin/Dashboard';
 import DataExport from './pages/departmentadmin/DataExport';
+
+// Public Pages
+import TermsAndConditions from './pages/TermsAndConditions';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 const AppRoutes = () => {
   return (
@@ -58,6 +66,8 @@ const AppRoutes = () => {
       <Route path="/register" element={<Register />} />
       <Route path="/setup-password" element={<SetupPassword />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
+      <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
       {/* Protected Routes - Authentication + Role-based authorization required */}
 
@@ -134,6 +144,10 @@ const AppRoutes = () => {
         <Route path="nurses" element={<Nurses />} />
         <Route path="departments" element={<Departments />} />
         <Route path="consent-forms" element={<ConsentForms />} />
+        <Route path="data-audit" element={<DataAudit />} />
+        <Route path="security-dashboard" element={<SecurityDashboard />} />
+        <Route path="behavioral-analytics" element={<BehavioralAnalytics />} />
+        <Route path="breach-management" element={<BreachManagement />} />
       </Route>
 
       {/* Department Admin Routes - Only accessible by department admins */}

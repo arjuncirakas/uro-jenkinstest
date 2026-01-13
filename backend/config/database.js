@@ -89,6 +89,15 @@ export const initializeDatabase = async () => {
   try {
     const client = await pool.connect();
 
+    // Enable pgcrypto extension for encryption support
+    try {
+      await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+      console.log('✅ pgcrypto extension enabled');
+    } catch (err) {
+      console.error('⚠️  Could not enable pgcrypto extension:', err.message);
+      // Continue anyway - application-level encryption will still work
+    }
+
     // Check if users table exists and get its structure
     const tableExists = await client.query(`
       SELECT EXISTS (
@@ -104,7 +113,7 @@ export const initializeDatabase = async () => {
 
       // Add new columns if they don't exist
       const newColumns = [
-        { name: 'phone', type: 'VARCHAR(20) UNIQUE' },
+        { name: 'phone', type: 'VARCHAR(500) UNIQUE' }, // Increased size for encrypted data
         { name: 'organization', type: 'VARCHAR(255)' },
         { name: 'is_active', type: 'BOOLEAN DEFAULT false' },
         { name: 'is_verified', type: 'BOOLEAN DEFAULT false' },
@@ -112,7 +121,9 @@ export const initializeDatabase = async () => {
         { name: 'phone_verified_at', type: 'TIMESTAMP' },
         { name: 'last_login_at', type: 'TIMESTAMP' },
         { name: 'failed_login_attempts', type: 'INTEGER DEFAULT 0' },
-        { name: 'locked_until', type: 'TIMESTAMP' }
+        { name: 'locked_until', type: 'TIMESTAMP' },
+        { name: 'email_hash', type: 'VARCHAR(64)' }, // Hash for searchable email
+        { name: 'phone_hash', type: 'VARCHAR(64)' }   // Hash for searchable phone
       ];
 
       for (const column of newColumns) {
@@ -146,11 +157,11 @@ export const initializeDatabase = async () => {
       await client.query(`
         CREATE TABLE users (
           id SERIAL PRIMARY KEY,
-          email VARCHAR(255) UNIQUE NOT NULL,
+          email VARCHAR(500) UNIQUE NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
           first_name VARCHAR(100) NOT NULL,
           last_name VARCHAR(100) NOT NULL,
-          phone VARCHAR(20) UNIQUE,
+          phone VARCHAR(500) UNIQUE,
           organization VARCHAR(255),
           role VARCHAR(50) NOT NULL CHECK (role IN ('superadmin', 'urologist', 'gp', 'urology_nurse', 'doctor', 'department_admin')),
           is_active BOOLEAN DEFAULT false,
@@ -160,6 +171,8 @@ export const initializeDatabase = async () => {
           last_login_at TIMESTAMP,
           failed_login_attempts INTEGER DEFAULT 0,
           locked_until TIMESTAMP,
+          email_hash VARCHAR(64),
+          phone_hash VARCHAR(64),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -339,6 +352,15 @@ export const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
     `);
 
+    // Create indexes for hash columns (for encrypted search)
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_email_hash ON users(email_hash);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_phone_hash ON users(phone_hash);
+    `);
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
     `);
@@ -410,8 +432,8 @@ export const initializeDatabase = async () => {
           last_name VARCHAR(100) NOT NULL,
           date_of_birth DATE NOT NULL,
           gender VARCHAR(10),
-          phone VARCHAR(20) NOT NULL,
-          email VARCHAR(255),
+          phone VARCHAR(500) NOT NULL,
+          email VARCHAR(500),
           address TEXT,
           postcode VARCHAR(10),
           city VARCHAR(100),
@@ -425,11 +447,14 @@ export const initializeDatabase = async () => {
           allergies TEXT,
           assigned_urologist VARCHAR(255),
           emergency_contact_name VARCHAR(100),
-          emergency_contact_phone VARCHAR(20),
+          emergency_contact_phone VARCHAR(500),
           emergency_contact_relationship VARCHAR(50),
           priority VARCHAR(20) DEFAULT 'Normal' CHECK (priority IN ('Low', 'Normal', 'High', 'Urgent')),
           notes TEXT,
           status VARCHAR(20) DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive', 'Discharged')),
+          phone_hash VARCHAR(64),
+          email_hash VARCHAR(64),
+          phone_prefix VARCHAR(10),
           created_by INTEGER REFERENCES users(id),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -438,6 +463,38 @@ export const initializeDatabase = async () => {
       console.log('✅ Patients table created successfully');
     } else {
       console.log('✅ Patients table already exists');
+      
+      // Add hash columns and increase column sizes for encrypted data
+      try {
+        // Increase column sizes for encrypted data
+        await client.query(`
+          ALTER TABLE patients 
+          ALTER COLUMN phone TYPE VARCHAR(500),
+          ALTER COLUMN email TYPE VARCHAR(500),
+          ALTER COLUMN emergency_contact_phone TYPE VARCHAR(500);
+        `);
+        console.log('✅ Updated patients table column sizes for encryption');
+      } catch (err) {
+        console.log(`⚠️  Column size update: ${err.message}`);
+      }
+      
+      // Add hash columns if they don't exist
+      const hashColumns = [
+        { name: 'phone_hash', type: 'VARCHAR(64)' },
+        { name: 'email_hash', type: 'VARCHAR(64)' },
+        { name: 'phone_prefix', type: 'VARCHAR(10)' }
+      ];
+      
+      for (const column of hashColumns) {
+        try {
+          await client.query(`
+            ALTER TABLE patients ADD COLUMN IF NOT EXISTS ${column.name} ${column.type};
+          `);
+          console.log(`✅ Added patients column: ${column.name}`);
+        } catch (err) {
+          console.log(`⚠️  Column ${column.name} might already exist: ${err.message}`);
+        }
+      }
     }
 
     // Make gender column nullable (remove NOT NULL constraint and CHECK constraint)
@@ -607,6 +664,12 @@ export const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_investigation_results_test_date ON investigation_results(test_date);
     `);
 
+    // Add file_data column for encrypted file storage
+    await client.query(`
+      ALTER TABLE investigation_results 
+      ADD COLUMN IF NOT EXISTS file_data BYTEA;
+    `);
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patients_email ON patients(email);
     `);
@@ -621,6 +684,19 @@ export const initializeDatabase = async () => {
 
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_patients_status ON patients(status);
+    `);
+
+    // Create indexes for hash columns (for encrypted search)
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_phone_hash ON patients(phone_hash);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_email_hash ON patients(email_hash);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_patients_phone_prefix ON patients(phone_prefix);
     `);
 
     // Create appointments table
@@ -1082,6 +1158,17 @@ export const initializeDatabase = async () => {
         // Columns might already exist, which is fine
         console.log('ℹ️ Consent forms table columns check completed');
       }
+      
+      // Add template_file_data column for encrypted file storage
+      try {
+        await client.query(`
+          ALTER TABLE consent_forms 
+          ADD COLUMN IF NOT EXISTS template_file_data BYTEA;
+        `);
+      } catch (alterError) {
+        // Columns might already exist, which is fine
+        console.log('ℹ️ Consent forms table columns check completed');
+      }
     }
 
     // Create patient_consent_forms table
@@ -1111,6 +1198,12 @@ export const initializeDatabase = async () => {
     } else {
       console.log('✅ Patient consent forms table already exists');
     }
+
+    // Add file_data column for encrypted file storage
+    await client.query(`
+      ALTER TABLE patient_consent_forms 
+      ADD COLUMN IF NOT EXISTS file_data BYTEA;
+    `);
 
     // Create indexes for consent forms tables
     await client.query(`
@@ -1266,6 +1359,412 @@ export const initializeDatabase = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_pathway_validations_patient_id ON pathway_validations(patient_id);
     `);
+
+    // Create data classification metadata table
+    const classificationTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'data_classification_metadata'
+      );
+    `);
+
+    if (!classificationTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE data_classification_metadata (
+          id SERIAL PRIMARY KEY,
+          table_name VARCHAR(255) NOT NULL UNIQUE,
+          classification_level INTEGER NOT NULL CHECK (classification_level BETWEEN 1 AND 5),
+          classification_label VARCHAR(50) NOT NULL,
+          description TEXT,
+          security_controls JSONB,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_reviewed_at TIMESTAMP
+        );
+      `);
+      console.log('✅ Created data_classification_metadata table');
+      
+      // Create indexes for classification table
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_data_classification_table_name ON data_classification_metadata(table_name);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_data_classification_level ON data_classification_metadata(classification_level);
+      `);
+    } else {
+      console.log('✅ Data classification metadata table already exists');
+    }
+
+    // Create security_alerts table
+    const securityAlertsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'security_alerts'
+      );
+    `);
+
+    if (!securityAlertsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE security_alerts (
+          id SERIAL PRIMARY KEY,
+          alert_type VARCHAR(100) NOT NULL,
+          severity VARCHAR(20) NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'low')),
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          user_email VARCHAR(255),
+          ip_address VARCHAR(45),
+          message TEXT NOT NULL,
+          details JSONB,
+          status VARCHAR(20) DEFAULT 'new' CHECK (status IN ('new', 'acknowledged', 'resolved')),
+          acknowledged_by INTEGER REFERENCES users(id),
+          acknowledged_at TIMESTAMP,
+          resolved_by INTEGER REFERENCES users(id),
+          resolved_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('✅ Created security_alerts table');
+      
+      // Create indexes for security_alerts table
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_security_alerts_user_id ON security_alerts(user_id);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_security_alerts_status ON security_alerts(status);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_security_alerts_created_at ON security_alerts(created_at);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_security_alerts_severity ON security_alerts(severity);
+      `);
+    } else {
+      console.log('✅ Security alerts table already exists');
+    }
+
+    // Create user_login_history table
+    const userLoginHistoryTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_login_history'
+      );
+    `);
+
+    if (!userLoginHistoryTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE user_login_history (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          ip_address VARCHAR(45) NOT NULL,
+          user_agent TEXT,
+          login_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, ip_address)
+        );
+      `);
+      console.log('✅ Created user_login_history table');
+      
+      // Create indexes for user_login_history table
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_user_login_history_user_id ON user_login_history(user_id);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_user_login_history_ip_address ON user_login_history(ip_address);
+      `);
+    } else {
+      console.log('✅ User login history table already exists');
+    }
+
+    // Create active_sessions table
+    const activeSessionsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'active_sessions'
+      );
+    `);
+
+    if (!activeSessionsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE active_sessions (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_token VARCHAR(500) NOT NULL,
+          ip_address VARCHAR(45) NOT NULL,
+          user_agent TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL
+        );
+      `);
+      console.log('✅ Created active_sessions table');
+      
+      // Create indexes for active_sessions table
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_active_sessions_user_id ON active_sessions(user_id);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_active_sessions_expires_at ON active_sessions(expires_at);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_active_sessions_session_token ON active_sessions(session_token);
+      `);
+    } else {
+      console.log('✅ Active sessions table already exists');
+    }
+
+    // Create security_team_members table
+    const securityTeamMembersTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'security_team_members'
+      );
+    `);
+
+    if (!securityTeamMembersTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE security_team_members (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+      console.log('✅ Created security_team_members table');
+      
+      // Create indexes for security_team_members table
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_security_team_members_email ON security_team_members(email);
+      `);
+    } else {
+      console.log('✅ Security team members table already exists');
+    }
+
+    // Create user_behavior_baselines table
+    const behaviorBaselinesTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user_behavior_baselines'
+      );
+    `);
+
+    if (!behaviorBaselinesTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE user_behavior_baselines (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          baseline_type VARCHAR(50) NOT NULL CHECK (baseline_type IN ('location', 'time', 'access_pattern')),
+          baseline_data JSONB NOT NULL,
+          calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, baseline_type)
+        );
+      `);
+      console.log('✅ Created user_behavior_baselines table');
+      
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_user_behavior_baselines_user_id_type ON user_behavior_baselines(user_id, baseline_type);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_user_behavior_baselines_calculated_at ON user_behavior_baselines(calculated_at);
+      `);
+    } else {
+      console.log('✅ User behavior baselines table already exists');
+    }
+
+    // Create behavioral_anomalies table
+    const behavioralAnomaliesTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'behavioral_anomalies'
+      );
+    `);
+
+    if (!behavioralAnomaliesTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE behavioral_anomalies (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          anomaly_type VARCHAR(50) NOT NULL CHECK (anomaly_type IN ('unusual_location', 'unusual_time', 'unusual_access')),
+          severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
+          details JSONB NOT NULL,
+          detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          status VARCHAR(20) DEFAULT 'new' CHECK (status IN ('new', 'reviewed', 'dismissed', 'escalated')),
+          reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          reviewed_at TIMESTAMP
+        );
+      `);
+      console.log('✅ Created behavioral_anomalies table');
+      
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_behavioral_anomalies_user_id ON behavioral_anomalies(user_id);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_behavioral_anomalies_status ON behavioral_anomalies(status);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_behavioral_anomalies_detected_at ON behavioral_anomalies(detected_at);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_behavioral_anomalies_severity ON behavioral_anomalies(severity);
+      `);
+    } else {
+      console.log('✅ Behavioral anomalies table already exists');
+    }
+
+    // Create breach_incidents table
+    const breachIncidentsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'breach_incidents'
+      );
+    `);
+
+    if (!breachIncidentsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE breach_incidents (
+          id SERIAL PRIMARY KEY,
+          incident_type VARCHAR(50) NOT NULL CHECK (incident_type IN ('data_breach', 'security_incident', 'unauthorized_access')),
+          severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+          description TEXT NOT NULL,
+          affected_users INTEGER[],
+          affected_data_types VARCHAR[],
+          detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          reported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'confirmed', 'under_investigation', 'contained', 'resolved')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('✅ Created breach_incidents table');
+      
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_incidents_status ON breach_incidents(status);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_incidents_severity ON breach_incidents(severity);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_incidents_detected_at ON breach_incidents(detected_at);
+      `);
+    } else {
+      console.log('✅ Breach incidents table already exists');
+    }
+
+    // Create breach_notifications table
+    const breachNotificationsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'breach_notifications'
+      );
+    `);
+
+    if (!breachNotificationsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE breach_notifications (
+          id SERIAL PRIMARY KEY,
+          incident_id INTEGER NOT NULL REFERENCES breach_incidents(id) ON DELETE CASCADE,
+          notification_type VARCHAR(50) NOT NULL CHECK (notification_type IN ('gdpr_supervisory', 'hipaa_hhs', 'individual_patient')),
+          recipient_type VARCHAR(50) NOT NULL CHECK (recipient_type IN ('supervisory_authority', 'hhs', 'individual')),
+          recipient_email VARCHAR(255) NOT NULL,
+          recipient_name VARCHAR(255),
+          template_used VARCHAR(100),
+          sent_at TIMESTAMP,
+          sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
+          error_message TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('✅ Created breach_notifications table');
+      
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_notifications_incident_id ON breach_notifications(incident_id);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_notifications_notification_type ON breach_notifications(notification_type);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_notifications_status ON breach_notifications(status);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_notifications_sent_at ON breach_notifications(sent_at);
+      `);
+    } else {
+      console.log('✅ Breach notifications table already exists');
+    }
+
+    // Create breach_remediations table
+    const breachRemediationsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'breach_remediations'
+      );
+    `);
+
+    if (!breachRemediationsTableExists.rows[0].exists) {
+      await client.query(`
+        CREATE TABLE breach_remediations (
+          id SERIAL PRIMARY KEY,
+          incident_id INTEGER NOT NULL REFERENCES breach_incidents(id) ON DELETE CASCADE,
+          action_taken TEXT NOT NULL,
+          taken_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          effectiveness VARCHAR(20) CHECK (effectiveness IN ('effective', 'partial', 'ineffective', 'pending')),
+          notes TEXT
+        );
+      `);
+      console.log('✅ Created breach_remediations table');
+      
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_remediations_incident_id ON breach_remediations(incident_id);
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_breach_remediations_taken_at ON breach_remediations(taken_at);
+      `);
+    } else {
+      console.log('✅ Breach remediations table already exists');
+    }
+
+    // Create dpo_contact_info table
+    const dpoTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'dpo_contact_info'
+      );
+    `);
+
+    if (!dpoTableExists.rows[0].exists) {
+      console.log('📋 Creating dpo_contact_info table...');
+      await client.query(`
+        CREATE TABLE dpo_contact_info (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          contact_number VARCHAR(50) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+      console.log('✅ Created dpo_contact_info table');
+      
+      // Create index for dpo_contact_info table
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_dpo_contact_info_email ON dpo_contact_info(email);
+      `);
+    } else {
+      console.log('✅ DPO contact info table already exists');
+    }
 
     client.release();
     return true;

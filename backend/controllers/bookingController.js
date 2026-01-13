@@ -1,4 +1,6 @@
 import pool from '../config/database.js';
+import { decryptFields } from '../services/encryptionService.js';
+import { PATIENT_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 import { sendAppointmentReminderEmail } from '../services/emailService.js';
 
 // Helper function to validate patient exists and is not expired
@@ -3354,6 +3356,9 @@ export const getAllAppointments = async (req, res) => {
 
     // Format results for frontend
     const formattedAppointments = result.rows.map(row => {
+      // Decrypt patient data
+      const decryptedRow = decryptFields(row, PATIENT_ENCRYPTED_FIELDS);
+      
       // Format date using local timezone to avoid UTC conversion issues
       const formatDate = (dateString) => {
         if (!dateString) return '';
@@ -3384,17 +3389,17 @@ export const getAllAppointments = async (req, res) => {
         }
       };
 
-      const formattedDate = formatDate(row.appointment_date);
+      const formattedDate = formatDate(decryptedRow.appointment_date);
 
       // Format time
-      const timeStr = row.appointment_time;
+      const timeStr = decryptedRow.appointment_time;
       const formattedTime = timeStr ? timeStr.substring(0, 5) : '';
 
       // Determine appointment type and color
       let typeColor = 'teal'; // Default for urologist consultations
       let appointmentType = 'Urologist Consultation';
 
-      const aptType = (row.type || '').toLowerCase();
+      const aptType = (decryptedRow.type || '').toLowerCase();
 
       if (aptType === 'automatic') {
         typeColor = 'blue';
@@ -3411,36 +3416,36 @@ export const getAllAppointments = async (req, res) => {
       }
 
       // Determine status - treat no_show as missed
-      let status = row.status;
+      let status = decryptedRow.status;
       if (status === 'no_show' || status === 'no-show') {
         status = 'missed';
       }
 
       return {
-        id: row.id,
-        patientId: row.patient_id,
-        patientName: `${row.first_name} ${row.last_name}`,
-        upi: row.upi,
-        phone: row.phone || '',
-        email: row.email || '',
-        age: row.age,
-        gender: row.gender,
-        psa: row.psa,
+        id: decryptedRow.id,
+        patientId: decryptedRow.patient_id,
+        patientName: `${decryptedRow.first_name} ${decryptedRow.last_name}`,
+        upi: decryptedRow.upi,
+        phone: decryptedRow.phone || '', // Decrypted
+        email: decryptedRow.email || '', // Decrypted
+        age: decryptedRow.age,
+        gender: decryptedRow.gender,
+        psa: decryptedRow.psa,
         date: formattedDate,
         time: formattedTime,
         status: status,
-        notes: row.notes || '',
+        notes: decryptedRow.notes || '',
         type: appointmentType,
         typeColor: typeColor,
-        urologist: row.type === 'investigation'
-          ? row.urologist_first_name || 'Unassigned'
-          : (row.urologist_first_name && row.urologist_last_name
-            ? `Dr. ${row.urologist_first_name} ${row.urologist_last_name}`
+        urologist: decryptedRow.type === 'investigation'
+          ? decryptedRow.urologist_first_name || 'Unassigned'
+          : (decryptedRow.urologist_first_name && decryptedRow.urologist_last_name
+            ? `Dr. ${decryptedRow.urologist_first_name} ${decryptedRow.urologist_last_name}`
             : 'Unassigned'),
-        reminderSent: row.reminder_sent || false,
-        reminderSentAt: row.reminder_sent_at || null,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
+        reminderSent: decryptedRow.reminder_sent || false,
+        reminderSentAt: decryptedRow.reminder_sent_at || null,
+        createdAt: decryptedRow.created_at,
+        updatedAt: decryptedRow.updated_at
       };
     });
 

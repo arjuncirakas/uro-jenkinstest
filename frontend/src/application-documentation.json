@@ -1,0 +1,585 @@
+{
+    "documentation": {
+        "title": "UroPrep - Urology Patient Management System",
+        "version": "1.0.0",
+        "generated_date": "2026-01-07"
+    },
+    "overview": {
+        "description": "UroPrep is a comprehensive, enterprise-grade urology patient management system designed to streamline healthcare coordination between urologists, general practitioners (GPs), nurses, and administrators. The platform facilitates seamless patient tracking from GP referral through diagnosis, treatment, and long-term monitoring.",
+        "key_objectives": [
+            "Unified Patient Management - Track patients throughout their entire care journey",
+            "Multi-Stakeholder Coordination - Connect urologists, GPs, nurses, and administrators",
+            "Clinical Decision Support - Evidence-based guideline recommendations",
+            "Active Surveillance Monitoring - PSA trend tracking for prostate cancer patients",
+            "Investigation Workflow Management - Book, track, and manage clinical investigations",
+            "Surgery & Post-Op Management - Complete surgical pathway tracking"
+        ]
+    },
+    "technology_stack": {
+        "frontend": {
+            "React 19": "UI Framework",
+            "Vite 7": "Build Tool & Dev Server",
+            "React Router 7": "Client-side Routing",
+            "Redux Toolkit": "State Management",
+            "TailwindCSS 4": "Styling Framework",
+            "Axios": "HTTP Client",
+            "Recharts": "Data Visualization",
+            "Lucide React": "Icon Library",
+            "PDF-lib": "PDF Generation",
+            "DOMPurify": "XSS Prevention"
+        },
+        "backend": {
+            "Node.js": "Runtime Environment",
+            "Express.js 4": "Web Framework",
+            "PostgreSQL": "Database",
+            "JWT": "Authentication",
+            "Helmet": "Security Headers",
+            "Nodemailer": "Email Service",
+            "Multer": "File Uploads",
+            "Joi": "Request Validation",
+            "Tesseract.js": "OCR for Documents",
+            "Node-cron": "Scheduled Tasks"
+        },
+        "testing": {
+            "Vitest": "Frontend Testing",
+            "Jest": "Backend Testing",
+            "Supertest": "API Testing",
+            "Playwright": "E2E Testing"
+        },
+        "devops": {
+            "Nginx": "Reverse Proxy",
+            "PM2": "Process Manager",
+            "SonarQube": "Code Quality"
+        }
+    },
+    "architecture": {
+        "description": "Monorepo structure with separate frontend (React SPA) and backend (Express.js API) applications communicating via REST API",
+        "structure": {
+            "backend": {
+                "description": "Express.js API Server",
+                "folders": {
+                    "config": "Database configuration",
+                    "controllers": "Request handlers (17 controllers)",
+                    "middleware": "Auth, validation, security (11 files)",
+                    "routes": "API route definitions (15 routes)",
+                    "services": "Business logic services (6 services)",
+                    "schedulers": "Cron jobs (auto no-show, etc.)",
+                    "scripts": "DB setup, migrations (21 scripts)",
+                    "utils": "Helper functions (11 utils)"
+                }
+            },
+            "frontend": {
+                "description": "React SPA with Vite",
+                "folders": {
+                    "components": "Reusable UI components (123 files)",
+                    "layouts": "Role-specific layouts (14 files)",
+                    "pages": "Page components by role (40 files)",
+                    "services": "API integration (22 services)",
+                    "store": "Redux state management",
+                    "utils": "Frontend utilities (16 files)"
+                }
+            }
+        }
+    },
+    "user_roles": {
+        "superadmin": {
+            "description": "Full system administration capabilities",
+            "permissions": [
+                "User Management - Create, update, delete all user accounts",
+                "Doctor Management - Manage urologist profiles",
+                "Nurse Management - Manage nurse profiles",
+                "Department Management - Create and configure departments",
+                "Consent Forms - Upload and manage consent form templates",
+                "System Settings - Configure system-wide settings"
+            ],
+            "pages": [
+                "/superadmin/users",
+                "/superadmin/doctors",
+                "/superadmin/nurses",
+                "/superadmin/departments",
+                "/superadmin/consent-forms"
+            ]
+        },
+        "department_admin": {
+            "description": "Department-level administration and reporting",
+            "permissions": [
+                "Dashboard Analytics - View department KPIs and statistics",
+                "Data Export - Export patient and operational data",
+                "Report Generation - Generate department reports"
+            ],
+            "pages": [
+                "/department-admin/dashboard",
+                "/department-admin/export"
+            ]
+        },
+        "urologist": {
+            "description": "Primary clinical decision-maker",
+            "permissions": [
+                "Patient Dashboard - Comprehensive patient overview",
+                "Patient Management - View and manage assigned patients",
+                "MDT Scheduling - Schedule multi-disciplinary team meetings",
+                "PSA Tracking - Monitor PSA trends for surveillance patients",
+                "Clinical Decisions - Record treatment decisions",
+                "Surgery Management - Manage surgical pathways",
+                "Appointments - View and manage appointments"
+            ],
+            "pages": [
+                "/urologist/dashboard",
+                "/urologist/patients/patients-under-me",
+                "/urologist/patients/my-patients",
+                "/urologist/patients/new",
+                "/urologist/patients/surgery-pathway",
+                "/urologist/patients/post-op-followup",
+                "/urologist/patients/all",
+                "/urologist/appointments"
+            ]
+        },
+        "gp": {
+            "description": "Referring physician and long-term care coordinator",
+            "permissions": [
+                "Referred Patients - Track patients referred to urology",
+                "Active Monitoring - Monitor patients on GP takeover",
+                "Medication Management - Coordinate medications",
+                "Communication - Direct communication with urology team"
+            ],
+            "pages": [
+                "/gp/dashboard",
+                "/gp/referred-patients",
+                "/gp/monitoring",
+                "/gp/medication"
+            ]
+        },
+        "urology_nurse": {
+            "description": "Clinical operations and patient coordination",
+            "permissions": [
+                "OPD Management - Manage outpatient department operations",
+                "Investigation Management - Book and track investigations",
+                "Patient List - View and manage patient registry",
+                "Appointments - Schedule and manage appointments",
+                "Active Monitoring - Monitor surveillance patients",
+                "Surgery Coordination - Coordinate surgical procedures",
+                "Post-Op Followup - Manage post-operative care"
+            ],
+            "pages": [
+                "/nurse/opd-management",
+                "/nurse/investigations",
+                "/nurse/patients",
+                "/nurse/appointments",
+                "/nurse/monitoring",
+                "/nurse/surgery",
+                "/nurse/followup"
+            ]
+        }
+    },
+    "frontend_structure": {
+        "components": {
+            "auth": "Login, Register components",
+            "modals": "Modal dialogs (AddPatientModal, AddUserModal, BookInvestigationModal, FullScreenPDFModal)",
+            "ProtectedRoute": "Route guard component for authentication"
+        },
+        "layouts": [
+            "BaseLayout.jsx - Shared layout foundation",
+            "UrologistLayout.jsx - Urologist-specific layout",
+            "GPLayout.jsx - GP-specific layout",
+            "NurseLayout.jsx - Nurse-specific layout",
+            "SuperadminLayout.jsx - Superadmin layout",
+            "DepartmentAdminLayout.jsx - Department admin layout"
+        ],
+        "services": [
+            "authService.js - Authentication API calls",
+            "patientService.js - Patient CRUD operations",
+            "bookingService.js - Appointment booking",
+            "investigationService.js - Investigation management",
+            "mdtService.js - MDT meeting management",
+            "consentFormService.js - Consent form handling",
+            "doctorsService.js - Doctor management",
+            "nursesService.js - Nurse management",
+            "gpService.js - GP operations",
+            "departmentAdminService.js - Department admin operations",
+            "superadminService.js - Superadmin operations",
+            "guidelineService.js - Clinical guidelines",
+            "notificationService.js - Notifications",
+            "tokenService.js - Token management",
+            "emailService.js - Email operations",
+            "notesService.js - Clinical notes",
+            "decisionSupportService.js - Clinical decision support"
+        ],
+        "state_management": {
+            "library": "Redux Toolkit",
+            "features": [
+                "Centralized application state",
+                "Auth slice for user session management",
+                "Async thunks for API calls"
+            ]
+        }
+    },
+    "backend_structure": {
+        "controllers": {
+            "authController.js": "Authentication, JWT tokens, OTP",
+            "patientController.js": "Patient CRUD, filtering, search",
+            "bookingController.js": "Appointment booking and management",
+            "investigationController.js": "Investigation workflow",
+            "mdtController.js": "MDT meeting management",
+            "doctorsController.js": "Urologist profile management",
+            "nursesController.js": "Nurse profile management",
+            "gpController.js": "GP-specific operations",
+            "consentFormController.js": "Consent form templates",
+            "dischargeSummaryController.js": "Discharge documentation",
+            "exportController.js": "Data export functionality",
+            "guidelineController.js": "Clinical guidelines",
+            "kpiController.js": "Key Performance Indicators",
+            "notesController.js": "Clinical notes",
+            "superadminController.js": "System administration"
+        },
+        "middleware": {
+            "auth.js": "JWT verification, role checking",
+            "apiAuth.js": "API route protection",
+            "corsConfig.js": "CORS configuration",
+            "rateLimiter.js": "Rate limiting for API endpoints",
+            "accountLockout.js": "Brute force protection",
+            "sanitizer.js": "Input sanitization",
+            "patientValidation.js": "Patient data validation",
+            "idorProtection.js": "IDOR attack prevention",
+            "auditMiddleware.js": "Audit logging",
+            "healthCheckAuth.js": "Health endpoint protection",
+            "errorHandler.js": "Global error handling"
+        },
+        "services": {
+            "emailService.js": "Email notifications via Nodemailer",
+            "notificationService.js": "In-app notifications",
+            "otpService.js": "OTP generation and verification",
+            "auditLogger.js": "Audit trail logging",
+            "guidelineService.js": "Clinical guideline logic",
+            "decisionSupportService.js": "Clinical decision support"
+        },
+        "schedulers": {
+            "autoNoShowScheduler.js": "Automatically mark no-show appointments"
+        }
+    },
+    "key_features": {
+        "patient_management": {
+            "description": "Complete patient lifecycle from referral to discharge",
+            "statuses": [
+                "New Referral",
+                "Awaiting Investigation",
+                "Under Consultation",
+                "Surgery Pathway",
+                "Active Surveillance",
+                "Post-Op Followup",
+                "GP Takeover",
+                "Discharged"
+            ],
+            "workflow": "GP Referral → Nurse Triage → Investigations → Urologist Consultation → MDT Discussion → Treatment Decision → Surgery or Active Surveillance → Post-Op Followup → GP Takeover or Discharge"
+        },
+        "investigation_workflow": {
+            "features": [
+                "Book Investigations - Nurses can book investigations for patients",
+                "Track Status - Real-time status tracking (Pending, In Progress, Completed)",
+                "Result Upload - Upload and attach investigation results",
+                "File Management - Secure file storage with PDF viewing"
+            ]
+        },
+        "psa_monitoring": {
+            "description": "Active Surveillance for prostate cancer patients",
+            "features": [
+                "PSA Result Entry - Record PSA test results with dates",
+                "Trend Visualization - Charts showing PSA trends over time",
+                "Alerts - Automatic alerts for concerning PSA patterns",
+                "Guideline Compliance - Active surveillance monitoring schedules"
+            ]
+        },
+        "mdt_coordination": {
+            "description": "Multi-Disciplinary Team meeting management",
+            "features": [
+                "Meeting Scheduling - Schedule MDT meetings",
+                "Case Presentation - Prepare patient cases for discussion",
+                "Collaborative Notes - Record discussion and decisions",
+                "Action Items - Track follow-up actions"
+            ]
+        },
+        "appointment_management": {
+            "features": [
+                "Visual Calendar - Weekly and monthly calendar views",
+                "Automated Reminders - Email notifications to patients",
+                "No-Show Tracking - Automatic no-show detection",
+                "Rescheduling Workflow - Easy appointment rescheduling"
+            ]
+        },
+        "consent_form_management": {
+            "features": [
+                "Template Upload - Admin uploads consent form templates",
+                "Digital Consent - Patients can provide digital consent",
+                "Document Storage - Secure storage of signed consents",
+                "Audit Trail - Complete consent history"
+            ]
+        },
+        "data_export": {
+            "features": [
+                "Excel Export - Export patient data to Excel format",
+                "Filtered Exports - Export based on date ranges, status",
+                "Audit Logging - Track all export operations"
+            ]
+        }
+    },
+    "security_implementation": {
+        "authentication_authorization": {
+            "JWT Tokens": "Access tokens (15 min) + Refresh tokens (7 days)",
+            "OTP Verification": "Email-based OTP for login",
+            "Account Lockout": "Lockout after failed attempts",
+            "Session Management": "Secure cookie-based sessions",
+            "Role-Based Access": "Middleware-enforced RBAC"
+        },
+        "security_headers": [
+            "Content Security Policy (CSP)",
+            "Strict Transport Security (HSTS)",
+            "X-Content-Type-Options",
+            "X-Frame-Options",
+            "Referrer Policy"
+        ],
+        "input_validation": [
+            "Joi Schemas - Request body validation",
+            "DOMPurify - XSS prevention",
+            "Express Validator - Additional validation layer"
+        ],
+        "api_security": {
+            "Rate Limiting": "Prevent API abuse",
+            "CORS Configuration": "Whitelist allowed origins",
+            "IDOR Protection": "Prevent unauthorized data access",
+            "Audit Logging": "Track all sensitive operations"
+        },
+        "compliance": [
+            "GDPR compliant data handling",
+            "NHS-compatible security standards",
+            "HIPAA considerations for healthcare data",
+            "Full audit trails for accountability"
+        ]
+    },
+    "database_schema": {
+        "core_tables": {
+            "users": "id, email, password_hash, role, first_name, last_name, phone, department_id, is_active, created_at, updated_at",
+            "patients": "id, mrn, first_name, last_name, dob, gender, phone, email, address, referring_gp_id, assigned_urologist_id, assigned_nurse_id, status, active_surveillance, created_at, updated_at",
+            "bookings": "id, patient_id, urologist_id, appointment_date, appointment_time, type, status, notes, created_by, created_at",
+            "investigations": "id, patient_id, type, status, booked_date, result_date, result_file_path, notes, created_by, created_at",
+            "psa_results": "id, patient_id, result_value, test_date, notes, created_at",
+            "mdt_meetings": "id, scheduled_date, status, notes, created_by, created_at",
+            "consent_forms": "id, name, file_path, department_id, is_active, created_at",
+            "audit_logs": "id, user_id, action, entity_type, entity_id, details, ip_address, created_at"
+        }
+    },
+    "api_endpoints": {
+        "authentication": {
+            "base_path": "/api/auth",
+            "endpoints": [
+                {
+                    "method": "POST",
+                    "path": "/login",
+                    "description": "User login"
+                },
+                {
+                    "method": "POST",
+                    "path": "/logout",
+                    "description": "User logout"
+                },
+                {
+                    "method": "POST",
+                    "path": "/refresh-token",
+                    "description": "Refresh access token"
+                },
+                {
+                    "method": "POST",
+                    "path": "/verify-otp",
+                    "description": "Verify OTP code"
+                },
+                {
+                    "method": "POST",
+                    "path": "/setup-password",
+                    "description": "Initial password setup"
+                }
+            ]
+        },
+        "patients": {
+            "base_path": "/api/patients",
+            "endpoints": [
+                {
+                    "method": "GET",
+                    "path": "/",
+                    "description": "List patients"
+                },
+                {
+                    "method": "GET",
+                    "path": "/:id",
+                    "description": "Get patient details"
+                },
+                {
+                    "method": "POST",
+                    "path": "/",
+                    "description": "Create patient"
+                },
+                {
+                    "method": "PUT",
+                    "path": "/:id",
+                    "description": "Update patient"
+                },
+                {
+                    "method": "DELETE",
+                    "path": "/:id",
+                    "description": "Delete patient"
+                }
+            ]
+        },
+        "investigations": {
+            "base_path": "/api/investigations",
+            "endpoints": [
+                {
+                    "method": "GET",
+                    "path": "/",
+                    "description": "List investigations"
+                },
+                {
+                    "method": "POST",
+                    "path": "/",
+                    "description": "Book investigation"
+                },
+                {
+                    "method": "PUT",
+                    "path": "/:id",
+                    "description": "Update investigation"
+                },
+                {
+                    "method": "POST",
+                    "path": "/:id/result",
+                    "description": "Upload result"
+                }
+            ]
+        },
+        "bookings": {
+            "base_path": "/api/bookings",
+            "endpoints": [
+                {
+                    "method": "GET",
+                    "path": "/",
+                    "description": "List appointments"
+                },
+                {
+                    "method": "POST",
+                    "path": "/",
+                    "description": "Create appointment"
+                },
+                {
+                    "method": "PUT",
+                    "path": "/:id",
+                    "description": "Update appointment"
+                },
+                {
+                    "method": "DELETE",
+                    "path": "/:id",
+                    "description": "Cancel appointment"
+                }
+            ]
+        },
+        "mdt": {
+            "base_path": "/api/mdt",
+            "endpoints": [
+                {
+                    "method": "GET",
+                    "path": "/",
+                    "description": "List MDT meetings"
+                },
+                {
+                    "method": "POST",
+                    "path": "/",
+                    "description": "Schedule meeting"
+                },
+                {
+                    "method": "PUT",
+                    "path": "/:id",
+                    "description": "Update meeting"
+                }
+            ]
+        },
+        "additional_endpoints": [
+            "/api/doctors - Urologist management",
+            "/api/nurses - Nurse management",
+            "/api/gp - GP operations",
+            "/api/superadmin - Admin operations",
+            "/api/consent-forms - Consent form management",
+            "/api/guidelines - Clinical guidelines",
+            "/api/kpi - Dashboard KPIs",
+            "/api/export - Data export",
+            "/api/notifications - Notification management",
+            "/api/notes - Clinical notes"
+        ]
+    },
+    "deployment": {
+        "production_stack": {
+            "description": "Nginx reverse proxy with PM2-managed Node.js backend and static frontend files",
+            "components": [
+                "Nginx - SSL Termination, Static Files, Reverse Proxy",
+                "Frontend - Static files served by Nginx",
+                "Backend - Node.js app managed by PM2",
+                "Database - PostgreSQL"
+            ]
+        },
+        "scripts": [
+            "deploy.sh - Main deployment script",
+            "deploy-to-production.ps1 - Windows PowerShell deployment",
+            "ecosystem.config.cjs - PM2 configuration",
+            "rebuild-frontend-production.ps1 - Frontend rebuild"
+        ],
+        "environment_variables": {
+            "backend": [
+                "PORT - Server port (default: 5000)",
+                "NODE_ENV - Environment (production/development)",
+                "DATABASE_URL - PostgreSQL connection string",
+                "JWT_SECRET - JWT signing secret",
+                "JWT_REFRESH_SECRET - Refresh token secret",
+                "SMTP_HOST - Email server host",
+                "SMTP_PORT - Email server port",
+                "SMTP_USER - Email username",
+                "SMTP_PASS - Email password",
+                "FRONTEND_URL - Frontend URL for CORS"
+            ],
+            "frontend": [
+                "VITE_API_URL - Backend API URL"
+            ]
+        }
+    },
+    "development_setup": {
+        "prerequisites": [
+            "Node.js 18+",
+            "PostgreSQL 14+",
+            "npm or yarn"
+        ],
+        "quick_start": [
+            "Clone repository",
+            "Install dependencies: npm install",
+            "Install backend deps: cd backend && npm install",
+            "Install frontend deps: cd frontend && npm install",
+            "Setup database: cd backend && npm run setup-db",
+            "Create superadmin: npm run create-superadmin",
+            "Start backend: npm run dev",
+            "Start frontend: cd frontend && npm run dev"
+        ],
+        "development_urls": {
+            "frontend": "http://localhost:5173",
+            "backend_api": "http://localhost:5000"
+        },
+        "testing_commands": {
+            "frontend_tests": "cd frontend && npm test",
+            "backend_tests": "cd backend && npm test",
+            "coverage_reports": "npm run test:coverage",
+            "e2e_tests": "npx playwright test"
+        }
+    },
+    "summary": {
+        "description": "UroPrep is a robust, secure, and comprehensive urology patient management system",
+        "key_points": [
+            "Connects all stakeholders - Urologists, GPs, Nurses, and Administrators on one platform",
+            "Manages complete patient journeys - From referral to treatment to long-term monitoring",
+            "Supports clinical decision-making - With PSA tracking, guidelines, and decision support",
+            "Ensures compliance - With GDPR, NHS, and healthcare security standards",
+            "Provides operational insights - Through dashboards and KPI tracking",
+            "Maintains audit trails - For full accountability and compliance"
+        ]
+    }
+}

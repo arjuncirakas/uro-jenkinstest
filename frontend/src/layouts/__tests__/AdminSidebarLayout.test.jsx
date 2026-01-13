@@ -710,4 +710,113 @@ describe('AdminSidebarLayout', () => {
         // Sidebar should close on mobile after link click - always assert this
         expect(screen.queryByLabelText('Close sidebar')).not.toBeInTheDocument();
     });
+
+    it('renders Terms, Privacy, and NPP buttons when expanded', () => {
+        renderLayout();
+        expect(screen.getByText('Terms')).toBeInTheDocument();
+        expect(screen.getByText('Privacy')).toBeInTheDocument();
+        expect(screen.getByText('NPP')).toBeInTheDocument();
+    });
+
+    it('hides Terms, Privacy, and NPP buttons when collapsed', () => {
+        renderLayout();
+        const collapseButton = screen.getByLabelText('Collapse sidebar');
+        fireEvent.click(collapseButton);
+
+        expect(screen.queryByText('Terms')).not.toBeInTheDocument();
+        expect(screen.queryByText('Privacy')).not.toBeInTheDocument();
+        expect(screen.queryByText('NPP')).not.toBeInTheDocument();
+    });
+
+    it('opens Terms modal when Terms button is clicked', () => {
+        renderLayout();
+        const termsButton = screen.getByText('Terms');
+        fireEvent.click(termsButton);
+        
+        // Modal should be rendered
+        expect(screen.getByText('Terms and Conditions')).toBeInTheDocument();
+    });
+
+    it('opens Privacy modal when Privacy button is clicked', () => {
+        renderLayout();
+        const privacyButton = screen.getByText('Privacy');
+        fireEvent.click(privacyButton);
+        
+        // Modal should be rendered
+        expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
+    });
+
+    it('renders separator between Terms and Privacy buttons', () => {
+        renderLayout();
+        const separator = screen.getByText('|');
+        expect(separator).toBeInTheDocument();
+    });
+
+    it('Terms, Privacy, and NPP buttons have correct styling', () => {
+        renderLayout();
+        const termsButton = screen.getByText('Terms');
+        const privacyButton = screen.getByText('Privacy');
+        const nppButton = screen.getByText('NPP');
+        
+        expect(termsButton).toHaveClass('text-gray-500', 'hover:text-teal-600');
+        expect(privacyButton).toHaveClass('text-gray-500', 'hover:text-teal-600');
+        expect(nppButton).toHaveClass('text-gray-500', 'hover:text-teal-600');
+    });
+
+    it('closes Terms modal when close button is clicked', () => {
+        renderLayout();
+        const termsButton = screen.getByText('Terms');
+        fireEvent.click(termsButton);
+        
+        // Modal should be open
+        expect(screen.getByText('Terms and Conditions')).toBeInTheDocument();
+        
+        // Close modal
+        const closeButton = screen.getByLabelText('Close modal');
+        fireEvent.click(closeButton);
+        
+        // Modal should be closed
+        expect(screen.queryByText('Terms and Conditions')).not.toBeInTheDocument();
+    });
+
+    it('closes Privacy modal when close button is clicked', () => {
+        renderLayout();
+        const privacyButton = screen.getByText('Privacy');
+        fireEvent.click(privacyButton);
+        
+        // Modal should be open
+        expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
+        
+        // Close modal
+        const closeButton = screen.getByLabelText('Close modal');
+        fireEvent.click(closeButton);
+        
+        // Modal should be closed
+        expect(screen.queryByText('Privacy Policy')).not.toBeInTheDocument();
+    });
+
+    it('opens NPP modal when NPP button is clicked', () => {
+        renderLayout();
+        const nppButton = screen.getByText('NPP');
+        fireEvent.click(nppButton);
+        
+        // Modal should be rendered
+        expect(screen.getByText('Notice of Privacy Practices')).toBeInTheDocument();
+    });
+
+    it('closes NPP modal when close button is clicked', () => {
+        renderLayout();
+        const nppButton = screen.getByText('NPP');
+        fireEvent.click(nppButton);
+        
+        // Modal should be open
+        expect(screen.getByText('Notice of Privacy Practices')).toBeInTheDocument();
+        
+        // Close modal
+        const closeButton = screen.getByLabelText('Close modal');
+        fireEvent.click(closeButton);
+        
+        // Modal should be closed
+        expect(screen.queryByText('Notice of Privacy Practices')).not.toBeInTheDocument();
+    });
 });

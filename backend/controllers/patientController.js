@@ -2,6 +2,8 @@ import pool from '../config/database.js';
 import { sendNotificationEmail } from '../services/emailService.js';
 import { createPathwayTransferNotification } from '../services/notificationService.js';
 import crypto from 'crypto';
+import { encrypt, decrypt, encryptFields, decryptFields, createSearchableHash, createPartialHash } from '../services/encryptionService.js';
+import { PATIENT_ENCRYPTED_FIELDS, SEARCHABLE_ENCRYPTED_FIELDS, PARTIAL_HASH_FIELDS } from '../constants/encryptionFields.js';
 
 /**
  * Check if patient has 3 consecutive no-shows without profile changes
@@ -171,13 +173,25 @@ export const parseJsonField = (jsonString, defaultValue = null) => {
   }
 };
 
-// Helper function to check if patient email already exists
+// Helper function to check if patient email already exists (using hash for encrypted search, fallback to direct email)
 export const checkExistingEmail = async (client, email) => {
   if (!email) return null;
-  const existingEmail = await client.query(
-    'SELECT id FROM patients WHERE email = $1',
-    [email]
+  const emailHash = createSearchableHash(email);
+  
+  // Try hash-based search first
+  let existingEmail = await client.query(
+    'SELECT id FROM patients WHERE email_hash = $1',
+    [emailHash]
   );
+  
+  // Fallback to direct email search for backward compatibility
+  if (existingEmail.rows.length === 0) {
+    existingEmail = await client.query(
+      'SELECT id FROM patients WHERE email = $1',
+      [email]
+    );
+  }
+  
   if (existingEmail.rows.length > 0) {
     return {
       exists: true,
@@ -190,13 +204,25 @@ export const checkExistingEmail = async (client, email) => {
   return { exists: false };
 };
 
-// Helper function to check if patient phone already exists
+// Helper function to check if patient phone already exists (using hash for encrypted search, fallback to direct phone)
 export const checkExistingPhone = async (client, phone) => {
   if (!phone) return null;
-  const existingPhone = await client.query(
-    'SELECT id FROM patients WHERE phone = $1',
-    [phone]
+  const phoneHash = createSearchableHash(phone);
+  
+  // Try hash-based search first
+  let existingPhone = await client.query(
+    'SELECT id FROM patients WHERE phone_hash = $1',
+    [phoneHash]
   );
+  
+  // Fallback to direct phone search for backward compatibility
+  if (existingPhone.rows.length === 0) {
+    existingPhone = await client.query(
+      'SELECT id FROM patients WHERE phone = $1',
+      [phone]
+    );
+  }
+  
   if (existingPhone.rows.length > 0) {
     return {
       exists: true,
@@ -307,8 +333,14 @@ export const addPatient = async (req, res) => {
         const birthYear = today.getFullYear() - ageNum;
         // Set to Jan 1st of the estimated birth year
         finalDateOfBirth = `${birthYear}-01-01`;
+        console.log(`[addPatient] Calculated date_of_birth from age ${ageNum}: ${finalDateOfBirth}`);
+      } else {
+        console.warn(`[addPatient] Invalid age value provided: ${age}`);
       }
     }
+    
+    // Log the final date_of_birth value for debugging
+    console.log(`[addPatient] Final date_of_birth value: ${finalDateOfBirth} (from dateOfBirth: ${dateOfBirth}, age: ${age})`);
 
     // Validate required fields - either dateOfBirth or age must be provided
     if (!firstName || !lastName || (!finalDateOfBirth && !age) || !phone || !initialPSA) {
@@ -338,17 +370,38 @@ export const addPatient = async (req, res) => {
       }
     }
 
-    // Check if email already exists (if provided)
+    // Check if email already exists (if provided) - using hash for encrypted search
     const emailCheck = await checkExistingEmail(client, email);
     if (emailCheck?.exists) {
       return sendErrorResponse(res, emailCheck.error.status, emailCheck.error.message);
     }
 
-    // Check if phone already exists (if provided)
+    // Check if phone already exists (if provided) - using hash for encrypted search
     const phoneCheck = await checkExistingPhone(client, phone);
     if (phoneCheck?.exists) {
       return sendErrorResponse(res, phoneCheck.error.status, phoneCheck.error.message);
     }
+
+    // Prepare data object for encryption
+    // Note: date_of_birth is stored as DATE type, not encrypted (needed for age calculations)
+    const patientData = {
+      phone,
+      email,
+      address,
+      medical_history: medicalHistory,
+      current_medications: currentMedications,
+      allergies,
+      emergency_contact_name: emergencyContactName,
+      emergency_contact_phone: emergencyContactPhone
+    };
+
+    // Encrypt sensitive fields
+    const encryptedData = encryptFields(patientData, PATIENT_ENCRYPTED_FIELDS);
+
+    // Create searchable hashes for phone and email
+    const phoneHash = phone ? createSearchableHash(phone) : null;
+    const emailHash = email ? createSearchableHash(email) : null;
+    const phonePrefix = phone ? createPartialHash(phone, 10) : null;
 
     // Generate unique UPI
     let upi;
@@ -401,8 +454,25 @@ export const addPatient = async (req, res) => {
 
     // Format date fields to prevent timezone conversion issues
     // Ensure empty strings, "no", null, undefined, or invalid values are converted to null
+    // CRITICAL: If finalDateOfBirth is still null but age was provided, recalculate from age
+    if (!finalDateOfBirth && age) {
+      const ageNum = parseInt(age, 10);
+      if (!isNaN(ageNum) && ageNum >= 0 && ageNum <= 120) {
+        const today = new Date();
+        const birthYear = today.getFullYear() - ageNum;
+        finalDateOfBirth = `${birthYear}-01-01`;
+        console.log(`[addPatient] Recalculated date_of_birth from age in formatting step: ${finalDateOfBirth}`);
+      }
+    }
+    
     const formattedDateOfBirth = (finalDateOfBirth && finalDateOfBirth !== '' && finalDateOfBirth !== 'no' && finalDateOfBirth !== 'No' && finalDateOfBirth !== 'NO')
       ? formatDateOnly(finalDateOfBirth) : null;
+    
+    // Final validation: Ensure we have a valid date_of_birth before inserting
+    if (!formattedDateOfBirth) {
+      console.error(`[addPatient] ERROR: formattedDateOfBirth is null! finalDateOfBirth: ${finalDateOfBirth}, age: ${age}`);
+      return sendErrorResponse(res, 400, 'Date of birth is required. Please provide either a date of birth or a valid age (0-120).');
+    }
     const formattedReferralDate = (referralDate && referralDate !== '' && referralDate !== 'no' && referralDate !== 'No' && referralDate !== 'NO' && referralDate !== null && referralDate !== undefined)
       ? formatDateOnly(referralDate) : null;
     const formattedInitialPSADate = (initialPSADate && initialPSADate !== '' && initialPSADate !== 'no' && initialPSADate !== 'No' && initialPSADate !== 'NO' && initialPSADate !== null && initialPSADate !== undefined)
@@ -459,7 +529,7 @@ export const addPatient = async (req, res) => {
       formattedPriorBiopsyDate = null;
     }
 
-    // Insert new patient
+    // Insert new patient with encrypted data and hashes
     const result = await client.query(
       `INSERT INTO patients (
         upi, first_name, last_name, date_of_birth, phone, email, address, 
@@ -468,31 +538,37 @@ export const addPatient = async (req, res) => {
         social_history, family_history, assigned_urologist, emergency_contact_name, emergency_contact_phone, 
         emergency_contact_relationship, priority, notes, created_by, referred_by_gp_id, triage_symptoms,
         dre_done, dre_findings, prior_biopsy, prior_biopsy_date, gleason_score, comorbidities,
-        gp_name, gp_contact
+        gp_name, gp_contact, phone_hash, email_hash, phone_prefix
       ) VALUES (
         $1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10, $11, $12::date, $13, $14::date, $15, 
         $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32::date, $33, $34,
-        $35, $36
+        $35, $36, $37, $38, $39
       ) RETURNING *`,
       [
         upi, firstName, lastName,
-        // Ensure dateOfBirth is never "no" - use null instead
-        (formattedDateOfBirth && formattedDateOfBirth !== 'no' && formattedDateOfBirth !== 'No' && formattedDateOfBirth !== 'NO') ? formattedDateOfBirth : null,
-        phone, email, address,
+        // Use formattedDateOfBirth (calculated from age if needed)
+        formattedDateOfBirth,
+        // Use encrypted phone, email, address
+        encryptedData.phone, encryptedData.email, encryptedData.address,
         postcode, city, state, referringDepartment,
         // Ensure referralDate is never "no" - use null instead
         (formattedReferralDate && formattedReferralDate !== 'no' && formattedReferralDate !== 'No' && formattedReferralDate !== 'NO') ? formattedReferralDate : null,
         initialPSA,
         // Ensure initialPSADate is never "no" - use null instead
         (formattedInitialPSADate && formattedInitialPSADate !== 'no' && formattedInitialPSADate !== 'No' && formattedInitialPSADate !== 'NO') ? formattedInitialPSADate : null,
-        medicalHistory, currentMedications, allergies,
-        socialHistory || '', familyHistory || '', finalAssignedUrologist, emergencyContactName, emergencyContactPhone,
+        // Use encrypted medical fields
+        encryptedData.medical_history, encryptedData.current_medications, encryptedData.allergies,
+        socialHistory || '', familyHistory || '', finalAssignedUrologist, 
+        // Use encrypted emergency contact fields
+        encryptedData.emergency_contact_name, encryptedData.emergency_contact_phone,
         emergencyContactRelationship, priority, notes || '', req.user.id, finalReferredByGpId, triageSymptoms || null,
         dreDone || false, dreFindings || null, priorBiopsy || 'no',
         // Ensure prior_biopsy_date is never "no" - use null instead
         (formattedPriorBiopsyDate && formattedPriorBiopsyDate !== 'no' && formattedPriorBiopsyDate !== 'No' && formattedPriorBiopsyDate !== 'NO') ? formattedPriorBiopsyDate : null,
         gleasonScore || null, comorbiditiesJson,
-        gpName || null, gpContact || null
+        gpName || null, gpContact || null,
+        // Add hash columns
+        phoneHash, emailHash, phonePrefix
       ]
     );
 
@@ -560,59 +636,65 @@ export const addPatient = async (req, res) => {
       }
     }
 
+    // Decrypt patient data before sending to frontend
+    const decryptedPatient = decryptFields(newPatient, PATIENT_ENCRYPTED_FIELDS);
+
     // Format prior biopsy date from database result for response
-    const responsePriorBiopsyDate = newPatient.prior_biopsy_date
-      ? new Date(newPatient.prior_biopsy_date).toISOString().split('T')[0]
+    const responsePriorBiopsyDate = decryptedPatient.prior_biopsy_date
+      ? new Date(decryptedPatient.prior_biopsy_date).toISOString().split('T')[0]
       : null;
+
+    // Format date_of_birth for response (use decrypted value or fallback to formatted input)
+    const responseDateOfBirth = decryptedPatient.date_of_birth || formattedDateOfBirth;
 
     res.status(201).json({
       success: true,
       message: 'Patient added successfully',
       data: {
         patient: {
-          id: newPatient.id,
-          upi: newPatient.upi,
-          firstName: newPatient.first_name,
-          lastName: newPatient.last_name,
-          fullName: `${newPatient.first_name} ${newPatient.last_name}`,
-          dateOfBirth: formattedDateOfBirth, // Use the formatted input date
+          id: decryptedPatient.id,
+          upi: decryptedPatient.upi,
+          firstName: decryptedPatient.first_name,
+          lastName: decryptedPatient.last_name,
+          fullName: `${decryptedPatient.first_name} ${decryptedPatient.last_name}`,
+          dateOfBirth: responseDateOfBirth,
           age: calculatedAge,
-          gender: newPatient.gender,
-          phone: newPatient.phone,
-          email: newPatient.email,
-          address: newPatient.address,
-          postcode: newPatient.postcode,
-          city: newPatient.city,
-          state: newPatient.state,
-          referringDepartment: newPatient.referring_department,
-          referralDate: formattedReferralDate, // Use the formatted input date
-          initialPSA: newPatient.initial_psa,
-          initialPSADate: formattedInitialPSADate, // Use the formatted input date
-          medicalHistory: newPatient.medical_history,
-          currentMedications: newPatient.current_medications,
-          allergies: newPatient.allergies,
-          socialHistory: newPatient.social_history,
-          familyHistory: newPatient.family_history,
-          assignedUrologist: newPatient.assigned_urologist || finalAssignedUrologist,
-          emergencyContactName: newPatient.emergency_contact_name,
-          emergencyContactPhone: newPatient.emergency_contact_phone,
-          emergencyContactRelationship: newPatient.emergency_contact_relationship,
-          priority: newPatient.priority,
-          notes: newPatient.notes || '',
-          status: newPatient.status,
-          createdBy: newPatient.created_by,
-          createdAt: newPatient.created_at,
-          updatedAt: newPatient.updated_at,
+          gender: decryptedPatient.gender,
+          phone: decryptedPatient.phone, // Decrypted
+          email: decryptedPatient.email, // Decrypted
+          address: decryptedPatient.address, // Decrypted
+          postcode: decryptedPatient.postcode,
+          city: decryptedPatient.city,
+          state: decryptedPatient.state,
+          referringDepartment: decryptedPatient.referring_department,
+          referralDate: formattedReferralDate,
+          initialPSA: decryptedPatient.initial_psa,
+          initialPSADate: formattedInitialPSADate,
+          medicalHistory: decryptedPatient.medical_history, // Decrypted
+          currentMedications: decryptedPatient.current_medications, // Decrypted
+          allergies: decryptedPatient.allergies, // Decrypted
+          socialHistory: decryptedPatient.social_history,
+          familyHistory: decryptedPatient.family_history,
+          assignedUrologist: decryptedPatient.assigned_urologist || finalAssignedUrologist,
+          emergencyContactName: decryptedPatient.emergency_contact_name, // Decrypted
+          emergencyContactPhone: decryptedPatient.emergency_contact_phone, // Decrypted
+          emergencyContactRelationship: decryptedPatient.emergency_contact_relationship,
+          priority: decryptedPatient.priority,
+          notes: decryptedPatient.notes || '',
+          status: decryptedPatient.status,
+          createdBy: decryptedPatient.created_by,
+          createdAt: decryptedPatient.created_at,
+          updatedAt: decryptedPatient.updated_at,
           // Triage and Exam & Prior Tests
-          triageSymptoms: parseJsonField(newPatient.triage_symptoms, null),
-          dreDone: newPatient.dre_done || false,
-          dreFindings: newPatient.dre_findings || null,
-          priorBiopsy: newPatient.prior_biopsy || 'no',
+          triageSymptoms: parseJsonField(decryptedPatient.triage_symptoms, null),
+          dreDone: decryptedPatient.dre_done || false,
+          dreFindings: decryptedPatient.dre_findings || null,
+          priorBiopsy: decryptedPatient.prior_biopsy || 'no',
           priorBiopsyDate: responsePriorBiopsyDate,
-          gleasonScore: newPatient.gleason_score || null,
-          comorbidities: parseJsonField(newPatient.comorbidities, []),
-          gpName: newPatient.gp_name,
-          gpContact: newPatient.gp_contact
+          gleasonScore: decryptedPatient.gleason_score || null,
+          comorbidities: parseJsonField(decryptedPatient.comorbidities, []),
+          gpName: decryptedPatient.gp_name,
+          gpContact: decryptedPatient.gp_contact
         }
       }
     });
@@ -753,9 +835,14 @@ export const getPatients = async (req, res) => {
       console.log(`🔍 Care Pathway Filter: ${pathwaysToFilter.join(', ')}`);
     }
 
-    // Add search filter - search in first name, last name, full name (concatenated), UPI, phone, and email
+    // Add search filter - search in first name, last name, full name (concatenated), UPI, phone (hash), and email (hash)
     if (search) {
+      // Create search hash for exact match on phone/email
+      const searchHash = createSearchableHash(search);
+      const searchPrefix = createPartialHash(search, 10);
+      
       paramCount++;
+      const searchTerm = `%${search}%`;
       whereConditions.push(`(
         p.first_name ILIKE $${paramCount} OR 
         p.last_name ILIKE $${paramCount} OR 
@@ -764,10 +851,11 @@ export const getPatients = async (req, res) => {
         CONCAT(p.first_name, p.last_name) ILIKE $${paramCount} OR
         CONCAT(p.last_name, p.first_name) ILIKE $${paramCount} OR
         p.upi ILIKE $${paramCount} OR 
-        p.phone ILIKE $${paramCount} OR 
-        p.email ILIKE $${paramCount}
+        (p.phone_hash = $${paramCount + 1} OR p.phone_prefix LIKE $${paramCount + 2}) OR 
+        p.email_hash = $${paramCount + 3}
       )`);
-      queryParams.push(`%${search}%`);
+      queryParams.push(searchTerm, searchHash, `${searchPrefix}%`, searchHash);
+      paramCount += 3; // Account for the 3 additional parameters
     }
 
     // Add urologist filter
@@ -868,25 +956,28 @@ export const getPatients = async (req, res) => {
       console.log(`[getPatients] Found latest PSA for ${psaQuery.rows.length} patients out of ${patientIds.length} total`);
     }
 
-    // Format patient data
+    // Decrypt patient data and format
     const patients = patientsResult.rows.map(patient => {
-      const age = new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear();
+      // Decrypt encrypted fields
+      const decryptedPatient = decryptFields(patient, PATIENT_ENCRYPTED_FIELDS);
+      
+      const age = new Date().getFullYear() - new Date(decryptedPatient.date_of_birth).getFullYear();
 
       // Get latest PSA or fallback to initial PSA
-      const latestPSA = latestPSAMap[patient.id];
-      const displayPSA = latestPSA ? latestPSA.result : (patient.initial_psa || null);
+      const latestPSA = latestPSAMap[decryptedPatient.id];
+      const displayPSA = latestPSA ? latestPSA.result : (decryptedPatient.initial_psa || null);
 
       // Debug logging for PSA values
-      if (patient.id <= 10) { // Only log for first few patients to avoid spam
-        console.log(`[getPatients] Patient ${patient.id}: initialPSA=${patient.initial_psa}, latestPSA=${latestPSA?.result || 'none'}, displayPSA=${displayPSA}`);
+      if (decryptedPatient.id <= 10) { // Only log for first few patients to avoid spam
+        console.log(`[getPatients] Patient ${decryptedPatient.id}: initialPSA=${decryptedPatient.initial_psa}, latestPSA=${latestPSA?.result || 'none'}, displayPSA=${displayPSA}`);
       }
 
       // Format next appointment data
-      const nextAppointmentDate = patient.next_appointment_date
-        ? new Date(patient.next_appointment_date).toISOString().split('T')[0]
+      const nextAppointmentDate = decryptedPatient.next_appointment_date
+        ? new Date(decryptedPatient.next_appointment_date).toISOString().split('T')[0]
         : null;
-      const nextAppointmentTime = patient.next_appointment_time
-        ? patient.next_appointment_time.substring(0, 5) // Format HH:MM
+      const nextAppointmentTime = decryptedPatient.next_appointment_time
+        ? decryptedPatient.next_appointment_time.substring(0, 5) // Format HH:MM
         : null;
 
       // Check if patient has any appointment (for easier frontend checking)
@@ -903,7 +994,7 @@ export const getPatients = async (req, res) => {
 
       // Calculate monitoring status based on PSA level and care pathway
       let monitoringStatus = 'Stable';
-      if (patient.care_pathway === 'Active Monitoring' || patient.care_pathway === 'Medication') {
+      if (decryptedPatient.care_pathway === 'Active Monitoring' || decryptedPatient.care_pathway === 'Medication') {
         const psaLevel = parseFloat(displayPSA || 0);
         if (psaLevel > 10) {
           monitoringStatus = 'Needs Attention';
@@ -915,62 +1006,62 @@ export const getPatients = async (req, res) => {
       }
 
       return {
-        id: patient.id,
-        upi: patient.upi,
-        firstName: patient.first_name,
-        lastName: patient.last_name,
-        fullName: `${patient.first_name} ${patient.last_name}`,
-        dateOfBirth: patient.date_of_birth, // Already formatted by TO_CHAR
+        id: decryptedPatient.id,
+        upi: decryptedPatient.upi,
+        firstName: decryptedPatient.first_name,
+        lastName: decryptedPatient.last_name,
+        fullName: `${decryptedPatient.first_name} ${decryptedPatient.last_name}`,
+        dateOfBirth: decryptedPatient.date_of_birth, // Already formatted by TO_CHAR, decrypted
         age,
-        gender: patient.gender,
-        phone: patient.phone,
-        email: patient.email,
-        address: patient.address,
-        postcode: patient.postcode,
-        city: patient.city,
-        state: patient.state,
-        referringDepartment: patient.referring_department,
-        referralDate: patient.referral_date, // Already formatted by TO_CHAR
-        initialPSA: patient.initial_psa,
-        initialPSADate: patient.initial_psa_date, // Already formatted by TO_CHAR
+        gender: decryptedPatient.gender,
+        phone: decryptedPatient.phone, // Decrypted
+        email: decryptedPatient.email, // Decrypted
+        address: decryptedPatient.address, // Decrypted
+        postcode: decryptedPatient.postcode,
+        city: decryptedPatient.city,
+        state: decryptedPatient.state,
+        referringDepartment: decryptedPatient.referring_department,
+        referralDate: decryptedPatient.referral_date, // Already formatted by TO_CHAR
+        initialPSA: decryptedPatient.initial_psa,
+        initialPSADate: decryptedPatient.initial_psa_date, // Already formatted by TO_CHAR
         latestPSA: displayPSA, // Latest PSA from investigation_results or initial PSA
-        medicalHistory: patient.medical_history,
-        currentMedications: patient.current_medications,
-        allergies: patient.allergies,
-        socialHistory: patient.social_history,
-        familyHistory: patient.family_history,
-        assignedUrologist: patient.assigned_urologist,
-        emergencyContactName: patient.emergency_contact_name,
-        emergencyContactPhone: patient.emergency_contact_phone,
-        emergencyContactRelationship: patient.emergency_contact_relationship,
-        priority: patient.priority,
-        notes: patient.notes || '',
-        status: patient.status,
-        carePathway: patient.care_pathway,
-        createdBy: patient.created_by,
-        createdByName: patient.created_by_first_name && patient.created_by_last_name
-          ? `${patient.created_by_first_name} ${patient.created_by_last_name}`
+        medicalHistory: decryptedPatient.medical_history, // Decrypted
+        currentMedications: decryptedPatient.current_medications, // Decrypted
+        allergies: decryptedPatient.allergies, // Decrypted
+        socialHistory: decryptedPatient.social_history,
+        familyHistory: decryptedPatient.family_history,
+        assignedUrologist: decryptedPatient.assigned_urologist,
+        emergencyContactName: decryptedPatient.emergency_contact_name, // Decrypted
+        emergencyContactPhone: decryptedPatient.emergency_contact_phone, // Decrypted
+        emergencyContactRelationship: decryptedPatient.emergency_contact_relationship,
+        priority: decryptedPatient.priority,
+        notes: decryptedPatient.notes || '',
+        status: decryptedPatient.status,
+        carePathway: decryptedPatient.care_pathway,
+        createdBy: decryptedPatient.created_by,
+        createdByName: decryptedPatient.created_by_first_name && decryptedPatient.created_by_last_name
+          ? `${decryptedPatient.created_by_first_name} ${decryptedPatient.created_by_last_name}`
           : 'Unknown',
-        referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
-        createdAt: patient.created_at,
-        updatedAt: patient.updated_at,
+        referredByGP: decryptedPatient.gp_first_name ? `Dr. ${decryptedPatient.gp_first_name} ${decryptedPatient.gp_last_name}` : null,
+        createdAt: decryptedPatient.created_at,
+        updatedAt: decryptedPatient.updated_at,
         // New fields for appointments and monitoring
         nextAppointmentDate,
         nextAppointmentTime,
         nextReview,
-        nextAppointmentUrologist: patient.next_appointment_urologist,
-        nextAppointmentId: patient.next_appointment_id, // Appointment ID for updating
-        nextAppointmentType: patient.next_appointment_type, // 'urologist' or 'investigation'
+        nextAppointmentUrologist: decryptedPatient.next_appointment_urologist,
+        nextAppointmentId: decryptedPatient.next_appointment_id, // Appointment ID for updating
+        nextAppointmentType: decryptedPatient.next_appointment_type, // 'urologist' or 'investigation'
         hasAppointment, // Boolean flag to easily check if patient has an appointment
         monitoringStatus,
         // Triage and Exam & Prior Tests
-        triageSymptoms: parseJsonField(patient.triage_symptoms, null),
-        dreDone: patient.dre_done || false,
-        dreFindings: patient.dre_findings || null,
-        priorBiopsy: patient.prior_biopsy || 'no',
-        priorBiopsyDate: patient.prior_biopsy_date_formatted || null,
-        gleasonScore: patient.gleason_score || null,
-        comorbidities: parseJsonField(patient.comorbidities, [])
+        triageSymptoms: parseJsonField(decryptedPatient.triage_symptoms, null),
+        dreDone: decryptedPatient.dre_done || false,
+        dreFindings: decryptedPatient.dre_findings || null,
+        priorBiopsy: decryptedPatient.prior_biopsy || 'no',
+        priorBiopsyDate: decryptedPatient.prior_biopsy_date_formatted || null,
+        gleasonScore: decryptedPatient.gleason_score || null,
+        comorbidities: parseJsonField(decryptedPatient.comorbidities, [])
       };
     });
 
@@ -1342,6 +1433,7 @@ export const getNewPatients = async (req, res) => {
 
 // Get patient by ID
 export const getPatientById = async (req, res) => {
+  // Decrypt patient data after retrieval
   const client = await pool.connect();
 
   try {
@@ -1377,7 +1469,11 @@ export const getPatientById = async (req, res) => {
     }
 
     const patient = result.rows[0];
-    const age = new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear();
+    
+    // Decrypt patient data before processing
+    const decryptedPatient = decryptFields(patient, PATIENT_ENCRYPTED_FIELDS);
+    
+    const age = new Date().getFullYear() - new Date(decryptedPatient.date_of_birth).getFullYear();
 
     // Get latest PSA from investigation_results (if any)
     let latestPSA = null;
@@ -1408,49 +1504,49 @@ export const getPatientById = async (req, res) => {
           firstName: patient.first_name,
           lastName: patient.last_name,
           fullName: `${patient.first_name} ${patient.last_name}`,
-          dateOfBirth: patient.date_of_birth, // Already formatted by TO_CHAR
+          dateOfBirth: decryptedPatient.date_of_birth, // Already formatted by TO_CHAR, decrypted
           age,
-          gender: patient.gender,
-          phone: patient.phone,
-          email: patient.email,
-          address: patient.address,
-          postcode: patient.postcode,
-          city: patient.city,
-          state: patient.state,
-          referringDepartment: patient.referring_department,
-          referralDate: patient.referral_date, // Already formatted by TO_CHAR
-          initialPSA: patient.initial_psa,
-          initialPSADate: patient.initial_psa_date, // Already formatted by TO_CHAR
-          medicalHistory: patient.medical_history,
-          currentMedications: patient.current_medications,
-          allergies: patient.allergies,
-          socialHistory: patient.social_history,
-          familyHistory: patient.family_history,
-          assignedUrologist: patient.assigned_urologist,
-          emergencyContactName: patient.emergency_contact_name,
-          emergencyContactPhone: patient.emergency_contact_phone,
-          emergencyContactRelationship: patient.emergency_contact_relationship,
-          priority: patient.priority,
-          notes: patient.notes || '',
-          status: patient.status,
-          carePathway: patient.care_pathway,
-          createdBy: patient.created_by,
-          createdByName: patient.created_by_first_name && patient.created_by_last_name
-            ? `${patient.created_by_first_name} ${patient.created_by_last_name}`
+          gender: decryptedPatient.gender,
+          phone: decryptedPatient.phone, // Decrypted
+          email: decryptedPatient.email, // Decrypted
+          address: decryptedPatient.address, // Decrypted
+          postcode: decryptedPatient.postcode,
+          city: decryptedPatient.city,
+          state: decryptedPatient.state,
+          referringDepartment: decryptedPatient.referring_department,
+          referralDate: decryptedPatient.referral_date, // Already formatted by TO_CHAR
+          initialPSA: decryptedPatient.initial_psa,
+          initialPSADate: decryptedPatient.initial_psa_date, // Already formatted by TO_CHAR
+          medicalHistory: decryptedPatient.medical_history, // Decrypted
+          currentMedications: decryptedPatient.current_medications, // Decrypted
+          allergies: decryptedPatient.allergies, // Decrypted
+          socialHistory: decryptedPatient.social_history,
+          familyHistory: decryptedPatient.family_history,
+          assignedUrologist: decryptedPatient.assigned_urologist,
+          emergencyContactName: decryptedPatient.emergency_contact_name, // Decrypted
+          emergencyContactPhone: decryptedPatient.emergency_contact_phone, // Decrypted
+          emergencyContactRelationship: decryptedPatient.emergency_contact_relationship,
+          priority: decryptedPatient.priority,
+          notes: decryptedPatient.notes || '',
+          status: decryptedPatient.status,
+          carePathway: decryptedPatient.care_pathway,
+          createdBy: decryptedPatient.created_by,
+          createdByName: decryptedPatient.created_by_first_name && decryptedPatient.created_by_last_name
+            ? `${decryptedPatient.created_by_first_name} ${decryptedPatient.created_by_last_name}`
             : 'Unknown',
-          referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
-          createdAt: patient.created_at,
-          updatedAt: patient.updated_at,
+          referredByGP: decryptedPatient.gp_first_name ? `Dr. ${decryptedPatient.gp_first_name} ${decryptedPatient.gp_last_name}` : null,
+          createdAt: decryptedPatient.created_at,
+          updatedAt: decryptedPatient.updated_at,
           latest_psa: latestPSA,
           latest_psa_date: latestPSADate,
           // Triage and Exam & Prior Tests
-          triageSymptoms: parseJsonField(patient.triage_symptoms, null),
-          dreDone: patient.dre_done || false,
-          dreFindings: patient.dre_findings || null,
-          priorBiopsy: patient.prior_biopsy || 'no',
-          priorBiopsyDate: patient.prior_biopsy_date_formatted || null,
-          gleasonScore: patient.gleason_score || null,
-          comorbidities: parseJsonField(patient.comorbidities, [])
+          triageSymptoms: parseJsonField(decryptedPatient.triage_symptoms, null),
+          dreDone: decryptedPatient.dre_done || false,
+          dreFindings: decryptedPatient.dre_findings || null,
+          priorBiopsy: decryptedPatient.prior_biopsy || 'no',
+          priorBiopsyDate: decryptedPatient.prior_biopsy_date_formatted || null,
+          gleasonScore: decryptedPatient.gleason_score || null,
+          comorbidities: parseJsonField(decryptedPatient.comorbidities, [])
         }
       }
     });
@@ -1542,9 +1638,18 @@ export const updatePatient = async (req, res) => {
       return str.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
     };
 
+    // Track if phone/email are being updated to update hashes
+    let phoneUpdated = false;
+    let emailUpdated = false;
+    let phoneValue = null;
+    let emailValue = null;
+
     for (const [key, value] of Object.entries(updateData)) {
       const dbField = camelToSnake(key);
       if (allowedFields.includes(dbField)) {
+        // Check if this is an encrypted field
+        const isEncryptedField = PATIENT_ENCRYPTED_FIELDS.includes(dbField);
+        
         // Format dates and cast them as DATE type in PostgreSQL
         if (dateFields.includes(dbField)) {
           // Always include date fields if value is provided
@@ -1552,6 +1657,8 @@ export const updatePatient = async (req, res) => {
             const formattedDate = formatDateOnly(value);
             if (formattedDate) {
               paramCount++;
+              // Note: date_of_birth is stored as DATE type, not encrypted text
+              // If encryption is needed, column type would need to change to VARCHAR/TEXT
               updateFields.push(`${dbField} = $${paramCount}::date`);
               updateValues.push(formattedDate);
             }
@@ -1582,10 +1689,43 @@ export const updatePatient = async (req, res) => {
           updateValues.push(value || false);
         } else {
           paramCount++;
+          let valueToStore = value;
+          
+          // Encrypt sensitive fields before storing
+          if (isEncryptedField && value !== null && value !== undefined && value !== '') {
+            valueToStore = encrypt(String(value));
+          }
+          
+          // Track phone/email updates for hash generation
+          if (dbField === 'phone') {
+            phoneUpdated = true;
+            phoneValue = value;
+          } else if (dbField === 'email') {
+            emailUpdated = true;
+            emailValue = value;
+          }
+          
           updateFields.push(`${dbField} = $${paramCount}`);
-          updateValues.push(value);
+          updateValues.push(valueToStore);
         }
       }
+    }
+
+    // Add hash updates if phone/email were updated
+    if (phoneUpdated && phoneValue) {
+      paramCount++;
+      updateFields.push(`phone_hash = $${paramCount}`);
+      updateValues.push(createSearchableHash(phoneValue));
+      
+      paramCount++;
+      updateFields.push(`phone_prefix = $${paramCount}`);
+      updateValues.push(createPartialHash(phoneValue, 10));
+    }
+    
+    if (emailUpdated && emailValue) {
+      paramCount++;
+      updateFields.push(`email_hash = $${paramCount}`);
+      updateValues.push(createSearchableHash(emailValue));
     }
 
     if (updateFields.length === 0) {
@@ -1625,48 +1765,51 @@ export const updatePatient = async (req, res) => {
     const result = await client.query(updateQuery, updateValues);
     const updatedPatient = result.rows[0];
 
-    const age = new Date().getFullYear() - new Date(updatedPatient.date_of_birth).getFullYear();
+    // Decrypt patient data before sending to frontend
+    const decryptedPatient = decryptFields(updatedPatient, PATIENT_ENCRYPTED_FIELDS);
+
+    const age = new Date().getFullYear() - new Date(decryptedPatient.date_of_birth).getFullYear();
 
     res.json({
       success: true,
       message: 'Patient updated successfully',
       data: {
         patient: {
-          id: updatedPatient.id,
-          upi: updatedPatient.upi,
-          firstName: updatedPatient.first_name,
-          lastName: updatedPatient.last_name,
-          fullName: `${updatedPatient.first_name} ${updatedPatient.last_name}`,
-          dateOfBirth: updatedPatient.date_of_birth, // Already formatted by TO_CHAR
+          id: decryptedPatient.id,
+          upi: decryptedPatient.upi,
+          firstName: decryptedPatient.first_name,
+          lastName: decryptedPatient.last_name,
+          fullName: `${decryptedPatient.first_name} ${decryptedPatient.last_name}`,
+          dateOfBirth: decryptedPatient.date_of_birth, // Already formatted by TO_CHAR, decrypted
           age,
-          gender: updatedPatient.gender,
-          phone: updatedPatient.phone,
-          email: updatedPatient.email,
-          address: updatedPatient.address,
-          postcode: updatedPatient.postcode,
-          city: updatedPatient.city,
-          state: updatedPatient.state,
-          referringDepartment: updatedPatient.referring_department,
-          referralDate: updatedPatient.referral_date, // Already formatted by TO_CHAR
-          initialPSA: updatedPatient.initial_psa,
-          initialPSADate: updatedPatient.initial_psa_date, // Already formatted by TO_CHAR
-          medicalHistory: updatedPatient.medical_history,
-          currentMedications: updatedPatient.current_medications,
-          allergies: updatedPatient.allergies,
-          socialHistory: updatedPatient.social_history,
-          familyHistory: updatedPatient.family_history,
-          assignedUrologist: updatedPatient.assigned_urologist,
-          emergencyContactName: updatedPatient.emergency_contact_name,
-          emergencyContactPhone: updatedPatient.emergency_contact_phone,
-          emergencyContactRelationship: updatedPatient.emergency_contact_relationship,
-          priority: updatedPatient.priority,
-          notes: updatedPatient.notes || '',
-          status: updatedPatient.status,
-          createdBy: updatedPatient.created_by,
-          createdAt: updatedPatient.created_at,
-          updatedAt: updatedPatient.updated_at,
+          gender: decryptedPatient.gender,
+          phone: decryptedPatient.phone, // Decrypted
+          email: decryptedPatient.email, // Decrypted
+          address: decryptedPatient.address, // Decrypted
+          postcode: decryptedPatient.postcode,
+          city: decryptedPatient.city,
+          state: decryptedPatient.state,
+          referringDepartment: decryptedPatient.referring_department,
+          referralDate: decryptedPatient.referral_date, // Already formatted by TO_CHAR
+          initialPSA: decryptedPatient.initial_psa,
+          initialPSADate: decryptedPatient.initial_psa_date, // Already formatted by TO_CHAR
+          medicalHistory: decryptedPatient.medical_history, // Decrypted
+          currentMedications: decryptedPatient.current_medications, // Decrypted
+          allergies: decryptedPatient.allergies, // Decrypted
+          socialHistory: decryptedPatient.social_history,
+          familyHistory: decryptedPatient.family_history,
+          assignedUrologist: decryptedPatient.assigned_urologist,
+          emergencyContactName: decryptedPatient.emergency_contact_name, // Decrypted
+          emergencyContactPhone: decryptedPatient.emergency_contact_phone, // Decrypted
+          emergencyContactRelationship: decryptedPatient.emergency_contact_relationship,
+          priority: decryptedPatient.priority,
+          notes: decryptedPatient.notes || '',
+          status: decryptedPatient.status,
+          createdBy: decryptedPatient.created_by,
+          createdAt: decryptedPatient.created_at,
+          updatedAt: decryptedPatient.updated_at,
           // Triage and Exam & Prior Tests
-          triageSymptoms: parseJsonField(updatedPatient.triage_symptoms, null),
+          triageSymptoms: parseJsonField(decryptedPatient.triage_symptoms, null),
           dreDone: updatedPatient.dre_done || false,
           dreFindings: updatedPatient.dre_findings || null,
           priorBiopsy: updatedPatient.prior_biopsy || 'no',
@@ -2813,8 +2956,12 @@ export const searchPatients = async (req, res) => {
 
     const searchTerm = `%${query.trim()}%`;
 
-    // Search patients by name, UPI, or phone
-    // Search in first name, last name, full name (both orders), UPI, and phone
+    // Create search hash for phone/email search
+    const searchHash = createSearchableHash(query.trim());
+    const searchPrefix = createPartialHash(query.trim(), 10);
+
+    // Search patients by name, UPI, phone (hash), or email (hash)
+    // Search in first name, last name, full name (both orders), UPI, phone (hash), and email (hash)
     const result = await client.query(
       `SELECT 
         id,
@@ -2839,44 +2986,49 @@ export const searchPatients = async (req, res) => {
          OR LOWER(first_name || last_name) LIKE LOWER($1)
          OR LOWER(last_name || first_name) LIKE LOWER($1)
          OR LOWER(upi) LIKE LOWER($1)
-         OR LOWER(phone) LIKE LOWER($1)
+         OR phone_hash = $2
+         OR phone_prefix LIKE $3
+         OR email_hash = $2
        )
        AND status != 'Discharged'
        ORDER BY 
          CASE 
-           WHEN LOWER(first_name || ' ' || last_name) LIKE LOWER($2) THEN 1
-           WHEN LOWER(last_name || ' ' || first_name) LIKE LOWER($2) THEN 1
-           WHEN LOWER(first_name) LIKE LOWER($2) THEN 2
-           WHEN LOWER(last_name) LIKE LOWER($2) THEN 2
-           WHEN LOWER(upi) LIKE LOWER($2) THEN 3
+           WHEN LOWER(first_name || ' ' || last_name) LIKE LOWER($4) THEN 1
+           WHEN LOWER(last_name || ' ' || first_name) LIKE LOWER($4) THEN 1
+           WHEN LOWER(first_name) LIKE LOWER($4) THEN 2
+           WHEN LOWER(last_name) LIKE LOWER($4) THEN 2
+           WHEN LOWER(upi) LIKE LOWER($4) THEN 3
            ELSE 4
          END,
          first_name, last_name
-       LIMIT $3`,
-      [searchTerm, `${query.trim()}%`, limit]
+       LIMIT $5`,
+      [searchTerm, searchHash, `${searchPrefix}%`, `${query.trim()}%`, limit]
     );
 
-    // Calculate age for each patient
+    // Decrypt and calculate age for each patient
     const today = new Date();
     const patients = result.rows.map(row => {
-      const birthDate = new Date(row.date_of_birth);
+      // Decrypt encrypted fields
+      const decryptedRow = decryptFields(row, PATIENT_ENCRYPTED_FIELDS);
+      
+      const birthDate = new Date(decryptedRow.date_of_birth);
       const age = Math.floor((today - birthDate) / (365.25 * 24 * 60 * 60 * 1000));
 
       return {
-        id: row.id,
-        upi: row.upi,
-        name: `${row.first_name} ${row.last_name}`,
-        firstName: row.first_name,
-        lastName: row.last_name,
+        id: decryptedRow.id,
+        upi: decryptedRow.upi,
+        name: `${decryptedRow.first_name} ${decryptedRow.last_name}`,
+        firstName: decryptedRow.first_name,
+        lastName: decryptedRow.last_name,
         age: age,
-        gender: row.gender,
-        phone: row.phone,
-        email: row.email,
-        carePathway: row.care_pathway,
-        status: row.status,
-        assignedUrologist: row.assigned_urologist,
-        initialPSA: row.initial_psa,
-        priority: row.priority
+        gender: decryptedRow.gender,
+        phone: decryptedRow.phone, // Decrypted
+        email: decryptedRow.email, // Decrypted
+        carePathway: decryptedRow.care_pathway,
+        status: decryptedRow.status,
+        assignedUrologist: decryptedRow.assigned_urologist,
+        initialPSA: decryptedRow.initial_psa,
+        priority: decryptedRow.priority
       };
     });
 
@@ -3244,3 +3396,4 @@ export const getAllUrologists = async (req, res) => {
     client.release();
   }
 };
+

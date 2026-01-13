@@ -3,6 +3,8 @@ import { validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendPasswordSetupEmail } from '../services/emailService.js';
+import { encrypt, decryptFields, createSearchableHash } from '../services/encryptionService.js';
+import { USER_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 
 // Get all doctors
 export const getAllDoctors = async (req, res) => {
@@ -204,21 +206,30 @@ export const createDoctor = async (req, res) => {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
     
+    // Encrypt email and phone
+    const encryptedEmail = encrypt(email);
+    const encryptedPhone = phone ? encrypt(phone) : null;
+    const emailHash = createSearchableHash(email);
+    const phoneHash = phone ? createSearchableHash(phone) : null;
+
     // Insert into users table (not verified yet, will be activated after password setup)
     const userResult = await client.query(`
-      INSERT INTO users (email, password_hash, first_name, last_name, phone, role, is_active, is_verified) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+      INSERT INTO users (email, password_hash, first_name, last_name, phone, role, is_active, is_verified, email_hash, phone_hash) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
       RETURNING id, email, first_name, last_name, phone, role, created_at`,
-      [email, passwordHash, first_name, last_name, phone, role, false, false]
+      [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, role, false, false, emailHash, phoneHash]
     );
     
     const newUser = userResult.rows[0];
+    
+    // Decrypt for use in token storage and response
+    const decryptedUser = decryptFields(newUser, USER_ENCRYPTED_FIELDS);
     
     // Generate password setup token
     const setupToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     
-    // Store password setup token
+    // Store password setup token (use plaintext email for token)
     await client.query(
       'INSERT INTO password_setup_tokens (user_id, email, token, expires_at) VALUES ($1, $2, $3, $4)',
       [newUser.id, email, setupToken, expiresAt]
@@ -244,11 +255,11 @@ export const createDoctor = async (req, res) => {
       data: {
         doctor: doctorResult.rows[0],
         user: {
-          userId: newUser.id,
-          email: newUser.email,
-          firstName: newUser.first_name,
-          lastName: newUser.last_name,
-          role: newUser.role,
+          userId: decryptedUser.id,
+          email: decryptedUser.email, // Decrypted
+          firstName: decryptedUser.first_name,
+          lastName: decryptedUser.last_name,
+          role: decryptedUser.role,
           emailSent
         }
       }
@@ -305,11 +316,12 @@ export const updateDoctor = async (req, res) => {
     const oldEmail = existingDoctor.rows[0].email;
     const finalIsActive = is_active !== undefined ? is_active : existingDoctor.rows[0].is_active;
     
-    // Check if email is being changed and if new email already exists
+    // Check if email is being changed and if new email already exists (using hash)
     if (email && email !== oldEmail) {
+      const emailHash = createSearchableHash(email);
       const existingUser = await client.query(
-        'SELECT id FROM users WHERE email = $1',
-        [email]
+        'SELECT id FROM users WHERE email_hash = $1',
+        [emailHash]
       );
       
       if (existingUser.rows.length > 0) {
@@ -321,12 +333,19 @@ export const updateDoctor = async (req, res) => {
       }
     }
     
-    // Check if phone is being changed and if new phone already exists
+    // Check if phone is being changed and if new phone already exists (using hash)
     if (phone) {
-      const existingPhone = await client.query(
-        'SELECT id FROM users WHERE phone = $1 AND email != $2',
-        [phone, email || oldEmail]
-      );
+      const phoneHash = createSearchableHash(phone);
+      const emailHashForCheck = email ? createSearchableHash(email) : (oldEmail ? createSearchableHash(oldEmail) : null);
+      const existingPhone = emailHashForCheck
+        ? await client.query(
+            'SELECT id FROM users WHERE phone_hash = $1 AND email_hash != $2',
+            [phoneHash, emailHashForCheck]
+          )
+        : await client.query(
+            'SELECT id FROM users WHERE phone_hash = $1',
+            [phoneHash]
+          );
       
       if (existingPhone.rows.length > 0) {
         await client.query('ROLLBACK');
@@ -372,14 +391,21 @@ export const updateDoctor = async (req, res) => {
       RETURNING *
     `, [first_name, last_name, email, phone, department_id, specialization, finalIsActive, id]);
     
+    // Encrypt email and phone for users table update
+    const encryptedEmail = encrypt(email);
+    const encryptedPhone = phone ? encrypt(phone) : null;
+    const emailHash = createSearchableHash(email);
+    const phoneHash = phone ? createSearchableHash(phone) : null;
+    const oldEmailHash = createSearchableHash(oldEmail);
+
     // Update corresponding user in users table if it exists
     const userUpdateResult = await client.query(`
       UPDATE users 
       SET first_name = $1, last_name = $2, email = $3, phone = $4, role = $5, is_active = $6,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE email = $7
+          email_hash = $7, phone_hash = $8, updated_at = CURRENT_TIMESTAMP
+      WHERE email_hash = $9
       RETURNING id
-    `, [first_name, last_name, email, phone, role, finalIsActive, oldEmail]);
+    `, [first_name, last_name, encryptedEmail, encryptedPhone, role, finalIsActive, emailHash, phoneHash, oldEmailHash]);
     
     // If user doesn't exist, create it (in case doctor was created before this feature)
     if (userUpdateResult.rows.length === 0 && email) {
@@ -388,12 +414,12 @@ export const updateDoctor = async (req, res) => {
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
       
-      // Insert into users table
+      // Insert into users table with encrypted data
       await client.query(`
-        INSERT INTO users (email, password_hash, first_name, last_name, phone, role, is_active, is_verified) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+        INSERT INTO users (email, password_hash, first_name, last_name, phone, role, is_active, is_verified, email_hash, phone_hash) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
         RETURNING id`,
-        [email, passwordHash, first_name, last_name, phone, role, finalIsActive, false]
+        [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, role, finalIsActive, false, emailHash, phoneHash]
       );
     }
     

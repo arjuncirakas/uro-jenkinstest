@@ -5,22 +5,10 @@ import fs from 'fs';
 
 // Import secure CORS helper - uses strict origin validation to prevent CORS misconfiguration attacks
 import { setCorsHeaders } from '../utils/corsHelper.js';
+import { encryptFile, decryptFile } from '../services/encryptionService.js';
 
-// Configure multer for template uploads
-const templateStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'consent-forms', 'templates');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `template-${uniqueSuffix}${ext}`);
-  }
-});
+// Configure multer for template uploads (memory storage for encryption)
+const templateStorage = multer.memoryStorage();
 
 // Export storage for testing purposes
 export const _templateStorage = templateStorage;
@@ -39,21 +27,8 @@ export const uploadTemplate = multer({
   fileFilter: templateFileFilter
 });
 
-// Configure multer for patient consent form uploads
-const patientConsentStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'consent-forms', 'patients');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `patient-consent-${uniqueSuffix}${ext}`);
-  }
-});
+// Configure multer for patient consent form uploads (memory storage for encryption)
+const patientConsentStorage = multer.memoryStorage();
 
 // Export storage for testing purposes
 export const _patientConsentStorage = patientConsentStorage;
@@ -179,18 +154,25 @@ export const createConsentFormTemplate = async (req, res) => {
     let templateFilePath = null;
     let templateFileName = null;
     let templateFileSize = null;
+    let templateFileData = null;
 
     if (file) {
-      templateFilePath = path.join('uploads', 'consent-forms', 'templates', file.filename);
       templateFileName = file.originalname;
       templateFileSize = file.size;
+      // Encrypt file buffer and store in database
+      if (file.buffer) {
+        templateFileData = encryptFile(file.buffer);
+        // Generate reference file_path for frontend URL construction (file not actually stored here)
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        templateFilePath = `consent-forms/templates/template-${uniqueSuffix}${path.extname(templateFileName)}`;
+      }
     }
 
     // Insert new template
     const result = await client.query(`
       INSERT INTO consent_forms 
-      (name, procedure_name, test_name, is_auto_generated, template_file_path, template_file_name, template_file_size, created_at, updated_at) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+      (name, procedure_name, test_name, is_auto_generated, template_file_path, template_file_name, template_file_size, template_file_data, created_at, updated_at) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
       RETURNING *
     `, [
       name.trim(),
@@ -199,7 +181,8 @@ export const createConsentFormTemplate = async (req, res) => {
       isAutoGen,
       templateFilePath,
       templateFileName,
-      templateFileSize
+      templateFileSize,
+      templateFileData
     ]);
 
     const template = result.rows[0];
@@ -294,22 +277,38 @@ const handleTemplateFileUpload = (file, existingFilePath) => {
     return {
       templateFilePath: existingFilePath,
       templateFileName: null,
-      templateFileSize: null
+      templateFileSize: null,
+      templateFileData: null
     };
   }
 
-  // Delete old file if exists
+  // Delete old file from filesystem if exists (backward compatibility)
   if (existingFilePath) {
     const oldFilePath = path.join(process.cwd(), existingFilePath);
     if (fs.existsSync(oldFilePath)) {
-      fs.unlinkSync(oldFilePath);
+      try {
+        fs.unlinkSync(oldFilePath);
+      } catch (err) {
+        console.error('Error deleting old template file:', err);
+      }
     }
   }
 
+  // Encrypt file buffer and store in database
+  let templateFileData = null;
+  let templateFilePath = null;
+  if (file.buffer) {
+    templateFileData = encryptFile(file.buffer);
+    // Generate reference file_path for frontend URL construction (file not actually stored here)
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    templateFilePath = `consent-forms/templates/template-${uniqueSuffix}${path.extname(file.originalname)}`;
+  }
+
   return {
-    templateFilePath: path.join('uploads', 'consent-forms', 'templates', file.filename),
+    templateFilePath: templateFilePath,
     templateFileName: file.originalname,
-    templateFileSize: file.size
+    templateFileSize: file.size,
+    templateFileData: templateFileData
   };
 };
 
@@ -376,11 +375,12 @@ export const updateConsentFormTemplate = async (req, res) => {
           procedure_name = $2, 
           test_name = $3, 
           is_auto_generated = $4,
-          template_file_path = $5,
+          template_file_path = CASE WHEN $5 IS NOT NULL THEN $5 ELSE template_file_path END,
           template_file_name = COALESCE($6, template_file_name),
           template_file_size = COALESCE($7, template_file_size),
+          template_file_data = CASE WHEN $8::BYTEA IS NOT NULL THEN $8::BYTEA ELSE template_file_data END,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = $8
+      WHERE id = $9
       RETURNING *
     `, [
       name.trim(),
@@ -390,6 +390,7 @@ export const updateConsentFormTemplate = async (req, res) => {
       fileInfo.templateFilePath,
       fileInfo.templateFileName,
       fileInfo.templateFileSize,
+      fileInfo.templateFileData,
       templateId
     ]);
 
@@ -562,36 +563,45 @@ export const uploadPatientConsentForm = async (req, res) => {
       });
     }
 
-    const filePath = path.join('uploads', 'consent-forms', 'patients', file.filename);
+    // Encrypt file buffer and store in database
+    let filePath = null;
+    let fileData = null;
+    if (file.buffer) {
+      fileData = encryptFile(file.buffer);
+      // Generate reference file_path for frontend URL construction (file not actually stored here)
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      filePath = `consent-forms/patients/patient-consent-${uniqueSuffix}${path.extname(file.originalname)}`;
+    }
 
     // Check if patient already has this consent form uploaded
     const existingUpload = await client.query(
-      `SELECT id FROM patient_consent_forms 
+      `SELECT id, file_path FROM patient_consent_forms 
        WHERE patient_id = $1 AND consent_form_id = $2`,
       [patientId, consentFormId]
     );
 
     if (existingUpload.rows.length > 0) {
       // Update existing record
-      const oldFile = await client.query(
-        'SELECT file_path FROM patient_consent_forms WHERE id = $1',
-        [existingUpload.rows[0].id]
-      );
+      const oldFilePath = existingUpload.rows[0].file_path;
 
-      // Delete old file if exists
-      if (oldFile.rows[0]?.file_path) {
-        const oldFilePath = path.join(process.cwd(), oldFile.rows[0].file_path);
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
+      // Delete old file from filesystem if exists (backward compatibility)
+      if (oldFilePath) {
+        const fullOldFilePath = path.join(process.cwd(), oldFilePath);
+        if (fs.existsSync(fullOldFilePath)) {
+          try {
+            fs.unlinkSync(fullOldFilePath);
+          } catch (err) {
+            console.error('Error deleting old patient consent file:', err);
+          }
         }
       }
 
       const result = await client.query(
         `UPDATE patient_consent_forms 
-         SET file_path = $1, file_name = $2, file_size = $3, uploaded_at = CURRENT_TIMESTAMP
-         WHERE id = $4
+         SET file_path = $1, file_name = $2, file_size = $3, file_data = $4, uploaded_at = CURRENT_TIMESTAMP
+         WHERE id = $5
          RETURNING *`,
-        [filePath, file.originalname, file.size, existingUpload.rows[0].id]
+        [filePath, file.originalname, file.size, fileData, existingUpload.rows[0].id]
       );
 
       return res.status(200).json({
@@ -603,10 +613,10 @@ export const uploadPatientConsentForm = async (req, res) => {
       // Insert new record
       const result = await client.query(
         `INSERT INTO patient_consent_forms 
-         (patient_id, consent_form_id, file_path, file_name, file_size, uploaded_at) 
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP) 
+         (patient_id, consent_form_id, file_path, file_name, file_size, file_data, uploaded_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP) 
          RETURNING *`,
-        [patientId, consentFormId, filePath, file.originalname, file.size]
+        [patientId, consentFormId, filePath, file.originalname, file.size, fileData]
       );
 
       return res.status(201).json({
@@ -629,6 +639,7 @@ export const uploadPatientConsentForm = async (req, res) => {
 
 // Serve consent form files
 export const serveConsentFormFile = async (req, res) => {
+  const client = await pool.connect();
   try {
     // Get the validated file path from middleware (already normalized and validated)
     const fullPath = req.validatedFilePath;
@@ -644,72 +655,111 @@ export const serveConsentFormFile = async (req, res) => {
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
 
-    // Log the path being checked for debugging
+    // Extract relative path for database lookup
+    const relativePath = fullPath.replace(/^.*uploads[\\/]/, '').replace(/\\/g, '/');
     console.log('[serveConsentFormFile] Checking file:', {
       validatedPath: fullPath,
-      exists: fs.existsSync(fullPath),
+      relativePath: relativePath,
       originalParam: req.params.filePath
     });
 
-    // Check if file exists
-    if (!fs.existsSync(fullPath)) {
-      console.error('[serveConsentFormFile] File not found:', {
-        checkedPath: fullPath,
-        originalParam: req.params.filePath,
-        cwd: process.cwd(),
-        baseDir: path.join(process.cwd(), 'uploads'),
-        uploadsExists: fs.existsSync(path.join(process.cwd(), 'uploads')),
-        templatesDirExists: fs.existsSync(path.join(process.cwd(), 'uploads', 'consent-forms', 'templates'))
-      });
-      
-      setCorsHeaders(req, res);
-      return res.status(404).json({
-        success: false,
-        message: 'File not found. Please verify the file exists on the server.',
-        debug: {
-          checkedPath: fullPath,
-          originalParam: req.params.filePath
-        }
-      });
-    }
+    // Check database first for encrypted files (check both template and patient consent tables)
+    let fileBuffer = null;
+    let fileName = null;
+    let mimeType = 'application/octet-stream';
 
-    // Set appropriate headers for file download/viewing
-    const ext = path.extname(fullPath).toLowerCase();
-    const mimeTypes = {
-      '.pdf': 'application/pdf',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.doc': 'application/msword',
-      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    };
+    // Check consent_forms table (templates)
+    const templateResult = await client.query(
+      'SELECT template_file_path, template_file_name, template_file_data FROM consent_forms WHERE template_file_path = $1',
+      [relativePath]
+    );
 
-    const mimeType = mimeTypes[ext] || 'application/octet-stream';
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
-    res.setHeader('Cache-Control', 'no-cache');
-
-    // Stream the file with error handling
-    const fileStream = fs.createReadStream(fullPath);
-
-    fileStream.on('error', (error) => {
-      console.error('Error reading consent form file stream:', error);
-      if (!res.headersSent) {
+    if (templateResult.rows.length > 0 && templateResult.rows[0].template_file_data) {
+      // Encrypted template file from database
+      console.log('[serveConsentFormFile] Found encrypted template file in database');
+      try {
+        fileBuffer = decryptFile(templateResult.rows[0].template_file_data);
+        fileName = templateResult.rows[0].template_file_name || path.basename(relativePath);
+        const ext = path.extname(fileName).toLowerCase();
+        const mimeTypes = {
+          '.pdf': 'application/pdf',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.doc': 'application/msword',
+          '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        };
+        mimeType = mimeTypes[ext] || 'application/octet-stream';
+      } catch (decryptError) {
+        console.error('[serveConsentFormFile] Decryption failed:', decryptError);
         setCorsHeaders(req, res);
-        res.status(500).json({
+        return res.status(500).json({
           success: false,
-          message: 'Error reading file'
+          message: 'Error decrypting file'
         });
       }
-    });
+    } else {
+      // Check patient_consent_forms table
+      const patientResult = await client.query(
+        'SELECT file_path, file_name, file_data FROM patient_consent_forms WHERE file_path = $1',
+        [relativePath]
+      );
 
-    res.on('close', () => {
-      if (!fileStream.destroyed) {
-        fileStream.destroy();
+      if (patientResult.rows.length > 0 && patientResult.rows[0].file_data) {
+        // Encrypted patient consent file from database
+        console.log('[serveConsentFormFile] Found encrypted patient consent file in database');
+        try {
+          fileBuffer = decryptFile(patientResult.rows[0].file_data);
+          fileName = patientResult.rows[0].file_name || path.basename(relativePath);
+          const ext = path.extname(fileName).toLowerCase();
+          const mimeTypes = {
+            '.pdf': 'application/pdf',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          };
+          mimeType = mimeTypes[ext] || 'application/octet-stream';
+        } catch (decryptError) {
+          console.error('[serveConsentFormFile] Decryption failed:', decryptError);
+          setCorsHeaders(req, res);
+          return res.status(500).json({
+            success: false,
+            message: 'Error decrypting file'
+          });
+        }
+      } else if (fs.existsSync(fullPath)) {
+        // Old file from filesystem (backward compatibility)
+        console.log('[serveConsentFormFile] Serving from filesystem (backward compatibility)');
+        fileBuffer = fs.readFileSync(fullPath);
+        fileName = path.basename(fullPath);
+        const ext = path.extname(fullPath).toLowerCase();
+        const mimeTypes = {
+          '.pdf': 'application/pdf',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.doc': 'application/msword',
+          '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        };
+        mimeType = mimeTypes[ext] || 'application/octet-stream';
+      } else {
+        // File not found
+        console.error('[serveConsentFormFile] File not found in database or filesystem');
+        setCorsHeaders(req, res);
+        return res.status(404).json({
+          success: false,
+          message: 'File not found'
+        });
       }
-    });
+    }
 
-    fileStream.pipe(res);
+    // Set headers and send file
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(fileBuffer);
 
   } catch (error) {
     console.error('Serve consent form file error:', error);
@@ -718,5 +768,7 @@ export const serveConsentFormFile = async (req, res) => {
       success: false,
       message: 'Error serving file'
     });
+  } finally {
+    client.release();
   }
 };

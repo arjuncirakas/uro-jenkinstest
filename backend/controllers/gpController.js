@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { sendPasswordEmail } from '../services/emailService.js';
 import { validationResult } from 'express-validator';
 import { withDatabaseClient } from '../utils/dbHelper.js';
+import { encrypt, decryptFields, createSearchableHash } from '../services/encryptionService.js';
+import { USER_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 
 // Helper function to generate secure password
 const generateSecurePassword = () => {
@@ -53,30 +55,34 @@ const validateGPRequest = (req, client) => {
   return { isValid: true };
 };
 
-// Helper function to check if user exists
+// Helper function to check if user exists (using hash for encrypted search)
 const checkUserExists = async (client, email, phone) => {
-  const existingUser = await client.query(
-    'SELECT id FROM users WHERE email = $1',
-    [email]
-  );
+  const emailHash = email ? createSearchableHash(email) : null;
+  if (emailHash) {
+    const existingUser = await client.query(
+      'SELECT id FROM users WHERE email_hash = $1',
+      [emailHash]
+    );
 
-  if (existingUser.rows.length > 0) {
-    return {
-      exists: true,
-      response: {
-        status: 409,
-        json: {
-          success: false,
-          error: 'User with this email already exists'
+    if (existingUser.rows.length > 0) {
+      return {
+        exists: true,
+        response: {
+          status: 409,
+          json: {
+            success: false,
+            error: 'User with this email already exists'
+          }
         }
-      }
-    };
+      };
+    }
   }
 
   if (phone) {
+    const phoneHash = createSearchableHash(phone);
     const existingPhone = await client.query(
-      'SELECT id FROM users WHERE phone = $1',
-      [phone]
+      'SELECT id FROM users WHERE phone_hash = $1',
+      [phoneHash]
     );
 
     if (existingPhone.rows.length > 0) {
@@ -157,21 +163,24 @@ export const getAllGPs = async (req, res) => {
 
       const result = await client.query(query, [is_active === 'true']);
 
-      // Transform to camelCase format for frontend consistency
-      const gps = result.rows.map(gp => ({
-        id: gp.id,
-        email: gp.email,
-        firstName: gp.first_name,
-        lastName: gp.last_name,
-        fullName: `${gp.first_name} ${gp.last_name}`,
-        phone: gp.phone,
-        organization: gp.organization,
-        role: gp.role,
-        isActive: gp.is_active,
-        isVerified: gp.is_verified,
-        createdAt: gp.created_at,
-        lastLoginAt: gp.last_login_at
-      }));
+      // Decrypt and transform to camelCase format for frontend consistency
+      const gps = result.rows.map(gp => {
+        const decryptedGP = decryptFields(gp, USER_ENCRYPTED_FIELDS);
+        return {
+          id: decryptedGP.id,
+          email: decryptedGP.email, // Decrypted
+          firstName: decryptedGP.first_name,
+          lastName: decryptedGP.last_name,
+          fullName: `${decryptedGP.first_name} ${decryptedGP.last_name}`,
+          phone: decryptedGP.phone, // Decrypted
+          organization: decryptedGP.organization,
+          role: decryptedGP.role,
+          isActive: decryptedGP.is_active,
+          isVerified: decryptedGP.is_verified,
+          createdAt: decryptedGP.created_at,
+          lastLoginAt: decryptedGP.last_login_at
+        };
+      });
 
       console.log(`📋 Returning ${gps.length} active GPs`);
 
@@ -211,9 +220,12 @@ export const getGPById = async (req, res) => {
         });
       }
 
+      // Decrypt user data before sending
+      const decryptedGP = decryptFields(result.rows[0], USER_ENCRYPTED_FIELDS);
+
       res.json({
         success: true,
-        data: result.rows[0]
+        data: decryptedGP
       });
     } catch (error) {
       console.error('Error fetching GP:', error);
@@ -252,15 +264,26 @@ export const createGP = async (req, res) => {
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
 
-      // Insert new GP
+      // Encrypt email and phone
+      const encryptedEmail = email ? encrypt(email) : null;
+      const encryptedPhone = phone ? encrypt(phone) : null;
+      
+      // Create searchable hashes
+      const emailHash = email ? createSearchableHash(email) : null;
+      const phoneHash = phone ? createSearchableHash(phone) : null;
+
+      // Insert new GP with encrypted data and hashes
       const result = await client.query(
-        `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+        `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified, email_hash, phone_hash) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
          RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-        [email, passwordHash, first_name, last_name, phone, organization || null, 'gp', true, true]
+        [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', true, true, emailHash, phoneHash]
       );
 
       const newGP = result.rows[0];
+      
+      // Decrypt for response
+      const decryptedGP = decryptFields(newGP, USER_ENCRYPTED_FIELDS);
 
       // Send password email
       const { emailSent, emailError } = await sendPasswordEmailWithLogging(email, first_name, tempPassword);
@@ -281,11 +304,11 @@ export const createGP = async (req, res) => {
           ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
           : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
         data: {
-          userId: newGP.id,
-          email: newGP.email,
-          firstName: newGP.first_name,
-          lastName: newGP.last_name,
-          role: newGP.role,
+          userId: decryptedGP.id,
+          email: decryptedGP.email, // Decrypted
+          firstName: decryptedGP.first_name,
+          lastName: decryptedGP.last_name,
+          role: decryptedGP.role,
           emailSent,
           emailError: emailError || null,
           ...(emailSent ? {} : { tempPassword: tempPassword })
@@ -329,12 +352,12 @@ export const updateGP = async (req, res) => {
     const { first_name, last_name, email, phone, organization, is_active } = req.body;
 
     // Get existing GP
-    const existingGP = await client.query(
-      'SELECT email, is_active FROM users WHERE id = $1 AND role = $2',
+    const existingGPResult = await client.query(
+      'SELECT email, phone, is_active FROM users WHERE id = $1 AND role = $2',
       [id, 'gp']
     );
 
-    if (existingGP.rows.length === 0) {
+    if (existingGPResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
@@ -342,14 +365,18 @@ export const updateGP = async (req, res) => {
       });
     }
 
-    const oldEmail = existingGP.rows[0].email;
-    const finalIsActive = is_active !== undefined ? is_active : existingGP.rows[0].is_active;
+    // Decrypt existing GP data to compare
+    const existingGP = decryptFields(existingGPResult.rows[0], USER_ENCRYPTED_FIELDS);
+    const oldEmail = existingGP.email;
+    const oldPhone = existingGP.phone;
+    const finalIsActive = is_active !== undefined ? is_active : existingGPResult.rows[0].is_active;
 
-    // Check if email is being changed and if new email already exists
+    // Check if email is being changed and if new email already exists (using hash)
     if (email && email !== oldEmail) {
+      const emailHash = createSearchableHash(email);
       const existingUser = await client.query(
-        'SELECT id FROM users WHERE email = $1',
-        [email]
+        'SELECT id FROM users WHERE email_hash = $1',
+        [emailHash]
       );
 
       if (existingUser.rows.length > 0) {
@@ -361,12 +388,19 @@ export const updateGP = async (req, res) => {
       }
     }
 
-    // Check if phone is being changed and if new phone already exists
-    if (phone) {
-      const existingPhone = await client.query(
-        'SELECT id FROM users WHERE phone = $1 AND email != $2',
-        [phone, email || oldEmail]
-      );
+    // Check if phone is being changed and if new phone already exists (using hash)
+    if (phone && phone !== oldPhone) {
+      const phoneHash = createSearchableHash(phone);
+      const emailHashForCheck = email ? createSearchableHash(email) : (oldEmail ? createSearchableHash(oldEmail) : null);
+      const existingPhone = emailHashForCheck
+        ? await client.query(
+            'SELECT id FROM users WHERE phone_hash = $1 AND email_hash != $2',
+            [phoneHash, emailHashForCheck]
+          )
+        : await client.query(
+            'SELECT id FROM users WHERE phone_hash = $1',
+            [phoneHash]
+          );
 
       if (existingPhone.rows.length > 0) {
         await client.query('ROLLBACK');
@@ -377,21 +411,55 @@ export const updateGP = async (req, res) => {
       }
     }
 
+    // Encrypt email and phone if they're being updated
+    const encryptedEmail = email ? encrypt(email) : existingGPResult.rows[0].email;
+    const encryptedPhone = phone ? encrypt(phone) : existingGPResult.rows[0].phone;
+    
+    // Update hashes if email/phone changed
+    const emailHash = email && email !== oldEmail ? createSearchableHash(email) : null;
+    const phoneHash = phone && phone !== oldPhone ? createSearchableHash(phone) : null;
+    
+    // Build update query dynamically
+    const updateFields = [
+      'first_name = $1',
+      'last_name = $2',
+      'email = $3',
+      'phone = $4',
+      'organization = $5',
+      'is_active = $6',
+      'updated_at = CURRENT_TIMESTAMP'
+    ];
+    const updateValues = [first_name, last_name, encryptedEmail, encryptedPhone, organization || null, finalIsActive];
+    
+    // Add hash updates if needed
+    if (emailHash) {
+      updateFields.push('email_hash = $' + (updateValues.length + 1));
+      updateValues.push(emailHash);
+    }
+    if (phoneHash) {
+      updateFields.push('phone_hash = $' + (updateValues.length + 1));
+      updateValues.push(phoneHash);
+    }
+    
+    updateValues.push(id); // For WHERE clause
+
     // Update GP
     const result = await client.query(`
       UPDATE users 
-      SET first_name = $1, last_name = $2, email = $3, phone = $4, organization = $5, is_active = $6,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $7 AND role = 'gp'
+      SET ${updateFields.join(', ')}
+      WHERE id = $${updateValues.length} AND role = 'gp'
       RETURNING id, email, first_name, last_name, phone, organization, role, is_active, is_verified, created_at
-    `, [first_name, last_name, email, phone, organization || null, finalIsActive, id]);
+    `, updateValues);
 
     await client.query('COMMIT');
+
+    // Decrypt for response
+    const decryptedGP = decryptFields(result.rows[0], USER_ENCRYPTED_FIELDS);
 
     res.json({
       success: true,
       message: 'GP updated successfully',
-      data: result.rows[0]
+      data: decryptedGP
     });
     } catch (error) {
       await client.query('ROLLBACK');

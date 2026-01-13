@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IoPersonOutline, IoMailOutline, IoCallOutline, IoClose } from 'react-icons/io5';
+import { IoPersonOutline, IoMailOutline, IoCallOutline, IoClose, IoShieldOutline } from 'react-icons/io5';
 import authService from '../services/authService';
+import { securityDashboardService } from '../services/securityDashboardService';
 
 const ProfileDropdown = ({ isOpen, onClose, buttonRef }) => {
   const [profile, setProfile] = useState(null);
+  const [dpoInfo, setDpoInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const dropdownRef = useRef(null);
@@ -11,6 +13,7 @@ const ProfileDropdown = ({ isOpen, onClose, buttonRef }) => {
   useEffect(() => {
     if (isOpen) {
       fetchProfile();
+      fetchDPOInfo();
       // Close dropdown when clicking outside
       const handleClickOutside = (event) => {
         if (
@@ -30,6 +33,7 @@ const ProfileDropdown = ({ isOpen, onClose, buttonRef }) => {
     } else {
       // Reset state when dropdown closes
       setProfile(null);
+      setDpoInfo(null);
       setError(null);
     }
   }, [isOpen, onClose, buttonRef]);
@@ -49,6 +53,19 @@ const ProfileDropdown = ({ isOpen, onClose, buttonRef }) => {
       setError(err.message || 'Failed to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDPOInfo = async () => {
+    try {
+      const result = await securityDashboardService.getDPOContactInfo();
+      if (result.success && result.data) {
+        setDpoInfo(result.data);
+      }
+      // Silently fail if DPO info doesn't exist - it's optional
+    } catch (err) {
+      console.error('Error fetching DPO info:', err);
+      // Don't set error state - DPO info is optional
     }
   };
 
@@ -170,6 +187,38 @@ const ProfileDropdown = ({ isOpen, onClose, buttonRef }) => {
                 </div>
               )}
             </div>
+
+            {/* DPO Contact Information */}
+            {dpoInfo && (
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                  Data Protection Officer
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                    <IoShieldOutline className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-500 mb-0.5">Name</p>
+                      <p className="text-sm font-medium text-gray-900">{dpoInfo.name}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                    <IoMailOutline className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-500 mb-0.5">Email</p>
+                      <p className="text-sm font-medium text-gray-900 break-all">{dpoInfo.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                    <IoCallOutline className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-500 mb-0.5">Contact Number</p>
+                      <p className="text-sm font-medium text-gray-900">{dpoInfo.contact_number}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
       </div>
@@ -178,6 +227,7 @@ const ProfileDropdown = ({ isOpen, onClose, buttonRef }) => {
 };
 
 export default ProfileDropdown;
+
 
 
 

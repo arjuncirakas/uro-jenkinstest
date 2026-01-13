@@ -85,6 +85,70 @@ const ConsentForms = () => {
     setShowEditModal(true);
   };
 
+  // Handle view
+  const handleView = async (template) => {
+    try {
+      // Get file path from template (could be template_file_path or template_file_url)
+      const filePath = template.template_file_path || template.template_file_url;
+      
+      if (!filePath) {
+        setError('No file available for this template');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
+
+      // Extract relative path if it's a full URL or contains 'uploads/'
+      let relativePath = filePath;
+      if (filePath.includes('uploads/')) {
+        relativePath = filePath.replace(/^.*uploads[\\/]/, '').replace(/\\/g, '/');
+      } else if (filePath.startsWith('http')) {
+        // If it's a full URL, extract the path part
+        const url = new URL(filePath);
+        relativePath = url.pathname.replace('/api/consent-forms/files/', '');
+      }
+
+      // Fetch the file
+      const response = await consentFormService.getConsentFormFile(relativePath);
+      
+      if (response.success) {
+        // Create a blob URL and open in new window
+        const blobUrl = URL.createObjectURL(response.data);
+        const fileName = template.template_file_name || 'consent-form.pdf';
+        
+        // Check if it's an image or PDF
+        const isImage = /\.(jpg|jpeg|png|gif)$/i.test(fileName);
+        const isPDF = /\.pdf$/i.test(fileName);
+        
+        if (isImage) {
+          // For images, open in a new window
+          window.open(blobUrl, '_blank');
+        } else if (isPDF) {
+          // For PDFs, open in a new window
+          window.open(blobUrl, '_blank');
+        } else {
+          // For other files, try to open or download
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.target = '_blank';
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+        
+        // Clean up blob URL after a delay
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+      } else {
+        setError(response.error || 'Failed to load file');
+        setTimeout(() => setError(''), 3000);
+      }
+    } catch (err) {
+      console.error('Error viewing file:', err);
+      setError('Failed to view file');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
   // Handle success
   const handleSuccess = () => {
     setSuccess(selectedTemplate ? 'Template updated successfully' : 'Template created successfully');
@@ -272,16 +336,31 @@ const ConsentForms = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-blue-600 bg-blue-100">
-                          <FileCheck className="h-3 w-3 mr-1" />
-                          Uploaded
-                        </span>
+                        {template.template_file_path || template.template_file_url ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-blue-600 bg-blue-100">
+                            <FileCheck className="h-3 w-3 mr-1" />
+                            Uploaded
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-gray-500 bg-gray-100">
+                            No File
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(template.created_at)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleView(template)}
+                            className="inline-flex items-center px-3 py-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View Template File"
+                            disabled={!template.template_file_path && !template.template_file_url}
+                          >
+                            <Eye className="h-4 w-4 mr-1.5" />
+                            <span className="text-xs font-medium">View</span>
+                          </button>
                           <button
                             onClick={() => handleEdit(template)}
                             className="inline-flex items-center px-3 py-1.5 text-teal-600 hover:text-teal-900 hover:bg-teal-50 rounded-lg transition-colors"

@@ -6,21 +6,10 @@ import { validateFilePath } from '../utils/ssrfProtection.js';
 import { extractPSADataFromFile } from '../utils/psaFileParser.js';
 import { getPSAStatusByAge, getPSAThresholdByAge } from '../utils/psaStatusByAge.js';
 import { setCorsHeaders } from '../utils/corsHelper.js';
+import { encryptFile, decryptFile } from '../services/encryptionService.js';
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads/investigations';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Configure multer for file uploads (memory storage for encryption)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   // Allow PDF, DOC, DOCX, XLS, XLSX, and CSV files only
@@ -112,9 +101,16 @@ export const addPSAResult = async (req, res) => {
     // Handle file upload
     let filePath = null;
     let fileName = null;
+    let encryptedFileData = null;
     if (req.file) {
-      filePath = req.file.path;
       fileName = req.file.originalname;
+      // Encrypt file buffer and store in database
+      if (req.file.buffer) {
+        encryptedFileData = encryptFile(req.file.buffer);
+        // Generate reference file_path for frontend URL construction (file not actually stored here)
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        filePath = `investigations/file-${uniqueSuffix}${path.extname(fileName)}`;
+      }
     }
 
     // Auto-determine status based on age if not provided
@@ -131,8 +127,8 @@ export const addPSAResult = async (req, res) => {
     const result_query = await client.query(
       `INSERT INTO investigation_results (
         patient_id, test_type, test_name, test_date, result, reference_range, 
-        status, notes, file_path, file_name, author_id, author_name, author_role
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        status, notes, file_path, file_name, file_data, author_id, author_name, author_role
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         patientId,
@@ -143,8 +139,9 @@ export const addPSAResult = async (req, res) => {
         referenceRange || ageAdjustedReferenceRange,
         finalStatus,
         notes || '',
-        filePath,
+        filePath, // null for new encrypted files
         fileName,
+        encryptedFileData, // encrypted file data
         userId,
         authorName,
         userRole
@@ -252,9 +249,10 @@ export const updatePSAResult = async (req, res) => {
     // Handle file upload - if new file is uploaded, replace old one
     let filePath = existingResult.file_path;
     let fileName = null;
+    let encryptedFileData = null;
 
     if (req.file) {
-      // Delete old file if it exists
+      // Delete old file from filesystem if it exists (backward compatibility)
       if (filePath && fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
@@ -262,8 +260,14 @@ export const updatePSAResult = async (req, res) => {
           console.error('Error deleting old file:', err);
         }
       }
-      filePath = req.file.path;
+      // Encrypt new file buffer and store in database
       fileName = req.file.originalname;
+      if (req.file.buffer) {
+        encryptedFileData = encryptFile(req.file.buffer);
+        // Generate reference file_path for frontend URL construction (file not actually stored here)
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        filePath = `investigations/file-${uniqueSuffix}${path.extname(fileName)}`;
+      }
     }
 
     // Auto-determine status based on age if not provided
@@ -280,14 +284,16 @@ export const updatePSAResult = async (req, res) => {
     const resultString = result ? String(result) : null;
 
     // Prepare update parameters
+    const hasNewFile = req.file !== undefined;
     const updateParams = [
       testDate,
       resultString,
       referenceRange || ageAdjustedReferenceRange || null, // Use age-adjusted range if not provided
       finalStatus || null,
       notes || null,
-      filePath !== existingResult.file_path ? filePath : null,
-      fileName || null,
+      hasNewFile ? filePath : null, // null for new encrypted files
+      hasNewFile ? fileName : null,
+      hasNewFile ? encryptedFileData : null, // encrypted file data
       parsedResultId
     ];
 
@@ -296,7 +302,7 @@ export const updatePSAResult = async (req, res) => {
       testDate,
       result: resultString,
       finalStatus,
-      hasNewFile: filePath !== existingResult.file_path,
+      hasNewFile,
       fileName
     });
 
@@ -310,8 +316,9 @@ export const updatePSAResult = async (req, res) => {
            notes = COALESCE($5, notes),
            file_path = CASE WHEN $6::VARCHAR IS NOT NULL THEN $6::VARCHAR ELSE file_path END,
            file_name = CASE WHEN $6::VARCHAR IS NOT NULL THEN $7::VARCHAR ELSE file_name END,
+           file_data = CASE WHEN $8::BYTEA IS NOT NULL THEN $8::BYTEA ELSE file_data END,
            updated_at = NOW()
-       WHERE id = $8
+       WHERE id = $9
        RETURNING *`,
       updateParams
     );
@@ -406,17 +413,24 @@ export const addOtherTestResult = async (req, res) => {
     // Handle file upload
     let filePath = null;
     let fileName = null;
+    let encryptedFileData = null;
     if (req.file) {
-      filePath = req.file.path;
       fileName = req.file.originalname;
+      // Encrypt file buffer and store in database
+      if (req.file.buffer) {
+        encryptedFileData = encryptFile(req.file.buffer);
+        // Generate reference file_path for frontend URL construction (file not actually stored here)
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        filePath = `investigations/file-${uniqueSuffix}${path.extname(fileName)}`;
+      }
     }
 
     // Insert test result
     const result_query = await client.query(
       `INSERT INTO investigation_results (
         patient_id, test_type, test_name, test_date, result, reference_range, 
-        status, notes, file_path, file_name, author_id, author_name, author_role
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        status, notes, file_path, file_name, file_data, author_id, author_name, author_role
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         patientId,
@@ -427,8 +441,9 @@ export const addOtherTestResult = async (req, res) => {
         '', // Empty reference range for non-PSA tests
         req.body.status || 'Normal', // Status if provided
         notes || '',
-        filePath,
+        filePath, // null for new encrypted files
         fileName,
+        encryptedFileData, // encrypted file data
         userId,
         authorName,
         userRole
@@ -1389,6 +1404,7 @@ export const deleteInvestigationRequest = async (req, res) => {
 
 // Serve investigation files
 export const serveFile = async (req, res) => {
+  const client = await pool.connect();
   try {
     console.log('📁 [serveFile] ==========================================');
     console.log('📁 [serveFile] Request received');
@@ -1397,7 +1413,6 @@ export const serveFile = async (req, res) => {
     console.log('📁 [serveFile] Path:', req.path);
     console.log('📁 [serveFile] Params:', req.params);
     console.log('📁 [serveFile] Params.filePath:', req.params.filePath);
-    console.log('📁 [serveFile] Headers:', JSON.stringify(req.headers, null, 2));
 
     // Get the validated file path from middleware (already normalized and validated)
     const fullPath = req.validatedFilePath;
@@ -1413,35 +1428,73 @@ export const serveFile = async (req, res) => {
       });
     }
 
-    console.log('📁 [serveFile] Step 2 - Requested file path (raw):', req.params.filePath);
-    console.log('📁 [serveFile] Step 2 - Using validated path from middleware:', fullPath);
-    console.log('📁 [serveFile] Step 2 - Full path type:', typeof fullPath);
-    console.log('📁 [serveFile] Step 2 - Full path length:', fullPath?.length);
-
     // Set CORS headers explicitly for file responses
     setCorsHeaders(req, res);
-    console.log('📁 [serveFile] Step 3 - CORS headers set');
-    console.log('📁 [serveFile] Step 3 - Validated file path:', fullPath);
-    console.log('📁 [serveFile] Step 3 - File exists check:', fs.existsSync(fullPath));
 
-    // Check if file exists
-    if (!fs.existsSync(fullPath)) {
-      console.log('📁 [serveFile] ERROR - File not found:', fullPath);
-      console.log('📁 [serveFile] ERROR - Current working directory:', process.cwd());
-      console.log('📁 [serveFile] ERROR - Uploads directory exists:', fs.existsSync('uploads'));
-      console.log('📁 [serveFile] ERROR - Uploads/investigations directory exists:', fs.existsSync('uploads/investigations'));
+    // Extract relative path for database lookup (e.g., "investigations/file-123.pdf")
+    const relativePath = fullPath.replace(/^.*uploads[\\/]/, '').replace(/\\/g, '/');
+    console.log('📁 [serveFile] Step 2 - Relative path for DB lookup:', relativePath);
 
-      // Try to list files in uploads/investigations for debugging
+    // Check database first for encrypted file
+    const dbResult = await client.query(
+      'SELECT file_path, file_name, file_data FROM investigation_results WHERE file_path = $1',
+      [relativePath]
+    );
+
+    let fileBuffer = null;
+    let fileName = null;
+    let mimeType = 'application/octet-stream';
+
+    if (dbResult.rows.length > 0 && dbResult.rows[0].file_data) {
+      // New encrypted file from database
+      console.log('📁 [serveFile] Step 3 - Found encrypted file in database');
       try {
-        if (fs.existsSync('uploads/investigations')) {
-          const files = fs.readdirSync('uploads/investigations');
-          console.log('📁 [serveFile] ERROR - Files in uploads/investigations:', files.slice(0, 10));
-        }
-      } catch (listError) {
-        console.log('📁 [serveFile] ERROR - Could not list files:', listError);
+        fileBuffer = decryptFile(dbResult.rows[0].file_data);
+        fileName = dbResult.rows[0].file_name || path.basename(relativePath);
+        const ext = path.extname(fileName).toLowerCase();
+        const mimeTypes = {
+          '.pdf': 'application/pdf',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.doc': 'application/msword',
+          '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          '.xls': 'application/vnd.ms-excel',
+          '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          '.csv': 'text/csv'
+        };
+        mimeType = mimeTypes[ext] || 'application/octet-stream';
+        console.log('📁 [serveFile] Step 4 - Decrypted file, size:', fileBuffer.length, 'bytes');
+      } catch (decryptError) {
+        console.error('📁 [serveFile] ERROR - Decryption failed:', decryptError);
+        setCorsHeaders(req, res);
+        return res.status(500).json({
+          success: false,
+          message: 'Error decrypting file'
+        });
       }
-
-      // Ensure CORS headers are set even in error responses
+    } else if (fs.existsSync(fullPath)) {
+      // Old file from filesystem (backward compatibility)
+      console.log('📁 [serveFile] Step 3 - Serving from filesystem (backward compatibility)');
+      fileBuffer = fs.readFileSync(fullPath);
+      fileName = path.basename(fullPath);
+      const ext = path.extname(fullPath).toLowerCase();
+      const mimeTypes = {
+        '.pdf': 'application/pdf',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.csv': 'text/csv'
+      };
+      mimeType = mimeTypes[ext] || 'application/octet-stream';
+      console.log('📁 [serveFile] Step 4 - Read file from filesystem, size:', fileBuffer.length, 'bytes');
+    } else {
+      // File not found
+      console.log('📁 [serveFile] ERROR - File not found in database or filesystem');
       setCorsHeaders(req, res);
       return res.status(404).json({
         success: false,
@@ -1449,97 +1502,24 @@ export const serveFile = async (req, res) => {
       });
     }
 
-    console.log('📁 [serveFile] Step 4 - File exists, preparing to serve');
-    console.log('📁 [serveFile] Step 4 - Serving file:', fullPath);
-
-    // Set appropriate headers for file download/viewing
-    const ext = path.extname(fullPath).toLowerCase();
-    console.log('📁 [serveFile] Step 5 - File extension:', ext);
-
-    const mimeTypes = {
-      '.pdf': 'application/pdf',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.doc': 'application/msword',
-      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    };
-
-    const mimeType = mimeTypes[ext] || 'application/octet-stream';
-    console.log('📁 [serveFile] Step 5 - MIME type:', mimeType);
-    console.log('📁 [serveFile] Step 5 - Setting Content-Type header:', mimeType);
-
+    // Set headers and send file
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
     res.setHeader('Cache-Control', 'no-cache');
-    console.log('📁 [serveFile] Step 5 - Headers set:', {
-      'Content-Type': mimeType,
-      'Content-Disposition': `inline; filename="${path.basename(fullPath)}"`,
-      'Cache-Control': 'no-cache'
-    });
-
-    // Get file stats for logging
-    const stats = fs.statSync(fullPath);
-    console.log('📁 [serveFile] Step 6 - File stats:', {
-      size: stats.size,
-      sizeInKB: (stats.size / 1024).toFixed(2) + ' KB',
-      created: stats.birthtime,
-      modified: stats.mtime
-    });
-
-    // Stream the file with error handling
-    console.log('📁 [serveFile] Step 7 - Creating file stream');
-    const fileStream = fs.createReadStream(fullPath);
-
-    fileStream.on('error', (error) => {
-      console.error('📁 [serveFile] ERROR - Error reading file stream:', error);
-      console.error('📁 [serveFile] ERROR - Error details:', {
-        code: error.code,
-        message: error.message,
-        path: error.path
-      });
-      if (!res.headersSent) {
-        setCorsHeaders(req, res);
-        res.status(500).json({
-          success: false,
-          message: 'Error reading file'
-        });
-      }
-    });
-
-    fileStream.on('open', () => {
-      console.log('📁 [serveFile] Step 8 - File stream opened successfully');
-    });
-
-    fileStream.on('data', (chunk) => {
-      console.log('📁 [serveFile] Step 9 - Streaming chunk, size:', chunk.length, 'bytes');
-    });
-
-    fileStream.on('end', () => {
-      console.log('📁 [serveFile] Step 10 - File stream ended');
-    });
-
-    res.on('close', () => {
-      console.log('📁 [serveFile] Step 11 - Response closed, destroying file stream');
-      if (!fileStream.destroyed) {
-        fileStream.destroy();
-      }
-    });
-
-    console.log('📁 [serveFile] Step 7 - Piping file stream to response');
-    fileStream.pipe(res);
-    console.log('📁 [serveFile] Step 7 - File stream piped, response should start streaming');
+    console.log('📁 [serveFile] Step 5 - Headers set, sending file buffer');
+    res.send(fileBuffer);
+    console.log('📁 [serveFile] Step 6 - File sent successfully');
 
   } catch (error) {
     console.error('📁 [serveFile] ERROR - Exception caught:', error);
     console.error('📁 [serveFile] ERROR - Error stack:', error.stack);
-    console.error('📁 [serveFile] ERROR - Error message:', error.message);
-    // Ensure CORS headers are set even in error responses
     setCorsHeaders(req, res);
     res.status(500).json({
       success: false,
       message: 'Error serving file'
     });
+  } finally {
+    client.release();
   }
 };
 

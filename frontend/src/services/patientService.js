@@ -13,9 +13,11 @@ export const patientService = {
       };
     } catch (error) {
       console.error('Error adding patient:', error);
+      // Extract detailed error message from backend
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Failed to add patient';
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to add patient',
+        error: errorMessage,
         details: error.response?.data?.errors || null
       };
     }

@@ -1,0 +1,183 @@
+{
+    "landing_page": "UroPrep - Urology Patient Management System",
+    "hero": {
+        "headline": "Streamline Urology Care with Intelligent Patient Management",
+        "subheadline": "The all-in-one platform connecting urologists, GPs, nurses, and patients for seamless care coordination",
+        "cta_primary": "Request a Demo",
+        "cta_secondary": "See It in Action"
+    },
+    "problem": {
+        "title": "Healthcare Coordination Shouldn't Be This Hard",
+        "pain_points": [
+            "GPs, urologists, and nurses struggle to stay aligned on patient care plans",
+            "Manual tracking of investigations, appointments, and follow-ups leads to errors",
+            "Patients fall through the cracks due to poor reminder systems",
+            "Department heads lack insights into patient flow and resource utilization",
+            "Managing consent forms and clinical documentation is cumbersome",
+            "Active surveillance patients require consistent monitoring that's hard to maintain"
+        ]
+    },
+    "solution": {
+        "title": "Meet UroPrep: Your Complete Urology Care Platform",
+        "points": [
+            {
+                "title": "Seamless Patient Tracking",
+                "content": "Follow every patient from GP referral through diagnosis, treatment, and long-term monitoring - nothing falls through the cracks"
+            },
+            {
+                "title": "Smart Investigation Management",
+                "content": "Book, schedule, and track clinical investigations with automated status updates and instant result notifications"
+            },
+            {
+                "title": "Proactive PSA Monitoring",
+                "content": "Visual trend analysis for active surveillance patients with intelligent alerts when values indicate concern"
+            },
+            {
+                "title": "Effortless Care Coordination",
+                "content": "Urologists, GPs, and nurses stay synchronized with real-time updates on patient status, appointments, and clinical decisions"
+            },
+            {
+                "title": "Automated Appointment Reminders",
+                "content": "Reduce no-shows with smart scheduling, automated patient reminders, and easy rescheduling workflows"
+            },
+            {
+                "title": "Complete Clinical Documentation",
+                "content": "Digital consent forms, investigation reports, MDT notes, and discharge summaries - all secure and instantly accessible"
+            }
+        ]
+    },
+    "features": {
+        "title": "Everything You Need to Manage Urology Care",
+        "list": [
+            {
+                "title": "Patient Management",
+                "content": "Complete patient overview with clinical history, PSA trends, investigation results, and treatment timeline all in one place"
+            },
+            {
+                "title": "Investigation Workflow",
+                "content": "Book clinical investigations, auto-assign to departments, track status in real-time, and view results instantly"
+            },
+            {
+                "title": "Active Surveillance Monitoring",
+                "content": "PSA result tracking with visual trends, automated alerts for concerning patterns, and guideline-compliant monitoring schedules"
+            },
+            {
+                "title": "Appointment Management",
+                "content": "Visual calendar for all appointment types, no-show tracking, automated rescheduling, and reminder notifications"
+            },
+            {
+                "title": "MDT Coordination",
+                "content": "Schedule multi-disciplinary team meetings, collaborative notes and decisions, and patient case presentation tools"
+            },
+            {
+                "title": "Clinical Decision Support",
+                "content": "Evidence-based guideline recommendations, pathway validation alerts, and risk stratification tools"
+            },
+            {
+                "title": "Surgery Management",
+                "content": "Pre-op and post-op checklist management, surgical pathway tracking, and discharge summary generation"
+            },
+            {
+                "title": "Document Management",
+                "content": "Digital consent forms, secure file uploads, PDF viewing and storage for all clinical documents"
+            }
+        ]
+    },
+    "who_its_for": {
+        "title": "Built for Every Role in Urology Care",
+        "roles": [
+            {
+                "role": "Urologists",
+                "benefits": "Complete patient dashboard, decision support, MDT scheduling, PSA tracking, and surgical pathway management"
+            },
+            {
+                "role": "GPs",
+                "benefits": "Track referred patients, stay updated on progress, coordinate medications, and communicate directly with the urology team"
+            },
+            {
+                "role": "Urology Nurses",
+                "benefits": "Manage OPD operations, book and track investigations, coordinate surgeries, and handle post-op follow-ups"
+            },
+            {
+                "role": "Administrators",
+                "benefits": "Manage users and departments, handle consent forms, export data and reports, and view complete audit trails"
+            }
+        ]
+    },
+    "patient_journey": {
+        "title": "Supporting the Complete Patient Journey",
+        "stages": [
+            "GP Referral",
+            "Nurse Triage",
+            "Investigations",
+            "Urologist Consultation",
+            "MDT Discussion",
+            "Treatment Decision",
+            "Surgery or Active Surveillance",
+            "Post-Op Follow-up",
+            "Long-term Monitoring",
+            "GP Takeover or Discharge"
+        ]
+    },
+    "benefits": {
+        "title": "Why Choose UroPrep?",
+        "list": [
+            "50% faster communication - instant updates replace phone calls and faxes",
+            "40% fewer missed appointments with automated reminders",
+            "100% compliance with digital consent forms and audit trails",
+            "Real-time insights with department-wide dashboards",
+            "Reduced administrative overhead and fewer errors",
+            "Better patient outcomes through coordinated care"
+        ]
+    },
+    "security": {
+        "title": "Enterprise-Grade Security",
+        "points": [
+            "End-to-end encryption for all data",
+            "Role-based access control",
+            "GDPR compliant",
+            "NHS compatible",
+            "Full audit trails",
+            "Regular security assessments"
+        ]
+    },
+    "faq": {
+        "title": "Frequently Asked Questions",
+        "questions": [
+            {
+                "q": "How long does implementation take?",
+                "a": "Most teams are up and running within 2-4 weeks."
+            },
+            {
+                "q": "Can UroPrep integrate with our existing systems?",
+                "a": "Yes, we support HL7/FHIR integrations and custom APIs."
+            },
+            {
+                "q": "Is training included?",
+                "a": "Yes, we provide comprehensive onboarding and ongoing support."
+            },
+            {
+                "q": "What about data migration?",
+                "a": "Our team assists with secure migration from legacy systems."
+            },
+            {
+                "q": "Is UroPrep mobile-friendly?",
+                "a": "Yes, access UroPrep from any device with a responsive web interface."
+            }
+        ]
+    },
+    "cta": {
+        "title": "Ready to Transform Your Urology Department?",
+        "subtitle": "Schedule a demo and see how UroPrep can streamline your patient care",
+        "button": "Schedule a Demo"
+    },
+    "footer": {
+        "contact": "Get in touch with our team",
+        "links": [
+            "Privacy Policy",
+            "Terms of Service",
+            "Support",
+            "Contact Us"
+        ]
+    }
+}

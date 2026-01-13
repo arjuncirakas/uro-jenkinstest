@@ -460,11 +460,41 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
           isCustom: symptom.isCustom || false
         }));
 
+      // Calculate dateOfBirth from age if only age is provided
+      let finalDateOfBirth = convertToISODate(formData.dateOfBirth);
+      
+      // If dateOfBirth is not provided, try to calculate from age
+      if (!finalDateOfBirth && formData.age && formData.age.toString().trim() !== '') {
+        const ageNum = parseInt(formData.age.toString().trim(), 10);
+        if (!isNaN(ageNum) && ageNum >= 0 && ageNum <= 120) {
+          const today = new Date();
+          const birthYear = today.getFullYear() - ageNum;
+          // Set to Jan 1st of the estimated birth year
+          finalDateOfBirth = `${birthYear}-01-01`;
+          console.log(`[AddPatientModal] Calculated date_of_birth from age ${ageNum}: ${finalDateOfBirth}`);
+        } else {
+          console.warn(`[AddPatientModal] Invalid age value: ${formData.age}`);
+        }
+      }
+      
+      // Ensure we have a date_of_birth before sending
+      if (!finalDateOfBirth) {
+        console.error('[AddPatientModal] No date_of_birth available - neither dateOfBirth nor valid age provided');
+      }
+
+      // Log the calculated values for debugging
+      console.log('[AddPatientModal] Patient data being sent:', {
+        dateOfBirth: finalDateOfBirth,
+        age: formData.age ? parseInt(formData.age, 10) : null,
+        originalDateOfBirth: formData.dateOfBirth,
+        originalAge: formData.age
+      });
+
       // Prepare patient data for API
       const patientData = {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
-        dateOfBirth: convertToISODate(formData.dateOfBirth),
+        dateOfBirth: finalDateOfBirth,
         age: formData.age ? parseInt(formData.age, 10) : null,
         phone: formData.phone,
         email: formData.email || '',
@@ -537,15 +567,29 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
             setErrors(apiErrors);
           }
         } else {
-          // Show error modal for general errors
+          // Show error modal for general errors with detailed message
+          const errorMessage = result.error || 'An unexpected error occurred. Please try again.';
+          // Check if error message contains database constraint errors and extract user-friendly message
+          let userFriendlyMessage = errorMessage;
+          if (errorMessage.includes('date_of_birth') && errorMessage.includes('not-null constraint')) {
+            userFriendlyMessage = 'Date of birth is required. Please provide either a date of birth or age.';
+          } else if (errorMessage.includes('violates not-null constraint')) {
+            // Extract field name from error message
+            const fieldMatch = errorMessage.match(/column "(\w+)" of relation/);
+            if (fieldMatch) {
+              const fieldName = fieldMatch[1].replace(/_/g, ' ');
+              userFriendlyMessage = `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} is required.`;
+            }
+          }
+          
           if (onError) {
             onError({
               title: 'Error',
-              message: result.error || 'An unexpected error occurred. Please try again.',
+              message: userFriendlyMessage,
               errors: []
             });
           } else {
-            setErrors({ submit: result.error });
+            setErrors({ submit: userFriendlyMessage });
           }
         }
       }

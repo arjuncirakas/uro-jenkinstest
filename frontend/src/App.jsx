@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import { store } from './store';
 import AppRoutes from './AppRoutes';
 import tokenRefreshManager from './utils/tokenRefresh';
+import CookieConsentBanner from './components/CookieConsentBanner';
 import './App.css';
 
 const App = () => {
@@ -21,6 +22,7 @@ const App = () => {
     <Provider store={store}>
       <Router>
         <AppRoutes />
+        <CookieConsentBanner />
       </Router>
     </Provider>
   );

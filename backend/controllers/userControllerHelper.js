@@ -2,13 +2,15 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import pool from '../config/database.js';
 import { validationResult } from 'express-validator';
+import { createSearchableHash, decryptFields } from '../services/encryptionService.js';
+import { USER_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 
 /**
  * Shared user controller utilities to reduce duplication across
  * nursesController, gpController, and doctorsController
  */
 
-// User fields to select
+// User fields to select (email and phone will be decrypted in controllers)
 const USER_SELECT_FIELDS = `
   id, email, first_name, last_name, phone, organization, role,
   is_active, is_verified, created_at, last_login_at
@@ -27,7 +29,9 @@ export const getAllUsersByRole = async (roleName, roleFilter = true) => {
       ORDER BY first_name, last_name
     `;
         const result = await client.query(query, [roleName, roleFilter]);
-        return { success: true, data: result.rows, count: result.rows.length };
+        // Decrypt user data before returning
+        const decryptedData = result.rows.map(user => decryptFields(user, USER_ENCRYPTED_FIELDS));
+        return { success: true, data: decryptedData, count: decryptedData.length };
     } catch (error) {
         console.error(`Error fetching ${roleName}s:`, error);
         return { success: false, error: `Failed to fetch ${roleName}s` };
@@ -52,7 +56,9 @@ export const getUserByIdAndRole = async (id, roleName, entityName) => {
             return { success: false, notFound: true, error: `${entityName} not found` };
         }
 
-        return { success: true, data: result.rows[0] };
+        // Decrypt user data before returning
+        const decryptedUser = decryptFields(result.rows[0], USER_ENCRYPTED_FIELDS);
+        return { success: true, data: decryptedUser };
     } catch (error) {
         console.error(`Error fetching ${entityName}:`, error);
         return { success: false, error: `Failed to fetch ${entityName}` };
@@ -62,23 +68,55 @@ export const getUserByIdAndRole = async (id, roleName, entityName) => {
 };
 
 /**
- * Check if email exists
+ * Check if email exists (using hash for encrypted search, fallback to direct email)
  */
 export const checkEmailExists = async (client, email) => {
-    const result = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (!email) return false;
+    const emailHash = createSearchableHash(email);
+    
+    // Try hash-based search first
+    let result = await client.query('SELECT id FROM users WHERE email_hash = $1', [emailHash]);
+    
+    // Fallback to direct email search for backward compatibility
+    if (result.rows.length === 0) {
+        result = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+    }
+    
     return result.rows.length > 0;
 };
 
 /**
- * Check if phone exists
+ * Check if phone exists (using hash for encrypted search, fallback to direct phone)
  */
 export const checkPhoneExists = async (client, phone, excludeEmail = null) => {
     if (!phone) return false;
-    const query = excludeEmail
-        ? 'SELECT id FROM users WHERE phone = $1 AND email != $2'
-        : 'SELECT id FROM users WHERE phone = $1';
-    const params = excludeEmail ? [phone, excludeEmail] : [phone];
-    const result = await client.query(query, params);
+    const phoneHash = createSearchableHash(phone);
+    
+    // Try hash-based search first
+    let query, params;
+    if (excludeEmail) {
+        const emailHash = createSearchableHash(excludeEmail);
+        query = 'SELECT id FROM users WHERE phone_hash = $1 AND email_hash != $2';
+        params = [phoneHash, emailHash];
+    } else {
+        query = 'SELECT id FROM users WHERE phone_hash = $1';
+        params = [phoneHash];
+    }
+    
+    let result = await client.query(query, params);
+    
+    // Fallback to direct phone search for backward compatibility
+    if (result.rows.length === 0) {
+        if (excludeEmail) {
+            query = 'SELECT id FROM users WHERE phone = $1 AND email != $2';
+            params = [phone, excludeEmail];
+        } else {
+            query = 'SELECT id FROM users WHERE phone = $1';
+            params = [phone];
+        }
+        result = await client.query(query, params);
+    }
+    
     return result.rows.length > 0;
 };
 

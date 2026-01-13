@@ -3,6 +3,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../../services/authService';
 import PropTypes from 'prop-types';
+import TermsAndConditionsModal from '../modals/TermsAndConditionsModal';
+import PrivacyPolicyModal from '../modals/PrivacyPolicyModal';
+import NoticeOfPrivacyPracticesModal from '../modals/NoticeOfPrivacyPracticesModal';
 
 /**
  * BaseSidebar - Shared sidebar component for all panels
@@ -19,6 +22,9 @@ const BaseSidebar = ({
     const location = useLocation();
     const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+    const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+    const [isNPPModalOpen, setIsNPPModalOpen] = useState(false);
 
     const handleLinkClick = () => {
         if (onClose) {
@@ -42,7 +48,7 @@ const BaseSidebar = ({
     const itemsWithActiveState = navigationItems.map(item => ({
         ...item,
         active: item.paths
-            ? item.paths.some(p => location.pathname === p)
+            ? item.paths.includes(location.pathname)
             : location.pathname === item.path
     }));
 
@@ -124,11 +130,47 @@ const BaseSidebar = ({
 
                 {/* Powered by AhimsaGlobal */}
                 {!isCollapsed && (
-                    <div className="text-center pt-4 border-t border-gray-100">
+                    <div className="text-center pt-4 border-t border-gray-100 space-y-2">
                         <p className="text-xs text-gray-400">Powered by AhimsaGlobal</p>
+                        <div className="flex justify-center gap-3 text-xs">
+                            <button
+                                onClick={() => setIsTermsModalOpen(true)}
+                                className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+                            >
+                                Terms
+                            </button>
+                            <span className="text-gray-300">|</span>
+                            <button
+                                onClick={() => setIsPrivacyModalOpen(true)}
+                                className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+                            >
+                                Privacy
+                            </button>
+                            <span className="text-gray-300">|</span>
+                            <button
+                                onClick={() => setIsNPPModalOpen(true)}
+                                className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+                            >
+                                NPP
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
+
+            {/* Modals */}
+            <TermsAndConditionsModal
+                isOpen={isTermsModalOpen}
+                onClose={() => setIsTermsModalOpen(false)}
+            />
+            <PrivacyPolicyModal
+                isOpen={isPrivacyModalOpen}
+                onClose={() => setIsPrivacyModalOpen(false)}
+            />
+            <NoticeOfPrivacyPracticesModal
+                isOpen={isNPPModalOpen}
+                onClose={() => setIsNPPModalOpen(false)}
+            />
         </div>
     );
 };

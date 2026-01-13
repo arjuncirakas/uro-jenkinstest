@@ -1067,6 +1067,12 @@ const OPDManagement = () => {
                                 Referred by: {patient.referredByGP}
                               </div>
                             )}
+                            {/* Only show GP Referral tag if patient was created by a GP */}
+                            {patient.createdByRole === 'gp' && (
+                              <div className="text-xs text-teal-600 mb-1">
+                                Created by GP
+                              </div>
+                            )}
                             {patient.assignedUrologist && (
                               <div className="text-xs text-gray-600 mb-1">
                                 Urologist: {patient.assignedUrologist}
@@ -1102,7 +1108,8 @@ const OPDManagement = () => {
                               Book Urologist
                             </button>
                           </div>
-                          {patient.referredByGP && (
+                          {/* Only show GP Referral tag if patient was created by a GP */}
+                          {patient.createdByRole === 'gp' && (
                             <div className="absolute bottom-3 right-3 px-2 py-1 bg-green-50 text-green-700 text-xs rounded font-medium text-center whitespace-nowrap">
                               GP Referral
                             </div>

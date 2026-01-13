@@ -4,6 +4,9 @@ import { HiHome } from 'react-icons/hi';
 import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaProcedures, FaHeartbeat } from 'react-icons/fa';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../../services/authService';
+import TermsAndConditionsModal from '../modals/TermsAndConditionsModal';
+import PrivacyPolicyModal from '../modals/PrivacyPolicyModal';
+import NoticeOfPrivacyPracticesModal from '../modals/NoticeOfPrivacyPracticesModal';
 
 // SubNavItem component
 const SubNavItem = ({ subItem, onLinkClick }) => {
@@ -38,6 +41,9 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [isNPPModalOpen, setIsNPPModalOpen] = useState(false);
 
   // Auto-expand Patients menu when on any patients route
   const isPatientsExpanded = location.pathname.startsWith('/urologist/patients');
@@ -228,11 +234,47 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
 
         {/* Powered by AhimsaGlobal */}
         {!isCollapsed && (
-          <div className="text-center pt-4 border-t border-gray-100">
+          <div className="text-center pt-4 border-t border-gray-100 space-y-2">
             <p className="text-xs text-gray-400">Powered by AhimsaGlobal</p>
+            <div className="flex justify-center gap-3 text-xs">
+              <button
+                onClick={() => setIsTermsModalOpen(true)}
+                className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+              >
+                Terms
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                onClick={() => setIsPrivacyModalOpen(true)}
+                className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+              >
+                Privacy
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                onClick={() => setIsNPPModalOpen(true)}
+                className="text-gray-500 hover:text-teal-600 transition-colors cursor-pointer"
+              >
+                NPP
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Modals */}
+      <TermsAndConditionsModal
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+      />
+      <PrivacyPolicyModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+      />
+      <NoticeOfPrivacyPracticesModal
+        isOpen={isNPPModalOpen}
+        onClose={() => setIsNPPModalOpen(false)}
+      />
     </div>
   );
 };

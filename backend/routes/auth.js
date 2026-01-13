@@ -13,6 +13,7 @@ import {
   verifyPasswordResetOTP,
   resetPassword
 } from '../controllers/authController.js';
+import { getDPOContactInfo } from '../controllers/securityDashboardController.js';
 // import { loginSimple } from '../controllers/authControllerSimple.js'; // Not used - using login with OTP instead
 import { validateRequest } from '../utils/validation.js';
 import { 
@@ -130,6 +131,13 @@ router.get('/profile',
   generalLimiter, 
   authenticateToken, 
   getProfile
+);
+
+// DPO contact information (accessible to all authenticated users)
+router.get('/dpo-contact', 
+  generalLimiter, 
+  authenticateToken, 
+  getDPOContactInfo
 );
 
 // Test endpoint to get OTP (only for testing)

@@ -4,7 +4,8 @@ import ProfileDropdown from '../ProfileDropdown';
 
 // Hoist mocks
 const mocks = vi.hoisted(() => ({
-    getProfile: vi.fn()
+    getProfile: vi.fn(),
+    getDPOContactInfo: vi.fn()
 }));
 
 vi.mock('../../services/authService', () => ({
@@ -13,12 +14,19 @@ vi.mock('../../services/authService', () => ({
     }
 }));
 
+vi.mock('../../services/securityDashboardService', () => ({
+    securityDashboardService: {
+        getDPOContactInfo: mocks.getDPOContactInfo
+    }
+}));
+
 // Mock react-icons
 vi.mock('react-icons/io5', () => ({
     IoPersonOutline: () => <span data-testid="person-icon" />,
     IoMailOutline: () => <span data-testid="mail-icon" />,
     IoCallOutline: () => <span data-testid="call-icon" />,
-    IoClose: () => <span data-testid="close-icon" />
+    IoClose: () => <span data-testid="close-icon" />,
+    IoShieldOutline: () => <span data-testid="shield-icon" />
 }));
 
 describe('ProfileDropdown Component', () => {
@@ -420,6 +428,227 @@ describe('ProfileDropdown Component', () => {
             );
 
             expect(screen.queryByText('My Profile')).not.toBeInTheDocument();
+        });
+    });
+
+    describe('DPO Contact Information Display', () => {
+        beforeEach(() => {
+            mocks.getProfile.mockResolvedValue({
+                success: true,
+                data: {
+                    user: {
+                        firstName: 'Test',
+                        lastName: 'User',
+                        email: 'test@test.com',
+                        role: 'urologist'
+                    }
+                }
+            });
+        });
+
+        it('should display DPO contact information when available', async () => {
+            mocks.getDPOContactInfo.mockResolvedValue({
+                success: true,
+                data: {
+                    name: 'John DPO',
+                    email: 'dpo@example.com',
+                    contact_number: '+1234567890'
+                }
+            });
+
+            render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Data Protection Officer')).toBeInTheDocument();
+                expect(screen.getByText('John DPO')).toBeInTheDocument();
+                expect(screen.getByText('dpo@example.com')).toBeInTheDocument();
+                expect(screen.getByText('+1234567890')).toBeInTheDocument();
+            });
+        });
+
+        it('should not display DPO section when DPO info is not available', async () => {
+            mocks.getDPOContactInfo.mockResolvedValue({
+                success: true,
+                data: null
+            });
+
+            render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Test User')).toBeInTheDocument();
+            });
+
+            expect(screen.queryByText('Data Protection Officer')).not.toBeInTheDocument();
+        });
+
+        it('should not display DPO section when DPO fetch fails', async () => {
+            mocks.getDPOContactInfo.mockRejectedValue(new Error('Network error'));
+
+            render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Test User')).toBeInTheDocument();
+            });
+
+            // DPO section should not be displayed on error
+            expect(screen.queryByText('Data Protection Officer')).not.toBeInTheDocument();
+        });
+
+        it('should not display DPO section when DPO fetch returns success false', async () => {
+            mocks.getDPOContactInfo.mockResolvedValue({
+                success: false,
+                error: 'Failed to fetch'
+            });
+
+            render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Test User')).toBeInTheDocument();
+            });
+
+            expect(screen.queryByText('Data Protection Officer')).not.toBeInTheDocument();
+        });
+
+        it('should fetch DPO info when modal opens', async () => {
+            mocks.getDPOContactInfo.mockResolvedValue({
+                success: true,
+                data: {
+                    name: 'Jane DPO',
+                    email: 'jane.dpo@example.com',
+                    contact_number: '+9876543210'
+                }
+            });
+
+            render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(mocks.getDPOContactInfo).toHaveBeenCalled();
+            });
+        });
+
+        it('should reset DPO info when modal closes', async () => {
+            mocks.getDPOContactInfo.mockResolvedValue({
+                success: true,
+                data: {
+                    name: 'John DPO',
+                    email: 'dpo@example.com',
+                    contact_number: '+1234567890'
+                }
+            });
+
+            const { rerender } = render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('John DPO')).toBeInTheDocument();
+            });
+
+            rerender(
+                <ProfileDropdown
+                    isOpen={false}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            // When modal reopens, DPO info should be fetched again
+            rerender(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(mocks.getDPOContactInfo).toHaveBeenCalledTimes(2);
+            });
+        });
+
+        it('should display DPO information with proper formatting', async () => {
+            mocks.getDPOContactInfo.mockResolvedValue({
+                success: true,
+                data: {
+                    name: 'Dr. Sarah DPO',
+                    email: 'sarah.dpo@healthcare.com',
+                    contact_number: '+44 20 7946 0958'
+                }
+            });
+
+            render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Dr. Sarah DPO')).toBeInTheDocument();
+                expect(screen.getByText('sarah.dpo@healthcare.com')).toBeInTheDocument();
+                expect(screen.getByText('+44 20 7946 0958')).toBeInTheDocument();
+            });
+        });
+
+        it('should handle empty DPO data gracefully', async () => {
+            mocks.getDPOContactInfo.mockResolvedValue({
+                success: true,
+                data: {
+                    name: '',
+                    email: '',
+                    contact_number: ''
+                }
+            });
+
+            render(
+                <ProfileDropdown
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    buttonRef={mockButtonRef}
+                />
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Test User')).toBeInTheDocument();
+            });
+
+            // Should not crash with empty data
+            expect(screen.queryByText('Data Protection Officer')).not.toBeInTheDocument();
         });
     });
 });

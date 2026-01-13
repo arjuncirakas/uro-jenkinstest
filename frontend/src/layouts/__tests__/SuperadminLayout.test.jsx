@@ -54,6 +54,7 @@ describe('SuperadminLayout', () => {
 
     expect(screen.getByTestId('nav-item-0')).toHaveTextContent('All Users');
     expect(screen.getByTestId('nav-item-1')).toHaveTextContent('Consent Forms');
+    expect(screen.getByTestId('nav-item-2')).toHaveTextContent('Data Audit');
   });
 
   it('should pass correct navigation array to AdminSidebarLayout', () => {
@@ -67,6 +68,7 @@ describe('SuperadminLayout', () => {
     expect(navigation).toBeInTheDocument();
     expect(screen.getByText('All Users')).toBeInTheDocument();
     expect(screen.getByText('Consent Forms')).toBeInTheDocument();
+    expect(screen.getByText('Data Audit')).toBeInTheDocument();
   });
 
   it('should pass fullWidthPaths prop to AdminSidebarLayout', () => {
@@ -99,6 +101,20 @@ describe('SuperadminLayout', () => {
 
     // Verify component renders (all lines executed)
     expect(screen.getByTestId('admin-sidebar-layout')).toBeInTheDocument();
+  });
+
+  it('should include Data Audit navigation item with correct route', () => {
+    render(
+      <MemoryRouter>
+        <SuperadminLayout />
+      </MemoryRouter>
+    );
+
+    // Verify Data Audit navigation item exists
+    expect(screen.getByText('Data Audit')).toBeInTheDocument();
+    
+    // Verify it's the third navigation item
+    expect(screen.getByTestId('nav-item-2')).toHaveTextContent('Data Audit');
   });
 });
 
