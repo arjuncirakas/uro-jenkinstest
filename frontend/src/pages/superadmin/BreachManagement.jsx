@@ -4,7 +4,6 @@ import {
   Mail,
   FileText,
   Loader2,
-  Filter,
   X,
   Plus,
   Send,
@@ -61,19 +60,13 @@ const BreachManagement = () => {
     notes: ''
   });
 
-  // Filter states
-  const [filters, setFilters] = useState({
-    status: '',
-    severity: ''
-  });
-
   // Fetch incidents
   const fetchIncidents = async () => {
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await breachNotificationService.getIncidents(filters);
+      const response = await breachNotificationService.getIncidents({});
       if (response.success) {
         const incidentsList = response.data || [];
         setIncidents(incidentsList);
@@ -195,7 +188,7 @@ const BreachManagement = () => {
     } else if (activeTab === 'notifications' || activeTab === 'notified') {
       fetchNotifications();
     }
-  }, [activeTab, filters]);
+  }, [activeTab]);
 
   const handleCreateIncident = async () => {
     setIsLoading(true);
@@ -584,63 +577,6 @@ const BreachManagement = () => {
         {/* Incidents Tab */}
         {activeTab === 'incidents' && (
           <>
-            {/* Filters */}
-            <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div className="flex flex-wrap items-end gap-4">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Filter className="h-4 w-4" />
-                  <span className="font-medium">Filters:</span>
-                </div>
-
-                <div>
-                  <label htmlFor="status-filter" className="block text-xs text-gray-600 mb-1">
-                    Status
-                  </label>
-                  <select
-                    id="status-filter"
-                    value={filters.status}
-                    onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="">All</option>
-                    <option value="draft">Draft</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="under_investigation">Under Investigation</option>
-                    <option value="contained">Contained</option>
-                    <option value="resolved">Resolved</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="severity-filter" className="block text-xs text-gray-600 mb-1">
-                    Severity
-                  </label>
-                  <select
-                    id="severity-filter"
-                    value={filters.severity}
-                    onChange={(e) => setFilters(prev => ({ ...prev, severity: e.target.value }))}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="">All</option>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </div>
-
-                {(filters.status || filters.severity) && (
-                  <button
-                    onClick={() => setFilters({ status: '', severity: '' })}
-                    className="ml-auto inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 cursor-pointer"
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-            </div>
-
             {/* Incidents List */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-200">
