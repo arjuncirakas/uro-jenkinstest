@@ -1,300 +1,492 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import SetupPassword from '../SetupPassword';
 import authService from '../../services/authService';
 
-// Hoist mocks
-const mocks = vi.hoisted(() => {
-    return {
-        navigate: vi.fn(),
-        searchParamsGet: vi.fn(),
-        setSearchParams: vi.fn(),
-        setupPassword: vi.fn(),
-    };
+// Mock dependencies
+vi.mock('../../services/authService', () => ({
+  default: {
+    setupPassword: vi.fn()
+  }
+}));
+
+// Mock useNavigate and useSearchParams
+const mockNavigate = vi.fn();
+const mockSetSearchParams = vi.fn();
+const mockSearchParams = new URLSearchParams();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useSearchParams: () => [mockSearchParams, mockSetSearchParams]
+  };
 });
 
-vi.mock('react-router-dom', () => ({
-    useNavigate: () => mocks.navigate,
-    useSearchParams: () => [{ get: mocks.searchParamsGet }, mocks.setSearchParams],
-}));
+describe('SetupPassword', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    mockSearchParams.delete('token');
+    vi.useFakeTimers();
+  });
 
-vi.mock('../../services/authService', () => ({
-    default: {
-        setupPassword: mocks.setupPassword,
-    },
-}));
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-vi.mock('lucide-react', () => ({
-    Eye: () => <span data-testid="eye-icon" />,
-    EyeOff: () => <span data-testid="eye-off-icon" />,
-    Lock: () => <span data-testid="lock-icon" />,
-    CheckCircle: () => <span data-testid="check-icon" />,
-    XCircle: () => <span data-testid="x-icon" />,
-    AlertCircle: () => <span data-testid="alert-icon" />,
-}));
-
-describe('SetupPassword Component', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        mocks.searchParamsGet.mockReturnValue(null); // Default no token in URL
-        sessionStorage.clear();
+  describe('Token Handling', () => {
+    it('should extract token from URL and store in sessionStorage', () => {
+      mockSearchParams.set('token', 'test-token-123');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      expect(sessionStorage.getItem('setupToken')).toBe('test-token-123');
     });
 
-    describe('Token Handling', () => {
-        it.skip('should extract token from URL, store in sessionStorage, and clear URL', async () => {
-            mocks.searchParamsGet.mockImplementation((key) => key === 'token' ? 'url-token-123' : null);
-            const setItemSpy = vi.spyOn(sessionStorage, 'setItem');
-
-            render(<SetupPassword />);
-
-            await waitFor(() => {
-                expect(setItemSpy).toHaveBeenCalledWith('setupToken', 'url-token-123');
-                expect(mocks.navigate).toHaveBeenCalledWith('/setup-password', expect.objectContaining({ replace: true }));
-            });
-        });
-
-        it('should use token from sessionStorage if URL has no token', () => {
-            mocks.searchParamsGet.mockReturnValue(null);
-            sessionStorage.setItem('setupToken', 'stored-token-456');
-
-            render(<SetupPassword />);
-
-            expect(screen.queryByText('Invalid or missing setup token')).not.toBeInTheDocument();
-        });
-
-        it('should show error if no token is found', () => {
-            mocks.searchParamsGet.mockReturnValue(null);
-            sessionStorage.clear();
-
-            render(<SetupPassword />);
-
-            expect(screen.getByText('Setup Failed')).toBeInTheDocument();
-
-            const btn = screen.getByText('Go to Login');
-            fireEvent.click(btn);
-            expect(mocks.navigate).toHaveBeenCalledWith('/login');
-        });
+    it('should use token from sessionStorage if URL has no token', () => {
+      sessionStorage.setItem('setupToken', 'stored-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      expect(sessionStorage.getItem('setupToken')).toBe('stored-token');
     });
 
-    describe('Form Interaction & Validation', () => {
-        beforeEach(() => {
-            sessionStorage.setItem('setupToken', 'valid-token');
-        });
-
-        it('should toggle password visibility', () => {
-            render(<SetupPassword />);
-            const inputs = screen.getAllByPlaceholderText(/password/i);
-            const passwordInput = inputs[0];
-            const toggleBtns = screen.getAllByRole('button').filter(btn => btn.querySelector('[data-testid^="eye"]'));
-
-            expect(passwordInput).toHaveAttribute('type', 'password');
-            fireEvent.click(toggleBtns[0]);
-            expect(passwordInput).toHaveAttribute('type', 'text');
-        });
-
-        it('should show validation errors for weak password', async () => {
-            render(<SetupPassword />);
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-
-            fireEvent.change(pwdInput, { target: { value: 'short' } });
-            await waitFor(() => {
-                expect(screen.getByText('Password must be at least 14 characters long')).toBeInTheDocument();
-            });
-        });
-
-        it('should update strength meter', async () => {
-            render(<SetupPassword />);
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-
-            // Force tooltips to be visible or just check existence
-            // The element exists in DOM even if invisible
-            expect(screen.getByText(/1\/6 complete/i)).toBeInTheDocument();
-
-            fireEvent.change(pwdInput, { target: { value: 'ValidPass123!@#' } });
-
-            await waitFor(() => {
-                expect(screen.getByText(/6\/6 complete/i)).toBeInTheDocument();
-            });
-        });
-
-        it('should show extended UI state (EyeOff icons)', () => {
-            render(<SetupPassword />);
-            const toggleBtns = screen.getAllByRole('button').filter(btn =>
-                btn.querySelector('[data-testid^="eye"]')
-            );
-
-            fireEvent.click(toggleBtns[0]);
-            fireEvent.click(toggleBtns[1]);
-
-            expect(screen.getAllByTestId('eye-off-icon')).toHaveLength(2);
-        });
-
-        it('should show validation error for mismatch passwords', () => {
-            render(<SetupPassword />);
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-            const confirmInput = screen.getByPlaceholderText('Confirm your password');
-
-            fireEvent.change(pwdInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.change(confirmInput, { target: { value: 'DifferentPass123!@#' } });
-
-            expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
-        });
+    it('should show error modal when no token is available', () => {
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      expect(screen.getByText(/invalid or missing setup token/i)).toBeInTheDocument();
     });
 
-    describe('Form Submission', () => {
-        beforeEach(() => {
-            sessionStorage.setItem('setupToken', 'valid-token');
-            mocks.searchParamsGet.mockReturnValue(null);
-        });
+    it('should clear token from URL after storing', () => {
+      mockSearchParams.set('token', 'test-token-123');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      expect(mockNavigate).toHaveBeenCalledWith('/setup-password', { replace: true });
+    });
+  });
 
-        it('should submit successfully with valid data', async () => {
-            mocks.setupPassword.mockResolvedValue({ success: true });
-            const removeItemSpy = vi.spyOn(sessionStorage, 'removeItem');
-
-            render(<SetupPassword />);
-
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-            const confirmInput = screen.getByPlaceholderText('Confirm your password');
-            const submitBtn = screen.getByRole('button', { name: /Complete Setup/i });
-
-            const validPass = 'ValidPass123!@#';
-            fireEvent.change(pwdInput, { target: { value: validPass } });
-            fireEvent.change(confirmInput, { target: { value: validPass } });
-
-            fireEvent.click(submitBtn);
-
-            await waitFor(() => {
-                expect(screen.getByText('Password Setup Complete!')).toBeInTheDocument();
-            });
-
-            const loginBtn = screen.getByRole('button', { name: 'Go to Login' });
-            fireEvent.click(loginBtn);
-
-            expect(sessionStorage.getItem('setupToken')).toBeNull();
-            expect(mocks.navigate).toHaveBeenCalledWith('/login');
-        });
-
-        it('should handle submission with specific token error (invalid)', async () => {
-            mocks.setupPassword.mockResolvedValue({ success: false, message: 'Invalid token provided' });
-
-            render(<SetupPassword />);
-
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-            const confirmInput = screen.getByPlaceholderText('Confirm your password');
-            const submitBtn = screen.getByRole('button', { name: /Complete Setup/i });
-
-            fireEvent.change(pwdInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.change(confirmInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.click(submitBtn);
-
-            await waitFor(() => {
-                expect(screen.getByText('Setup Failed')).toBeInTheDocument();
-            });
-
-            expect(screen.getByText('Go to Login')).toBeInTheDocument();
-        });
-
-        it('should handle submission with generic error (stay on page) and retry', async () => {
-            mocks.setupPassword.mockRejectedValue(new Error('Network error'));
-
-            render(<SetupPassword />);
-
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-            const confirmInput = screen.getByPlaceholderText('Confirm your password');
-            const submitBtn = screen.getByRole('button', { name: /Complete Setup/i });
-
-            fireEvent.change(pwdInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.change(confirmInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.click(submitBtn);
-
-            await waitFor(() => {
-                expect(screen.getByText('Network error')).toBeInTheDocument();
-            });
-
-            const tryAgainBtn = screen.getByRole('button', { name: 'Try Again' });
-            expect(tryAgainBtn).toBeInTheDocument();
-
-            fireEvent.click(tryAgainBtn);
-
-            await waitFor(() => {
-                expect(screen.queryByText('Network error')).not.toBeInTheDocument();
-            });
-        });
-
-        it('should handle API validation errors', async () => {
-            const errorResponse = {
-                response: {
-                    data: {
-                        message: 'Password previously used'
-                    }
-                }
-            };
-
-            mocks.setupPassword.mockRejectedValue(errorResponse);
-
-            render(<SetupPassword />);
-
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-            const confirmInput = screen.getByPlaceholderText('Confirm your password');
-            const submitBtn = screen.getByRole('button', { name: /Complete Setup/i });
-
-            const validPass = 'ValidPass123!@#';
-            fireEvent.change(pwdInput, { target: { value: validPass } });
-            fireEvent.change(confirmInput, { target: { value: validPass } });
-
-            fireEvent.click(submitBtn);
-
-            await waitFor(() => {
-                expect(screen.getByText('Password previously used')).toBeInTheDocument();
-            });
-        });
+  describe('Form Rendering', () => {
+    it('should render password input fields', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
     });
 
-    describe('Modal Logic', () => {
-        it('should navigate to login when clicking backdrop on invalid token error', async () => {
-            mocks.setupPassword.mockResolvedValue({ success: false, message: 'Invalid token' });
-            sessionStorage.setItem('setupToken', 'invalid');
-            mocks.searchParamsGet.mockReturnValue(null);
-
-            render(<SetupPassword />);
-
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-            const confirmInput = screen.getByPlaceholderText('Confirm your password');
-            const submitBtn = screen.getByRole('button', { name: /Complete Setup/i });
-
-            fireEvent.change(pwdInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.change(confirmInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.click(submitBtn);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('error-modal-backdrop')).toBeInTheDocument();
-            });
-
-            fireEvent.click(screen.getByTestId('error-modal-backdrop'));
-            expect(mocks.navigate).toHaveBeenCalledWith('/login');
-        });
-
-        it('should NOT navigate when clicking backdrop on generic error', async () => {
-            mocks.setupPassword.mockRejectedValue(new Error('Network error'));
-            sessionStorage.setItem('setupToken', 'valid-token');
-            mocks.searchParamsGet.mockReturnValue(null);
-
-            render(<SetupPassword />);
-
-            const pwdInput = screen.getByPlaceholderText('Enter your password');
-            const confirmInput = screen.getByPlaceholderText('Confirm your password');
-            const submitBtn = screen.getByRole('button', { name: /Complete Setup/i });
-
-            fireEvent.change(pwdInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.change(confirmInput, { target: { value: 'ValidPass123!@#' } });
-            fireEvent.click(submitBtn);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('error-modal-backdrop')).toBeInTheDocument();
-            });
-
-            fireEvent.click(screen.getByTestId('error-modal-backdrop'));
-            expect(mocks.navigate).not.toHaveBeenCalled();
-        });
+    it('should render submit button', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      expect(screen.getByRole('button', { name: /set password/i })).toBeInTheDocument();
     });
+  });
+
+  describe('Password Visibility Toggle', () => {
+    it('should toggle password visibility', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const toggleButton = screen.getByRole('button', { name: /toggle password visibility/i });
+      
+      expect(passwordInput.type).toBe('password');
+      fireEvent.click(toggleButton);
+      expect(passwordInput.type).toBe('text');
+    });
+
+    it('should toggle confirm password visibility', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      const toggleButton = screen.getAllByRole('button', { name: /toggle password visibility/i })[1];
+      
+      expect(confirmInput.type).toBe('password');
+      fireEvent.click(toggleButton);
+      expect(confirmInput.type).toBe('text');
+    });
+  });
+
+  describe('Password Validation', () => {
+    it('should validate password is required', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/password is required/i)).toBeInTheDocument();
+    });
+
+    it('should validate password minimum length', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      fireEvent.change(passwordInput, { target: { value: 'Short1!' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/at least 14 characters/i)).toBeInTheDocument();
+    });
+
+    it('should validate password has lowercase letter', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      fireEvent.change(passwordInput, { target: { value: 'UPPERCASE123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/lowercase letter/i)).toBeInTheDocument();
+    });
+
+    it('should validate password has uppercase letter', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      fireEvent.change(passwordInput, { target: { value: 'lowercase123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/uppercase letter/i)).toBeInTheDocument();
+    });
+
+    it('should validate password has number', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      fireEvent.change(passwordInput, { target: { value: 'NoNumbers!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/number/i)).toBeInTheDocument();
+    });
+
+    it('should validate password has special character', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      fireEvent.change(passwordInput, { target: { value: 'NoSpecial123' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/special character/i)).toBeInTheDocument();
+    });
+
+    it('should validate password has no spaces', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      fireEvent.change(passwordInput, { target: { value: 'Has Spaces123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/cannot contain spaces/i)).toBeInTheDocument();
+    });
+
+    it('should validate passwords match', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      fireEvent.change(confirmInput, { target: { value: 'DifferentPassword123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/passwords do not match/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Password Strength', () => {
+    it('should calculate password strength correctly', () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      
+      // Should show strength indicator
+      expect(screen.getByText(/strength/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Form Submission', () => {
+    it('should submit form with valid password', async () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      authService.setupPassword.mockResolvedValue({
+        success: true,
+        message: 'Password set successfully'
+      });
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      fireEvent.change(confirmInput, { target: { value: 'ValidPassword123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(authService.setupPassword).toHaveBeenCalledWith(
+          'test-token',
+          'ValidPassword123!@#'
+        );
+      });
+    });
+
+    it('should show success modal on successful submission', async () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      authService.setupPassword.mockResolvedValue({
+        success: true,
+        message: 'Password set successfully'
+      });
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      fireEvent.change(confirmInput, { target: { value: 'ValidPassword123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(screen.getByText(/password set successfully/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should navigate to login on success', async () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      authService.setupPassword.mockResolvedValue({
+        success: true,
+        message: 'Password set successfully'
+      });
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      fireEvent.change(confirmInput, { target: { value: 'ValidPassword123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/login');
+      });
+    });
+
+    it('should handle API errors', async () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      authService.setupPassword.mockResolvedValue({
+        success: false,
+        error: 'Token expired'
+      });
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      fireEvent.change(confirmInput, { target: { value: 'ValidPassword123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(screen.getByText(/token expired/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should handle network errors', async () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      authService.setupPassword.mockRejectedValue(new Error('Network error'));
+      
+      render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      fireEvent.change(confirmInput, { target: { value: 'ValidPassword123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(screen.getByText(/network error/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Token Cleanup', () => {
+    it('should remove token from sessionStorage on success', async () => {
+      sessionStorage.setItem('setupToken', 'test-token');
+      authService.setupPassword.mockResolvedValue({
+        success: true,
+        message: 'Password set successfully'
+      });
+      
+      const { unmount } = render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      const passwordInput = screen.getByLabelText(/^password/i);
+      const confirmInput = screen.getByLabelText(/confirm password/i);
+      
+      fireEvent.change(passwordInput, { target: { value: 'ValidPassword123!@#' } });
+      fireEvent.change(confirmInput, { target: { value: 'ValidPassword123!@#' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(authService.setupPassword).toHaveBeenCalled();
+      });
+      
+      // Simulate success modal shown
+      const { rerender } = render(
+        <BrowserRouter>
+          <SetupPassword />
+        </BrowserRouter>
+      );
+      
+      unmount();
+      
+      // Token should be cleaned up
+      expect(sessionStorage.getItem('setupToken')).toBeNull();
+    });
+  });
 });

@@ -116,7 +116,7 @@ export const createSearchableHash = (value) => {
     const normalized = String(value)
       .toLowerCase()
       .trim()
-      .replace(/[\s\-\(\)\.]/g, ''); // Remove spaces, dashes, parentheses, dots
+      .replace(/[\s\-().]/g, ''); // Remove spaces, dashes, parentheses, dots
     
     if (normalized.length === 0) {
       return null;

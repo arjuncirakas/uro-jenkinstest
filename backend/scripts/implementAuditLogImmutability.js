@@ -322,8 +322,7 @@ const migratePreviousHashIfNeeded = async (client) => {
       };
       
       let previousEntryHash = '';
-      for (let i = 0; i < existingLogs.rows.length; i++) {
-        const log = existingLogs.rows[i];
+      for (const log of existingLogs.rows) {
         
         // Set previous_hash to the hash of the previous entry
         await client.query(`

@@ -9,6 +9,188 @@ import { USER_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 import { monitorAuthenticationEvents } from '../services/securityMonitoringService.js';
 import { createAlert, sendAlertNotification } from '../services/alertService.js';
 
+// Helper function to handle failed login monitoring and alerts
+const handleFailedLoginMonitoring = async (req, userId, userEmail, eventType) => {
+  const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
+  try {
+    const alerts = await monitorAuthenticationEvents({
+      userId,
+      userEmail,
+      ipAddress,
+      eventType
+    });
+    
+    // Create and send alerts if any detected
+    for (const alertData of alerts) {
+      if (alertData.shouldAlert) {
+        try {
+          const alert = await createAlert(alertData);
+          sendAlertNotification(alert).catch(err => {
+            console.error('Failed to send alert notification:', err);
+          });
+        } catch (alertError) {
+          console.error('Failed to create alert:', alertError);
+        }
+      }
+    }
+  } catch (monitoringError) {
+    console.error('Error in authentication monitoring:', monitoringError);
+  }
+};
+
+// Helper function to find user by email (with hash fallback)
+const findUserByEmail = async (client, email) => {
+  const emailHash = createSearchableHash(email);
+  
+  // Try hash-based search first (for encrypted users)
+  let result = await client.query(
+    'SELECT id, email, password_hash, first_name, last_name, role, is_active, is_verified FROM users WHERE email_hash = $1',
+    [emailHash]
+  );
+  
+  // If not found, try direct email search (for backward compatibility with unencrypted users)
+  if (result.rows.length === 0) {
+    result = await client.query(
+      'SELECT id, email, password_hash, first_name, last_name, role, is_active, is_verified FROM users WHERE email = $1',
+      [email]
+    );
+    
+    // If found via direct email, update the hash for future searches
+    if (result.rows.length > 0) {
+      await client.query(
+        'UPDATE users SET email_hash = $1 WHERE id = $2',
+        [emailHash, result.rows[0].id]
+      );
+      console.log(`✅ Updated email_hash for user ${result.rows[0].id} during login`);
+    }
+  }
+  
+  return result;
+};
+
+// Helper function to handle user not found scenario
+const handleUserNotFound = async (req, res, email) => {
+  console.log(`❌ Login failed: User not found - ${email}`);
+  await logFailedAccess(req, 'User not found');
+  await incrementFailedAttempts(email);
+  await handleFailedLoginMonitoring(req, null, email, 'login_failure');
+  
+  return res.status(401).json({
+    success: false,
+    message: 'Invalid email or password'
+  });
+};
+
+// Helper function to handle account validation failures
+const handleAccountValidationFailure = async (req, res, user, decryptedUser, reason, message) => {
+  console.log(`❌ Login failed: ${reason} - ${decryptedUser.email}`);
+  await logFailedAccess(req, reason);
+  await incrementFailedAttempts(decryptedUser.email);
+  await handleFailedLoginMonitoring(req, user.id, decryptedUser.email, 'login_failure');
+  
+  return res.status(401).json({
+    success: false,
+    message
+  });
+};
+
+// Helper function to revoke previous sessions for single device login
+const revokePreviousSessions = async (client, userId) => {
+  try {
+    await client.query(
+      'UPDATE refresh_tokens SET is_revoked = true WHERE user_id = $1 AND is_revoked = false',
+      [userId]
+    );
+    console.log(`🔒 [Single Device] Revoked all previous refresh tokens for user ${userId}`);
+  } catch (revokeError) {
+    console.error('Error revoking previous refresh tokens:', revokeError);
+  }
+  
+  try {
+    await client.query(
+      'DELETE FROM active_sessions WHERE user_id = $1',
+      [userId]
+    );
+    console.log(`🔒 [Single Device] Deleted all previous active sessions for user ${userId}`);
+  } catch (sessionDeleteError) {
+    console.error('Error deleting previous active sessions:', sessionDeleteError);
+  }
+};
+
+// Helper function to create new session
+const createNewSession = async (client, userId, refreshToken, ipAddress, userAgent) => {
+  try {
+    const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Match refresh token expiry
+    const crypto = await import('node:crypto');
+    const sessionHash = crypto.createHash('sha256').update(refreshToken).digest('hex').substring(0, 16);
+    
+    await client.query(`
+      INSERT INTO active_sessions (user_id, session_token, ip_address, user_agent, expires_at)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [userId, refreshToken, ipAddress, userAgent, sessionExpiresAt]);
+    
+    console.log(`✅ [Single Device] Created new active session for user ${userId} with hash ${sessionHash}`);
+  } catch (sessionError) {
+    console.error('Error recording active session:', sessionError);
+  }
+};
+
+// Helper function to record login history
+const recordLoginHistory = async (client, userId, ipAddress, userAgent) => {
+  try {
+    await client.query(`
+      INSERT INTO user_login_history (user_id, ip_address, user_agent)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (user_id, ip_address) DO UPDATE
+      SET login_timestamp = CURRENT_TIMESTAMP, user_agent = $3
+    `, [userId, ipAddress, userAgent]);
+  } catch (historyError) {
+    console.error('Error recording login history:', historyError);
+  }
+};
+
+// Helper function to handle successful login monitoring
+const handleSuccessfulLoginMonitoring = async (userId, userEmail, ipAddress) => {
+  try {
+    const alerts = await monitorAuthenticationEvents({
+      userId,
+      userEmail,
+      ipAddress,
+      eventType: 'login_success'
+    });
+    
+    // Create and send alerts if any detected
+    for (const alertData of alerts) {
+      if (alertData.shouldAlert) {
+        try {
+          const alert = await createAlert(alertData);
+          sendAlertNotification(alert).catch(err => {
+            console.error('Failed to send alert notification:', err);
+          });
+        } catch (alertError) {
+          console.error('Failed to create alert:', alertError);
+        }
+      }
+    }
+  } catch (monitoringError) {
+    console.error('Error in authentication monitoring:', monitoringError);
+  }
+  
+  // Non-blocking behavioral anomaly detection
+  try {
+    const { detectAnomalies } = await import('../services/behavioralAnalyticsService.js');
+    detectAnomalies(userId, {
+      ipAddress,
+      timestamp: new Date(),
+      eventType: 'login_success'
+    }).catch(err => {
+      console.error('Anomaly detection error:', err);
+    });
+  } catch (anomalyError) {
+    console.error('Error importing anomaly detection:', anomalyError);
+  }
+};
+
 // Register a new user (Step 1: Send OTP)
 export const register = async (req, res) => {
   const client = await pool.connect();
@@ -281,68 +463,11 @@ export const login = async (req, res) => {
 
     console.log(`🔐 Login attempt for: ${email}`);
 
-    // Find user by email (using hash for encrypted search, fallback to direct email for backward compatibility)
-    const emailHash = createSearchableHash(email);
-    
-    // Try hash-based search first (for encrypted users)
-    let result = await client.query(
-      'SELECT id, email, password_hash, first_name, last_name, role, is_active, is_verified FROM users WHERE email_hash = $1',
-      [emailHash]
-    );
-    
-    // If not found, try direct email search (for backward compatibility with unencrypted users)
-    if (result.rows.length === 0) {
-      result = await client.query(
-        'SELECT id, email, password_hash, first_name, last_name, role, is_active, is_verified FROM users WHERE email = $1',
-        [email]
-      );
-      
-      // If found via direct email, update the hash for future searches
-      if (result.rows.length > 0) {
-        await client.query(
-          'UPDATE users SET email_hash = $1 WHERE id = $2',
-          [emailHash, result.rows[0].id]
-        );
-        console.log(`✅ Updated email_hash for user ${result.rows[0].id} during login`);
-      }
-    }
+    // Find user by email
+    const result = await findUserByEmail(client, email);
 
     if (result.rows.length === 0) {
-      console.log(`❌ Login failed: User not found - ${email}`);
-      await logFailedAccess(req, 'User not found');
-      await incrementFailedAttempts(email);
-      
-      // Monitor failed login attempt
-      const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
-      try {
-        const alerts = await monitorAuthenticationEvents({
-          userId: null,
-          userEmail: email,
-          ipAddress,
-          eventType: 'login_failure'
-        });
-        
-        // Create and send alerts if any detected
-        for (const alertData of alerts) {
-          if (alertData.shouldAlert) {
-            try {
-              const alert = await createAlert(alertData);
-              sendAlertNotification(alert).catch(err => {
-                console.error('Failed to send alert notification:', err);
-              });
-            } catch (alertError) {
-              console.error('Failed to create alert:', alertError);
-            }
-          }
-        }
-      } catch (monitoringError) {
-        console.error('Error in authentication monitoring:', monitoringError);
-      }
-      
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+      return await handleUserNotFound(req, res, email);
     }
 
     const user = result.rows[0];
@@ -352,121 +477,31 @@ export const login = async (req, res) => {
 
     // Check if account is active
     if (!user.is_active) {
-      console.log(`❌ Login failed: Account deactivated - ${decryptedUser.email}`);
-      await logFailedAccess(req, 'Account deactivated');
-      await incrementFailedAttempts(decryptedUser.email);
-      
-      // Monitor failed login attempt
-      const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
-      try {
-        const alerts = await monitorAuthenticationEvents({
-          userId: user.id,
-          userEmail: decryptedUser.email,
-          ipAddress,
-          eventType: 'login_failure'
-        });
-        
-        // Create and send alerts if any detected
-        for (const alertData of alerts) {
-          if (alertData.shouldAlert) {
-            try {
-              const alert = await createAlert(alertData);
-              sendAlertNotification(alert).catch(err => {
-                console.error('Failed to send alert notification:', err);
-              });
-            } catch (alertError) {
-              console.error('Failed to create alert:', alertError);
-            }
-          }
-        }
-      } catch (monitoringError) {
-        console.error('Error in authentication monitoring:', monitoringError);
-      }
-      
-      return res.status(401).json({
-        success: false,
-        message: 'Account is deactivated'
-      });
+      return await handleAccountValidationFailure(
+        req, res, user, decryptedUser, 
+        'Account deactivated', 
+        'Account is deactivated'
+      );
     }
 
     // Check if account is verified
     if (!user.is_verified) {
-      console.log(`❌ Login failed: Account not verified - ${decryptedUser.email}`);
-      await logFailedAccess(req, 'Account not verified');
-      await incrementFailedAttempts(decryptedUser.email);
-      
-      // Monitor failed login attempt
-      const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
-      try {
-        const alerts = await monitorAuthenticationEvents({
-          userId: user.id,
-          userEmail: decryptedUser.email,
-          ipAddress,
-          eventType: 'login_failure'
-        });
-        
-        // Create and send alerts if any detected
-        for (const alertData of alerts) {
-          if (alertData.shouldAlert) {
-            try {
-              const alert = await createAlert(alertData);
-              sendAlertNotification(alert).catch(err => {
-                console.error('Failed to send alert notification:', err);
-              });
-            } catch (alertError) {
-              console.error('Failed to create alert:', alertError);
-            }
-          }
-        }
-      } catch (monitoringError) {
-        console.error('Error in authentication monitoring:', monitoringError);
-      }
-      
-      return res.status(401).json({
-        success: false,
-        message: 'Account not verified. Please verify your email first.'
-      });
+      return await handleAccountValidationFailure(
+        req, res, user, decryptedUser, 
+        'Account not verified', 
+        'Account not verified. Please verify your email first.'
+      );
     }
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
-      console.log(`❌ Login failed: Invalid password - ${decryptedUser.email}`);
-      await logFailedAccess(req, 'Invalid password');
-      await incrementFailedAttempts(decryptedUser.email);
-      
-      // Monitor failed login attempt
-      const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
-      try {
-        const alerts = await monitorAuthenticationEvents({
-          userId: user.id,
-          userEmail: decryptedUser.email,
-          ipAddress,
-          eventType: 'login_failure'
-        });
-        
-        // Create and send alerts if any detected
-        for (const alertData of alerts) {
-          if (alertData.shouldAlert) {
-            try {
-              const alert = await createAlert(alertData);
-              sendAlertNotification(alert).catch(err => {
-                console.error('Failed to send alert notification:', err);
-              });
-            } catch (alertError) {
-              console.error('Failed to create alert:', alertError);
-            }
-          }
-        }
-      } catch (monitoringError) {
-        console.error('Error in authentication monitoring:', monitoringError);
-      }
-      
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+      return await handleAccountValidationFailure(
+        req, res, user, decryptedUser, 
+        'Invalid password', 
+        'Invalid email or password'
+      );
     }
 
     // Password is valid - reset failed attempts and log success
@@ -567,27 +602,7 @@ export const verifyLoginOTP = async (req, res) => {
     const userAgent = req.headers['user-agent'] || 'unknown';
 
     // INVALIDATE ALL PREVIOUS SESSIONS (Single Device Login)
-    // Revoke all previous refresh tokens for this user
-    try {
-      await client.query(
-        'UPDATE refresh_tokens SET is_revoked = true WHERE user_id = $1 AND is_revoked = false',
-        [user.id]
-      );
-      console.log(`🔒 [Single Device] Revoked all previous refresh tokens for user ${user.id}`);
-    } catch (revokeError) {
-      console.error('Error revoking previous refresh tokens:', revokeError);
-    }
-
-    // Delete all previous active sessions for this user
-    try {
-      await client.query(
-        'DELETE FROM active_sessions WHERE user_id = $1',
-        [user.id]
-      );
-      console.log(`🔒 [Single Device] Deleted all previous active sessions for user ${user.id}`);
-    } catch (sessionDeleteError) {
-      console.error('Error deleting previous active sessions:', sessionDeleteError);
-    }
+    await revokePreviousSessions(client, user.id);
 
     // Store new refresh token in database
     await client.query(
@@ -595,76 +610,12 @@ export const verifyLoginOTP = async (req, res) => {
       [user.id, tokens.refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)] // 7 days
     );
     
-    // Record login in user_login_history
-    try {
-      await client.query(`
-        INSERT INTO user_login_history (user_id, ip_address, user_agent)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, ip_address) DO UPDATE
-        SET login_timestamp = CURRENT_TIMESTAMP, user_agent = $3
-      `, [user.id, ipAddress, userAgent]);
-    } catch (historyError) {
-      console.error('Error recording login history:', historyError);
-    }
-    
-    // Record new active session with session hash
-    try {
-      const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Match refresh token expiry
-      // Create session hash from refresh token for validation
-      const crypto = await import('node:crypto');
-      const sessionHash = crypto.createHash('sha256').update(tokens.refreshToken).digest('hex').substring(0, 16);
-      
-      await client.query(`
-        INSERT INTO active_sessions (user_id, session_token, ip_address, user_agent, expires_at)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [user.id, tokens.refreshToken, ipAddress, userAgent, sessionExpiresAt]);
-      
-      // Store session hash in a separate column or use it for validation
-      // For now, we'll use the session_token (refresh token) for validation
-      console.log(`✅ [Single Device] Created new active session for user ${user.id} with hash ${sessionHash}`);
-    } catch (sessionError) {
-      console.error('Error recording active session:', sessionError);
-    }
+    // Record login history and create new session
+    await recordLoginHistory(client, user.id, ipAddress, userAgent);
+    await createNewSession(client, user.id, tokens.refreshToken, ipAddress, userAgent);
 
     // Monitor successful login for security threats
-    try {
-      const alerts = await monitorAuthenticationEvents({
-        userId: user.id,
-        userEmail: user.email,
-        ipAddress,
-        eventType: 'login_success'
-      });
-      
-      // Create and send alerts if any detected
-      for (const alertData of alerts) {
-        if (alertData.shouldAlert) {
-          try {
-            const alert = await createAlert(alertData);
-            sendAlertNotification(alert).catch(err => {
-              console.error('Failed to send alert notification:', err);
-            });
-          } catch (alertError) {
-            console.error('Failed to create alert:', alertError);
-          }
-        }
-      }
-    } catch (monitoringError) {
-      console.error('Error in authentication monitoring:', monitoringError);
-    }
-
-    // Non-blocking behavioral anomaly detection
-    try {
-      const { detectAnomalies } = await import('../services/behavioralAnalyticsService.js');
-      detectAnomalies(user.id, {
-        ipAddress,
-        timestamp: new Date(),
-        eventType: 'login_success'
-      }).catch(err => {
-        console.error('Anomaly detection error:', err);
-      });
-    } catch (anomalyError) {
-      console.error('Error importing anomaly detection:', anomalyError);
-    }
+    await handleSuccessfulLoginMonitoring(user.id, user.email, ipAddress);
 
     // Set secure HTTP-only cookie for refresh token
     res.cookie('refreshToken', tokens.refreshToken, getCookieOptions());
@@ -1016,7 +967,7 @@ export const requestPasswordReset = async (req, res) => {
     };
 
     // Check if user exists and is active
-    const userResult = await client.query(
+    let userResult = await client.query(
       'SELECT id, email, first_name, is_active, is_verified FROM users WHERE email_hash = $1',
       [createSearchableHash(email)]
     );

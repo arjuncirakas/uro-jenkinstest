@@ -137,8 +137,7 @@ export const initializeAuditLogsTable = async () => {
         `);
         
         let previousEntryHash = '';
-        for (let i = 0; i < existingLogs.rows.length; i++) {
-          const log = existingLogs.rows[i];
+        for (const log of existingLogs.rows) {
           
           // Set previous_hash to the hash of the previous entry
           await client.query(`
@@ -294,7 +293,7 @@ export const logAuditEvent = async (logData) => {
     }
     
     // Insert new log entry with previous_hash = hash of the previous entry
-    const insertResult = await client.query(`
+    await client.query(`
       INSERT INTO audit_logs (
         user_id, user_email, user_role, action, resource_type, resource_id,
         ip_address, user_agent, request_method, request_path, status,
@@ -480,7 +479,7 @@ export const verifyImmutabilityStatus = async () => {
       deleteProtection: deleteTrigger ? 'ACTIVE' : 'MISSING',
       updateProtection: updateTrigger ? 'ACTIVE' : 'MISSING',
       triggers: triggers,
-      isFullyProtected: deleteTrigger && updateTrigger ? true : false,
+      isFullyProtected: deleteTrigger && updateTrigger,
       message: deleteTrigger && updateTrigger 
         ? 'Database-level immutability is fully active'
         : 'Database-level immutability is not fully active - some triggers are missing'
@@ -531,11 +530,8 @@ export const verifyAuditLogIntegrity = async () => {
     }
     
     const tamperedLogs = [];
-    let previousHash = '';
     
-    for (let i = 0; i < logs.length; i++) {
-      const log = logs[i];
-      
+    for (const [i, log] of logs.entries()) {
       // Check if previous_hash matches the hash of the previous entry
       if (i > 0) {
         // Calculate hash of previous entry
@@ -553,18 +549,16 @@ export const verifyAuditLogIntegrity = async () => {
             issue: log.previous_hash === null ? 'Missing hash (pre-migration log)' : 'Hash chain broken - possible tampering'
           });
         }
-      } else {
+      } else if (log.previous_hash !== '' && log.previous_hash !== null) {
         // First entry should have empty previous_hash
-        if (log.previous_hash !== '' && log.previous_hash !== null) {
-          tamperedLogs.push({
-            logId: log.id,
-            timestamp: log.timestamp,
-            action: log.action,
-            expectedPreviousHash: '',
-            storedPreviousHash: log.previous_hash,
-            issue: 'First entry should have empty previous_hash'
-          });
-        }
+        tamperedLogs.push({
+          logId: log.id,
+          timestamp: log.timestamp,
+          action: log.action,
+          expectedPreviousHash: '',
+          storedPreviousHash: log.previous_hash,
+          issue: 'First entry should have empty previous_hash'
+        });
       }
     }
     

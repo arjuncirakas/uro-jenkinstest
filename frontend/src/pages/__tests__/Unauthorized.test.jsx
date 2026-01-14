@@ -1,117 +1,200 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import Unauthorized from '../Unauthorized';
 import authService from '../../services/authService';
 
 // Mock dependencies
-const mockNavigate = vi.fn();
-
-vi.mock('react-router-dom', () => ({
-    useNavigate: () => mockNavigate,
-}));
-
 vi.mock('../../services/authService', () => ({
-    default: {
-        getUserRole: vi.fn(),
-        logout: vi.fn(),
-    },
+  default: {
+    getUserRole: vi.fn(),
+    logout: vi.fn()
+  }
 }));
 
-describe('Unauthorized Component', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
+// Mock useNavigate
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate
+  };
+});
+
+describe('Unauthorized', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('Rendering', () => {
+    it('should render unauthorized page', () => {
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      expect(screen.getByText('Access Denied')).toBeInTheDocument();
     });
 
-    it('should render access denied message', () => {
-        render(<Unauthorized />);
-
-        expect(screen.getByText('Access Denied')).toBeInTheDocument();
-        expect(screen.getByText("You don't have permission to access this page.")).toBeInTheDocument();
-        expect(screen.getByText(/Error Code: 403/)).toBeInTheDocument();
+    it('should display error message', () => {
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      expect(screen.getByText(/don't have permission/i)).toBeInTheDocument();
     });
 
-    describe('Go to Dashboard functionality', () => {
-        const roles = [
-            { role: 'superadmin', path: '/superadmin/dashboard' },
-            { role: 'urologist', path: '/urologist/dashboard' },
-            { role: 'gp', path: '/gp/dashboard' },
-            { role: 'urology_nurse', path: '/nurse/opd-management' },
-        ];
-
-        roles.forEach(({ role, path }) => {
-            it(`should navigate to correct dashboard for ${role}`, () => {
-                authService.getUserRole.mockReturnValue(role);
-
-                render(<Unauthorized />);
-
-                const dashboardBtn = screen.getByText('Go to Dashboard');
-                fireEvent.click(dashboardBtn);
-
-                expect(authService.getUserRole).toHaveBeenCalled();
-                expect(mockNavigate).toHaveBeenCalledWith(path);
-            });
-        });
-
-        it('should navigate to login if role is unknown', () => {
-            authService.getUserRole.mockReturnValue('unknown_role');
-
-            render(<Unauthorized />);
-
-            const dashboardBtn = screen.getByText('Go to Dashboard');
-            fireEvent.click(dashboardBtn);
-
-            expect(mockNavigate).toHaveBeenCalledWith('/login');
-        });
-
-        it('should navigate to login if getUserRole returns null', () => {
-            authService.getUserRole.mockReturnValue(null);
-
-            render(<Unauthorized />);
-
-            const dashboardBtn = screen.getByText('Go to Dashboard');
-            fireEvent.click(dashboardBtn);
-
-            expect(mockNavigate).toHaveBeenCalledWith('/login');
-        });
+    it('should display error code', () => {
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      expect(screen.getByText(/403.*forbidden/i)).toBeInTheDocument();
     });
 
-    describe('Logout functionality', () => {
-        it('should handle successful logout', async () => {
-            authService.logout.mockResolvedValue({});
+    it('should display support contact', () => {
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      expect(screen.getByText(/techsupport@ahimsa.global/i)).toBeInTheDocument();
+    });
+  });
 
-            render(<Unauthorized />);
-
-            const logoutBtn = screen.getByText('Logout');
-            fireEvent.click(logoutBtn);
-
-            expect(authService.logout).toHaveBeenCalled();
-            await waitFor(() => {
-                expect(mockNavigate).toHaveBeenCalledWith('/login');
-            });
-        });
-
-        it('should handle logout failure but still navigate to login', async () => {
-            authService.logout.mockRejectedValue(new Error('Logout failed'));
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
-
-            render(<Unauthorized />);
-
-            const logoutBtn = screen.getByText('Logout');
-            fireEvent.click(logoutBtn);
-
-            expect(authService.logout).toHaveBeenCalled();
-            await waitFor(() => {
-                expect(consoleSpy).toHaveBeenCalledWith('Logout error:', expect.any(Error));
-                expect(mockNavigate).toHaveBeenCalledWith('/login');
-            });
-
-            consoleSpy.mockRestore();
-        });
+  describe('Go to Dashboard', () => {
+    it('should navigate to superadmin dashboard for superadmin role', () => {
+      authService.getUserRole.mockReturnValue('superadmin');
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const goHomeButton = screen.getByText(/go to dashboard/i);
+      fireEvent.click(goHomeButton);
+      
+      expect(mockNavigate).toHaveBeenCalledWith('/superadmin/dashboard');
     });
 
-    it('should render contact support info', () => {
-        render(<Unauthorized />);
-        expect(screen.getByText(/Contact support at/)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'techsupport@ahimsa.global' })).toHaveAttribute('href', 'mailto:techsupport@ahimsa.global');
+    it('should navigate to urologist dashboard for urologist role', () => {
+      authService.getUserRole.mockReturnValue('urologist');
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const goHomeButton = screen.getByText(/go to dashboard/i);
+      fireEvent.click(goHomeButton);
+      
+      expect(mockNavigate).toHaveBeenCalledWith('/urologist/dashboard');
     });
+
+    it('should navigate to GP dashboard for GP role', () => {
+      authService.getUserRole.mockReturnValue('gp');
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const goHomeButton = screen.getByText(/go to dashboard/i);
+      fireEvent.click(goHomeButton);
+      
+      expect(mockNavigate).toHaveBeenCalledWith('/gp/dashboard');
+    });
+
+    it('should navigate to nurse OPD for urology_nurse role', () => {
+      authService.getUserRole.mockReturnValue('urology_nurse');
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const goHomeButton = screen.getByText(/go to dashboard/i);
+      fireEvent.click(goHomeButton);
+      
+      expect(mockNavigate).toHaveBeenCalledWith('/nurse/opd-management');
+    });
+
+    it('should navigate to login for unknown role', () => {
+      authService.getUserRole.mockReturnValue('unknown');
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const goHomeButton = screen.getByText(/go to dashboard/i);
+      fireEvent.click(goHomeButton);
+      
+      expect(mockNavigate).toHaveBeenCalledWith('/login');
+    });
+
+    it('should navigate to login when role is null', () => {
+      authService.getUserRole.mockReturnValue(null);
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const goHomeButton = screen.getByText(/go to dashboard/i);
+      fireEvent.click(goHomeButton);
+      
+      expect(mockNavigate).toHaveBeenCalledWith('/login');
+    });
+  });
+
+  describe('Logout', () => {
+    it('should logout and navigate to login on success', async () => {
+      authService.logout.mockResolvedValue({ success: true });
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const logoutButton = screen.getByText(/logout/i);
+      fireEvent.click(logoutButton);
+      
+      await waitFor(() => {
+        expect(authService.logout).toHaveBeenCalled();
+        expect(mockNavigate).toHaveBeenCalledWith('/login');
+      });
+    });
+
+    it('should navigate to login even if logout fails', async () => {
+      authService.logout.mockRejectedValue(new Error('Logout failed'));
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      
+      render(
+        <BrowserRouter>
+          <Unauthorized />
+        </BrowserRouter>
+      );
+      
+      const logoutButton = screen.getByText(/logout/i);
+      fireEvent.click(logoutButton);
+      
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/login');
+        expect(consoleSpy).toHaveBeenCalled();
+      });
+      
+      consoleSpy.mockRestore();
+    });
+  });
 });

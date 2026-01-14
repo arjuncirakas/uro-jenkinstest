@@ -7,12 +7,142 @@ import { batchGetLocationsFromIPs } from './geolocationService.js';
  * Calculates user behavior baselines and detects anomalies
  */
 
-/**
- * Calculate baseline behavior for a user
- * @param {number|string} userIdOrEmail - User ID or email address
- * @param {string} baselineType - Type of baseline: 'location', 'time', or 'access_pattern'
- * @returns {Promise<Object>} Baseline data object
- */
+// Helper function to resolve user ID from email or ID
+const resolveUserId = async (client, userIdOrEmail) => {
+  if (typeof userIdOrEmail === 'string' && userIdOrEmail.includes('@')) {
+    // It's an email - look up user ID (support both encrypted and plain email)
+    const emailHash = createSearchableHash(userIdOrEmail);
+    const emailResult = await client.query(
+      `SELECT id FROM users 
+       WHERE email_hash = $1 
+       OR LOWER(email) = LOWER($2)`,
+      [emailHash, userIdOrEmail]
+    );
+    if (emailResult.rows.length === 0) {
+      throw new Error(`User with email ${userIdOrEmail} does not exist`);
+    }
+    return emailResult.rows[0].id;
+  } else {
+    // It's a user ID
+    const userId = typeof userIdOrEmail === 'string' ? parseInt(userIdOrEmail) : userIdOrEmail;
+    
+    // Verify user exists
+    const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      throw new Error(`User with ID ${userId} does not exist`);
+    }
+    return userId;
+  }
+};
+
+// Helper function to calculate location baseline
+const calculateLocationBaseline = async (client, userId) => {
+  const locationResult = await client.query(`
+    SELECT ip_address, COUNT(*) as count
+    FROM user_login_history
+    WHERE user_id = $1
+      AND login_timestamp > NOW() - INTERVAL '30 days'
+    GROUP BY ip_address
+    ORDER BY count DESC
+    LIMIT 10
+  `, [userId]);
+
+  const ipAddresses = locationResult.rows.map(row => row.ip_address).filter(ip => ip && ip !== 'unknown');
+  
+  // Get location names for IP addresses (non-blocking, continue if lookup fails)
+  let locationMap = new Map();
+  try {
+    locationMap = await batchGetLocationsFromIPs(ipAddresses);
+  } catch (error) {
+    console.error('Error fetching geolocation data:', error);
+    // Continue without location names if lookup fails
+  }
+
+  const locations = locationResult.rows.map(row => {
+    const ip = row.ip_address || 'unknown';
+    const locationInfo = locationMap.get(ip);
+    
+    // Always include IP address, even if location lookup failed
+    return {
+      ip: ip,
+      location: locationInfo?.location || null,
+      frequency: parseInt(row.count)
+    };
+  });
+
+  const totalLogins = locations.reduce((sum, loc) => sum + loc.frequency, 0);
+
+  return {
+    commonLocations: locations,
+    totalLogins: totalLogins,
+    uniqueLocations: locations.length,
+    message: totalLogins === 0 ? 'No login history found in the last 30 days. Baseline will be calculated once the user has login activity.' : null
+  };
+};
+
+// Helper function to calculate time baseline
+const calculateTimeBaseline = async (client, userId) => {
+  const timeResult = await client.query(`
+    SELECT 
+      EXTRACT(HOUR FROM login_timestamp) as hour,
+      COUNT(*) as count
+    FROM user_login_history
+    WHERE user_id = $1
+      AND login_timestamp > NOW() - INTERVAL '30 days'
+    GROUP BY EXTRACT(HOUR FROM login_timestamp)
+    ORDER BY count DESC
+  `, [userId]);
+
+  const hours = timeResult.rows.map(row => ({
+    hour: parseInt(row.hour),
+    frequency: parseInt(row.count)
+  }));
+
+  const totalLogins = hours.reduce((sum, h) => sum + h.frequency, 0);
+
+  // Calculate most common login hours (top 3)
+  const topHours = hours.slice(0, 3).map(h => h.hour);
+  const avgHour = totalLogins > 0
+    ? Math.round(hours.reduce((sum, h) => sum + (h.hour * h.frequency), 0) / totalLogins)
+    : null;
+
+  return {
+    commonHours: topHours,
+    averageHour: avgHour,
+    hourDistribution: hours,
+    totalLogins: totalLogins,
+    message: totalLogins === 0 ? 'No login history found in the last 30 days. Baseline will be calculated once the user has login activity.' : null
+  };
+};
+
+// Helper function to calculate access pattern baseline
+const calculateAccessPatternBaseline = async (client, userId) => {
+  const accessResult = await client.query(`
+    SELECT 
+      action,
+      COUNT(*) as count
+    FROM audit_logs
+    WHERE user_id = $1
+      AND timestamp > NOW() - INTERVAL '30 days'
+    GROUP BY action
+    ORDER BY count DESC
+  `, [userId]);
+
+  const patterns = accessResult.rows.map(row => ({
+    action: row.action,
+    frequency: parseInt(row.count)
+  }));
+
+  const totalActions = patterns.reduce((sum, p) => sum + p.frequency, 0);
+
+  return {
+    commonActions: patterns,
+    totalActions: totalActions,
+    uniqueActions: patterns.length,
+    message: totalActions === 0 ? 'No access activity found in the last 30 days. Baseline will be calculated once the user has activity.' : null
+  };
+};
+
 export const calculateBaseline = async (userIdOrEmail, baselineType) => {
   if (!userIdOrEmail || !baselineType) {
     throw new Error('userId/email and baselineType are required');
@@ -25,137 +155,15 @@ export const calculateBaseline = async (userIdOrEmail, baselineType) => {
   const client = await pool.connect();
 
   try {
-    let userId;
-    
-    // Check if input is email (contains @) or numeric ID
-    if (typeof userIdOrEmail === 'string' && userIdOrEmail.includes('@')) {
-      // It's an email - look up user ID (support both encrypted and plain email)
-      const emailHash = createSearchableHash(userIdOrEmail);
-      const emailResult = await client.query(
-        `SELECT id FROM users 
-         WHERE email_hash = $1 
-         OR LOWER(email) = LOWER($2)`,
-        [emailHash, userIdOrEmail]
-      );
-      if (emailResult.rows.length === 0) {
-        throw new Error(`User with email ${userIdOrEmail} does not exist`);
-      }
-      userId = emailResult.rows[0].id;
-    } else {
-      // It's a user ID
-      userId = typeof userIdOrEmail === 'string' ? parseInt(userIdOrEmail) : userIdOrEmail;
-      
-      // Verify user exists
-      const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
-      if (userCheck.rows.length === 0) {
-        throw new Error(`User with ID ${userId} does not exist`);
-      }
-    }
-
+    const userId = await resolveUserId(client, userIdOrEmail);
     let baselineData = {};
 
     if (baselineType === 'location') {
-      // Calculate location baseline from user_login_history
-      const locationResult = await client.query(`
-        SELECT ip_address, COUNT(*) as count
-        FROM user_login_history
-        WHERE user_id = $1
-          AND login_timestamp > NOW() - INTERVAL '30 days'
-        GROUP BY ip_address
-        ORDER BY count DESC
-        LIMIT 10
-      `, [userId]);
-
-      const ipAddresses = locationResult.rows.map(row => row.ip_address).filter(ip => ip && ip !== 'unknown');
-      
-      // Get location names for IP addresses (non-blocking, continue if lookup fails)
-      let locationMap = new Map();
-      try {
-        locationMap = await batchGetLocationsFromIPs(ipAddresses);
-      } catch (error) {
-        console.error('Error fetching geolocation data:', error);
-        // Continue without location names if lookup fails
-      }
-
-      const locations = locationResult.rows.map(row => {
-        const ip = row.ip_address || 'unknown';
-        const locationInfo = locationMap.get(ip);
-        
-        // Always include IP address, even if location lookup failed
-        return {
-          ip: ip,
-          location: locationInfo?.location || null,
-          frequency: parseInt(row.count)
-        };
-      });
-
-      const totalLogins = locations.reduce((sum, loc) => sum + loc.frequency, 0);
-
-      baselineData = {
-        commonLocations: locations,
-        totalLogins: totalLogins,
-        uniqueLocations: locations.length,
-        message: totalLogins === 0 ? 'No login history found in the last 30 days. Baseline will be calculated once the user has login activity.' : null
-      };
+      baselineData = await calculateLocationBaseline(client, userId);
     } else if (baselineType === 'time') {
-      // Calculate time baseline from user_login_history
-      const timeResult = await client.query(`
-        SELECT 
-          EXTRACT(HOUR FROM login_timestamp) as hour,
-          COUNT(*) as count
-        FROM user_login_history
-        WHERE user_id = $1
-          AND login_timestamp > NOW() - INTERVAL '30 days'
-        GROUP BY EXTRACT(HOUR FROM login_timestamp)
-        ORDER BY count DESC
-      `, [userId]);
-
-      const hours = timeResult.rows.map(row => ({
-        hour: parseInt(row.hour),
-        frequency: parseInt(row.count)
-      }));
-
-      const totalLogins = hours.reduce((sum, h) => sum + h.frequency, 0);
-
-      // Calculate most common login hours (top 3)
-      const topHours = hours.slice(0, 3).map(h => h.hour);
-      const avgHour = totalLogins > 0
-        ? Math.round(hours.reduce((sum, h) => sum + (h.hour * h.frequency), 0) / totalLogins)
-        : null;
-
-      baselineData = {
-        commonHours: topHours,
-        averageHour: avgHour,
-        hourDistribution: hours,
-        totalLogins: totalLogins,
-        message: totalLogins === 0 ? 'No login history found in the last 30 days. Baseline will be calculated once the user has login activity.' : null
-      };
+      baselineData = await calculateTimeBaseline(client, userId);
     } else if (baselineType === 'access_pattern') {
-      // Calculate access pattern baseline from audit_logs
-      const accessResult = await client.query(`
-        SELECT 
-          action,
-          COUNT(*) as count
-        FROM audit_logs
-        WHERE user_id = $1
-          AND timestamp > NOW() - INTERVAL '30 days'
-        GROUP BY action
-        ORDER BY count DESC
-      `, [userId]);
-
-      const patterns = accessResult.rows.map(row => ({
-        action: row.action,
-        frequency: parseInt(row.count)
-      }));
-
-      const totalActions = patterns.reduce((sum, p) => sum + p.frequency, 0);
-
-      baselineData = {
-        commonActions: patterns,
-        totalActions: totalActions,
-        uniqueActions: patterns.length,
-        message: totalActions === 0 ? 'No access activity found in the last 30 days. Baseline will be calculated once the user has activity.' : null
-      };
+      baselineData = await calculateAccessPatternBaseline(client, userId);
     }
 
     // Upsert baseline record
@@ -188,6 +196,72 @@ export const calculateBaseline = async (userIdOrEmail, baselineType) => {
  * @param {Object} eventData - Event data { ipAddress, timestamp, eventType }
  * @returns {Promise<Object|null>} Anomaly object if detected, null otherwise
  */
+// Helper function to parse baselines from database result
+const parseBaselines = (baselineResult) => {
+  const baselines = {};
+  baselineResult.rows.forEach(row => {
+    // PostgreSQL JSONB columns are automatically parsed, but handle both cases
+    baselines[row.baseline_type] = typeof row.baseline_data === 'string' 
+      ? JSON.parse(row.baseline_data) 
+      : row.baseline_data;
+  });
+  return baselines;
+};
+
+// Helper function to check all anomaly types
+const checkAllAnomalies = (ipAddress, timestamp, eventType, baselines) => {
+  const anomalies = [];
+
+  // Check location anomaly
+  if (ipAddress && baselines.location) {
+    const locationAnomaly = checkLocationAnomaly(ipAddress, baselines.location, eventType);
+    if (locationAnomaly) {
+      anomalies.push(locationAnomaly);
+    }
+  }
+
+  // Check time anomaly
+  if (timestamp && baselines.time) {
+    const timeAnomaly = checkTimeAnomaly(timestamp, baselines.time, eventType);
+    if (timeAnomaly) {
+      anomalies.push(timeAnomaly);
+    }
+  }
+
+  // Check access pattern anomaly (if eventType is provided)
+  if (eventType && baselines.access_pattern) {
+    const accessAnomaly = checkAccessPatternAnomaly(eventType, baselines.access_pattern);
+    if (accessAnomaly) {
+      anomalies.push(accessAnomaly);
+    }
+  }
+
+  return anomalies;
+};
+
+// Helper function to create anomaly records in database
+const createAnomalyRecords = async (client, userId, anomalies, timestamp) => {
+  const createdAnomalies = [];
+  for (const anomaly of anomalies) {
+    const insertResult = await client.query(`
+      INSERT INTO behavioral_anomalies (
+        user_id, anomaly_type, severity, details, detected_at, status
+      )
+      VALUES ($1, $2, $3, $4, $5, 'new')
+      RETURNING *
+    `, [
+      userId,
+      anomaly.type,
+      anomaly.severity,
+      JSON.stringify(anomaly.details),
+      timestamp || new Date()
+    ]);
+
+    createdAnomalies.push(insertResult.rows[0]);
+  }
+  return createdAnomalies;
+};
+
 export const detectAnomalies = async (userId, eventData) => {
   if (!userId || !eventData) {
     return null;
@@ -210,108 +284,15 @@ export const detectAnomalies = async (userId, eventData) => {
       return null;
     }
 
-    const baselines = {};
-    baselineResult.rows.forEach(row => {
-      // PostgreSQL JSONB columns are automatically parsed, but handle both cases
-      baselines[row.baseline_type] = typeof row.baseline_data === 'string' 
-        ? JSON.parse(row.baseline_data) 
-        : row.baseline_data;
-    });
-
-    const anomalies = [];
-
-    // Check location anomaly
-    if (ipAddress && baselines.location) {
-      const locationBaseline = baselines.location;
-      const isKnownLocation = locationBaseline.commonLocations?.some(
-        loc => loc.ip === ipAddress
-      );
-
-      if (!isKnownLocation && locationBaseline.totalLogins > 5) {
-        // Only flag as anomaly if user has enough login history
-        anomalies.push({
-          type: 'unusual_location',
-          severity: 'medium',
-          details: {
-            ipAddress,
-            expectedLocations: locationBaseline.commonLocations?.map(l => l.ip) || [],
-            eventType
-          }
-        });
-      }
+    const baselines = parseBaselines(baselineResult);
+    const anomalies = checkAllAnomalies(ipAddress, timestamp, eventType, baselines);
+    
+    if (anomalies.length === 0) {
+      return null;
     }
 
-    // Check time anomaly
-    if (timestamp && baselines.time) {
-      const timeBaseline = baselines.time;
-      const eventHour = new Date(timestamp).getHours();
-
-      if (timeBaseline.commonHours && timeBaseline.commonHours.length > 0) {
-        const isNormalHour = timeBaseline.commonHours.includes(eventHour);
-        const avgHour = timeBaseline.averageHour;
-
-        if (!isNormalHour && avgHour !== null) {
-          // Check if outside ±2 hours from average
-          const hourDiff = Math.abs(eventHour - avgHour);
-          if (hourDiff > 2 && hourDiff < 22) {
-            // Not within ±2 hours, but not on opposite side of clock
-            anomalies.push({
-              type: 'unusual_time',
-              severity: 'low',
-              details: {
-                eventHour,
-                expectedHours: timeBaseline.commonHours,
-                averageHour: avgHour,
-                eventType
-              }
-            });
-          }
-        }
-      }
-    }
-
-    // Check access pattern anomaly (if eventType is provided)
-    if (eventType && baselines.access_pattern) {
-      const accessBaseline = baselines.access_pattern;
-      const isCommonAction = accessBaseline.commonActions?.some(
-        action => action.action === eventType
-      );
-
-      if (!isCommonAction && accessBaseline.totalActions > 10) {
-        // Only flag if user has enough action history
-        anomalies.push({
-          type: 'unusual_access',
-          severity: 'low',
-          details: {
-            action: eventType,
-            expectedActions: accessBaseline.commonActions?.map(a => a.action) || [],
-            eventType
-          }
-        });
-      }
-    }
-
-    // Create anomaly records for each detected anomaly
-    const createdAnomalies = [];
-    for (const anomaly of anomalies) {
-      const insertResult = await client.query(`
-        INSERT INTO behavioral_anomalies (
-          user_id, anomaly_type, severity, details, detected_at, status
-        )
-        VALUES ($1, $2, $3, $4, $5, 'new')
-        RETURNING *
-      `, [
-        userId,
-        anomaly.type,
-        anomaly.severity,
-        JSON.stringify(anomaly.details),
-        timestamp || new Date()
-      ]);
-
-      createdAnomalies.push(insertResult.rows[0]);
-    }
-
-    return createdAnomalies.length > 0 ? createdAnomalies : null;
+    const createdAnomalies = await createAnomalyRecords(client, userId, anomalies, timestamp);
+    return createdAnomalies;
   } catch (error) {
     console.error('Error detecting anomalies:', error);
     // Return null on error to not block the calling function

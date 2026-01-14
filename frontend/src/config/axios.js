@@ -80,7 +80,7 @@ apiClient.interceptors.response.use(
         const { default: tokenService } = await import('../services/tokenService.js');
         tokenService.clearAuth();
         // Redirect will be handled by session validation service
-        return Promise.reject(error);
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
 
       originalRequest._retry = true;

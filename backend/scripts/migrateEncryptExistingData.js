@@ -30,6 +30,76 @@ const isEncrypted = (value) => {
   return /^[0-9a-f]{64,}$/i.test(str) && str.length > 64;
 };
 
+// Helper function to add field encryption update
+const addFieldEncryption = (updates, values, field, value, paramCount) => {
+  if (!value || isEncrypted(value)) {
+    return paramCount;
+  }
+  const newParamCount = paramCount + 1;
+  updates.push(`${field} = $${newParamCount}`);
+  values.push(encrypt(String(value)));
+  return newParamCount;
+};
+
+// Helper function to add hash updates for patient
+const addPatientHashes = (updates, values, record, paramCount) => {
+  let currentParamCount = paramCount;
+  if (record.phone && !isEncrypted(record.phone)) {
+    currentParamCount++;
+    updates.push(`phone_hash = $${currentParamCount}`);
+    values.push(createSearchableHash(record.phone));
+    
+    currentParamCount++;
+    updates.push(`phone_prefix = $${currentParamCount}`);
+    values.push(createPartialHash(record.phone, 10));
+  }
+  
+  if (record.email && !isEncrypted(record.email)) {
+    currentParamCount++;
+    updates.push(`email_hash = $${currentParamCount}`);
+    values.push(createSearchableHash(record.email));
+  }
+  return currentParamCount;
+};
+
+// Helper function to add hash updates for user
+const addUserHashes = (updates, values, record, paramCount) => {
+  let currentParamCount = paramCount;
+  if (record.email && !isEncrypted(record.email)) {
+    currentParamCount++;
+    updates.push(`email_hash = $${currentParamCount}`);
+    values.push(createSearchableHash(record.email));
+  }
+  
+  if (record.phone && !isEncrypted(record.phone)) {
+    currentParamCount++;
+    updates.push(`phone_hash = $${currentParamCount}`);
+    values.push(createSearchableHash(record.phone));
+  }
+  return currentParamCount;
+};
+
+// Helper function to build encryption updates for a record
+const buildEncryptionUpdates = (record, encryptedFields, isPatient = false) => {
+  const updates = [];
+  const values = [];
+  let paramCount = 0;
+  
+  // Check each encrypted field
+  for (const field of encryptedFields) {
+    paramCount = addFieldEncryption(updates, values, field, record[field], paramCount);
+  }
+  
+  // Update phone/email hashes
+  if (isPatient) {
+    paramCount = addPatientHashes(updates, values, record, paramCount);
+  } else {
+    paramCount = addUserHashes(updates, values, record, paramCount);
+  }
+  
+  return { updates, values, paramCount };
+};
+
 // Migrate patients
 const migratePatients = async (client) => {
   console.log('\n📋 Migrating patients...');
@@ -49,49 +119,15 @@ const migratePatients = async (client) => {
   
   for (const patient of result.rows) {
     try {
-      const updates = [];
-      const values = [];
-      let paramCount = 0;
-      
-      // Check each encrypted field
-      for (const field of PATIENT_ENCRYPTED_FIELDS) {
-        const value = patient[field];
-        
-        // Skip if null/empty or already encrypted
-        if (!value || isEncrypted(value)) {
-          continue;
-        }
-        
-        // Encrypt the value
-        paramCount++;
-        updates.push(`${field} = $${paramCount}`);
-        values.push(encrypt(String(value)));
-      }
-      
-      // Update phone/email hashes if phone/email were encrypted
-      if (patient.phone && !isEncrypted(patient.phone)) {
-        paramCount++;
-        updates.push(`phone_hash = $${paramCount}`);
-        values.push(createSearchableHash(patient.phone));
-        
-        paramCount++;
-        updates.push(`phone_prefix = $${paramCount}`);
-        values.push(createPartialHash(patient.phone, 10));
-      }
-      
-      if (patient.email && !isEncrypted(patient.email)) {
-        paramCount++;
-        updates.push(`email_hash = $${paramCount}`);
-        values.push(createSearchableHash(patient.email));
-      }
+      const { updates, values, paramCount } = buildEncryptionUpdates(patient, PATIENT_ENCRYPTED_FIELDS, true);
       
       if (updates.length > 0) {
         values.push(patient.id);
-        paramCount++;
+        const finalParamCount = paramCount + 1;
         
         if (!DRY_RUN) {
           await client.query(
-            `UPDATE patients SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount}`,
+            `UPDATE patients SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${finalParamCount}`,
             values
           );
         }
@@ -133,45 +169,15 @@ const migrateUsers = async (client) => {
   
   for (const user of result.rows) {
     try {
-      const updates = [];
-      const values = [];
-      let paramCount = 0;
-      
-      // Check each encrypted field
-      for (const field of USER_ENCRYPTED_FIELDS) {
-        const value = user[field];
-        
-        // Skip if null/empty or already encrypted
-        if (!value || isEncrypted(value)) {
-          continue;
-        }
-        
-        // Encrypt the value
-        paramCount++;
-        updates.push(`${field} = $${paramCount}`);
-        values.push(encrypt(String(value)));
-      }
-      
-      // Update email/phone hashes if they were encrypted
-      if (user.email && !isEncrypted(user.email)) {
-        paramCount++;
-        updates.push(`email_hash = $${paramCount}`);
-        values.push(createSearchableHash(user.email));
-      }
-      
-      if (user.phone && !isEncrypted(user.phone)) {
-        paramCount++;
-        updates.push(`phone_hash = $${paramCount}`);
-        values.push(createSearchableHash(user.phone));
-      }
+      const { updates, values, paramCount } = buildEncryptionUpdates(user, USER_ENCRYPTED_FIELDS, false);
       
       if (updates.length > 0) {
         values.push(user.id);
-        paramCount++;
+        const finalParamCount = paramCount + 1;
         
         if (!DRY_RUN) {
           await client.query(
-            `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount}`,
+            `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${finalParamCount}`,
             values
           );
         }

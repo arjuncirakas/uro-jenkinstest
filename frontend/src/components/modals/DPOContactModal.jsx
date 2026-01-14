@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { X, Save, Loader2 } from 'lucide-react';
 import { securityDashboardService } from '../../services/securityDashboardService';
 
@@ -243,6 +244,11 @@ const DPOContactModal = ({ isOpen, onClose }) => {
       </div>
     </div>
   );
+};
+
+DPOContactModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired
 };
 
 export default DPOContactModal;

@@ -57,7 +57,7 @@ const getBreachNotificationRecipients = async () => {
         LIMIT 1
       `);
       
-      if (dpoResult.rows.length > 0 && dpoResult.rows[0].email) {
+      if (dpoResult.rows.length > 0 && dpoResult.rows[0]?.email) {
         emailSet.add(dpoResult.rows[0].email);
       }
       
@@ -131,11 +131,11 @@ const sendBreachIncidentEmail = async (incident) => {
               <tr>
                 <td style="padding: 8px 0; font-weight: bold;">Severity:</td>
                 <td style="padding: 8px 0;">
-                  <span style="padding: 4px 8px; border-radius: 4px; font-weight: bold; ${
-                    incident.severity === 'high' ? 'background-color: #fee2e2; color: #991b1b;' :
-                    incident.severity === 'medium' ? 'background-color: #fef3c7; color: #92400e;' :
-                    'background-color: #d1fae5; color: #065f46;'
-                  }">
+                  <span style="padding: 4px 8px; border-radius: 4px; font-weight: bold; ${(() => {
+                    if (incident.severity === 'high') return 'background-color: #fee2e2; color: #991b1b;';
+                    if (incident.severity === 'medium') return 'background-color: #fef3c7; color: #92400e;';
+                    return 'background-color: #d1fae5; color: #065f46;';
+                  })()}">
                     ${severity}
                   </span>
                 </td>
@@ -156,14 +156,14 @@ const sendBreachIncidentEmail = async (incident) => {
             <p style="margin: 0; white-space: pre-wrap; color: #374151;">${incident.description || 'No description provided.'}</p>
           </div>
 
-          ${incident.affected_data_types && incident.affected_data_types.length > 0 ? `
+          ${incident.affected_data_types?.length > 0 ? `
           <div style="background-color: #eff6ff; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
             <p style="margin: 0; font-weight: bold; color: #1e40af;">Affected Data Types:</p>
             <p style="margin: 5px 0 0 0; color: #1e40af;">${incident.affected_data_types.join(', ')}</p>
           </div>
           ` : ''}
 
-          ${incident.affected_users && incident.affected_users.length > 0 ? `
+          ${incident.affected_users?.length > 0 ? `
           <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
             <p style="margin: 0; font-weight: bold; color: #92400e;">Affected Users:</p>
             <p style="margin: 5px 0 0 0; color: #92400e;">${incident.affected_users.length} individual(s)</p>
@@ -218,7 +218,7 @@ const sendBreachIncidentEmail = async (incident) => {
  * @returns {Promise<Object>} Created incident object
  */
 export const createIncident = async (incidentData) => {
-  if (!incidentData || !incidentData.incident_type || !incidentData.severity || !incidentData.description) {
+  if (!incidentData?.incident_type || !incidentData?.severity || !incidentData?.description) {
     throw new Error('incident_type, severity, and description are required');
   }
 
@@ -406,7 +406,7 @@ export const updateIncidentStatus = async (incidentId, status) => {
  * @returns {Promise<Object>} Created notification object
  */
 export const createNotification = async (incidentId, notificationData) => {
-  if (!incidentId || !notificationData || !notificationData.notification_type || !notificationData.recipient_email) {
+  if (!incidentId || !notificationData?.notification_type || !notificationData?.recipient_email) {
     throw new Error('incidentId, notification_type, and recipient_email are required');
   }
 
@@ -635,7 +635,7 @@ export const getRemediations = async (incidentId) => {
  * @returns {Promise<Object>} Created remediation object
  */
 export const addRemediation = async (incidentId, remediationData) => {
-  if (!incidentId || !remediationData || !remediationData.action_taken) {
+  if (!incidentId || !remediationData?.action_taken) {
     throw new Error('incidentId and action_taken are required');
   }
 

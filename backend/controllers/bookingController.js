@@ -3,6 +3,11 @@ import { decryptFields } from '../services/encryptionService.js';
 import { PATIENT_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 import { sendAppointmentReminderEmail } from '../services/emailService.js';
 
+// Helper function to get test result status
+const getTestResultStatus = (testResult) => {
+  return testResult ? 'completed' : 'pending';
+};
+
 // Helper function to validate patient exists and is not expired
 export const validatePatientForBooking = async (client, patientId, errorContext = 'booking') => {
   const patientCheck = await client.query(
@@ -1369,9 +1374,9 @@ export const getTodaysAppointments = async (req, res) => {
           notes: row.notes || '',
           type: row.type || 'urologist',
           // Add test result status for all appointments
-          mri: testResults[row.patient_id]?.mri ? 'completed' : 'pending',
-          biopsy: testResults[row.patient_id]?.biopsy ? 'completed' : 'pending',
-          trus: testResults[row.patient_id]?.trus ? 'completed' : 'pending'
+          mri: getTestResultStatus(testResults[row.patient_id]?.mri),
+          biopsy: getTestResultStatus(testResults[row.patient_id]?.biopsy),
+          trus: getTestResultStatus(testResults[row.patient_id]?.trus)
         };
       } catch (formatError) {
         console.error(`[getTodaysAppointments] Error formatting appointment ${index}:`, formatError);
@@ -3437,11 +3442,15 @@ export const getAllAppointments = async (req, res) => {
         notes: decryptedRow.notes || '',
         type: appointmentType,
         typeColor: typeColor,
-        urologist: decryptedRow.type === 'investigation'
-          ? decryptedRow.urologist_first_name || 'Unassigned'
-          : (decryptedRow.urologist_first_name && decryptedRow.urologist_last_name
-            ? `Dr. ${decryptedRow.urologist_first_name} ${decryptedRow.urologist_last_name}`
-            : 'Unassigned'),
+        urologist: (() => {
+          if (decryptedRow.type === 'investigation') {
+            return decryptedRow.urologist_first_name || 'Unassigned';
+          }
+          if (decryptedRow.urologist_first_name && decryptedRow.urologist_last_name) {
+            return `Dr. ${decryptedRow.urologist_first_name} ${decryptedRow.urologist_last_name}`;
+          }
+          return 'Unassigned';
+        })(),
         reminderSent: decryptedRow.reminder_sent || false,
         reminderSentAt: decryptedRow.reminder_sent_at || null,
         createdAt: decryptedRow.created_at,

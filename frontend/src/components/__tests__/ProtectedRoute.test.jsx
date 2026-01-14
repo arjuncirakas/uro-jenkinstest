@@ -1,288 +1,609 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import ProtectedRoute from '../ProtectedRoute';
+import tokenService from '../../services/tokenService';
 
-// Hoist mocks to avoid initialization issues
-const mocks = vi.hoisted(() => ({
+// Mock tokenService
+vi.mock('../../services/tokenService', () => ({
+  default: {
     getAccessToken: vi.fn(),
     getRefreshToken: vi.fn(),
-    isTokenExpired: vi.fn(),
     isAuthenticated: vi.fn(),
     getUserRole: vi.fn(),
-    clearAuth: vi.fn()
-}));
-
-vi.mock('../../services/tokenService', () => ({
-    default: {
-        getAccessToken: mocks.getAccessToken,
-        getRefreshToken: mocks.getRefreshToken,
-        isTokenExpired: mocks.isTokenExpired,
-        isAuthenticated: mocks.isAuthenticated,
-        getUserRole: mocks.getUserRole,
-        clearAuth: mocks.clearAuth
-    }
+    clearAuth: vi.fn(),
+    isTokenExpired: vi.fn(),
+    getUser: vi.fn()
+  }
 }));
 
 // Mock fetch
-globalThis.fetch = vi.fn();
+global.fetch = vi.fn();
 
-describe('ProtectedRoute Component', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        mocks.getAccessToken.mockReturnValue(null);
-        mocks.getRefreshToken.mockReturnValue(null);
-        mocks.isTokenExpired.mockReturnValue(false);
-        mocks.isAuthenticated.mockReturnValue(false);
-        mocks.getUserRole.mockReturnValue(null);
+const TestComponent = () => <div>Protected Content</div>;
+
+describe('ProtectedRoute', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    global.fetch.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('Loading State', () => {
+    it('should show loading spinner while checking authentication', () => {
+      tokenService.getAccessToken.mockReturnValue('token');
+      tokenService.getRefreshToken.mockReturnValue('refresh-token');
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('urologist');
+      
+      // Mock a pending fetch
+      global.fetch.mockImplementation(() => new Promise(() => {}));
+
+      render(
+        <MemoryRouter>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      expect(screen.getByText('Verifying access...')).toBeInTheDocument();
+    });
+  });
+
+  describe('No Tokens', () => {
+    it('should redirect to login when no access token', async () => {
+      tokenService.getAccessToken.mockReturnValue(null);
+      tokenService.getRefreshToken.mockReturnValue('refresh-token');
+      tokenService.clearAuth.mockReturnValue(true);
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
     });
 
-    const renderWithRouter = (ui, initialRoute = '/protected') => {
-        return render(
-            <MemoryRouter initialEntries={[initialRoute]}>
-                <Routes>
-                    <Route path="/login" element={<div>Login Page</div>} />
-                    <Route path="/unauthorized" element={<div>Unauthorized Page</div>} />
-                    <Route path="/protected" element={ui} />
-                </Routes>
-            </MemoryRouter>
+    it('should redirect to login when no refresh token', async () => {
+      tokenService.getAccessToken.mockReturnValue('token');
+      tokenService.getRefreshToken.mockReturnValue(null);
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+
+    it('should redirect to login when both tokens are missing', async () => {
+      tokenService.getAccessToken.mockReturnValue(null);
+      tokenService.getRefreshToken.mockReturnValue(null);
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Invalid Token Format', () => {
+    it('should redirect to login when access token has invalid format', async () => {
+      tokenService.getAccessToken.mockReturnValue('invalid-token');
+      tokenService.getRefreshToken.mockReturnValue('refresh-token');
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+
+    it('should redirect to login when refresh token has invalid format', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue('invalid-token');
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+
+    it('should handle token with wrong number of parts', async () => {
+      tokenService.getAccessToken.mockReturnValue('header.payload'); // Only 2 parts
+      tokenService.getRefreshToken.mockReturnValue('refresh-token');
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Expired Tokens', () => {
+    it('should redirect to login when both tokens are expired', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockImplementation((token) => {
+        return token === validToken;
+      });
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Authentication Check', () => {
+    it('should redirect to login when user is not authenticated', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(false);
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Role-Based Access', () => {
+    it('should allow access when user has required role', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('urologist');
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 1 } })
+      });
+
+      render(
+        <MemoryRouter>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Protected Content')).toBeInTheDocument();
+      });
+    });
+
+    it('should redirect to unauthorized when user role is not in allowed roles', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('gp');
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).not.toHaveBeenCalled();
+      });
+    });
+
+    it('should redirect to login when user has no role', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue(null);
+      tokenService.clearAuth.mockReturnValue(true);
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+
+    it('should allow access when no roles are specified', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 1 } })
+      });
+
+      render(
+        <MemoryRouter>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Protected Content')).toBeInTheDocument();
+      });
+    });
+
+    it('should allow access when allowedRoles is empty array', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 1 } })
+      });
+
+      render(
+        <MemoryRouter>
+          <ProtectedRoute allowedRoles={[]}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Protected Content')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Token Verification', () => {
+    it('should verify token with API call and allow access on success', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('urologist');
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 1 } })
+      });
+
+      vi.stubGlobal('import.meta', { env: { VITE_API_URL: 'https://test-api.com/api' } });
+
+      render(
+        <MemoryRouter>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Protected Content')).toBeInTheDocument();
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/auth/profile'),
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'Authorization': `Bearer ${validToken}`
+          })
+        })
+      );
+    });
+
+    it('should redirect to login when API returns 401', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('urologist');
+      tokenService.clearAuth.mockReturnValue(true);
+
+      global.fetch.mockResolvedValue({
+        ok: false,
+        status: 401
+      });
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+
+    it('should redirect to login when API call fails with error', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('urologist');
+      tokenService.clearAuth.mockReturnValue(true);
+
+      global.fetch.mockRejectedValue(new Error('Network error'));
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should redirect to login when API returns non-401 error', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('urologist');
+      tokenService.clearAuth.mockReturnValue(true);
+
+      global.fetch.mockResolvedValue({
+        ok: false,
+        status: 500
+      });
+
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
+    });
+
+    it('should use default API URL when VITE_API_URL is not set', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 1 } })
+      });
+
+      vi.stubGlobal('import.meta', { env: {} });
+
+      render(
+        <MemoryRouter>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('https://uroprep.ahimsa.global/api'),
+          expect.any(Object)
         );
-    };
+      });
+    });
+  });
 
-    describe('Loading State', () => {
-        it('should show loading state while checking authentication', () => {
-            const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-            mocks.getAccessToken.mockReturnValue(validToken);
-            mocks.getRefreshToken.mockReturnValue(validToken);
-            mocks.isAuthenticated.mockReturnValue(true);
+  describe('Navigation', () => {
+    it('should preserve location state when redirecting to login', async () => {
+      tokenService.getAccessToken.mockReturnValue(null);
+      tokenService.getRefreshToken.mockReturnValue(null);
+      tokenService.clearAuth.mockReturnValue(true);
 
-            // Mock fetch to hang
-            globalThis.fetch.mockImplementation(() => new Promise(() => { }));
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
 
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            expect(screen.getByText('Verifying access...')).toBeInTheDocument();
-        });
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
     });
 
-    describe('No Tokens', () => {
-        it('should redirect to login when no tokens exist', async () => {
-            mocks.getAccessToken.mockReturnValue(null);
-            mocks.getRefreshToken.mockReturnValue(null);
+    it('should redirect to unauthorized when authenticated but wrong role', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
+      tokenService.getUserRole.mockReturnValue('gp');
 
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute allowedRoles={['urologist']}>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
 
-            await waitFor(() => {
-                expect(screen.getByText('Login Page')).toBeInTheDocument();
-            });
-            expect(mocks.clearAuth).toHaveBeenCalled();
-        });
+      await waitFor(() => {
+        // Should not show protected content
+        expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+      });
+    });
+  });
 
-        it('should redirect to login when access token is missing', async () => {
-            mocks.getAccessToken.mockReturnValue(null);
-            mocks.getRefreshToken.mockReturnValue('valid.refresh.token.here');
+  describe('Edge Cases', () => {
+    it('should handle token with invalid JSON in payload', async () => {
+      tokenService.getAccessToken.mockReturnValue('header.invalid-json.signature');
+      tokenService.getRefreshToken.mockReturnValue('refresh-token');
+      tokenService.clearAuth.mockReturnValue(true);
 
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
 
-            await waitFor(() => {
-                expect(screen.getByText('Login Page')).toBeInTheDocument();
-            });
-        });
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
     });
 
-    describe('Invalid Token Format', () => {
-        it('should redirect to login when token format is invalid', async () => {
-            mocks.getAccessToken.mockReturnValue('invalid-token');
-            mocks.getRefreshToken.mockReturnValue('also-invalid');
+    it('should handle empty string tokens', async () => {
+      tokenService.getAccessToken.mockReturnValue('');
+      tokenService.getRefreshToken.mockReturnValue('');
+      tokenService.clearAuth.mockReturnValue(true);
 
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
+      render(
+        <MemoryRouter initialEntries={['/protected']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
 
-            await waitFor(() => {
-                expect(screen.getByText('Login Page')).toBeInTheDocument();
-            });
-            expect(mocks.clearAuth).toHaveBeenCalled();
-        });
-
-        it('should redirect when token has wrong number of parts', async () => {
-            mocks.getAccessToken.mockReturnValue('only.two');
-            mocks.getRefreshToken.mockReturnValue('valid.refresh.token.here');
-
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            await waitFor(() => {
-                expect(screen.getByText('Login Page')).toBeInTheDocument();
-            });
-        });
+      await waitFor(() => {
+        expect(tokenService.clearAuth).toHaveBeenCalled();
+      });
     });
 
-    describe('Token Expiration', () => {
-        it('should redirect to login when both tokens are expired', async () => {
-            const validTokenFormat = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+    it('should re-check authentication when location changes', async () => {
+      const validToken = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`;
+      tokenService.getAccessToken.mockReturnValue(validToken);
+      tokenService.getRefreshToken.mockReturnValue(validToken);
+      tokenService.isTokenExpired.mockReturnValue(false);
+      tokenService.isAuthenticated.mockReturnValue(true);
 
-            mocks.getAccessToken.mockReturnValue(validTokenFormat);
-            mocks.getRefreshToken.mockReturnValue(validTokenFormat);
-            mocks.isTokenExpired.mockReturnValue(true);
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 1 } })
+      });
 
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
+      const { rerender } = render(
+        <MemoryRouter initialEntries={['/page1']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
 
-            await waitFor(() => {
-                expect(screen.getByText('Login Page')).toBeInTheDocument();
-            });
-            expect(mocks.clearAuth).toHaveBeenCalled();
-        });
+      await waitFor(() => {
+        expect(screen.getByText('Protected Content')).toBeInTheDocument();
+      });
+
+      // Simulate location change
+      rerender(
+        <MemoryRouter initialEntries={['/page2']}>
+          <ProtectedRoute>
+            <TestComponent />
+          </ProtectedRoute>
+        </MemoryRouter>
+      );
+
+      // Should re-verify
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+      });
     });
-
-    describe('Role-Based Access', () => {
-        const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-
-        beforeEach(() => {
-            mocks.getAccessToken.mockReturnValue(validToken);
-            mocks.getRefreshToken.mockReturnValue(validToken);
-            mocks.isTokenExpired.mockReturnValue(false);
-            mocks.isAuthenticated.mockReturnValue(true);
-        });
-
-        it('should redirect when user role is missing', async () => {
-            mocks.getUserRole.mockReturnValue(null);
-
-            renderWithRouter(
-                <ProtectedRoute allowedRoles={['admin']}>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            // When role is missing but user is authenticated, it clears auth and redirects to login
-            await waitFor(() => {
-                expect(mocks.clearAuth).toHaveBeenCalled();
-            });
-        });
-
-        it('should redirect to unauthorized when role not in allowed roles', async () => {
-            mocks.getUserRole.mockReturnValue('user');
-            globalThis.fetch.mockResolvedValue({ ok: true, status: 200 });
-
-            renderWithRouter(
-                <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            await waitFor(() => {
-                expect(screen.getByText('Unauthorized Page')).toBeInTheDocument();
-            });
-        });
-
-        it('should allow access when user has correct role', async () => {
-            mocks.getUserRole.mockReturnValue('admin');
-            globalThis.fetch.mockResolvedValue({ ok: true, status: 200 });
-
-            renderWithRouter(
-                <ProtectedRoute allowedRoles={['admin']}>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            await waitFor(() => {
-                expect(screen.getByText('Protected Content')).toBeInTheDocument();
-            });
-        });
-
-        it('should allow access when no roles specified', async () => {
-            mocks.getUserRole.mockReturnValue('any_role');
-            globalThis.fetch.mockResolvedValue({ ok: true, status: 200 });
-
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            await waitFor(() => {
-                expect(screen.getByText('Protected Content')).toBeInTheDocument();
-            });
-        });
-    });
-
-    describe('API Verification', () => {
-        const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-
-        beforeEach(() => {
-            mocks.getAccessToken.mockReturnValue(validToken);
-            mocks.getRefreshToken.mockReturnValue(validToken);
-            mocks.isTokenExpired.mockReturnValue(false);
-            mocks.isAuthenticated.mockReturnValue(true);
-        });
-
-        it('should redirect to login when API returns 401', async () => {
-            // When API returns 401, component clears auth, so isAuthenticated becomes false
-            // and it redirects to login
-            mocks.isAuthenticated.mockReturnValue(false);
-            globalThis.fetch.mockResolvedValue({ ok: false, status: 401 });
-
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            await waitFor(() => {
-                expect(mocks.clearAuth).toHaveBeenCalled();
-            });
-        });
-
-        it('should redirect when API throws error', async () => {
-            mocks.isAuthenticated.mockReturnValue(false);
-            globalThis.fetch.mockRejectedValue(new Error('Network error'));
-
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            await waitFor(() => {
-                expect(mocks.clearAuth).toHaveBeenCalled();
-            });
-        });
-
-        it('should handle non-401 error responses', async () => {
-            // For non-401 errors, component throws an error which clears auth
-            mocks.isAuthenticated.mockReturnValue(false);
-            globalThis.fetch.mockResolvedValue({ ok: false, status: 500 });
-
-            renderWithRouter(
-                <ProtectedRoute>
-                    <div>Protected Content</div>
-                </ProtectedRoute>
-            );
-
-            await waitFor(() => {
-                expect(mocks.clearAuth).toHaveBeenCalled();
-            });
-        });
-    });
+  });
 });

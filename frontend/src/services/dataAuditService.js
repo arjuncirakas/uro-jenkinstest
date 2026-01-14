@@ -207,8 +207,9 @@ export const dataAuditService = {
       if (options.endDate) params.append('endDate', options.endDate);
       if (options.userId) params.append('userId', options.userId);
 
+      const responseType = 'blob';
       const response = await apiClient.get(`/superadmin/data-audit/export?${params.toString()}`, {
-        responseType: format === 'pdf' ? 'blob' : 'blob'
+        responseType
       });
 
       // Create download link

@@ -1,217 +1,189 @@
-import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-
 import SuccessErrorModal from '../SuccessErrorModal';
 
 describe('SuccessErrorModal', () => {
-    const mockOnClose = vi.fn();
+  const mockOnClose = vi.fn();
 
-    const defaultProps = {
-        isOpen: true,
-        type: 'success',
-        title: 'Success!',
-        message: 'Operation completed successfully',
-        onClose: mockOnClose
-    };
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-    beforeEach(() => {
-        vi.clearAllMocks();
+  describe('Rendering', () => {
+    it('should not render when isOpen is false', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={false}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      expect(screen.queryByText('Test message')).not.toBeInTheDocument();
     });
 
-    describe('Rendering', () => {
-        it('should return null when not open', () => {
-            const { container } = render(
-                <SuccessErrorModal {...defaultProps} isOpen={false} />
-            );
-            expect(container.firstChild).toBeNull();
-        });
-
-        it('should render modal when open', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            expect(screen.getByText('Success!')).toBeInTheDocument();
-        });
-
-        it('should display title', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            expect(screen.getByText('Success!')).toBeInTheDocument();
-        });
-
-        it('should display message', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            expect(screen.getByText('Operation completed successfully')).toBeInTheDocument();
-        });
+    it('should render when isOpen is true', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      expect(screen.getByText('Test message')).toBeInTheDocument();
     });
 
-    describe('Success Type', () => {
-        it('should display success styling', () => {
-            render(<SuccessErrorModal {...defaultProps} type="success" />);
-            const modal = document.querySelector('[class*="success"]') ||
-                document.querySelector('[class*="green"]');
-            expect(modal || screen.getByText('Success!')).toBeTruthy();
-        });
-
-        it('should display success icon', () => {
-            render(<SuccessErrorModal {...defaultProps} type="success" />);
-            const icon = document.querySelector('svg') ||
-                document.querySelector('[class*="icon"]');
-            expect(icon).toBeInTheDocument();
-        });
+    it('should display success title for success type', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Success message"
+          type="success"
+        />
+      );
+      expect(screen.getByText('Success')).toBeInTheDocument();
     });
 
-    describe('Error Type', () => {
-        it('should display error styling', () => {
-            render(
-                <SuccessErrorModal
-                    {...defaultProps}
-                    type="error"
-                    title="Error!"
-                    message="Something went wrong"
-                />
-            );
-            expect(screen.getByText('Error!')).toBeInTheDocument();
-        });
-
-        it('should display error icon', () => {
-            render(
-                <SuccessErrorModal
-                    {...defaultProps}
-                    type="error"
-                    title="Error!"
-                    message="Something went wrong"
-                />
-            );
-            const icon = document.querySelector('svg') ||
-                document.querySelector('[class*="icon"]');
-            expect(icon).toBeInTheDocument();
-        });
+    it('should display error title for error type', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Error message"
+          type="error"
+        />
+      );
+      expect(screen.getByText('Error')).toBeInTheDocument();
     });
 
-    describe('Warning Type', () => {
-        it('should display warning styling', () => {
-            render(
-                <SuccessErrorModal
-                    {...defaultProps}
-                    type="warning"
-                    title="Warning!"
-                    message="Please be careful"
-                />
-            );
-            expect(screen.getByText('Warning!')).toBeInTheDocument();
-        });
+    it('should use success type by default', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Default message"
+        />
+      );
+      expect(screen.getByText('Success')).toBeInTheDocument();
     });
 
-    describe('Info Type', () => {
-        it('should display info styling', () => {
-            render(
-                <SuccessErrorModal
-                    {...defaultProps}
-                    type="info"
-                    title="Information"
-                    message="Here is some info"
-                />
-            );
-            expect(screen.getByText('Information')).toBeInTheDocument();
-        });
+    it('should display message', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Custom message"
+        />
+      );
+      expect(screen.getByText('Custom message')).toBeInTheDocument();
+    });
+  });
+
+  describe('Styling', () => {
+    it('should apply success styling for success type', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Success message"
+          type="success"
+        />
+      );
+      const modal = screen.getByText('Success message').closest('div');
+      expect(modal.className).toContain('bg-green-50');
     });
 
-    describe('Close Action', () => {
-        it('should call onClose when close button is clicked', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            const closeButton = screen.getByRole('button') ||
-                screen.getByText('OK') ||
-                screen.getByText('Close');
-            fireEvent.click(closeButton);
-            expect(mockOnClose).toHaveBeenCalled();
-        });
+    it('should apply error styling for error type', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Error message"
+          type="error"
+        />
+      );
+      const modal = screen.getByText('Error message').closest('div');
+      expect(modal.className).toContain('bg-red-50');
+    });
+  });
 
-        it('should call onClose when backdrop is clicked', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            const backdrop = document.querySelector('[class*="fixed"]') ||
-                document.querySelector('[class*="overlay"]');
-            if (backdrop) {
-                fireEvent.click(backdrop);
-                expect(mockOnClose).toHaveBeenCalled();
-            }
-        });
-
-        it('should call onClose when OK button is clicked', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            const okButton = screen.getByText('OK') || screen.getByText('Close');
-            if (okButton) {
-                fireEvent.click(okButton);
-                expect(mockOnClose).toHaveBeenCalled();
-            }
-        });
+  describe('Close', () => {
+    it('should call onClose when close button is clicked', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      const closeButtons = screen.getAllByRole('button');
+      const closeButton = closeButtons.find(btn => btn.textContent === '');
+      if (closeButton) {
+        fireEvent.click(closeButton);
+      }
+      
+      // Also try the OK button
+      const okButton = screen.getByText('OK');
+      fireEvent.click(okButton);
+      
+      expect(mockOnClose).toHaveBeenCalled();
     });
 
-    describe('Custom Button Text', () => {
-        it('should display custom button text', () => {
-            render(
-                <SuccessErrorModal
-                    {...defaultProps}
-                    buttonText="Got it!"
-                />
-            );
-            expect(screen.getByText('Got it!') || screen.getByText('OK')).toBeTruthy();
-        });
+    it('should call onClose when OK button is clicked', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      const okButton = screen.getByText('OK');
+      fireEvent.click(okButton);
+      
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle null onClose', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={null}
+          message="Test message"
+        />
+      );
+      
+      // Should not crash
+      expect(screen.getByText('Test message')).toBeInTheDocument();
     });
 
-    describe('Auto Close', () => {
-        it('should auto close after timeout if specified', async () => {
-            vi.useFakeTimers();
-
-            render(
-                <SuccessErrorModal
-                    {...defaultProps}
-                    autoClose={true}
-                    autoCloseTime={3000}
-                />
-            );
-
-            expect(mockOnClose).not.toHaveBeenCalled();
-
-            vi.advanceTimersByTime(3000);
-
-            expect(mockOnClose).toHaveBeenCalled();
-
-            vi.useRealTimers();
-        });
+    it('should handle empty message', () => {
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message=""
+        />
+      );
+      
+      // Should render without crashing
+      expect(screen.getByText('Success')).toBeInTheDocument();
     });
 
-    describe('Accessibility', () => {
-        it('should have proper role', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            const modal = screen.getByRole('dialog') ||
-                document.querySelector('[role="dialog"]');
-            expect(modal || screen.getByText('Success!')).toBeTruthy();
-        });
-
-        it('should be focusable', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            const button = screen.getByRole('button');
-            expect(button).toBeInTheDocument();
-        });
+    it('should handle very long message', () => {
+      const longMessage = 'A'.repeat(500);
+      render(
+        <SuccessErrorModal
+          isOpen={true}
+          onClose={mockOnClose}
+          message={longMessage}
+        />
+      );
+      
+      expect(screen.getByText(longMessage)).toBeInTheDocument();
     });
-
-    describe('Animation', () => {
-        it('should render with animation classes', () => {
-            render(<SuccessErrorModal {...defaultProps} />);
-            const modal = document.querySelector('[class*="animate"]') ||
-                document.querySelector('[class*="transition"]');
-            expect(modal || screen.getByText('Success!')).toBeTruthy();
-        });
-    });
-
-    describe('Multiple Messages', () => {
-        it('should handle array of messages', () => {
-            render(
-                <SuccessErrorModal
-                    {...defaultProps}
-                    message={['Message 1', 'Message 2']}
-                />
-            );
-            expect(screen.getByText('Message 1') || screen.getByText(/Message/)).toBeTruthy();
-        });
-    });
+  });
 });

@@ -59,8 +59,6 @@ const AdminSidebarLayout = ({
 
     const handleLinkClick = () => setSidebarOpen(false);
 
-    const isFullWidth = fullWidthPaths.includes(location.pathname);
-
     return (
         <div className="flex h-screen bg-gray-50">
             {/* Mobile sidebar backdrop */}
@@ -207,7 +205,7 @@ const AdminSidebarLayout = ({
                 {/* Page content */}
                 <main className="flex-1 overflow-y-auto bg-gray-50">
                     <div className="py-6">
-                        <div className={`${isFullWidth ? 'max-w-full' : 'max-w-full'} px-2 sm:px-3 lg:px-4`}>
+                        <div className="max-w-full px-2 sm:px-3 lg:px-4">
                             <Outlet />
                         </div>
                     </div>

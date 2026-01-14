@@ -6,6 +6,252 @@ import { sendNotificationEmail } from './emailService.js';
  * Manages security alerts and notifications
  */
 
+// Helper function to format alert type
+const formatAlertType = (type) => {
+  return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
+// Helper function to get severity color
+const getSeverityColor = (severity) => {
+  switch (severity) {
+    case 'critical':
+      return '#dc2626'; // red-600
+    case 'high':
+      return '#ea580c'; // orange-600
+    case 'medium':
+      return '#ca8a04'; // yellow-600
+    case 'low':
+      return '#14b8a6'; // teal-500
+    default:
+      return '#6b7280'; // gray-500
+  }
+};
+
+// Helper function to format details for display
+const formatDetails = (details) => {
+  if (!details || typeof details !== 'object') return '';
+  
+  let html = '';
+  
+  // Lockout threshold details
+  if (details.failedAttempts !== undefined && details.threshold !== undefined) {
+    html += `
+      <div style="background-color: #fef2f2; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #dc2626;">
+        <p style="margin: 0; color: #991b1b; font-size: 14px;">
+          <strong>Failed Login Attempts:</strong> ${details.failedAttempts} / ${details.threshold}
+        </p>
+      </div>
+    `;
+  }
+  
+  // Multiple failed logins details
+  if (details.failedAttempts !== undefined && details.timeWindow) {
+    html += `
+      <div style="background-color: #fff7ed; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #ea580c;">
+        <p style="margin: 0; color: #9a3412; font-size: 14px;">
+          <strong>Failed Attempts:</strong> ${details.failedAttempts} in ${details.timeWindow}
+        </p>
+      </div>
+    `;
+  }
+  
+  // Unusual location details
+  if (details.previousIP) {
+    html += `
+      <div style="background-color: #fef3c7; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #ca8a04;">
+        <p style="margin: 0; color: #854d0e; font-size: 14px;">
+          <strong>Previous IP Address:</strong> ${details.previousIP}
+        </p>
+      </div>
+    `;
+  }
+  
+  // Simultaneous login details
+  if (details.activeSessions !== undefined) {
+    html += `
+      <div style="background-color: #f0fdf4; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #14b8a6;">
+        <p style="margin: 0; color: #14532d; font-size: 14px;">
+          <strong>Active Sessions:</strong> ${details.activeSessions}
+        </p>
+      </div>
+    `;
+  }
+  
+  return html;
+};
+
+// Helper function to build alert email HTML
+const buildAlertEmailHTML = (alert, alertDetails, severityColor, formattedTime) => {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Alert</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, ${severityColor} 0%, ${severityColor}dd 100%); padding: 30px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600; letter-spacing: -0.5px;">
+                🔒 Security Alert Notification
+              </h1>
+            </td>
+          </tr>
+          
+          <!-- Alert Badge -->
+          <tr>
+            <td style="padding: 20px 40px 0;">
+              <div style="display: inline-block; background-color: ${severityColor}15; color: ${severityColor}; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                ${alert.severity}
+              </div>
+            </td>
+          </tr>
+          
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 30px 40px;">
+              <!-- Alert Type -->
+              <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 20px; font-weight: 600;">
+                ${formatAlertType(alert.alert_type)}
+              </h2>
+              
+              <!-- Message -->
+              <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; border-left: 4px solid ${severityColor}; margin-bottom: 24px;">
+                <p style="margin: 0; color: #374151; font-size: 16px; line-height: 1.6;">
+                  ${alert.message}
+                </p>
+              </div>
+              
+              <!-- Alert Information -->
+              <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <strong style="color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Time</strong>
+                    <p style="margin: 4px 0 0 0; color: #111827; font-size: 15px;">${formattedTime}</p>
+                  </td>
+                </tr>
+                ${alert.user_email ? `
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <strong style="color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Affected User</strong>
+                    <p style="margin: 4px 0 0 0; color: #111827; font-size: 15px;">${alert.user_email}</p>
+                  </td>
+                </tr>
+                ` : ''}
+                ${alert.ip_address ? `
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <strong style="color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">IP Address</strong>
+                    <p style="margin: 4px 0 0 0; color: #111827; font-size: 15px; font-family: monospace;">${alert.ip_address}</p>
+                  </td>
+                </tr>
+                ` : ''}
+              </table>
+              
+              <!-- Details Section (formatted, no raw JSON) -->
+              ${alertDetails ? formatDetails(alertDetails) : ''}
+              
+              <!-- Action Button -->
+              <div style="text-align: center; margin-top: 32px;">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/superadmin/security-dashboard" 
+                   style="display: inline-block; background-color: #14b8a6; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">
+                  View in Security Dashboard
+                </a>
+              </div>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f9fafb; padding: 24px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;">
+                This is an automated security alert from the
+              </p>
+              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                <strong>Urology Patient Management System</strong>
+              </p>
+              <p style="margin: 12px 0 0 0; color: #9ca3af; font-size: 11px;">
+                Please review this alert in the Security Dashboard for more details and to take appropriate action.
+              </p>
+            </td>
+          </tr>
+        </table>
+        
+        <!-- Footer Note -->
+        <table role="presentation" style="max-width: 600px; width: 100%; margin-top: 20px;">
+          <tr>
+            <td style="text-align: center; padding: 16px;">
+              <p style="margin: 0; color: #9ca3af; font-size: 11px; line-height: 1.5;">
+                This email was sent to security administrators and designated security team members.<br>
+                If you believe you received this email in error, please contact your system administrator.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+};
+
+// Helper function to send emails to all recipients
+const sendEmailsToRecipients = async (recipients, subject, emailHtml) => {
+  console.log(`📧 [Email Alert] Attempting to send email to ${recipients.length} recipient(s)...`);
+  const emailResults = [];
+  
+  for (const recipient of recipients) {
+    try {
+      console.log(`📧 [Email Alert] Sending email to: ${recipient}`);
+      const result = await sendNotificationEmail(
+        recipient,
+        subject,
+        emailHtml,
+        'text/html'
+      );
+      
+      emailResults.push({
+        recipient,
+        success: true,
+        messageId: result?.messageId || null
+      });
+      
+      const messageIdText = result?.messageId ? ` (Message ID: ${result.messageId})` : '';
+      console.log(`✅ [Email Alert] Email sent successfully to ${recipient}${messageIdText}`);
+    } catch (emailError) {
+      console.error(`❌ [Email Alert] Failed to send email to ${recipient}:`, emailError);
+      emailResults.push({
+        recipient,
+        success: false,
+        error: emailError.message || 'Unknown error'
+      });
+    }
+  }
+  
+  const successCount = emailResults.filter(r => r.success).length;
+  const failureCount = emailResults.filter(r => !r.success).length;
+  
+  console.log(`📧 [Email Alert] Email sending completed: ${successCount} succeeded, ${failureCount} failed`);
+  
+  return {
+    success: successCount > 0,
+    successCount,
+    failureCount,
+    recipientsCount: recipients.length,
+    results: emailResults,
+    message: successCount > 0 
+      ? `Email sent to ${successCount} of ${recipients.length} recipient(s)`
+      : 'Failed to send email to all recipients'
+  };
+};
+
 /**
  * Get list of users who should receive security alerts
  * Returns: superadmin users + security team members
@@ -220,81 +466,7 @@ export const sendAlertNotification = async (alert) => {
     console.log(`📧 [Email Alert] Will send email to ${recipients.length} recipient(s): ${recipients.join(', ')}`);
     
     // Format email subject
-    const subject = `[${alert.severity.toUpperCase()}] Security Alert: ${alert.alert_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
-    
-    // Format alert type for display
-    const formatAlertType = (type) => {
-      return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    };
-    
-    // Get severity color
-    const getSeverityColor = (severity) => {
-      switch (severity) {
-        case 'critical':
-          return '#dc2626'; // red-600
-        case 'high':
-          return '#ea580c'; // orange-600
-        case 'medium':
-          return '#ca8a04'; // yellow-600
-        case 'low':
-          return '#14b8a6'; // teal-500
-        default:
-          return '#6b7280'; // gray-500
-      }
-    };
-    
-    // Format details for display (no raw JSON)
-    const formatDetails = (details) => {
-      if (!details || typeof details !== 'object') return '';
-      
-      let html = '';
-      
-      // Lockout threshold details
-      if (details.failedAttempts !== undefined && details.threshold !== undefined) {
-        html += `
-          <div style="background-color: #fef2f2; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #dc2626;">
-            <p style="margin: 0; color: #991b1b; font-size: 14px;">
-              <strong>Failed Login Attempts:</strong> ${details.failedAttempts} / ${details.threshold}
-            </p>
-          </div>
-        `;
-      }
-      
-      // Multiple failed logins details
-      if (details.failedAttempts !== undefined && details.timeWindow) {
-        html += `
-          <div style="background-color: #fff7ed; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #ea580c;">
-            <p style="margin: 0; color: #9a3412; font-size: 14px;">
-              <strong>Failed Attempts:</strong> ${details.failedAttempts} in ${details.timeWindow}
-            </p>
-          </div>
-        `;
-      }
-      
-      // Unusual location details
-      if (details.previousIP) {
-        html += `
-          <div style="background-color: #fef3c7; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #ca8a04;">
-            <p style="margin: 0; color: #854d0e; font-size: 14px;">
-              <strong>Previous IP Address:</strong> ${details.previousIP}
-            </p>
-          </div>
-        `;
-      }
-      
-      // Simultaneous login details
-      if (details.activeSessions !== undefined) {
-        html += `
-          <div style="background-color: #f0fdf4; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #14b8a6;">
-            <p style="margin: 0; color: #14532d; font-size: 14px;">
-              <strong>Active Sessions:</strong> ${details.activeSessions}
-            </p>
-          </div>
-        `;
-      }
-      
-      return html;
-    };
+    const subject = `[${alert.severity.toUpperCase()}] Security Alert: ${formatAlertType(alert.alert_type)}`;
     
     // Parse details if it's a string
     let alertDetails = alert.details;
@@ -319,194 +491,18 @@ export const sendAlertNotification = async (alert) => {
       hour12: true
     });
     
-    const emailHtml = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Security Alert</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
-          <!-- Header -->
-          <tr>
-            <td style="background: linear-gradient(135deg, ${severityColor} 0%, ${severityColor}dd 100%); padding: 30px 40px; text-align: center;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600; letter-spacing: -0.5px;">
-                🔒 Security Alert Notification
-              </h1>
-            </td>
-          </tr>
-          
-          <!-- Alert Badge -->
-          <tr>
-            <td style="padding: 20px 40px 0;">
-              <div style="display: inline-block; background-color: ${severityColor}15; color: ${severityColor}; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                ${alert.severity}
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Main Content -->
-          <tr>
-            <td style="padding: 30px 40px;">
-              <!-- Alert Type -->
-              <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 20px; font-weight: 600;">
-                ${formatAlertType(alert.alert_type)}
-              </h2>
-              
-              <!-- Message -->
-              <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; border-left: 4px solid ${severityColor}; margin-bottom: 24px;">
-                <p style="margin: 0; color: #374151; font-size: 16px; line-height: 1.6;">
-                  ${alert.message}
-                </p>
-              </div>
-              
-              <!-- Alert Information -->
-              <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-                    <strong style="color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Time</strong>
-                    <p style="margin: 4px 0 0 0; color: #111827; font-size: 15px;">${formattedTime}</p>
-                  </td>
-                </tr>
-                ${alert.user_email ? `
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-                    <strong style="color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Affected User</strong>
-                    <p style="margin: 4px 0 0 0; color: #111827; font-size: 15px;">${alert.user_email}</p>
-                  </td>
-                </tr>
-                ` : ''}
-                ${alert.ip_address ? `
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-                    <strong style="color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">IP Address</strong>
-                    <p style="margin: 4px 0 0 0; color: #111827; font-size: 15px; font-family: monospace;">${alert.ip_address}</p>
-                  </td>
-                </tr>
-                ` : ''}
-              </table>
-              
-              <!-- Details Section (formatted, no raw JSON) -->
-              ${alertDetails ? formatDetails(alertDetails) : ''}
-              
-              <!-- Action Button -->
-              <div style="text-align: center; margin-top: 32px;">
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/superadmin/security-dashboard" 
-                   style="display: inline-block; background-color: #14b8a6; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">
-                  View in Security Dashboard
-                </a>
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f9fafb; padding: 24px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
-              <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;">
-                This is an automated security alert from the
-              </p>
-              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-                <strong>Urology Patient Management System</strong>
-              </p>
-              <p style="margin: 12px 0 0 0; color: #9ca3af; font-size: 11px;">
-                Please review this alert in the Security Dashboard for more details and to take appropriate action.
-              </p>
-            </td>
-          </tr>
-        </table>
-        
-        <!-- Footer Note -->
-        <table role="presentation" style="max-width: 600px; width: 100%; margin-top: 20px;">
-          <tr>
-            <td style="text-align: center; padding: 16px;">
-              <p style="margin: 0; color: #9ca3af; font-size: 11px; line-height: 1.5;">
-                This email was sent to security administrators and designated security team members.<br>
-                If you believe you received this email in error, please contact your system administrator.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-    `.trim();
-    
-    // Plain text fallback
-    const emailText = `
-Security Alert Notification
-
-Alert Type: ${formatAlertType(alert.alert_type)}
-Severity: ${alert.severity.toUpperCase()}
-Time: ${formattedTime}
-
-${alert.message}
-
-${alert.user_email ? `Affected User: ${alert.user_email}` : ''}
-${alert.ip_address ? `IP Address: ${alert.ip_address}` : ''}
-${alertDetails && alertDetails.failedAttempts !== undefined && alertDetails.threshold !== undefined ? `Failed Attempts: ${alertDetails.failedAttempts} / ${alertDetails.threshold}` : ''}
-
-View this alert in the Security Dashboard: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/superadmin/security-dashboard
-
-This is an automated security alert from the Urology Patient Management System.
-    `.trim();
+    const emailHtml = buildAlertEmailHTML(alert, alertDetails, severityColor, formattedTime);
     
     // Send email to all recipients
-    console.log(`📧 [Email Alert] Attempting to send email to ${recipients.length} recipient(s)...`);
-    const emailResults = [];
-    for (const recipient of recipients) {
-      try {
-        console.log(`📧 [Email Alert] Sending email to: ${recipient}`);
-        const result = await sendNotificationEmail(
-          recipient,
-          subject,
-          emailHtml,
-          true
-        );
-        if (result.success) {
-          console.log(`✅ [Email Alert] Email sent successfully to ${recipient} (Message ID: ${result.messageId || 'N/A'})`);
-        } else {
-          console.error(`❌ [Email Alert] Failed to send email to ${recipient}: ${result.error || result.message}`);
-        }
-        emailResults.push({ recipient, ...result });
-      } catch (error) {
-        console.error(`❌ [Email Alert] Exception sending email to ${recipient}:`, error);
-        console.error(`❌ [Email Alert] Error details:`, {
-          message: error.message,
-          code: error.code,
-          stack: error.stack
-        });
-        emailResults.push({ recipient, success: false, error: error.message });
-      }
-    }
-    
-    const successCount = emailResults.filter(r => r.success).length;
-    const failureCount = recipients.length - successCount;
-    
-    if (successCount > 0) {
-      console.log(`✅ [Email Alert] Successfully sent to ${successCount}/${recipients.length} recipient(s)`);
-    }
-    if (failureCount > 0) {
-      console.error(`❌ [Email Alert] Failed to send to ${failureCount}/${recipients.length} recipient(s)`);
-    }
-    
-    return {
-      success: successCount > 0,
-      recipientsCount: recipients.length,
-      successCount,
-      failureCount,
-      results: emailResults
-    };
+    return await sendEmailsToRecipients(recipients, subject, emailHtml);
   } catch (error) {
-    console.error('❌ [Email Alert] Error sending alert notification:', error);
+    console.error('❌ [Email Alert] Error in sendAlertNotification:', error);
     console.error('❌ [Email Alert] Error stack:', error.stack);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      message: 'Failed to send alert notification',
+      error: error.message
+    };
   }
 };
 

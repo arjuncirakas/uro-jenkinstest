@@ -1,607 +1,1685 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import AddPatientModal from '../AddPatientModal';
+import { patientService } from '../../services/patientService';
+import { bookingService } from '../../services/bookingService';
+import authService from '../../services/authService';
+import * as inputValidation from '../../utils/inputValidation';
 
-// Mock services
-const mockCreatePatient = vi.fn();
-const mockGetUrologists = vi.fn();
-const mockGetGPs = vi.fn();
-
+// Mock dependencies
 vi.mock('../../services/patientService', () => ({
-    patientService: {
-        addPatient: (...args) => mockCreatePatient(...args)
-    }
+  patientService: {
+    addPatient: vi.fn()
+  }
 }));
 
 vi.mock('../../services/bookingService', () => ({
-    bookingService: {
-        getAvailableUrologists: (...args) => mockGetUrologists(...args),
-        getAvailableGPs: (...args) => mockGetGPs(...args)
-    }
+  bookingService: {
+    getAvailableUrologists: vi.fn(),
+    getAvailableGPs: vi.fn()
+  }
 }));
 
-vi.mock('../../services/authService.js', () => ({
-    default: {
-        getCurrentUser: () => ({ id: 1, role: 'urology_nurse' })
-    }
+vi.mock('../../services/authService', () => ({
+  default: {
+    getCurrentUser: vi.fn()
+  }
 }));
 
-// Mock child modals
+vi.mock('../../utils/inputValidation', () => ({
+  validateNameInput: vi.fn((value) => /^[a-zA-Z\s'.-]*$/.test(value)),
+  validatePhoneInput: vi.fn((value) => /^[\d\s\-\(\)\+]*$/.test(value)),
+  validateNumericInput: vi.fn((value) => /^[\d.]*$/.test(value)),
+  validatePatientForm: vi.fn(() => ({})),
+  sanitizeInput: vi.fn((value) => value)
+}));
+
+vi.mock('../ConfirmModal', () => ({
+  default: ({ isOpen, onConfirm, onCancel, title, message }) => (
+    isOpen ? (
+      <div data-testid="confirm-modal">
+        <div>{title}</div>
+        <div>{message}</div>
+        <button onClick={() => onConfirm(true)}>Save</button>
+        <button onClick={() => onConfirm(false)}>Don't Save</button>
+        <button onClick={onCancel}>Cancel</button>
+      </div>
+    ) : null
+  )
+}));
+
 vi.mock('../modals/AddGPModal', () => ({
-    default: ({ isOpen, onClose, onSuccess }) =>
-        isOpen ? (
-            <div data-testid="add-gp-modal">
-                <button onClick={() => onSuccess({ id: 99, first_name: 'New', last_name: 'GP' })}>Add GP</button>
-                <button onClick={onClose}>Close</button>
-            </div>
-        ) : null
+  default: ({ isOpen, onClose, onSuccess }) => (
+    isOpen ? (
+      <div data-testid="add-gp-modal">
+        <button onClick={() => onSuccess({ userId: 1 })}>Add GP</button>
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null
+  )
 }));
-
-vi.mock('../modals/SuccessModal', () => ({
-    default: ({ isOpen, message, onClose }) =>
-        isOpen ? <div data-testid="success-modal" onClick={onClose}>{message}</div> : null
-}));
-
-vi.mock('../modals/ErrorModal', () => ({
-    default: ({ isOpen, message, onClose }) =>
-        isOpen ? <div data-testid="error-modal" onClick={onClose}>{message}</div> : null
-}));
-
-vi.mock('../modals/ConfirmationModal', () => ({
-    default: ({ isOpen, message, onConfirm, onCancel }) =>
-        isOpen ? (
-            <div data-testid="confirmation-modal">
-                {message}
-                <button onClick={onConfirm}>Confirm</button>
-                <button onClick={onCancel}>Cancel</button>
-            </div>
-        ) : null
-}));
-
-import AddPatientModal from '../AddPatientModal';
 
 describe('AddPatientModal', () => {
-    const mockOnClose = vi.fn();
-    const mockOnPatientAdded = vi.fn();
-    const mockOnError = vi.fn();
+  const mockOnClose = vi.fn();
+  const mockOnPatientAdded = vi.fn();
+  const mockOnError = vi.fn();
 
-    const defaultProps = {
-        isOpen: true,
-        onClose: mockOnClose,
-        onPatientAdded: mockOnPatientAdded,
-        onError: mockOnError,
-        isUrologist: false
-    };
+  const defaultProps = {
+    isOpen: true,
+    onClose: mockOnClose,
+    onPatientAdded: mockOnPatientAdded,
+    onError: mockOnError,
+    isUrologist: false
+  };
 
-    const mockUrologists = [
-        { id: 1, first_name: 'Dr.', last_name: 'Smith' },
-        { id: 2, first_name: 'Dr.', last_name: 'Johnson' }
-    ];
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    authService.getCurrentUser.mockReturnValue({ id: 1, role: 'nurse' });
+    bookingService.getAvailableUrologists.mockResolvedValue({
+      success: true,
+      data: [{ id: 1, name: 'Dr. Smith' }]
+    });
+    bookingService.getAvailableGPs.mockResolvedValue({
+      success: true,
+      data: { gps: [{ id: 1, firstName: 'John', lastName: 'Doe' }] }
+    });
+    patientService.addPatient.mockResolvedValue({
+      success: true,
+      data: { id: 1, firstName: 'Test', lastName: 'Patient' }
+    });
+    vi.useFakeTimers();
+  });
 
-    const mockGPs = [
-        { id: 1, first_name: 'Dr.', last_name: 'General' },
-        { id: 2, first_name: 'Dr.', last_name: 'Practice' }
-    ];
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        mockGetUrologists.mockResolvedValue({ success: true, data: mockUrologists });
-        mockGetGPs.mockResolvedValue({ success: true, data: mockGPs });
+  describe('Rendering', () => {
+    it('should not render when isOpen is false', () => {
+      render(<AddPatientModal {...defaultProps} isOpen={false} />);
+      expect(screen.queryByText('Add New Patient')).not.toBeInTheDocument();
     });
 
-    describe('Rendering', () => {
-        it('should return null when not open', () => {
-            const { container } = render(
-                <AddPatientModal {...defaultProps} isOpen={false} />
-            );
-            expect(container.firstChild).toBeNull();
-        });
-
-        it('should render modal when open', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            expect(screen.getByText(/Add New Patient/i)).toBeInTheDocument();
-        });
-
-        it('should render patient information fields', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            expect(screen.getByLabelText(/First Name/i)).toBeInTheDocument();
-            expect(screen.getByLabelText(/Last Name/i)).toBeInTheDocument();
-            expect(screen.getByLabelText(/Date of Birth/i)).toBeInTheDocument();
-        });
-
-        it('should render contact fields', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
-            expect(screen.getByLabelText(/Phone/i)).toBeInTheDocument();
-        });
-
-        it('should fetch urologists on mount', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            await waitFor(() => {
-                expect(mockGetUrologists).toHaveBeenCalled();
-            });
-        });
-
-        it('should fetch GPs on mount', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            await waitFor(() => {
-                expect(mockGetGPs).toHaveBeenCalled();
-            });
-        });
+    it('should render modal when isOpen is true', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      expect(screen.getByText('Add New Patient')).toBeInTheDocument();
     });
 
-    describe('Form Input Handling', () => {
-        it('should update first name on input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const firstNameInput = screen.getByLabelText(/First Name/i);
-            fireEvent.change(firstNameInput, { target: { name: 'firstName', value: 'John' } });
-            expect(firstNameInput.value).toBe('John');
-        });
-
-        it('should update last name on input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const lastNameInput = screen.getByLabelText(/Last Name/i);
-            fireEvent.change(lastNameInput, { target: { name: 'lastName', value: 'Doe' } });
-            expect(lastNameInput.value).toBe('Doe');
-        });
-
-        it('should update date of birth on input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const dobInput = screen.getByLabelText(/Date of Birth/i);
-            fireEvent.change(dobInput, { target: { name: 'dateOfBirth', value: '1980-05-15' } });
-            expect(dobInput.value).toBe('1980-05-15');
-        });
-
-        it('should auto-calculate age from date of birth', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const dobInput = screen.getByLabelText(/Date of Birth/i);
-            const ageInput = screen.getByLabelText(/Age/i) || document.querySelector('input[name="age"]');
-            
-            // Set DOB to 20 years ago
-            const twentyYearsAgo = new Date();
-            twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20);
-            const dobString = twentyYearsAgo.toISOString().split('T')[0];
-            
-            fireEvent.change(dobInput, { target: { name: 'dateOfBirth', value: dobString } });
-            
-            if (ageInput) {
-                expect(parseInt(ageInput.value)).toBeGreaterThanOrEqual(19);
-                expect(parseInt(ageInput.value)).toBeLessThanOrEqual(21);
-            }
-        });
-
-        it('should update email on input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const emailInput = screen.getByLabelText(/Email/i);
-            fireEvent.change(emailInput, { target: { name: 'email', value: 'john@example.com' } });
-            expect(emailInput.value).toBe('john@example.com');
-        });
-
-        it('should update phone on input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const phoneInput = screen.getByLabelText(/Phone/i);
-            fireEvent.change(phoneInput, { target: { name: 'phone', value: '1234567890' } });
-            expect(phoneInput.value).toBe('1234567890');
-        });
+    it('should render all form sections', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      expect(screen.getByText('Personal Information')).toBeInTheDocument();
+      expect(screen.getByText('GP Information')).toBeInTheDocument();
+      expect(screen.getByText('Emergency Contact')).toBeInTheDocument();
+      expect(screen.getByText('Medical Information')).toBeInTheDocument();
+      expect(screen.getByText('PSA Information')).toBeInTheDocument();
+      expect(screen.getByText('Exam & Prior Tests')).toBeInTheDocument();
     });
 
-    describe('Urologist Selection', () => {
-        it('should display urologist dropdown', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            await waitFor(() => {
-                expect(screen.getByLabelText(/Urologist/i)).toBeInTheDocument();
-            });
-        });
+    it('should render all required input fields', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      expect(screen.getByLabelText(/first name/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/last name/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/address/i)).toBeInTheDocument();
+    });
+  });
 
-        it('should show urologists in dropdown', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            await waitFor(() => {
-                expect(screen.getByText(/Dr. Smith/i)).toBeInTheDocument();
-            });
-        });
+  describe('Form Input Handling', () => {
+    it('should update firstName when input changes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const firstNameInput = screen.getByLabelText(/first name/i);
+      fireEvent.change(firstNameInput, { target: { value: 'John' } });
+      expect(firstNameInput.value).toBe('John');
     });
 
-    describe('GP Selection', () => {
-        it('should display GP dropdown', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            await waitFor(() => {
-                expect(screen.getByLabelText(/GP/i)).toBeInTheDocument();
-            });
-        });
-
-        it('should allow adding new GP', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const addGPButton = screen.getByText(/Add New GP/i);
-            fireEvent.click(addGPButton);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('add-gp-modal')).toBeInTheDocument();
-            });
-        });
-
-        it('should handle new GP being added', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const addGPButton = screen.getByText(/Add New GP/i);
-            fireEvent.click(addGPButton);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('add-gp-modal')).toBeInTheDocument();
-            });
-
-            // Add GP from modal
-            const addButton = screen.getByText('Add GP');
-            fireEvent.click(addButton);
-
-            await waitFor(() => {
-                expect(screen.queryByTestId('add-gp-modal')).not.toBeInTheDocument();
-            });
-        });
+    it('should validate name input and reject invalid characters', () => {
+      inputValidation.validateNameInput.mockReturnValue(false);
+      render(<AddPatientModal {...defaultProps} />);
+      const firstNameInput = screen.getByLabelText(/first name/i);
+      fireEvent.change(firstNameInput, { target: { value: 'John123' } });
+      // Should not update if validation fails
+      expect(firstNameInput.value).toBe('');
     });
 
-    describe('Form Validation', () => {
-        it('should validate required fields', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const submitButton = screen.getByText(/Add Patient/i);
-            fireEvent.click(submitButton);
-
-            await waitFor(() => {
-                expect(screen.getByText(/First name is required/i)).toBeInTheDocument();
-            });
-        });
-
-        it('should validate email format', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const emailInput = screen.getByLabelText(/Email/i);
-            fireEvent.change(emailInput, { target: { name: 'email', value: 'invalid' } });
-            fireEvent.blur(emailInput, { target: { name: 'email', value: 'invalid' } });
-
-            await waitFor(() => {
-                expect(screen.getByText(/valid email/i)).toBeInTheDocument();
-            });
-        });
-
-        it('should validate phone format', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const phoneInput = screen.getByLabelText(/Phone/i);
-            fireEvent.change(phoneInput, { target: { name: 'phone', value: '123' } });
-            fireEvent.blur(phoneInput, { target: { name: 'phone', value: '123' } });
-
-            await waitFor(() => {
-                expect(screen.getByText(/at least 8/i)).toBeInTheDocument();
-            });
-        });
+    it('should update phone number when input changes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const phoneInput = screen.getByLabelText(/phone number/i);
+      fireEvent.change(phoneInput, { target: { value: '1234567890' } });
+      expect(phoneInput.value).toBe('1234567890');
     });
 
-    describe('Form Submission', () => {
-        const fillValidForm = () => {
-            fireEvent.change(screen.getByLabelText(/First Name/i), {
-                target: { name: 'firstName', value: 'John' }
-            });
-            fireEvent.change(screen.getByLabelText(/Last Name/i), {
-                target: { name: 'lastName', value: 'Doe' }
-            });
-            fireEvent.change(screen.getByLabelText(/Date of Birth/i), {
-                target: { name: 'dateOfBirth', value: '1980-05-15' }
-            });
-            fireEvent.change(screen.getByLabelText(/Email/i), {
-                target: { name: 'email', value: 'john@example.com' }
-            });
-            fireEvent.change(screen.getByLabelText(/Phone/i), {
-                target: { name: 'phone', value: '1234567890' }
-            });
-        };
-
-        it('should submit form with valid data', async () => {
-            mockCreatePatient.mockResolvedValue({ success: true, data: { id: 1 } });
-            render(<AddPatientModal {...defaultProps} />);
-
-            fillValidForm();
-
-            const submitButton = screen.getByText(/Add Patient/i);
-            fireEvent.click(submitButton);
-
-            await waitFor(() => {
-                expect(mockCreatePatient).toHaveBeenCalled();
-            });
-        });
-
-        it('should show success modal on successful submission', async () => {
-            mockCreatePatient.mockResolvedValue({ success: true, data: { id: 1 } });
-            render(<AddPatientModal {...defaultProps} />);
-
-            fillValidForm();
-
-            const submitButton = screen.getByText(/Add Patient/i);
-            fireEvent.click(submitButton);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('success-modal')).toBeInTheDocument();
-            });
-        });
-
-        it('should call onPatientAdded after success', async () => {
-            mockCreatePatient.mockResolvedValue({ success: true, data: { id: 1 } });
-            render(<AddPatientModal {...defaultProps} />);
-
-            fillValidForm();
-
-            const submitButton = screen.getByText(/Add Patient/i);
-            fireEvent.click(submitButton);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('success-modal')).toBeInTheDocument();
-            });
-
-            fireEvent.click(screen.getByTestId('success-modal'));
-
-            await waitFor(() => {
-                expect(mockOnPatientAdded).toHaveBeenCalled();
-            });
-        });
-
-        it('should show error modal on failed submission', async () => {
-            mockCreatePatient.mockResolvedValue({
-                success: false,
-                message: 'Patient already exists'
-            });
-            render(<AddPatientModal {...defaultProps} />);
-
-            fillValidForm();
-
-            const submitButton = screen.getByText(/Add Patient/i);
-            fireEvent.click(submitButton);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('error-modal')).toBeInTheDocument();
-            });
-        });
-
-        it('should handle API exception', async () => {
-            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
-            mockCreatePatient.mockRejectedValue(new Error('Network error'));
-            render(<AddPatientModal {...defaultProps} />);
-
-            fillValidForm();
-
-            const submitButton = screen.getByText(/Add Patient/i);
-            fireEvent.click(submitButton);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('error-modal')).toBeInTheDocument();
-            });
-
-            consoleError.mockRestore();
-        });
+    it('should validate phone input and reject invalid characters', () => {
+      inputValidation.validatePhoneInput.mockReturnValue(false);
+      render(<AddPatientModal {...defaultProps} />);
+      const phoneInput = screen.getByLabelText(/phone number/i);
+      fireEvent.change(phoneInput, { target: { value: 'abc123' } });
+      expect(phoneInput.value).toBe('');
     });
 
-    describe('Modal Actions', () => {
-        it('should call onClose on Cancel', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const cancelButton = screen.getByText('Cancel');
-            fireEvent.click(cancelButton);
-            expect(mockOnClose).toHaveBeenCalled();
-        });
-
-        it('should reset form when modal reopens', () => {
-            const { rerender } = render(<AddPatientModal {...defaultProps} />);
-
-            fireEvent.change(screen.getByLabelText(/First Name/i), {
-                target: { name: 'first_name', value: 'John' }
-            });
-
-            rerender(<AddPatientModal {...defaultProps} isOpen={false} />);
-            rerender(<AddPatientModal {...defaultProps} isOpen={true} />);
-
-            expect(screen.getByLabelText(/First Name/i)).toHaveValue('');
-        });
+    it('should update email when input changes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const emailInput = screen.getByLabelText(/email address/i);
+      fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+      expect(emailInput.value).toBe('test@example.com');
     });
 
-    describe('Input Validation', () => {
-        it('should reject invalid characters in name fields', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const firstNameInput = screen.getByLabelText(/First Name/i);
-            const initialValue = firstNameInput.value;
-            
-            fireEvent.change(firstNameInput, { target: { name: 'firstName', value: 'John123' } });
-            // Should not update if invalid
-            expect(firstNameInput.value).toBe(initialValue);
-        });
-
-        it('should reject invalid characters in phone fields', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const phoneInput = screen.getByLabelText(/Phone/i);
-            const initialValue = phoneInput.value;
-            
-            fireEvent.change(phoneInput, { target: { name: 'phone', value: 'abc123' } });
-            // Should not update if invalid
-            expect(phoneInput.value).toBe(initialValue);
-        });
-
-        it('should reject invalid characters in postcode field', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const postcodeInput = screen.getByLabelText(/Postcode/i) || document.querySelector('input[name="postcode"]');
-            if (postcodeInput) {
-                const initialValue = postcodeInput.value;
-                fireEvent.change(postcodeInput, { target: { name: 'postcode', value: 'ABC123' } });
-                // Should not update if invalid
-                expect(postcodeInput.value).toBe(initialValue);
-            }
-        });
-
-        it('should handle priorBiopsy change to "no"', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const priorBiopsySelect = screen.getByLabelText(/Prior Biopsy/i) || document.querySelector('select[name="priorBiopsy"]');
-            if (priorBiopsySelect) {
-                fireEvent.change(priorBiopsySelect, { target: { name: 'priorBiopsy', value: 'yes' } });
-                fireEvent.change(priorBiopsySelect, { target: { name: 'priorBiopsy', value: 'no' } });
-                // Date should be cleared when "no" is selected
-                const dateInput = document.querySelector('input[name="priorBiopsyDate"]');
-                if (dateInput) {
-                    expect(dateInput.value).toBe('');
-                }
-            }
-        });
+    it('should update dateOfBirth and calculate age', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dobInput = screen.getByLabelText(/date of birth/i);
+      const ageInput = screen.getByLabelText(/^age/i);
+      
+      const pastDate = new Date();
+      pastDate.setFullYear(pastDate.getFullYear() - 30);
+      const dateString = pastDate.toISOString().split('T')[0];
+      
+      fireEvent.change(dobInput, { target: { value: dateString } });
+      
+      expect(dobInput.value).toBe(dateString);
+      expect(ageInput.value).toBe('30');
     });
 
-    describe('GP Selection Error Handling', () => {
-        it('should handle GP fetch error', async () => {
-            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
-            mockGetGPs.mockResolvedValue({ success: false });
-            
-            render(<AddPatientModal {...defaultProps} />);
-            
-            await waitFor(() => {
-                expect(mockGetGPs).toHaveBeenCalled();
-            });
-            
-            consoleError.mockRestore();
-        });
-
-        it('should handle urologist fetch error', async () => {
-            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
-            mockGetUrologists.mockResolvedValue({ success: false });
-            
-            render(<AddPatientModal {...defaultProps} />);
-            
-            await waitFor(() => {
-                expect(mockGetUrologists).toHaveBeenCalled();
-            });
-            
-            consoleError.mockRestore();
-        });
-
-        it('should handle GP select change', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            
-            await waitFor(() => {
-                const gpSelect = screen.getByLabelText(/GP/i) || document.querySelector('select[name="referringGP"]');
-                if (gpSelect) {
-                    fireEvent.change(gpSelect, { target: { value: '1' } });
-                    expect(gpSelect.value).toBe('1');
-                }
-            });
-        });
-
-        it('should handle clearing GP selection', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-            
-            await waitFor(() => {
-                const gpSelect = screen.getByLabelText(/GP/i) || document.querySelector('select[name="referringGP"]');
-                if (gpSelect) {
-                    fireEvent.change(gpSelect, { target: { value: '1' } });
-                    fireEvent.change(gpSelect, { target: { value: '' } });
-                    expect(gpSelect.value).toBe('');
-                }
-            });
-        });
+    it('should clear age when dateOfBirth is cleared', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dobInput = screen.getByLabelText(/date of birth/i);
+      const ageInput = screen.getByLabelText(/^age/i);
+      
+      fireEvent.change(dobInput, { target: { value: '2000-01-01' } });
+      fireEvent.change(dobInput, { target: { value: '' } });
+      
+      expect(ageInput.value).toBe('');
     });
 
-    describe('Additional Form Fields', () => {
-        it('should handle address input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const addressInput = screen.getByLabelText(/Address/i) || document.querySelector('input[name="address"], textarea[name="address"]');
-            if (addressInput) {
-                fireEvent.change(addressInput, { target: { name: 'address', value: '123 Main St' } });
-                expect(addressInput.value).toBe('123 Main St');
-            }
-        });
-
-        it('should handle medical history input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const medicalHistoryInput = screen.getByLabelText(/Medical History/i) || document.querySelector('textarea[name="medicalHistory"]');
-            if (medicalHistoryInput) {
-                fireEvent.change(medicalHistoryInput, { target: { name: 'medicalHistory', value: 'Hypertension' } });
-                expect(medicalHistoryInput.value).toBe('Hypertension');
-            }
-        });
-
-        it('should handle initial PSA input', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const psaInput = screen.getByLabelText(/Initial PSA/i) || document.querySelector('input[name="initialPSA"]');
-            if (psaInput) {
-                fireEvent.change(psaInput, { target: { name: 'initialPSA', value: '5.5' } });
-                expect(psaInput.value).toBe('5.5');
-            }
-        });
-
-        it('should handle priority selection', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const prioritySelect = screen.getByLabelText(/Priority/i) || document.querySelector('select[name="priority"]');
-            if (prioritySelect) {
-                fireEvent.change(prioritySelect, { target: { name: 'priority', value: 'Urgent' } });
-                expect(prioritySelect.value).toBe('Urgent');
-            }
-        });
+    it('should update age without calculating dateOfBirth', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const ageInput = screen.getByLabelText(/^age/i);
+      
+      fireEvent.change(ageInput, { target: { value: '25' } });
+      
+      expect(ageInput.value).toBe('25');
     });
 
-    describe('Triage Symptoms', () => {
-        it('should render symptom checkboxes', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            expect(screen.getByText(/Symptoms/i) || screen.getByText(/Triage/i)).toBeInTheDocument();
-        });
-
-        it('should handle symptom checkbox change', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const symptomCheckbox = screen.getAllByRole('checkbox')[0];
-            if (symptomCheckbox) {
-                const initialChecked = symptomCheckbox.checked;
-                fireEvent.click(symptomCheckbox);
-                // Verify checkbox state changed
-                expect(symptomCheckbox.checked).toBe(!initialChecked);
-            } else {
-                // If no checkbox found, verify component rendered
-                expect(screen.getByText(/Add New Patient/i)).toBeInTheDocument();
-            }
-        });
-
-        it('should allow adding custom symptoms', () => {
-            render(<AddPatientModal {...defaultProps} />);
-            const addSymptomButton = screen.queryByText(/Add Custom/i);
-            if (addSymptomButton) {
-                fireEvent.click(addSymptomButton);
-                // Verify custom symptom input field appears or button click was handled
-                expect(addSymptomButton).toBeInTheDocument();
-            } else {
-                // If button not found, verify component still renders correctly
-                expect(screen.getByText(/Add New Patient/i)).toBeInTheDocument();
-            }
-        });
+    it('should validate age input (only integers)', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const ageInput = screen.getByLabelText(/^age/i);
+      
+      fireEvent.change(ageInput, { target: { value: '25.5' } });
+      // Should reject decimal
+      expect(ageInput.value).toBe('');
     });
 
-    describe('Urologist Mode', () => {
-        it('should render differently for urologist', () => {
-            render(<AddPatientModal {...defaultProps} isUrologist={true} />);
-            expect(screen.getByText(/Add New Patient/i)).toBeInTheDocument();
-        });
+    it('should update postcode (digits only)', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const postcodeInput = screen.getByLabelText(/postcode/i);
+      
+      fireEvent.change(postcodeInput, { target: { value: '4000' } });
+      expect(postcodeInput.value).toBe('4000');
+      
+      fireEvent.change(postcodeInput, { target: { value: 'abc' } });
+      // Should reject non-digits
+      expect(postcodeInput.value).toBe('4000');
     });
 
-    describe('Keyboard Handling', () => {
-        it('should handle Escape key', () => {
-            render(<AddPatientModal {...defaultProps} />);
-
-            fireEvent.keyDown(document, { key: 'Escape' });
-            // Should trigger confirmation if form has changes or close modal
-            // Verify component doesn't crash and handles the key event
-            expect(screen.getByText(/Add New Patient/i)).toBeInTheDocument();
-        });
+    it('should update state dropdown', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const stateSelect = screen.getByLabelText(/state/i);
+      
+      fireEvent.change(stateSelect, { target: { value: 'NSW' } });
+      expect(stateSelect.value).toBe('NSW');
     });
 
-    describe('Confirmation Modal', () => {
-        it('should show confirmation on cancel with unsaved changes', async () => {
-            render(<AddPatientModal {...defaultProps} />);
-
-            // Make a change
-            fireEvent.change(screen.getByLabelText(/First Name/i), {
-                target: { name: 'firstName', value: 'John' }
-            });
-
-            // Try to cancel
-            const cancelButton = screen.getByText('Cancel');
-            fireEvent.click(cancelButton);
-
-            await waitFor(() => {
-                expect(screen.getByTestId('confirmation-modal') || mockOnClose.mock.calls.length > 0).toBeTruthy();
-            });
-        });
+    it('should update initialPSA (numeric with decimal)', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const psaInput = screen.getByLabelText(/initial psa level/i);
+      
+      fireEvent.change(psaInput, { target: { value: '4.5' } });
+      expect(psaInput.value).toBe('4.5');
     });
+
+    it('should validate PSA input and reject non-numeric', () => {
+      inputValidation.validateNumericInput.mockReturnValue(false);
+      render(<AddPatientModal {...defaultProps} />);
+      const psaInput = screen.getByLabelText(/initial psa level/i);
+      
+      fireEvent.change(psaInput, { target: { value: 'abc' } });
+      expect(psaInput.value).toBe('');
+    });
+
+    it('should clear priorBiopsyDate when priorBiopsy is set to no', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Set priorBiopsy to yes and add date
+      const yesRadio = screen.getByLabelText(/yes/i);
+      fireEvent.click(yesRadio);
+      
+      const biopsyDateInput = screen.getByLabelText(/biopsy date/i);
+      fireEvent.change(biopsyDateInput, { target: { value: '2020-01-01' } });
+      
+      // Set to no
+      const noRadio = screen.getByLabelText(/^no$/i);
+      fireEvent.click(noRadio);
+      
+      expect(biopsyDateInput.value).toBe('');
+    });
+
+    it('should update textarea fields', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const medicalHistoryTextarea = screen.getByLabelText(/medical history/i);
+      
+      fireEvent.change(medicalHistoryTextarea, { target: { value: 'Hypertension' } });
+      expect(medicalHistoryTextarea.value).toBe('Hypertension');
+    });
+
+    it('should sanitize input values', () => {
+      inputValidation.sanitizeInput.mockReturnValue('sanitized');
+      render(<AddPatientModal {...defaultProps} />);
+      const firstNameInput = screen.getByLabelText(/first name/i);
+      
+      fireEvent.change(firstNameInput, { target: { value: '<script>alert("xss")</script>' } });
+      
+      expect(inputValidation.sanitizeInput).toHaveBeenCalled();
+    });
+
+    it('should clear errors when user starts typing', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const firstNameInput = screen.getByLabelText(/first name/i);
+      
+      // Trigger error first
+      inputValidation.validatePatientForm.mockReturnValue({ firstName: 'Required' });
+      const form = firstNameInput.closest('form');
+      fireEvent.submit(form);
+      
+      // Then type to clear error
+      fireEvent.change(firstNameInput, { target: { value: 'John' } });
+      
+      // Error should be cleared
+      expect(screen.queryByText('Required')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('DRE Findings', () => {
+    it('should toggle DRE done checkbox', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dreCheckbox = screen.getByLabelText(/dre.*done/i);
+      
+      expect(dreCheckbox.checked).toBe(false);
+      fireEvent.click(dreCheckbox);
+      expect(dreCheckbox.checked).toBe(true);
+    });
+
+    it('should show DRE findings when DRE is done', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dreCheckbox = screen.getByLabelText(/dre.*done/i);
+      fireEvent.click(dreCheckbox);
+      
+      expect(screen.getByText(/dre findings/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/normal/i)).toBeInTheDocument();
+    });
+
+    it('should hide DRE findings when DRE is not done', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dreCheckbox = screen.getByLabelText(/dre.*done/i);
+      
+      expect(screen.queryByText(/dre findings/i)).not.toBeInTheDocument();
+      
+      fireEvent.click(dreCheckbox);
+      expect(screen.getByText(/dre findings/i)).toBeInTheDocument();
+      
+      fireEvent.click(dreCheckbox);
+      expect(screen.queryByText(/dre findings/i)).not.toBeInTheDocument();
+    });
+
+    it('should clear DRE findings when DRE is unchecked', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dreCheckbox = screen.getByLabelText(/dre.*done/i);
+      
+      fireEvent.click(dreCheckbox);
+      const normalCheckbox = screen.getByLabelText(/normal/i);
+      fireEvent.click(normalCheckbox);
+      
+      expect(normalCheckbox.checked).toBe(true);
+      
+      fireEvent.click(dreCheckbox);
+      fireEvent.click(dreCheckbox);
+      
+      // Findings should be cleared
+      const normalCheckboxAfter = screen.getByLabelText(/normal/i);
+      expect(normalCheckboxAfter.checked).toBe(false);
+    });
+
+    it('should allow multiple DRE findings', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dreCheckbox = screen.getByLabelText(/dre.*done/i);
+      fireEvent.click(dreCheckbox);
+      
+      const normalCheckbox = screen.getByLabelText(/normal/i);
+      const enlargedCheckbox = screen.getByLabelText(/enlarged/i);
+      
+      fireEvent.click(normalCheckbox);
+      fireEvent.click(enlargedCheckbox);
+      
+      expect(normalCheckbox.checked).toBe(true);
+      expect(enlargedCheckbox.checked).toBe(true);
+    });
+
+    it('should uncheck DRE finding when clicked again', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const dreCheckbox = screen.getByLabelText(/dre.*done/i);
+      fireEvent.click(dreCheckbox);
+      
+      const normalCheckbox = screen.getByLabelText(/normal/i);
+      fireEvent.click(normalCheckbox);
+      expect(normalCheckbox.checked).toBe(true);
+      
+      fireEvent.click(normalCheckbox);
+      expect(normalCheckbox.checked).toBe(false);
+    });
+  });
+
+  describe('Prior Biopsy', () => {
+    it('should show biopsy date and gleason score when priorBiopsy is yes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const yesRadio = screen.getByLabelText(/yes/i);
+      fireEvent.click(yesRadio);
+      
+      expect(screen.getByLabelText(/biopsy date/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/gleason score/i)).toBeInTheDocument();
+    });
+
+    it('should hide biopsy fields when priorBiopsy is no', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const yesRadio = screen.getByLabelText(/yes/i);
+      fireEvent.click(yesRadio);
+      
+      expect(screen.getByLabelText(/biopsy date/i)).toBeInTheDocument();
+      
+      const noRadio = screen.getByLabelText(/^no$/i);
+      fireEvent.click(noRadio);
+      
+      expect(screen.queryByLabelText(/biopsy date/i)).not.toBeInTheDocument();
+    });
+
+    it('should update priorBiopsyDate', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const yesRadio = screen.getByLabelText(/yes/i);
+      fireEvent.click(yesRadio);
+      
+      const dateInput = screen.getByLabelText(/biopsy date/i);
+      fireEvent.change(dateInput, { target: { value: '2020-01-01' } });
+      
+      expect(dateInput.value).toBe('2020-01-01');
+    });
+
+    it('should update gleasonScore', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const yesRadio = screen.getByLabelText(/yes/i);
+      fireEvent.click(yesRadio);
+      
+      const gleasonInput = screen.getByLabelText(/gleason score/i);
+      fireEvent.change(gleasonInput, { target: { value: '3+4' } });
+      
+      expect(gleasonInput.value).toBe('3+4');
+    });
+  });
+
+  describe('Comorbidities', () => {
+    it('should toggle comorbidity checkbox', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const cvdCheckbox = screen.getByLabelText(/^cvd$/i);
+      
+      expect(cvdCheckbox.checked).toBe(false);
+      fireEvent.click(cvdCheckbox);
+      expect(cvdCheckbox.checked).toBe(true);
+    });
+
+    it('should allow multiple comorbidities', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const cvdCheckbox = screen.getByLabelText(/^cvd$/i);
+      const diabetesCheckbox = screen.getByLabelText(/diabetes/i);
+      
+      fireEvent.click(cvdCheckbox);
+      fireEvent.click(diabetesCheckbox);
+      
+      expect(cvdCheckbox.checked).toBe(true);
+      expect(diabetesCheckbox.checked).toBe(true);
+    });
+
+    it('should uncheck comorbidity when clicked again', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const cvdCheckbox = screen.getByLabelText(/^cvd$/i);
+      
+      fireEvent.click(cvdCheckbox);
+      expect(cvdCheckbox.checked).toBe(true);
+      
+      fireEvent.click(cvdCheckbox);
+      expect(cvdCheckbox.checked).toBe(false);
+    });
+  });
+
+  describe('Triage Symptoms', () => {
+    it('should render predefined symptoms', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      expect(screen.getByText('LUTS')).toBeInTheDocument();
+      expect(screen.getByText('Hematuria')).toBeInTheDocument();
+      expect(screen.getByText('Nocturia')).toBeInTheDocument();
+    });
+
+    it('should toggle symptom checkbox', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const lutsCheckbox = screen.getByLabelText(/^luts$/i);
+      
+      expect(lutsCheckbox.checked).toBe(false);
+      fireEvent.click(lutsCheckbox);
+      expect(lutsCheckbox.checked).toBe(true);
+    });
+
+    it('should show IPSS score field for LUTS when checked', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const lutsCheckbox = screen.getByLabelText(/^luts$/i);
+      fireEvent.click(lutsCheckbox);
+      
+      expect(screen.getByLabelText(/ipss score/i)).toBeInTheDocument();
+    });
+
+    it('should show IPSS score field for Nocturia when checked', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const nocturiaCheckbox = screen.getByLabelText(/nocturia/i);
+      fireEvent.click(nocturiaCheckbox);
+      
+      expect(screen.getByLabelText(/ipss score/i)).toBeInTheDocument();
+    });
+
+    it('should show duration field when symptom is checked', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const hematuriaCheckbox = screen.getByLabelText(/hematuria/i);
+      fireEvent.click(hematuriaCheckbox);
+      
+      expect(screen.getByLabelText(/duration of symptoms/i)).toBeInTheDocument();
+    });
+
+    it('should update symptom duration', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const hematuriaCheckbox = screen.getByLabelText(/hematuria/i);
+      fireEvent.click(hematuriaCheckbox);
+      
+      const durationInput = screen.getByLabelText(/duration of symptoms/i);
+      fireEvent.change(durationInput, { target: { value: '6' } });
+      
+      expect(durationInput.value).toBe('6');
+    });
+
+    it('should update symptom duration unit', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const hematuriaCheckbox = screen.getByLabelText(/hematuria/i);
+      fireEvent.click(hematuriaCheckbox);
+      
+      const unitSelect = screen.getByLabelText(/unit/i);
+      fireEvent.change(unitSelect, { target: { value: 'years' } });
+      
+      expect(unitSelect.value).toBe('years');
+    });
+
+    it('should show frequency field for Nocturia', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const nocturiaCheckbox = screen.getByLabelText(/nocturia/i);
+      fireEvent.click(nocturiaCheckbox);
+      
+      expect(screen.getByLabelText(/frequency.*times per night/i)).toBeInTheDocument();
+    });
+
+    it('should update frequency for Nocturia', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const nocturiaCheckbox = screen.getByLabelText(/nocturia/i);
+      fireEvent.click(nocturiaCheckbox);
+      
+      const frequencyInput = screen.getByLabelText(/frequency.*times per night/i);
+      fireEvent.change(frequencyInput, { target: { value: '3' } });
+      
+      expect(frequencyInput.value).toBe('3');
+    });
+
+    it('should update symptom notes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const hematuriaCheckbox = screen.getByLabelText(/hematuria/i);
+      fireEvent.click(hematuriaCheckbox);
+      
+      const notesTextarea = screen.getByLabelText(/notes/i);
+      fireEvent.change(notesTextarea, { target: { value: 'Patient reports pain' } });
+      
+      expect(notesTextarea.value).toBe('Patient reports pain');
+    });
+
+    it('should open custom symptom modal', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const addCustomButton = screen.getByText(/add custom symptom/i);
+      fireEvent.click(addCustomButton);
+      
+      expect(screen.getByTestId('custom-symptom-modal')).toBeInTheDocument();
+    });
+
+    it('should add custom symptom', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const addCustomButton = screen.getByText(/add custom symptom/i);
+      fireEvent.click(addCustomButton);
+      
+      const nameInput = screen.getByLabelText(/symptom name/i);
+      fireEvent.change(nameInput, { target: { value: 'Back Pain' } });
+      
+      const durationInput = screen.getByLabelText(/duration of symptoms/i);
+      fireEvent.change(durationInput, { target: { value: '3' } });
+      
+      const addButton = screen.getByText(/add symptom/i);
+      fireEvent.click(addButton);
+      
+      expect(screen.getByText('Back Pain')).toBeInTheDocument();
+    });
+
+    it('should require IPSS score for custom LUTS symptom', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const addCustomButton = screen.getByText(/add custom symptom/i);
+      fireEvent.click(addCustomButton);
+      
+      const nameInput = screen.getByLabelText(/symptom name/i);
+      fireEvent.change(nameInput, { target: { value: 'LUTS' } });
+      
+      const addButton = screen.getByText(/add symptom/i);
+      fireEvent.click(addButton);
+      
+      // Should show IPSS score field
+      expect(screen.getByLabelText(/ipss score/i)).toBeInTheDocument();
+    });
+
+    it('should remove custom symptom', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const addCustomButton = screen.getByText(/add custom symptom/i);
+      fireEvent.click(addCustomButton);
+      
+      const nameInput = screen.getByLabelText(/symptom name/i);
+      fireEvent.change(nameInput, { target: { value: 'Back Pain' } });
+      
+      const durationInput = screen.getByLabelText(/duration of symptoms/i);
+      fireEvent.change(durationInput, { target: { value: '3' } });
+      
+      const addButton = screen.getByText(/add symptom/i);
+      fireEvent.click(addButton);
+      
+      const removeButton = screen.getByLabelText(/remove.*back pain/i);
+      fireEvent.click(removeButton);
+      
+      expect(screen.queryByText('Back Pain')).not.toBeInTheDocument();
+    });
+
+    it('should clear IPSS error when score is selected', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const lutsCheckbox = screen.getByLabelText(/^luts$/i);
+      fireEvent.click(lutsCheckbox);
+      
+      // Trigger validation error
+      inputValidation.validatePatientForm.mockReturnValue({
+        symptoms: { '0_ipss': 'IPSS score is required' }
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      // Select IPSS score
+      const ipssSelect = screen.getByLabelText(/ipss score/i);
+      fireEvent.change(ipssSelect, { target: { value: 'Mild' } });
+      
+      // Error should be cleared
+      expect(screen.queryByText('IPSS score is required')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('GP Selection', () => {
+    it('should fetch GPs on modal open', async () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        expect(bookingService.getAvailableGPs).toHaveBeenCalled();
+      });
+    });
+
+    it('should display GPs in dropdown', async () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        expect(gpSelect).toBeInTheDocument();
+      });
+    });
+
+    it('should select GP from dropdown', async () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+        expect(gpSelect.value).toBe('1');
+      });
+    });
+
+    it('should open Add GP modal', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const addGPButton = screen.getByText(/add gp/i);
+      fireEvent.click(addGPButton);
+      
+      expect(screen.getByTestId('add-gp-modal')).toBeInTheDocument();
+    });
+
+    it('should auto-select GP when user is GP role', async () => {
+      authService.getCurrentUser.mockReturnValue({ id: 1, role: 'gp' });
+      bookingService.getAvailableGPs.mockResolvedValue({
+        success: true,
+        data: { gps: [{ id: 1, firstName: 'John', lastName: 'Doe' }] }
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        expect(gpSelect.value).toBe('1');
+      });
+    });
+
+    it('should refresh GP list after adding new GP', async () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const addGPButton = screen.getByText(/add gp/i);
+      fireEvent.click(addGPButton);
+      
+      const addButton = screen.getByText(/add gp/i);
+      fireEvent.click(addButton);
+      
+      await waitFor(() => {
+        expect(bookingService.getAvailableGPs).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    it('should handle GP fetch error', async () => {
+      bookingService.getAvailableGPs.mockResolvedValue({
+        success: false,
+        error: 'Failed to fetch'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        expect(bookingService.getAvailableGPs).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Urologist Selection', () => {
+    it('should fetch urologists on modal open', async () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        expect(bookingService.getAvailableUrologists).toHaveBeenCalled();
+      });
+    });
+
+    it('should display urologists in dropdown', async () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        const urologistSelect = screen.getByLabelText(/assigned urologist/i);
+        expect(urologistSelect).toBeInTheDocument();
+      });
+    });
+
+    it('should select urologist from dropdown', async () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        const urologistSelect = screen.getByLabelText(/assigned urologist/i);
+        fireEvent.change(urologistSelect, { target: { value: 'Dr. Smith' } });
+        expect(urologistSelect.value).toBe('Dr. Smith');
+      });
+    });
+
+    it('should handle urologist fetch error', async () => {
+      bookingService.getAvailableUrologists.mockResolvedValue({
+        success: false,
+        error: 'Failed to fetch'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      await waitFor(() => {
+        expect(bookingService.getAvailableUrologists).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Form Validation', () => {
+    it('should validate required fields', () => {
+      inputValidation.validatePatientForm.mockReturnValue({
+        firstName: 'First name is required',
+        lastName: 'Last name is required',
+        phone: 'Phone is required'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText('First name is required')).toBeInTheDocument();
+      expect(screen.getByText('Last name is required')).toBeInTheDocument();
+      expect(screen.getByText('Phone is required')).toBeInTheDocument();
+    });
+
+    it('should validate dateOfBirth or age is required', () => {
+      inputValidation.validatePatientForm.mockReturnValue({
+        dateOfBirth: 'Date of birth or Age is required',
+        age: 'Date of birth or Age is required'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/date of birth or age is required/i)).toBeInTheDocument();
+    });
+
+    it('should validate dateOfBirth is not in future', () => {
+      inputValidation.validatePatientForm.mockReturnValue({
+        dateOfBirth: 'Date of birth cannot be in the future'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      const dobInput = screen.getByLabelText(/date of birth/i);
+      const futureDate = new Date();
+      futureDate.setFullYear(futureDate.getFullYear() + 1);
+      fireEvent.change(dobInput, { target: { value: futureDate.toISOString().split('T')[0] } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/cannot be in the future/i)).toBeInTheDocument();
+    });
+
+    it('should validate age is between 0 and 120', () => {
+      inputValidation.validatePatientForm.mockReturnValue({
+        age: 'Please enter a valid age (0-120)'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      const ageInput = screen.getByLabelText(/^age/i);
+      fireEvent.change(ageInput, { target: { value: '150' } });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/valid age.*0-120/i)).toBeInTheDocument();
+    });
+
+    it('should validate IPSS score is required for LUTS', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const lutsCheckbox = screen.getByLabelText(/^luts$/i);
+      fireEvent.click(lutsCheckbox);
+      
+      inputValidation.validatePatientForm.mockReturnValue({
+        symptoms: { '0_ipss': 'IPSS score is required for LUTS' }
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/ipss score is required for luts/i)).toBeInTheDocument();
+    });
+
+    it('should validate IPSS score is required for Nocturia', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const nocturiaCheckbox = screen.getByLabelText(/nocturia/i);
+      fireEvent.click(nocturiaCheckbox);
+      
+      inputValidation.validatePatientForm.mockReturnValue({
+        symptoms: { '2_ipss': 'IPSS score is required for Nocturia' }
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/ipss score is required for nocturia/i)).toBeInTheDocument();
+    });
+
+    it('should validate GP is selected', () => {
+      inputValidation.validatePatientForm.mockReturnValue({
+        referringGP: 'Please select a GP'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/please select a gp/i)).toBeInTheDocument();
+    });
+
+    it('should scroll to first error on validation failure', async () => {
+      const scrollIntoViewMock = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoViewMock;
+      
+      inputValidation.validatePatientForm.mockReturnValue({
+        firstName: 'Required'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      vi.advanceTimersByTime(100);
+      
+      await waitFor(() => {
+        expect(scrollIntoViewMock).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Form Submission', () => {
+    it('should submit form with valid data', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalled();
+      });
+    });
+
+    it('should call onPatientAdded on successful submission', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockOnPatientAdded).toHaveBeenCalled();
+      });
+    });
+
+    it('should close modal on successful submission', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockOnClose).toHaveBeenCalled();
+      });
+    });
+
+    it('should reset form on successful submission', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(screen.getByLabelText(/first name/i).value).toBe('');
+      });
+    });
+
+    it('should handle API validation errors', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      patientService.addPatient.mockResolvedValue({
+        success: false,
+        details: [
+          { field: 'email', message: 'Email already exists' }
+        ]
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockOnError).toHaveBeenCalledWith({
+          title: 'Validation Failed',
+          message: 'Please correct the following errors and try again',
+          errors: [{ field: 'email', message: 'Email already exists' }]
+        });
+      });
+    });
+
+    it('should handle API general errors', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      patientService.addPatient.mockResolvedValue({
+        success: false,
+        error: 'Database connection failed'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockOnError).toHaveBeenCalled();
+      });
+    });
+
+    it('should handle date_of_birth constraint error', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      patientService.addPatient.mockResolvedValue({
+        success: false,
+        error: 'column "date_of_birth" of relation "patients" violates not-null constraint'
+      });
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill form without dateOfBirth
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockOnError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: expect.stringContaining('Date of birth is required')
+          })
+        );
+      });
+    });
+
+    it('should calculate dateOfBirth from age when only age provided', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/^age/i), { target: { value: '30' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            age: 30,
+            dateOfBirth: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+          })
+        );
+      });
+    });
+
+    it('should include triage symptoms in submission', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      const hematuriaCheckbox = screen.getByLabelText(/hematuria/i);
+      fireEvent.click(hematuriaCheckbox);
+      
+      const durationInput = screen.getByLabelText(/duration of symptoms/i);
+      fireEvent.change(durationInput, { target: { value: '6' } });
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            triageSymptoms: expect.stringContaining('Hematuria')
+          })
+        );
+      });
+    });
+
+    it('should include IPSS score for LUTS in submission', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      const lutsCheckbox = screen.getByLabelText(/^luts$/i);
+      fireEvent.click(lutsCheckbox);
+      
+      const ipssSelect = screen.getByLabelText(/ipss score/i);
+      fireEvent.change(ipssSelect, { target: { value: 'Moderate' } });
+      
+      const durationInput = screen.getByLabelText(/duration of symptoms/i);
+      fireEvent.change(durationInput, { target: { value: '3' } });
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            triageSymptoms: expect.stringContaining('Moderate')
+          })
+        );
+      });
+    });
+
+    it('should include priorBiopsyDate only when priorBiopsy is yes', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      const yesRadio = screen.getByLabelText(/yes/i);
+      fireEvent.click(yesRadio);
+      
+      const biopsyDateInput = screen.getByLabelText(/biopsy date/i);
+      fireEvent.change(biopsyDateInput, { target: { value: '2020-01-01' } });
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            priorBiopsy: 'yes',
+            priorBiopsyDate: '2020-01-01'
+          })
+        );
+      });
+    });
+
+    it('should not include priorBiopsyDate when priorBiopsy is no', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        const callArgs = patientService.addPatient.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('priorBiopsyDate');
+      });
+    });
+
+    it('should include DRE findings as comma-separated string', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      const dreCheckbox = screen.getByLabelText(/dre.*done/i);
+      fireEvent.click(dreCheckbox);
+      
+      const normalCheckbox = screen.getByLabelText(/normal/i);
+      const enlargedCheckbox = screen.getByLabelText(/enlarged/i);
+      fireEvent.click(normalCheckbox);
+      fireEvent.click(enlargedCheckbox);
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            dreFindings: expect.stringContaining('Normal')
+          })
+        );
+      });
+    });
+
+    it('should include comorbidities array', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      const cvdCheckbox = screen.getByLabelText(/^cvd$/i);
+      fireEvent.click(cvdCheckbox);
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            comorbidities: ['CVD']
+          })
+        );
+      });
+    });
+
+    it('should handle network errors', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      patientService.addPatient.mockRejectedValue(new Error('Network error'));
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockOnError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: 'Network Error',
+            message: expect.stringContaining('Unable to connect')
+          })
+        );
+      });
+    });
+
+    it('should show loading state during submission', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      patientService.addPatient.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ success: true, data: {} }), 100)));
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const submitButton = screen.getByText(/add patient/i);
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      expect(screen.getByText(/adding patient/i)).toBeInTheDocument();
+      expect(submitButton).toBeDisabled();
+    });
+  });
+
+  describe('Cancel and Unsaved Changes', () => {
+    it('should close modal when cancel clicked with no unsaved changes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      const cancelButton = screen.getByText(/cancel/i);
+      fireEvent.click(cancelButton);
+      
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+
+    it('should show confirmation modal when cancel clicked with unsaved changes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      
+      const cancelButton = screen.getByText(/cancel/i);
+      fireEvent.click(cancelButton);
+      
+      expect(screen.getByTestId('confirm-modal')).toBeInTheDocument();
+    });
+
+    it('should save and close when Save clicked in confirmation modal', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      
+      const cancelButton = screen.getByText(/cancel/i);
+      fireEvent.click(cancelButton);
+      
+      const saveButton = screen.getByText(/save/i);
+      fireEvent.click(saveButton);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalled();
+      });
+    });
+
+    it('should close without saving when Don\'t Save clicked', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      
+      const cancelButton = screen.getByText(/cancel/i);
+      fireEvent.click(cancelButton);
+      
+      const dontSaveButton = screen.getByText(/don't save/i);
+      fireEvent.click(dontSaveButton);
+      
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+
+    it('should close confirmation modal when Cancel clicked', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      
+      const cancelButton = screen.getByText(/cancel/i);
+      fireEvent.click(cancelButton);
+      
+      const modalCancelButton = screen.getByText(/cancel/i);
+      fireEvent.click(modalCancelButton);
+      
+      expect(screen.queryByTestId('confirm-modal')).not.toBeInTheDocument();
+    });
+
+    it('should handle Escape key with unsaved changes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      
+      fireEvent.keyDown(document, { key: 'Escape', keyCode: 27 });
+      
+      expect(screen.getByTestId('confirm-modal')).toBeInTheDocument();
+    });
+
+    it('should close immediately on Escape when no unsaved changes', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      fireEvent.keyDown(document, { key: 'Escape', keyCode: 27 });
+      
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+
+    it('should detect unsaved changes correctly', () => {
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // No changes
+      const cancelButton1 = screen.getByText(/cancel/i);
+      fireEvent.click(cancelButton1);
+      expect(mockOnClose).toHaveBeenCalled();
+      
+      mockOnClose.mockClear();
+      
+      // With changes
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      const cancelButton2 = screen.getByText(/cancel/i);
+      fireEvent.click(cancelButton2);
+      expect(screen.getByTestId('confirm-modal')).toBeInTheDocument();
+    });
+  });
+
+  describe('Date Conversion', () => {
+    it('should convert date to ISO format', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      const dobInput = screen.getByLabelText(/date of birth/i);
+      fireEvent.change(dobInput, { target: { value: '1990-01-01' } });
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(patientService.addPatient).toHaveBeenCalledWith(
+          expect.objectContaining({
+            dateOfBirth: '1990-01-01'
+          })
+        );
+      });
+    });
+
+    it('should return null for empty date strings', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        const callArgs = patientService.addPatient.mock.calls[0][0];
+        expect(callArgs.referralDate).toBeNull();
+      });
+    });
+
+    it('should handle invalid date strings', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      const referralDateInput = screen.getByLabelText(/referral date/i);
+      fireEvent.change(referralDateInput, { target: { value: 'invalid-date' } });
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        const callArgs = patientService.addPatient.mock.calls[0][0];
+        expect(callArgs.referralDate).toBeNull();
+      });
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle null onPatientAdded callback', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} onPatientAdded={null} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(mockOnClose).toHaveBeenCalled();
+      });
+    });
+
+    it('should handle null onError callback', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      patientService.addPatient.mockResolvedValue({
+        success: false,
+        error: 'Error occurred'
+      });
+      
+      render(<AddPatientModal {...defaultProps} onError={null} />);
+      
+      // Fill form
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        expect(screen.getByText(/error occurred/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should handle empty triage symptoms', async () => {
+      inputValidation.validatePatientForm.mockReturnValue({});
+      
+      render(<AddPatientModal {...defaultProps} />);
+      
+      // Fill required fields
+      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } });
+      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: '1234567890' } });
+      fireEvent.change(screen.getByLabelText(/address/i), { target: { value: '123 Main St' } });
+      fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-01-01' } });
+      fireEvent.change(screen.getByLabelText(/initial psa level/i), { target: { value: '4.5' } });
+      fireEvent.change(screen.getByLabelText(/psa test date/i), { target: { value: '2024-01-01' } });
+      
+      await waitFor(() => {
+        const gpSelect = screen.getByLabelText(/select gp/i);
+        fireEvent.change(gpSelect, { target: { value: '1' } });
+      });
+      
+      const form = screen.getByRole('form');
+      fireEvent.submit(form);
+      
+      await waitFor(() => {
+        const callArgs = patientService.addPatient.mock.calls[0][0];
+        expect(callArgs.triageSymptoms).toBeNull();
+      });
+    });
+
+    it('should handle isUrologist prop', () => {
+      render(<AddPatientModal {...defaultProps} isUrologist={true} />);
+      expect(screen.getByText('Add New Patient')).toBeInTheDocument();
+    });
+  });
 });

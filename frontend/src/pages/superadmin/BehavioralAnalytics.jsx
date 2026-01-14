@@ -5,20 +5,10 @@ import {
   Clock,
   MapPin,
   Loader2,
-  Filter,
   X,
-  Eye,
-  Bell,
-  Search,
-  User,
   Shield,
   BarChart3,
-  Settings,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  XCircle,
-  Info
+  CheckCircle2
 } from 'lucide-react';
 import behavioralAnalyticsService from '../../services/behavioralAnalyticsService';
 import breachNotificationService from '../../services/breachNotificationService';
@@ -34,7 +24,6 @@ const BehavioralAnalytics = () => {
   const [error, setError] = useState('');
   const [userIdentifier, setUserIdentifier] = useState('');
   const [selectedBaselineType, setSelectedBaselineType] = useState('location');
-  const [showFilters, setShowFilters] = useState(false);
   const [showDismissConfirm, setShowDismissConfirm] = useState(false);
   const [anomalyToDismiss, setAnomalyToDismiss] = useState(null);
   const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
@@ -214,7 +203,8 @@ const BehavioralAnalytics = () => {
       parts.push(`Average Hour: ${details.averageHour}:00`);
     }
     if (details.expectedHours && Array.isArray(details.expectedHours)) {
-      parts.push(`Expected Hours: ${details.expectedHours.map(h => `${h}:00`).join(', ')}`);
+      const hoursText = details.expectedHours.map(h => `${h}:00`).join(', ');
+      parts.push(`Expected Hours: ${hoursText}`);
     }
     if (details.eventType) {
       parts.push(`Event Type: ${details.eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
@@ -237,10 +227,16 @@ const BehavioralAnalytics = () => {
       const anomalyTypeFormatted = anomalyToNotify.anomaly_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown';
       const detailsFormatted = formatAnomalyDetails(anomalyToNotify);
       
+      const getSeverity = () => {
+        if (anomalyToNotify.severity === 'high') return 'high';
+        if (anomalyToNotify.severity === 'medium') return 'medium';
+        return 'low';
+      };
+      const userIdentifier = anomalyToNotify.user_email || anomalyToNotify.user_id;
       const incidentData = {
         incident_type: 'security_incident',
-        severity: anomalyToNotify.severity === 'high' ? 'high' : anomalyToNotify.severity === 'medium' ? 'medium' : 'low',
-        description: `Behavioral anomaly detected: ${anomalyTypeFormatted} for user ${anomalyToNotify.user_email || anomalyToNotify.user_id}.\n\nDetails: ${detailsFormatted}`,
+        severity: getSeverity(),
+        description: `Behavioral anomaly detected: ${anomalyTypeFormatted} for user ${userIdentifier}.\n\nDetails: ${detailsFormatted}`,
         affected_users: [anomalyToNotify.user_id],
         affected_data_types: ['PII', 'PHI'],
         anomaly_id: anomalyToNotify.id
@@ -325,7 +321,12 @@ const BehavioralAnalytics = () => {
     if (isNaN(hour)) return 'N/A';
     
     // Convert to 12-hour format
-    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const getHour12 = (h) => {
+      if (h === 0) return 12;
+      if (h > 12) return h - 12;
+      return h;
+    };
+    const hour12 = getHour12(hour);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     return `${hour12}:00 ${ampm}`;
   };
@@ -505,17 +506,30 @@ const BehavioralAnalytics = () => {
               <div className="text-center py-12">
                 <div className="flex items-center justify-center space-x-2">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
-                  <span className="text-gray-600 text-sm">Loading {anomalySubTab === 'notified' ? 'notified ' : ''}anomalies...</span>
+                  <span className="text-gray-600 text-sm">
+                    {(() => {
+                      const prefix = anomalySubTab === 'notified' ? 'notified ' : '';
+                      return `Loading ${prefix}anomalies...`;
+                    })()}
+                  </span>
                 </div>
               </div>
-            ) : (anomalySubTab === 'notified' ? notifiedAnomaliesList : anomalies).length === 0 ? (
+            ) : (() => {
+              const currentList = anomalySubTab === 'notified' ? notifiedAnomaliesList : anomalies;
+              return currentList.length === 0;
+            })() ? (
               <div className="text-center py-12">
                 <div className="text-gray-500 text-sm mb-2">
-                  {hasActiveFilters 
-                    ? `No ${anomalySubTab === 'notified' ? 'notified ' : ''}anomalies match your filters`
-                    : anomalySubTab === 'notified' 
-                      ? 'No anomalies have been notified yet'
-                      : 'No behavioral anomalies detected'}
+                  {(() => {
+                    if (hasActiveFilters) {
+                      const prefix = anomalySubTab === 'notified' ? 'notified ' : '';
+                      return `No ${prefix}anomalies match your filters`;
+                    }
+                    if (anomalySubTab === 'notified') {
+                      return 'No anomalies have been notified yet';
+                    }
+                    return 'No behavioral anomalies detected';
+                  })()}
                 </div>
                 {hasActiveFilters && (
                   <button
@@ -766,7 +780,7 @@ const BehavioralAnalytics = () => {
                                   }
                                   
                                   return (
-                                    <div key={idx} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
+                                    <div key={`location-${loc.ip}-${idx}`} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
                                       <span className="text-xs text-gray-700">{displayText}</span>
                                       <span className="text-xs text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">{loc.frequency || loc.count || 0} login(s)</span>
                                     </div>
@@ -827,7 +841,7 @@ const BehavioralAnalytics = () => {
                               <p className="text-xs font-medium text-gray-700 mb-2">Common Actions</p>
                               <div className="space-y-1.5">
                                 {baselineData.commonActions.map((action, idx) => (
-                                  <div key={idx} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
+                                  <div key={`action-${action.action || 'unknown'}-${idx}`} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
                                     <span className="text-xs text-gray-700">{action.action || 'Unknown'}</span>
                                     <span className="text-xs text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">{action.frequency || action.count || 0} time(s)</span>
                                   </div>
@@ -885,9 +899,16 @@ const BehavioralAnalytics = () => {
 
       {/* Dismiss Confirmation Modal */}
       {showDismissConfirm && anomalyToDismiss && (
-        <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        <button
+          type="button"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 border-none outline-none"
           onClick={handleCancelDismiss}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              handleCancelDismiss();
+            }
+          }}
+          aria-label="Close modal"
         >
           <div 
             className="bg-white rounded-lg shadow-xl max-w-md w-full"
@@ -924,14 +945,21 @@ const BehavioralAnalytics = () => {
               </button>
             </div>
           </div>
-        </div>
+        </button>
       )}
 
       {/* Notify Confirmation Modal */}
       {showNotifyConfirm && anomalyToNotify && (
-        <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        <button
+          type="button"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 border-none outline-none"
           onClick={handleCancelNotify}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              handleCancelNotify();
+            }
+          }}
+          aria-label="Close modal"
         >
           <div 
             className="bg-white rounded-lg shadow-xl max-w-md w-full"
@@ -980,7 +1008,7 @@ const BehavioralAnalytics = () => {
               </button>
             </div>
           </div>
-        </div>
+        </button>
       )}
     </div>
   );

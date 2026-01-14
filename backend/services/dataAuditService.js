@@ -500,7 +500,13 @@ export const getThirdPartySharing = async (filters = {}) => {
         resourceType: row.resource_type,
         resourceId: row.resource_id,
         ipAddress: row.ip_address,
-        metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null
+        metadata: (() => {
+          if (!row.metadata) return null;
+          if (typeof row.metadata === 'string') {
+            return JSON.parse(row.metadata);
+          }
+          return row.metadata;
+        })()
       }))
     };
   } catch (error) {

@@ -175,8 +175,12 @@ export const createNotificationController = async (req, res) => {
 
     const notificationData = {
       notification_type,
-      recipient_type: recipient_type || notification_type === 'gdpr_supervisory' ? 'supervisory_authority' : 
-                      notification_type === 'hipaa_hhs' ? 'hhs' : 'individual',
+      recipient_type: (() => {
+        if (recipient_type) return recipient_type;
+        if (notification_type === 'gdpr_supervisory') return 'supervisory_authority';
+        if (notification_type === 'hipaa_hhs') return 'hhs';
+        return 'individual';
+      })(),
       recipient_email,
       recipient_name: recipient_name || null,
       sent_by: req.user?.id || null

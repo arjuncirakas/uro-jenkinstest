@@ -1,7 +1,7 @@
 // Session validation service for single device login
 // Periodically checks if the current session is still valid
 // Automatically logs out if session was terminated (user logged in from another device)
-import apiClient, { API_ENDPOINTS } from '../config/axios.js';
+import apiClient from '../config/axios.js';
 import tokenService from './tokenService.js';
 import authService from './authService.js';
 

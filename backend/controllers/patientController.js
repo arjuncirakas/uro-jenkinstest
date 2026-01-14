@@ -2,8 +2,8 @@ import pool from '../config/database.js';
 import { sendNotificationEmail } from '../services/emailService.js';
 import { createPathwayTransferNotification } from '../services/notificationService.js';
 import crypto from 'crypto';
-import { encrypt, decrypt, encryptFields, decryptFields, createSearchableHash, createPartialHash } from '../services/encryptionService.js';
-import { PATIENT_ENCRYPTED_FIELDS, SEARCHABLE_ENCRYPTED_FIELDS, PARTIAL_HASH_FIELDS } from '../constants/encryptionFields.js';
+import { encrypt, encryptFields, decryptFields, createSearchableHash, createPartialHash } from '../services/encryptionService.js';
+import { PATIENT_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 
 /**
  * Check if patient has 3 consecutive no-shows without profile changes

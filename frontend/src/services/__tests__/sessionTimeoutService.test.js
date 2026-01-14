@@ -179,6 +179,7 @@ describe('SessionTimeoutService', () => {
       // This is tested by checking that timer reset throttling prevents excessive resets
       vi.advanceTimersByTime(1000);
       // Timer reset throttling should prevent excessive resets
+      expect(sessionTimeoutService.getActive()).toBe(true);
     });
 
     it('should not reset timers if service is not active', () => {
@@ -217,6 +218,7 @@ describe('SessionTimeoutService', () => {
 
       // Timer should only reset once due to throttling
       // This is verified by checking the timer behavior
+      expect(sessionTimeoutService.getActive()).toBe(true);
     });
   });
 

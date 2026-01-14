@@ -1,5 +1,5 @@
 import pool from '../config/database.js';
-import { createAlert, sendAlertNotification, updateAlert } from '../services/alertService.js';
+import { sendAlertNotification } from '../services/alertService.js';
 import { createSearchableHash } from '../services/encryptionService.js';
 
 /**
@@ -17,6 +17,210 @@ const MAX_FAILED_ATTEMPTS = 10;
 export const checkAccountLockout = async (req, res, next) => {
   // Always allow login - monitoring only, no actual locking
   next();
+};
+
+// Helper function to find existing alert
+const findExistingAlert = async (client, email, userId) => {
+  const existingAlertResult = await client.query(`
+    SELECT id, status, user_id, user_email FROM security_alerts
+    WHERE alert_type = 'lockout_threshold'
+      AND (
+        LOWER(user_email) = LOWER($1)
+        OR (user_id = $2 AND user_id IS NOT NULL AND $2 IS NOT NULL)
+      )
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [email, userId]);
+  return existingAlertResult.rows.length > 0 ? existingAlertResult.rows[0] : null;
+};
+
+// Helper function to update existing alert
+const updateExistingAlert = async (client, existingAlert, newAttemptCount, userId, email) => {
+  const updateResult = await client.query(`
+    UPDATE security_alerts
+    SET message = $1,
+        details = $2,
+        status = CASE WHEN status = 'resolved' THEN 'new' ELSE status END,
+        user_id = COALESCE(user_id, $3),
+        user_email = COALESCE(user_email, $4)
+    WHERE id = $5
+    RETURNING *
+  `, [
+    `Account lockout threshold reached: ${newAttemptCount} failed login attempts`,
+    JSON.stringify({
+      failedAttempts: newAttemptCount,
+      threshold: MAX_FAILED_ATTEMPTS
+    }),
+    userId,
+    email,
+    existingAlert.id
+  ]);
+  return updateResult.rows[0];
+};
+
+// Helper function to send alert notification
+const sendAlertNotificationSafely = (alert) => {
+  sendAlertNotification(alert)
+    .then(result => {
+      if (result.success) {
+        console.log(`✅ [Lockout Alert] Email sent successfully to ${result.successCount}/${result.recipientsCount} recipients`);
+        if (result.results && result.results.length > 0) {
+          result.results.forEach(r => {
+            if (r.success) {
+              console.log(`  ✅ Sent to: ${r.recipient} (Message ID: ${r.messageId || 'N/A'})`);
+            } else {
+              console.error(`  ❌ Failed to send to: ${r.recipient} - ${r.error || r.message}`);
+            }
+          });
+        }
+      } else {
+        console.error(`❌ [Lockout Alert] Failed to send email: ${result.message || result.error}`);
+        if (result.message === 'Email notifications disabled') {
+          console.error('💡 [Lockout Alert] To enable, add ALERT_EMAIL_ENABLED=true to your .env file');
+        } else if (result.message === 'No alert recipients found') {
+          console.error('💡 [Lockout Alert] Ensure you have superadmin users or security team members configured');
+        }
+      }
+    })
+    .catch(err => {
+      console.error('❌ [Lockout Alert] Exception sending alert:', err);
+      console.error('❌ [Lockout Alert] Error stack:', err.stack);
+    });
+};
+
+// Helper function to create new alert
+const createNewAlert = async (client, email, userId, newAttemptCount) => {
+  const alertData = {
+    alertType: 'lockout_threshold',
+    severity: 'critical',
+    userEmail: email,
+    userId: userId,
+    message: `Account lockout threshold reached: ${newAttemptCount} failed login attempts`,
+    details: {
+      failedAttempts: newAttemptCount,
+      threshold: MAX_FAILED_ATTEMPTS
+    }
+  };
+  
+  const createResult = await client.query(`
+    INSERT INTO security_alerts (
+      alert_type, severity, user_id, user_email, ip_address, message, details, status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'new')
+    RETURNING *
+  `, [
+    alertData.alertType,
+    alertData.severity,
+    alertData.userId,
+    alertData.userEmail,
+    null,
+    alertData.message,
+    JSON.stringify(alertData.details)
+  ]);
+  
+  const alert = createResult.rows[0];
+  if (alert.details && typeof alert.details === 'string') {
+    alert.details = JSON.parse(alert.details);
+  }
+  return alert;
+};
+
+// Helper function to handle duplicate alert
+const handleDuplicateAlert = async (client, alert, email, userId, newAttemptCount) => {
+  const duplicateCheck = await client.query(`
+    SELECT id, status FROM security_alerts
+    WHERE alert_type = 'lockout_threshold'
+      AND LOWER(user_email) = LOWER($1)
+      AND id != $2
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [email, alert.id]);
+  
+  if (duplicateCheck.rows.length === 0) {
+    return false;
+  }
+  
+  const duplicateAlert = duplicateCheck.rows[0];
+  console.warn(`⚠️  [Lockout Alert] Duplicate alert detected! Deleting new alert ID ${alert.id} and updating existing alert ID ${duplicateAlert.id}`);
+  
+  await client.query('DELETE FROM security_alerts WHERE id = $1', [alert.id]);
+  
+  const updatedAlert = await updateExistingAlert(client, duplicateAlert, newAttemptCount, userId, email);
+  if (updatedAlert.details && typeof updatedAlert.details === 'string') {
+    updatedAlert.details = JSON.parse(updatedAlert.details);
+  }
+  
+  await client.query('COMMIT');
+  console.log(`✅ [Lockout Alert] Updated existing alert ID ${duplicateAlert.id} instead of creating duplicate`);
+  
+  if (duplicateAlert.status === 'resolved') {
+    console.log(`📧 [Lockout Alert] Sending email notification for reactivated alert ID: ${updatedAlert.id}`);
+    sendAlertNotificationSafely(updatedAlert);
+  }
+  
+  return true;
+};
+
+// Helper function to handle threshold reached
+const handleThresholdReached = async (client, email, userId, newAttemptCount) => {
+  try {
+    await client.query('BEGIN');
+    
+    try {
+      await client.query(`
+        SELECT pg_advisory_xact_lock(hashtext($1))
+      `, [`lockout_alert_${email}`]);
+      
+      const existingAlert = await findExistingAlert(client, email, userId);
+      
+      if (existingAlert) {
+        const isResolved = existingAlert.status === 'resolved';
+        console.log(`🔍 [Lockout Alert] Found existing alert ID ${existingAlert.id} for email ${email}: status=${existingAlert.status}`);
+        
+        if (isResolved) {
+          console.log(`📧 [Lockout Alert] Reactivating resolved alert ID ${existingAlert.id} with new count: ${newAttemptCount}`);
+        } else {
+          console.log(`📧 [Lockout Alert] Updating existing alert ID ${existingAlert.id} with new count: ${newAttemptCount}`);
+        }
+        
+        const updatedAlert = await updateExistingAlert(client, existingAlert, newAttemptCount, userId, email);
+        if (updatedAlert.details && typeof updatedAlert.details === 'string') {
+          updatedAlert.details = JSON.parse(updatedAlert.details);
+        }
+        
+        await client.query('COMMIT');
+        console.log(`✅ [Lockout Alert] Alert ${isResolved ? 'reactivated' : 'updated'} successfully, count: ${newAttemptCount}`);
+        
+        if (isResolved && updatedAlert) {
+          console.log(`📧 [Lockout Alert] Sending email notification for reactivated alert ID: ${updatedAlert.id}`);
+          sendAlertNotificationSafely(updatedAlert);
+        }
+        
+        return;
+      }
+      
+      console.log(`🔍 [Lockout Alert] No existing alert found for email ${email} (user_id=${userId}), creating new alert`);
+      console.log(`📧 [Lockout Alert] Creating new alert for user: ${email} (threshold first reached)`);
+      
+      const alert = await createNewAlert(client, email, userId, newAttemptCount);
+      
+      const isDuplicate = await handleDuplicateAlert(client, alert, email, userId, newAttemptCount);
+      if (isDuplicate) {
+        return;
+      }
+      
+      await client.query('COMMIT');
+      console.log(`✅ [Lockout Alert] Alert created successfully, ID: ${alert.id}`);
+      
+      console.log(`📧 [Lockout Alert] Sending email notification for new alert ID: ${alert.id}`);
+      sendAlertNotificationSafely(alert);
+    } catch (txError) {
+      await client.query('ROLLBACK');
+      throw txError;
+    }
+  } catch (alertError) {
+    console.error('❌ [Lockout Alert] Failed to create/update alert:', alertError);
+    console.error('❌ [Lockout Alert] Error stack:', alertError.stack);
+  }
 };
 
 /**
@@ -60,264 +264,9 @@ export const incrementFailedAttempts = async (email) => {
         }
         
         // If threshold reached, create or update alert (but don't lock account)
-        // Only create new alert and send email once when threshold is first reached
-        // For subsequent attempts, just update the existing alert's count
         if (newAttemptCount >= MAX_FAILED_ATTEMPTS) {
           console.log(`⚠️  [Lockout Alert] Threshold reached: ${email} - ${newAttemptCount} failed attempts (monitoring only, account not locked)`);
-          
-          try {
-            // Use a transaction with advisory locks to prevent race conditions
-            // This ensures only one alert is created/updated at a time for this user
-            await client.query('BEGIN');
-            
-            try {
-              // Use advisory lock based on email hash to serialize alert operations per user
-              // This prevents concurrent transactions from creating duplicate alerts
-              // pg_advisory_xact_lock automatically releases when transaction commits/rolls back
-              // Use hashtext to convert email to a consistent integer for the lock key
-              await client.query(`
-                SELECT pg_advisory_xact_lock(hashtext($1))
-              `, [`lockout_alert_${email}`]);
-              
-              // Check for ANY existing lockout_threshold alert for this user (including resolved ones)
-              // Prioritize email matching since user_id might be null
-              // Use LOWER() for case-insensitive email matching
-              // Check by email first, then by user_id if provided
-              const existingAlertResult = await client.query(`
-                SELECT id, status, user_id, user_email FROM security_alerts
-                WHERE alert_type = 'lockout_threshold'
-                  AND (
-                    LOWER(user_email) = LOWER($1)
-                    OR (user_id = $2 AND user_id IS NOT NULL AND $2 IS NOT NULL)
-                  )
-                ORDER BY created_at DESC
-                LIMIT 1
-              `, [email, user.id]);
-              
-              if (existingAlertResult.rows.length > 0) {
-                const existingAlert = existingAlertResult.rows[0];
-                const existingAlertId = existingAlert.id;
-                const isResolved = existingAlert.status === 'resolved';
-                const shouldSendEmail = isResolved; // Only send email when reactivating resolved alert
-                
-                console.log(`🔍 [Lockout Alert] Found existing alert ID ${existingAlertId} for email ${email}: status=${existingAlert.status}, existing_user_id=${existingAlert.user_id}, current_user_id=${user.id}`);
-                
-                if (isResolved) {
-                  console.log(`📧 [Lockout Alert] Reactivating resolved alert ID ${existingAlertId} with new count: ${newAttemptCount}`);
-                } else {
-                  console.log(`📧 [Lockout Alert] Updating existing alert ID ${existingAlertId} with new count: ${newAttemptCount}`);
-                }
-                
-                // Update alert: reactivate if resolved, update count, ensure user_id/email are set
-                const updateResult = await client.query(`
-                  UPDATE security_alerts
-                  SET message = $1,
-                      details = $2,
-                      status = CASE WHEN status = 'resolved' THEN 'new' ELSE status END,
-                      user_id = COALESCE(user_id, $3),
-                      user_email = COALESCE(user_email, $4)
-                  WHERE id = $5
-                  RETURNING *
-                `, [
-                  `Account lockout threshold reached: ${newAttemptCount} failed login attempts`,
-                  JSON.stringify({
-                    failedAttempts: newAttemptCount,
-                    threshold: MAX_FAILED_ATTEMPTS
-                  }),
-                  user.id,
-                  email,
-                  existingAlertId
-                ]);
-                
-                await client.query('COMMIT');
-                console.log(`✅ [Lockout Alert] Alert ${isResolved ? 'reactivated' : 'updated'} successfully, count: ${newAttemptCount}`);
-                
-                // Send email only if reactivating a resolved alert (new threshold breach cycle)
-                if (shouldSendEmail && updateResult.rows.length > 0) {
-                  const updatedAlert = updateResult.rows[0];
-                  if (updatedAlert.details && typeof updatedAlert.details === 'string') {
-                    updatedAlert.details = JSON.parse(updatedAlert.details);
-                  }
-                  
-                  console.log(`📧 [Lockout Alert] Sending email notification for reactivated alert ID: ${updatedAlert.id}`);
-                  sendAlertNotification(updatedAlert)
-                    .then(result => {
-                      if (result.success) {
-                        console.log(`✅ [Lockout Alert] Email sent successfully to ${result.successCount}/${result.recipientsCount} recipients`);
-                        if (result.results && result.results.length > 0) {
-                          result.results.forEach(r => {
-                            if (r.success) {
-                              console.log(`  ✅ Sent to: ${r.recipient} (Message ID: ${r.messageId || 'N/A'})`);
-                            } else {
-                              console.error(`  ❌ Failed to send to: ${r.recipient} - ${r.error || r.message}`);
-                            }
-                          });
-                        }
-                      } else {
-                        console.error(`❌ [Lockout Alert] Failed to send email: ${result.message || result.error}`);
-                        if (result.message === 'Email notifications disabled') {
-                          console.error('💡 [Lockout Alert] To enable, add ALERT_EMAIL_ENABLED=true to your .env file');
-                        } else if (result.message === 'No alert recipients found') {
-                          console.error('💡 [Lockout Alert] Ensure you have superadmin users or security team members configured');
-                        }
-                      }
-                    })
-                    .catch(err => {
-                      console.error('❌ [Lockout Alert] Exception sending alert:', err);
-                      console.error('❌ [Lockout Alert] Error stack:', err.stack);
-                    });
-                }
-                
-                return; // Don't create duplicate alert
-              }
-              
-              // Advisory lock ensures no other transaction can create alert for this user
-              // No need for double-check since we have exclusive lock
-              
-              // No existing alert found - create new alert and send email (only once)
-              console.log(`🔍 [Lockout Alert] No existing alert found for email ${email} (user_id=${user.id}), creating new alert`);
-              
-              const alertData = {
-                alertType: 'lockout_threshold',
-                severity: 'critical',
-                userEmail: email,
-                userId: user.id,
-                message: `Account lockout threshold reached: ${newAttemptCount} failed login attempts`,
-                details: {
-                  failedAttempts: newAttemptCount,
-                  threshold: MAX_FAILED_ATTEMPTS
-                }
-              };
-              
-              console.log(`📧 [Lockout Alert] Creating new alert for user: ${email} (threshold first reached)`);
-              
-              // Create alert directly in the transaction
-              const createResult = await client.query(`
-                INSERT INTO security_alerts (
-                  alert_type, severity, user_id, user_email, ip_address, message, details, status
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'new')
-                RETURNING *
-              `, [
-                alertData.alertType,
-                alertData.severity,
-                alertData.userId,
-                alertData.userEmail,
-                null, // ip_address
-                alertData.message,
-                JSON.stringify(alertData.details)
-              ]);
-              
-              const alert = createResult.rows[0];
-              if (alert.details && typeof alert.details === 'string') {
-                alert.details = JSON.parse(alert.details);
-              }
-              
-              // Double-check: After creating, verify no other alert exists for this email
-              // This is a safety net in case the advisory lock didn't prevent a race condition
-              const duplicateCheck = await client.query(`
-                SELECT id, status FROM security_alerts
-                WHERE alert_type = 'lockout_threshold'
-                  AND LOWER(user_email) = LOWER($1)
-                  AND id != $2
-                ORDER BY created_at DESC
-                LIMIT 1
-              `, [email, alert.id]);
-              
-              if (duplicateCheck.rows.length > 0) {
-                // Found a duplicate - delete the one we just created and update the existing one
-                const duplicateAlert = duplicateCheck.rows[0];
-                console.warn(`⚠️  [Lockout Alert] Duplicate alert detected! Deleting new alert ID ${alert.id} and updating existing alert ID ${duplicateAlert.id}`);
-                
-                await client.query('DELETE FROM security_alerts WHERE id = $1', [alert.id]);
-                
-                // Update the existing alert instead
-                const updateResult = await client.query(`
-                  UPDATE security_alerts
-                  SET message = $1,
-                      details = $2,
-                      status = CASE WHEN status = 'resolved' THEN 'new' ELSE status END,
-                      user_id = COALESCE(user_id, $3),
-                      user_email = COALESCE(user_email, $4)
-                  WHERE id = $5
-                  RETURNING *
-                `, [
-                  `Account lockout threshold reached: ${newAttemptCount} failed login attempts`,
-                  JSON.stringify({
-                    failedAttempts: newAttemptCount,
-                    threshold: MAX_FAILED_ATTEMPTS
-                  }),
-                  user.id,
-                  email,
-                  duplicateAlert.id
-                ]);
-                
-                const updatedAlert = updateResult.rows[0];
-                if (updatedAlert.details && typeof updatedAlert.details === 'string') {
-                  updatedAlert.details = JSON.parse(updatedAlert.details);
-                }
-                
-                await client.query('COMMIT');
-                console.log(`✅ [Lockout Alert] Updated existing alert ID ${duplicateAlert.id} instead of creating duplicate`);
-                
-                // Send email only if reactivating resolved alert
-                const isResolved = duplicateAlert.status === 'resolved';
-                if (isResolved) {
-                  console.log(`📧 [Lockout Alert] Sending email notification for reactivated alert ID: ${updatedAlert.id}`);
-                  sendAlertNotification(updatedAlert)
-                    .then(result => {
-                      if (result.success) {
-                        console.log(`✅ [Lockout Alert] Email sent successfully to ${result.successCount}/${result.recipientsCount} recipients`);
-                      } else {
-                        console.error(`❌ [Lockout Alert] Failed to send email: ${result.message || result.error}`);
-                      }
-                    })
-                    .catch(err => {
-                      console.error('❌ [Lockout Alert] Exception sending alert:', err);
-                    });
-                }
-                
-                return; // Exit early, alert already handled
-              }
-              
-              await client.query('COMMIT');
-              console.log(`✅ [Lockout Alert] Alert created successfully, ID: ${alert.id}`);
-              
-              // Send notification ONLY ONCE when alert is first created (non-blocking)
-              console.log(`📧 [Lockout Alert] Sending email notification for new alert ID: ${alert.id}`);
-              sendAlertNotification(alert)
-                .then(result => {
-                  if (result.success) {
-                    console.log(`✅ [Lockout Alert] Email sent successfully to ${result.successCount}/${result.recipientsCount} recipients`);
-                    if (result.results && result.results.length > 0) {
-                      result.results.forEach(r => {
-                        if (r.success) {
-                          console.log(`  ✅ Sent to: ${r.recipient} (Message ID: ${r.messageId || 'N/A'})`);
-                        } else {
-                          console.error(`  ❌ Failed to send to: ${r.recipient} - ${r.error || r.message}`);
-                        }
-                      });
-                    }
-                  } else {
-                    console.error(`❌ [Lockout Alert] Failed to send email: ${result.message || result.error}`);
-                    if (result.message === 'Email notifications disabled') {
-                      console.error('💡 [Lockout Alert] To enable, add ALERT_EMAIL_ENABLED=true to your .env file');
-                    } else if (result.message === 'No alert recipients found') {
-                      console.error('💡 [Lockout Alert] Ensure you have superadmin users or security team members configured');
-                    }
-                  }
-                })
-                .catch(err => {
-                  console.error('❌ [Lockout Alert] Exception sending alert:', err);
-                  console.error('❌ [Lockout Alert] Error stack:', err.stack);
-                });
-            } catch (txError) {
-              await client.query('ROLLBACK');
-              throw txError;
-            }
-          } catch (alertError) {
-            console.error('❌ [Lockout Alert] Failed to create/update alert:', alertError);
-            console.error('❌ [Lockout Alert] Error stack:', alertError.stack);
-          }
+          await handleThresholdReached(client, email, user.id, newAttemptCount);
         }
       }
     } finally {

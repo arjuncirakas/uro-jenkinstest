@@ -24,7 +24,12 @@
     "rate-limit:enable": "node scripts/toggle-rate-limiting.js enable",
     "rate-limit:disable": "node scripts/toggle-rate-limiting.js disable",
     "rate-limit:status": "node scripts/toggle-rate-limiting.js status",
-    "check-env": "node scripts/check-env.js"
+    "check-env": "node scripts/check-env.js",
+    "tde:setup": "node scripts/setupTDE.js",
+    "tde:setup-interactive": "node scripts/setupTDEInteractive.js",
+    "tde:status": "node scripts/checkTDEStatus.js",
+    "tde:enable-table": "node scripts/enableTableTDE.js",
+    "tde:rotate-keys": "node scripts/rotateTDEKeys.js"
   },
   "dependencies": {
     "axios": "^1.13.0",

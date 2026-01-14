@@ -1443,7 +1443,7 @@ export const serveFile = async (req, res) => {
 
     let fileBuffer = null;
     let fileName = null;
-    let mimeType = 'application/octet-stream';
+    let mimeType;
 
     if (dbResult.rows.length > 0 && dbResult.rows[0].file_data) {
       // New encrypted file from database
@@ -1463,7 +1463,7 @@ export const serveFile = async (req, res) => {
           '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           '.csv': 'text/csv'
         };
-        mimeType = mimeTypes[ext] || 'application/octet-stream';
+        mimeType = mimeTypes[ext] ?? 'application/octet-stream';
         console.log('📁 [serveFile] Step 4 - Decrypted file, size:', fileBuffer.length, 'bytes');
       } catch (decryptError) {
         console.error('📁 [serveFile] ERROR - Decryption failed:', decryptError);

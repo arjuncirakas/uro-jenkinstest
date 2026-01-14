@@ -4,8 +4,7 @@ import {
   getAnomalies,
   getNotifiedAnomalies,
   updateAnomalyStatus,
-  getAnomalyStatistics,
-  detectAnomalies
+  getAnomalyStatistics
 } from '../services/behavioralAnalyticsService.js';
 
 /**
@@ -38,7 +37,7 @@ export const getBaselines = async (req, res) => {
   } catch (error) {
     console.error('Error getting baselines:', error);
     
-    if (error.message && error.message.includes('does not exist')) {
+    if (error.message?.includes('does not exist')) {
       return res.status(404).json({
         success: false,
         message: error.message,
@@ -205,21 +204,67 @@ export const updateAnomalyStatusController = async (req, res) => {
  * POST /api/superadmin/behavioral-analytics/baselines/calculate
  * Body: { userId: 123, baselineType: 'time' } OR { email: 'user@example.com', baselineType: 'time' }
  */
+// Helper function to validate baseline request
+const validateBaselineRequest = (userId, email, baselineType) => {
+  if ((!userId && !email) || !baselineType) {
+    return {
+      isValid: false,
+      error: {
+        status: 400,
+        message: 'userId or email, and baselineType are required'
+      }
+    };
+  }
+
+  if (!['location', 'time', 'access_pattern'].includes(baselineType)) {
+    return {
+      isValid: false,
+      error: {
+        status: 400,
+        message: 'Invalid baselineType. Must be: location, time, or access_pattern'
+      }
+    };
+  }
+
+  return { isValid: true };
+};
+
+// Helper function to handle baseline calculation errors
+const handleBaselineError = (error, req, res) => {
+  console.error('Error calculating baseline:', error);
+  
+  if (error.message?.includes('does not exist')) {
+    return res.status(404).json({
+      success: false,
+      message: error.message,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+
+  if (error.message?.includes('foreign key constraint')) {
+    return res.status(400).json({
+      success: false,
+      message: `User with ID ${req.body.userId} does not exist. Please verify the user ID.`,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+
+  return res.status(500).json({
+    success: false,
+    message: 'Failed to calculate baseline',
+    error: process.env.NODE_ENV === 'development' ? error.message : undefined
+  });
+};
+
 export const calculateBaselineController = async (req, res) => {
   try {
     const { userId, email, baselineType } = req.body;
 
-    if ((!userId && !email) || !baselineType) {
-      return res.status(400).json({
+    const validation = validateBaselineRequest(userId, email, baselineType);
+    if (!validation.isValid) {
+      return res.status(validation.error.status).json({
         success: false,
-        message: 'userId or email, and baselineType are required'
-      });
-    }
-
-    if (!['location', 'time', 'access_pattern'].includes(baselineType)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid baselineType. Must be: location, time, or access_pattern'
+        message: validation.error.message
       });
     }
 
@@ -232,30 +277,7 @@ export const calculateBaselineController = async (req, res) => {
       message: 'Baseline calculated successfully'
     });
   } catch (error) {
-    console.error('Error calculating baseline:', error);
-    
-    // Handle specific error cases
-    if (error.message && error.message.includes('does not exist')) {
-      return res.status(404).json({
-        success: false,
-        message: error.message,
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
-    }
-
-    if (error.message && error.message.includes('foreign key constraint')) {
-      return res.status(400).json({
-        success: false,
-        message: `User with ID ${req.body.userId} does not exist. Please verify the user ID.`,
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to calculate baseline',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return handleBaselineError(error, req, res);
   }
 };
 

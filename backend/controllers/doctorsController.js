@@ -336,7 +336,12 @@ export const updateDoctor = async (req, res) => {
     // Check if phone is being changed and if new phone already exists (using hash)
     if (phone) {
       const phoneHash = createSearchableHash(phone);
-      const emailHashForCheck = email ? createSearchableHash(email) : (oldEmail ? createSearchableHash(oldEmail) : null);
+      let emailHashForCheck = null;
+      if (email) {
+        emailHashForCheck = createSearchableHash(email);
+      } else if (oldEmail) {
+        emailHashForCheck = createSearchableHash(oldEmail);
+      }
       const existingPhone = emailHashForCheck
         ? await client.query(
             'SELECT id FROM users WHERE phone_hash = $1 AND email_hash != $2',

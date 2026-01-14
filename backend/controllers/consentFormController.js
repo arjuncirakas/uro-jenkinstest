@@ -514,6 +514,72 @@ export const getPatientConsentForms = async (req, res) => {
   }
 };
 
+// Helper function to validate upload request
+const validateConsentFormUpload = (consentFormId, file) => {
+  if (!consentFormId) {
+    return {
+      isValid: false,
+      error: { status: 400, message: 'Consent form ID is required' }
+    };
+  }
+  if (!file) {
+    return {
+      isValid: false,
+      error: { status: 400, message: 'File is required' }
+    };
+  }
+  return { isValid: true };
+};
+
+// Helper function to prepare file data
+const prepareFileData = (file) => {
+  if (!file.buffer) {
+    return { filePath: null, fileData: null };
+  }
+  const fileData = encryptFile(file.buffer);
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  const filePath = `consent-forms/patients/patient-consent-${uniqueSuffix}${path.extname(file.originalname)}`;
+  return { filePath, fileData };
+};
+
+// Helper function to delete old file
+const deleteOldFile = (oldFilePath) => {
+  if (!oldFilePath) return;
+  const fullOldFilePath = path.join(process.cwd(), oldFilePath);
+  if (fs.existsSync(fullOldFilePath)) {
+    try {
+      fs.unlinkSync(fullOldFilePath);
+    } catch (err) {
+      console.error('Error deleting old patient consent file:', err);
+    }
+  }
+};
+
+// Helper function to update existing consent form
+const updateExistingConsentForm = async (client, existingUpload, filePath, file, fileData) => {
+  deleteOldFile(existingUpload.rows[0].file_path);
+  const result = await client.query(
+    `UPDATE patient_consent_forms 
+     SET file_path = $1, file_name = $2, file_size = $3, file_data = $4, uploaded_at = CURRENT_TIMESTAMP
+     WHERE id = $5
+     RETURNING *`,
+    [filePath, file.originalname, file.size, fileData, existingUpload.rows[0].id]
+  );
+  return result;
+};
+
+// Helper function to insert new consent form
+const insertNewConsentForm = async (client, patientId, consentFormId, filePath, file, fileData) => {
+  const result = await client.query(
+    `INSERT INTO patient_consent_forms 
+     (patient_id, consent_form_id, file_path, file_name, file_size, file_data, uploaded_at) 
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP) 
+     RETURNING *`,
+    [patientId, consentFormId, filePath, file.originalname, file.size, fileData]
+  );
+  return result;
+};
+
 // Upload patient consent form
 export const uploadPatientConsentForm = async (req, res) => {
   const client = await pool.connect();
@@ -523,17 +589,11 @@ export const uploadPatientConsentForm = async (req, res) => {
     const { consentFormId } = req.body;
     const file = req.file;
 
-    if (!consentFormId) {
-      return res.status(400).json({
+    const validation = validateConsentFormUpload(consentFormId, file);
+    if (!validation.isValid) {
+      return res.status(validation.error.status).json({
         success: false,
-        message: 'Consent form ID is required'
-      });
-    }
-
-    if (!file) {
-      return res.status(400).json({
-        success: false,
-        message: 'File is required'
+        message: validation.error.message
       });
     }
 
@@ -563,15 +623,8 @@ export const uploadPatientConsentForm = async (req, res) => {
       });
     }
 
-    // Encrypt file buffer and store in database
-    let filePath = null;
-    let fileData = null;
-    if (file.buffer) {
-      fileData = encryptFile(file.buffer);
-      // Generate reference file_path for frontend URL construction (file not actually stored here)
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      filePath = `consent-forms/patients/patient-consent-${uniqueSuffix}${path.extname(file.originalname)}`;
-    }
+    // Prepare file data
+    const { filePath, fileData } = prepareFileData(file);
 
     // Check if patient already has this consent form uploaded
     const existingUpload = await client.query(
@@ -581,44 +634,14 @@ export const uploadPatientConsentForm = async (req, res) => {
     );
 
     if (existingUpload.rows.length > 0) {
-      // Update existing record
-      const oldFilePath = existingUpload.rows[0].file_path;
-
-      // Delete old file from filesystem if exists (backward compatibility)
-      if (oldFilePath) {
-        const fullOldFilePath = path.join(process.cwd(), oldFilePath);
-        if (fs.existsSync(fullOldFilePath)) {
-          try {
-            fs.unlinkSync(fullOldFilePath);
-          } catch (err) {
-            console.error('Error deleting old patient consent file:', err);
-          }
-        }
-      }
-
-      const result = await client.query(
-        `UPDATE patient_consent_forms 
-         SET file_path = $1, file_name = $2, file_size = $3, file_data = $4, uploaded_at = CURRENT_TIMESTAMP
-         WHERE id = $5
-         RETURNING *`,
-        [filePath, file.originalname, file.size, fileData, existingUpload.rows[0].id]
-      );
-
+      const result = await updateExistingConsentForm(client, existingUpload, filePath, file, fileData);
       return res.status(200).json({
         success: true,
         message: 'Consent form file updated successfully',
         data: result.rows[0]
       });
     } else {
-      // Insert new record
-      const result = await client.query(
-        `INSERT INTO patient_consent_forms 
-         (patient_id, consent_form_id, file_path, file_name, file_size, file_data, uploaded_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP) 
-         RETURNING *`,
-        [patientId, consentFormId, filePath, file.originalname, file.size, fileData]
-      );
-
+      const result = await insertNewConsentForm(client, patientId, consentFormId, filePath, file, fileData);
       return res.status(201).json({
         success: true,
         message: 'Consent form file uploaded successfully',
@@ -666,7 +689,7 @@ export const serveConsentFormFile = async (req, res) => {
     // Check database first for encrypted files (check both template and patient consent tables)
     let fileBuffer = null;
     let fileName = null;
-    let mimeType = 'application/octet-stream';
+    let mimeType;
 
     // Check consent_forms table (templates)
     const templateResult = await client.query(
@@ -689,7 +712,7 @@ export const serveConsentFormFile = async (req, res) => {
           '.doc': 'application/msword',
           '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         };
-        mimeType = mimeTypes[ext] || 'application/octet-stream';
+        mimeType = mimeTypes[ext] ?? 'application/octet-stream';
       } catch (decryptError) {
         console.error('[serveConsentFormFile] Decryption failed:', decryptError);
         setCorsHeaders(req, res);
@@ -720,7 +743,7 @@ export const serveConsentFormFile = async (req, res) => {
             '.doc': 'application/msword',
             '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           };
-          mimeType = mimeTypes[ext] || 'application/octet-stream';
+          mimeType = mimeTypes[ext] ?? 'application/octet-stream';
         } catch (decryptError) {
           console.error('[serveConsentFormFile] Decryption failed:', decryptError);
           setCorsHeaders(req, res);
@@ -743,7 +766,7 @@ export const serveConsentFormFile = async (req, res) => {
           '.doc': 'application/msword',
           '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         };
-        mimeType = mimeTypes[ext] || 'application/octet-stream';
+        mimeType = mimeTypes[ext] ?? 'application/octet-stream';
       } else {
         // File not found
         console.error('[serveConsentFormFile] File not found in database or filesystem');

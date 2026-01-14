@@ -60,6 +60,23 @@ const BreachManagement = () => {
     notes: ''
   });
 
+  // Helper function to check if incident has government notification
+  const checkIncidentGovNotification = async (incidentId) => {
+    try {
+      const notifResponse = await breachNotificationService.getNotifications(incidentId);
+      if (notifResponse.success && notifResponse.data) {
+        return notifResponse.data.some(notif => 
+          (notif.notification_type === 'gdpr_supervisory' || notif.notification_type === 'hipaa_hhs') &&
+          notif.status === 'sent'
+        );
+      }
+      return false;
+    } catch (err) {
+      console.error(`Error checking notifications for incident ${incidentId}:`, err);
+      return false;
+    }
+  };
+
   // Fetch incidents
   const fetchIncidents = async () => {
     setIsLoading(true);
@@ -74,19 +91,9 @@ const BreachManagement = () => {
         // Check which incidents have been notified to government authorities
         const notifiedSet = new Set();
         for (const incident of incidentsList) {
-          try {
-            const notifResponse = await breachNotificationService.getNotifications(incident.id);
-            if (notifResponse.success && notifResponse.data) {
-              const hasGovNotif = notifResponse.data.some(notif => 
-                (notif.notification_type === 'gdpr_supervisory' || notif.notification_type === 'hipaa_hhs') &&
-                notif.status === 'sent'
-              );
-              if (hasGovNotif) {
-                notifiedSet.add(incident.id);
-              }
-            }
-          } catch (err) {
-            console.error(`Error checking notifications for incident ${incident.id}:`, err);
+          const hasGovNotif = await checkIncidentGovNotification(incident.id);
+          if (hasGovNotif) {
+            notifiedSet.add(incident.id);
           }
         }
         setNotifiedIncidents(notifiedSet);
@@ -98,6 +105,57 @@ const BreachManagement = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper function to process notifications for an incident
+  const processIncidentNotifications = async (incident, allNotifications, notifiedIncidents) => {
+    try {
+      const notifResponse = await breachNotificationService.getNotifications(incident.id);
+      if (notifResponse.success && notifResponse.data) {
+        // Filter only government authority notifications
+        const govNotifications = notifResponse.data.filter(notif => 
+          notif.notification_type === 'gdpr_supervisory' || notif.notification_type === 'hipaa_hhs'
+        );
+        
+        // If incident has been notified, add to notified incidents list
+        if (govNotifications.length > 0 && govNotifications.some(n => n.status === 'sent')) {
+          notifiedIncidents.push({
+            ...incident,
+            notifications: govNotifications
+          });
+        }
+        
+        // Add incident info to each notification
+        govNotifications.forEach(notif => {
+          allNotifications.push({
+            ...notif,
+            incident_id: incident.id,
+            incident_type: incident.incident_type,
+            incident_severity: incident.severity
+          });
+        });
+      }
+    } catch (err) {
+      console.error(`Failed to fetch notifications for incident ${incident.id}:`, err);
+    }
+  };
+
+  // Helper function to sort notifications by date
+  const sortNotificationsByDate = (notifications) => {
+    return notifications.sort((a, b) => {
+      const dateA = a.sent_at || a.created_at;
+      const dateB = b.sent_at || b.created_at;
+      return new Date(dateB) - new Date(dateA);
+    });
+  };
+
+  // Helper function to sort incidents by notification date
+  const sortIncidentsByNotificationDate = (incidents) => {
+    return incidents.sort((a, b) => {
+      const dateA = a.notifications[0]?.sent_at || a.notifications[0]?.created_at || a.detected_at;
+      const dateB = b.notifications[0]?.sent_at || b.notifications[0]?.created_at || b.detected_at;
+      return new Date(dateB) - new Date(dateA);
+    });
   };
 
   // Fetch all government authority notifications
@@ -112,50 +170,12 @@ const BreachManagement = () => {
         
         // Fetch notifications for each incident
         for (const incident of incidentsResponse.data) {
-          try {
-            const notifResponse = await breachNotificationService.getNotifications(incident.id);
-            if (notifResponse.success && notifResponse.data) {
-              // Filter only government authority notifications
-              const govNotifications = notifResponse.data.filter(notif => 
-                notif.notification_type === 'gdpr_supervisory' || notif.notification_type === 'hipaa_hhs'
-              );
-              
-              // If incident has been notified, add to notified incidents list
-              if (govNotifications.length > 0 && govNotifications.some(n => n.status === 'sent')) {
-                notifiedIncidents.push({
-                  ...incident,
-                  notifications: govNotifications
-                });
-              }
-              
-              // Add incident info to each notification
-              govNotifications.forEach(notif => {
-                allNotifications.push({
-                  ...notif,
-                  incident_id: incident.id,
-                  incident_type: incident.incident_type,
-                  incident_severity: incident.severity
-                });
-              });
-            }
-          } catch (err) {
-            console.error(`Failed to fetch notifications for incident ${incident.id}:`, err);
-          }
+          await processIncidentNotifications(incident, allNotifications, notifiedIncidents);
         }
         
         // Sort by sent_at or created_at (most recent first)
-        allNotifications.sort((a, b) => {
-          const dateA = a.sent_at || a.created_at;
-          const dateB = b.sent_at || b.created_at;
-          return new Date(dateB) - new Date(dateA);
-        });
-
-        // Sort notified incidents by most recent notification
-        notifiedIncidents.sort((a, b) => {
-          const dateA = a.notifications[0]?.sent_at || a.notifications[0]?.created_at || a.detected_at;
-          const dateB = b.notifications[0]?.sent_at || b.notifications[0]?.created_at || b.detected_at;
-          return new Date(dateB) - new Date(dateA);
-        });
+        sortNotificationsByDate(allNotifications);
+        sortIncidentsByNotificationDate(notifiedIncidents);
         
         setNotifications(allNotifications);
         setNotifiedIncidentsList(notifiedIncidents);
@@ -262,17 +282,60 @@ const BreachManagement = () => {
     try {
       const response = await breachNotificationService.sendNotification(notificationId);
       if (response.success) {
-        // Refresh notifications list if we're on the notifications tab
-        if (activeTab === 'notifications') {
-          await fetchNotifications();
-        } else {
-          await fetchNotifications();
-        }
+        // Refresh notifications list
+        await fetchNotifications();
       } else {
         setError(response.error || 'Failed to send notification');
       }
     } catch (err) {
       setError('Failed to send notification');
+    }
+  };
+
+  // Helper function to format incident description with JSON parsing
+  const formatIncidentDescription = (description) => {
+    if (!description) return '';
+    
+    // Check if description contains JSON string
+    const jsonMatch = description.match(/Details:\s*(\{.*\})/s);
+    if (!jsonMatch) {
+      return description;
+    }
+    
+    try {
+      const jsonStr = jsonMatch[1];
+      const jsonData = JSON.parse(jsonStr);
+      
+      // Format the JSON data nicely
+      const parts = [];
+      if (jsonData.eventHour !== undefined) {
+        parts.push(`Event Hour: ${jsonData.eventHour}:00`);
+      }
+      if (jsonData.averageHour !== undefined) {
+        parts.push(`Average Hour: ${jsonData.averageHour}:00`);
+      }
+      if (jsonData.expectedHours && Array.isArray(jsonData.expectedHours)) {
+        const hoursText = jsonData.expectedHours.map(h => `${h}:00`).join(', ');
+        parts.push(`Expected Hours: ${hoursText}`);
+      }
+      if (jsonData.eventType) {
+        parts.push(`Event Type: ${jsonData.eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
+      }
+      if (jsonData.ipAddress) {
+        parts.push(`IP Address: ${jsonData.ipAddress}`);
+      }
+      if (jsonData.location) {
+        parts.push(`Location: ${jsonData.location}`);
+      }
+      
+      // Replace JSON with formatted details
+      if (parts.length > 0) {
+        return description.replace(jsonMatch[0], `Details: ${parts.join(' | ')}`);
+      }
+      return description;
+    } catch (e) {
+      // If parsing fails, just show as is
+      return description;
     }
   };
 
@@ -622,49 +685,7 @@ const BreachManagement = () => {
                           </h3>
 
                           <div className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">
-                            {(() => {
-                              // Try to parse and format description if it contains JSON
-                              let description = incident.description || '';
-                              
-                              // Check if description contains JSON string
-                              const jsonMatch = description.match(/Details:\s*(\{.*\})/s);
-                              if (jsonMatch) {
-                                try {
-                                  const jsonStr = jsonMatch[1];
-                                  const jsonData = JSON.parse(jsonStr);
-                                  
-                                  // Format the JSON data nicely
-                                  const parts = [];
-                                  if (jsonData.eventHour !== undefined) {
-                                    parts.push(`Event Hour: ${jsonData.eventHour}:00`);
-                                  }
-                                  if (jsonData.averageHour !== undefined) {
-                                    parts.push(`Average Hour: ${jsonData.averageHour}:00`);
-                                  }
-                                  if (jsonData.expectedHours && Array.isArray(jsonData.expectedHours)) {
-                                    parts.push(`Expected Hours: ${jsonData.expectedHours.map(h => `${h}:00`).join(', ')}`);
-                                  }
-                                  if (jsonData.eventType) {
-                                    parts.push(`Event Type: ${jsonData.eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
-                                  }
-                                  if (jsonData.ipAddress) {
-                                    parts.push(`IP Address: ${jsonData.ipAddress}`);
-                                  }
-                                  if (jsonData.location) {
-                                    parts.push(`Location: ${jsonData.location}`);
-                                  }
-                                  
-                                  // Replace JSON with formatted details
-                                  if (parts.length > 0) {
-                                    description = description.replace(jsonMatch[0], `Details: ${parts.join(' | ')}`);
-                                  }
-                                } catch (e) {
-                                  // If parsing fails, just show as is
-                                }
-                              }
-                              
-                              return description;
-                            })()}
+                            {formatIncidentDescription(incident.description)}
                           </div>
 
                           {incident.affected_data_types && incident.affected_data_types.length > 0 && (
@@ -737,13 +758,18 @@ const BreachManagement = () => {
                           <span className="text-sm font-medium text-gray-900">
                             {notification.notification_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                           </span>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            notification.status === 'sent' ? 'bg-green-100 text-green-800' :
-                            notification.status === 'failed' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {notification.status}
-                          </span>
+                          {(() => {
+                            const getStatusClass = (status) => {
+                              if (status === 'sent') return 'bg-green-100 text-green-800';
+                              if (status === 'failed') return 'bg-red-100 text-red-800';
+                              return 'bg-yellow-100 text-yellow-800';
+                            };
+                            return (
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusClass(notification.status)}`}>
+                                {notification.status}
+                              </span>
+                            );
+                          })()}
                           {notification.incident_id && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                               Incident #{notification.incident_id}
@@ -907,8 +933,9 @@ const BreachManagement = () => {
               <h2 className="text-xl font-bold text-gray-900 mb-4">Create Breach Incident</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Incident Type</label>
+                  <label htmlFor="incident-type" className="block text-sm font-medium text-gray-700 mb-1">Incident Type</label>
                   <select
+                    id="incident-type"
                     value={incidentForm.incident_type}
                     onChange={(e) => setIncidentForm(prev => ({ ...prev, incident_type: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -919,8 +946,9 @@ const BreachManagement = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                  <label htmlFor="incident-severity" className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
                   <select
+                    id="incident-severity"
                     value={incidentForm.severity}
                     onChange={(e) => setIncidentForm(prev => ({ ...prev, severity: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -932,8 +960,9 @@ const BreachManagement = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <label htmlFor="incident-description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <textarea
+                    id="incident-description"
                     value={incidentForm.description}
                     onChange={(e) => setIncidentForm(prev => ({ ...prev, description: e.target.value }))}
                     rows={4}
@@ -942,8 +971,9 @@ const BreachManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Affected Data Types (comma-separated)</label>
+                  <label htmlFor="affected-data-types" className="block text-sm font-medium text-gray-700 mb-1">Affected Data Types (comma-separated)</label>
                   <input
+                    id="affected-data-types"
                     type="text"
                     value={incidentForm.affected_data_types.join(', ')}
                     onChange={(e) => setIncidentForm(prev => ({ ...prev, affected_data_types: e.target.value.split(',').map(s => s.trim()).filter(s => s) }))}
@@ -978,8 +1008,9 @@ const BreachManagement = () => {
               <h2 className="text-xl font-bold text-gray-900 mb-4">Create Notification</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notification Type</label>
+                  <label htmlFor="notification-type" className="block text-sm font-medium text-gray-700 mb-1">Notification Type</label>
                   <select
+                    id="notification-type"
                     value={notificationForm.notification_type}
                     onChange={(e) => setNotificationForm(prev => ({ ...prev, notification_type: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -990,8 +1021,9 @@ const BreachManagement = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Recipient Email</label>
+                  <label htmlFor="notification-recipient-email" className="block text-sm font-medium text-gray-700 mb-1">Recipient Email</label>
                   <input
+                    id="notification-recipient-email"
                     type="email"
                     value={notificationForm.recipient_email}
                     onChange={(e) => setNotificationForm(prev => ({ ...prev, recipient_email: e.target.value }))}
@@ -1000,8 +1032,9 @@ const BreachManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Recipient Name (optional)</label>
+                  <label htmlFor="notification-recipient-name" className="block text-sm font-medium text-gray-700 mb-1">Recipient Name (optional)</label>
                   <input
+                    id="notification-recipient-name"
                     type="text"
                     value={notificationForm.recipient_name}
                     onChange={(e) => setNotificationForm(prev => ({ ...prev, recipient_name: e.target.value }))}
@@ -1153,16 +1186,19 @@ const BreachManagement = () => {
                           <p className="text-xs text-gray-500 mb-2">
                             Taken: {formatDate(remediation.taken_at)} by {remediation.taken_by_email || 'System'}
                           </p>
-                          {remediation.effectiveness && (
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              remediation.effectiveness === 'effective' ? 'bg-green-100 text-green-800' :
-                              remediation.effectiveness === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                              remediation.effectiveness === 'ineffective' ? 'bg-red-100 text-red-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {remediation.effectiveness}
-                            </span>
-                          )}
+                          {remediation.effectiveness && (() => {
+                            const getEffectivenessClass = (eff) => {
+                              if (eff === 'effective') return 'bg-green-100 text-green-800';
+                              if (eff === 'partial') return 'bg-yellow-100 text-yellow-800';
+                              if (eff === 'ineffective') return 'bg-red-100 text-red-800';
+                              return 'bg-gray-100 text-gray-800';
+                            };
+                            return (
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEffectivenessClass(remediation.effectiveness)}`}>
+                                {remediation.effectiveness}
+                              </span>
+                            );
+                          })()}
                           {remediation.notes && (
                             <p className="text-sm text-gray-600 mt-2">{remediation.notes}</p>
                           )}
@@ -1287,13 +1323,21 @@ const BreachManagement = () => {
 
         {/* Notify Government Authority Modal */}
         {showGovAuthorityModal && incidentToNotify && (
-          <div 
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          <button
+            type="button"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 border-none outline-none"
             onClick={handleCancelGovAuthority}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                handleCancelGovAuthority();
+              }
+            }}
+            aria-label="Close modal"
           >
             <div 
               className="bg-white rounded-lg shadow-xl max-w-md w-full"
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
             >
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Notify Government Authority</h2>
@@ -1314,10 +1358,11 @@ const BreachManagement = () => {
                 )}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="gov-authority-type" className="block text-sm font-medium text-gray-700 mb-1">
                       Authority Type <span className="text-red-500">*</span>
                     </label>
                     <select
+                      id="gov-authority-type"
                       value={govAuthorityForm.notification_type}
                       onChange={(e) => setGovAuthorityForm(prev => ({ ...prev, notification_type: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -1327,16 +1372,20 @@ const BreachManagement = () => {
                       <option value="hipaa_hhs">HIPAA HHS</option>
                     </select>
                     <p className="text-xs text-gray-500 mt-1">
-                      {govAuthorityForm.notification_type === 'gdpr_supervisory' 
-                        ? 'GDPR requires notification within 72 hours'
-                        : 'HIPAA requires notification within 60 days'}
+                      {(() => {
+                        if (govAuthorityForm.notification_type === 'gdpr_supervisory') {
+                          return 'GDPR requires notification within 72 hours';
+                        }
+                        return 'HIPAA requires notification within 60 days';
+                      })()}
                     </p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="gov-recipient-email" className="block text-sm font-medium text-gray-700 mb-1">
                       Recipient Email <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="gov-recipient-email"
                       type="email"
                       value={govAuthorityForm.recipient_email}
                       onChange={(e) => setGovAuthorityForm(prev => ({ ...prev, recipient_email: e.target.value }))}
@@ -1346,10 +1395,11 @@ const BreachManagement = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="gov-recipient-name" className="block text-sm font-medium text-gray-700 mb-1">
                       Recipient Name (optional)
                     </label>
                     <input
+                      id="gov-recipient-name"
                       type="text"
                       value={govAuthorityForm.recipient_name}
                       onChange={(e) => setGovAuthorityForm(prev => ({ ...prev, recipient_name: e.target.value }))}
@@ -1387,7 +1437,7 @@ const BreachManagement = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </button>
         )}
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { X, Plus, Trash2, Loader2 } from 'lucide-react';
 import { securityDashboardService } from '../../services/securityDashboardService';
 
@@ -206,15 +207,22 @@ const SecurityTeamModal = ({ isOpen, onClose }) => {
           {/* Team Members List */}
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Security Team Members</h3>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              </div>
-            ) : teamMembers.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p>No security team members added yet.</p>
-              </div>
-            ) : (
+            {(() => {
+              if (isLoading) {
+                return (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                  </div>
+                );
+              }
+              if (teamMembers.length === 0) {
+                return (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No security team members added yet.</p>
+                  </div>
+                );
+              }
+              return (
               <div className="space-y-2">
                 {teamMembers.map((member) => (
                   <div
@@ -235,7 +243,8 @@ const SecurityTeamModal = ({ isOpen, onClose }) => {
                   </div>
                 ))}
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
 
@@ -251,6 +260,11 @@ const SecurityTeamModal = ({ isOpen, onClose }) => {
       </div>
     </div>
   );
+};
+
+SecurityTeamModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired
 };
 
 export default SecurityTeamModal;

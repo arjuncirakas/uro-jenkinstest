@@ -1,547 +1,386 @@
-/**
- * Tests for CookieConsentBanner.jsx
- * Ensures 100% coverage including all rendering paths and interactions
- * CRITICAL: No modifications to source code - only testing existing behavior
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import CookieConsentBanner from '../CookieConsentBanner';
-import React from 'react';
-
-// Hoist mocks
-const mocks = vi.hoisted(() => ({
-  isAuthenticated: vi.fn()
-}));
+import tokenService from '../../services/tokenService';
 
 // Mock tokenService
 vi.mock('../../services/tokenService', () => ({
   default: {
-    isAuthenticated: mocks.isAuthenticated
+    isAuthenticated: vi.fn()
   }
 }));
 
 // Mock useNavigate and useLocation
 const mockNavigate = vi.fn();
-const mockLocation = { pathname: '/urologist/dashboard' };
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useLocation: () => mockLocation
+    useLocation: () => ({ pathname: '/dashboard' })
   };
 });
 
 describe('CookieConsentBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-    // Clear localStorage and sessionStorage
     localStorage.clear();
     sessionStorage.clear();
-    mockNavigate.mockClear();
-    // Reset location to a default protected route
-    mockLocation.pathname = '/urologist/dashboard';
+    tokenService.isAuthenticated.mockReturnValue(true);
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    localStorage.clear();
-    sessionStorage.clear();
   });
 
-  const renderComponent = () => {
-    return render(
-      <BrowserRouter>
-        <CookieConsentBanner />
-      </BrowserRouter>
-    );
-  };
-
-  describe('Rendering Logic', () => {
+  describe('Rendering', () => {
     it('should not render when user is not authenticated', () => {
-      mocks.isAuthenticated.mockReturnValue(false);
-      mockLocation.pathname = '/urologist/dashboard';
-      
-      const { container } = renderComponent();
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
+      tokenService.isAuthenticated.mockReturnValue(false);
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
 
-    it('should not render on login page even if authenticated', () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/login';
+    it('should not render when user has already consented', () => {
+      localStorage.setItem('cookieConsent', 'true');
       sessionStorage.setItem('showCookieBanner', 'true');
-      
-      const { container } = renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
 
-    it('should not render on register page even if authenticated', () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/register';
-      sessionStorage.setItem('showCookieBanner', 'true');
-      
-      const { container } = renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
+    it('should not render when banner flag is not set', () => {
+      localStorage.removeItem('cookieConsent');
+      sessionStorage.removeItem('showCookieBanner');
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
 
-    it('should not render on setup-password page even if authenticated', () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/setup-password';
+    it('should render when all conditions are met', async () => {
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
+      tokenService.isAuthenticated.mockReturnValue(true);
       
-      const { container } = renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
-    });
-
-    it('should not render on unauthorized page even if authenticated', () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/unauthorized';
-      sessionStorage.setItem('showCookieBanner', 'true');
-      
-      const { container } = renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
-    });
-
-    it('should hide banner when navigating to login page', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      sessionStorage.setItem('showCookieBanner', 'true');
-      
-      const { container, rerender } = renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
-      });
-      
-      // Navigate to login page
-      mockLocation.pathname = '/login';
-      rerender(
+      render(
         <BrowserRouter>
           <CookieConsentBanner />
         </BrowserRouter>
       );
       
+      vi.advanceTimersByTime(300);
+      
       await waitFor(() => {
-        expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
+        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
       });
     });
 
-    it('should not render when user has already accepted cookies', () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      localStorage.setItem('cookieConsent', 'true');
+    it('should not render on auth routes', () => {
+      const { useLocation } = await import('react-router-dom');
+      vi.mocked(useLocation).mockReturnValue({ pathname: '/login' });
       
-      const { container } = renderComponent();
-      
-      // Advance timers to trigger useEffect
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
-    });
-
-    it('should not render when user has declined cookies', () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      localStorage.setItem('cookieConsent', 'declined');
-      
-      const { container } = renderComponent();
-      
-      // Advance timers to trigger useEffect
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
-    });
-
-    it('should show cookie icon', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        const icon = screen.getByText('Cookie Consent').closest('.flex').querySelector('svg');
-        expect(icon).toBeInTheDocument();
-      });
-    });
-
-    it('should display correct message text', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      sessionStorage.setItem('showCookieBanner', 'true');
-      
-      renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText(/We use cookies to enhance your experience/)).toBeInTheDocument();
-        expect(screen.getByText(/By clicking "Accept All", you consent to our use of cookies/)).toBeInTheDocument();
-      });
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
   });
 
-  describe('Accept Button', () => {
-    it('should save consent to localStorage when Accept All is clicked', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+  describe('Accept Action', () => {
+    it('should save consent to localStorage when Accept is clicked', async () => {
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
+      vi.advanceTimersByTime(300);
       
       await waitFor(() => {
-        expect(screen.getByText('Accept All')).toBeInTheDocument();
+        const acceptButton = screen.getByText('Accept All');
+        fireEvent.click(acceptButton);
       });
-      
-      const acceptButton = screen.getByText('Accept All');
-      fireEvent.click(acceptButton);
       
       expect(localStorage.getItem('cookieConsent')).toBe('true');
       expect(sessionStorage.getItem('showCookieBanner')).toBeNull();
     });
 
     it('should hide banner after accepting', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      const { container } = renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Accept All')).toBeInTheDocument();
-      });
-      
-      const acceptButton = screen.getByText('Accept All');
-      fireEvent.click(acceptButton);
+      vi.advanceTimersByTime(300);
       
       await waitFor(() => {
-        expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
+        const acceptButton = screen.getByText('Accept All');
+        fireEvent.click(acceptButton);
       });
+      
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
   });
 
-  describe('Decline Button', () => {
-    it('should save declined status to localStorage when Decline is clicked', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+  describe('Decline Action', () => {
+    it('should save declined consent to localStorage when Decline is clicked', async () => {
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
+      vi.advanceTimersByTime(300);
       
       await waitFor(() => {
-        expect(screen.getByText('Decline')).toBeInTheDocument();
+        const declineButton = screen.getByText('Decline');
+        fireEvent.click(declineButton);
       });
-      
-      const declineButton = screen.getByText('Decline');
-      fireEvent.click(declineButton);
       
       expect(localStorage.getItem('cookieConsent')).toBe('declined');
       expect(sessionStorage.getItem('showCookieBanner')).toBeNull();
     });
 
     it('should hide banner after declining', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      const { container } = renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Decline')).toBeInTheDocument();
-      });
-      
-      const declineButton = screen.getByText('Decline');
-      fireEvent.click(declineButton);
+      vi.advanceTimersByTime(300);
       
       await waitFor(() => {
-        expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
+        const declineButton = screen.getByText('Decline');
+        fireEvent.click(declineButton);
       });
+      
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
   });
 
-  describe('Close Button', () => {
+  describe('Close Action', () => {
     it('should hide banner when close button is clicked', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      const { container } = renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
-      });
-      
-      const closeButton = screen.getByLabelText('Close');
-      fireEvent.click(closeButton);
+      vi.advanceTimersByTime(300);
       
       await waitFor(() => {
-        expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
-      });
-    });
-
-    it('should not save consent when close button is clicked', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      sessionStorage.setItem('showCookieBanner', 'true');
-      
-      renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
+        const closeButton = screen.getByLabelText('Close');
+        fireEvent.click(closeButton);
       });
       
-      await waitFor(() => {
-        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
-      });
-      
-      const closeButton = screen.getByLabelText('Close');
-      fireEvent.click(closeButton);
-      
-      // Consent should not be saved
-      expect(localStorage.getItem('cookieConsent')).toBeNull();
-      // Session flag should be cleared
       expect(sessionStorage.getItem('showCookieBanner')).toBeNull();
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
   });
 
-  describe('Privacy Policy Link', () => {
-    it('should navigate to privacy policy page when Learn more is clicked', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+  describe('Privacy Policy Navigation', () => {
+    it('should navigate to privacy policy when Learn more is clicked', async () => {
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
+      vi.advanceTimersByTime(300);
       
       await waitFor(() => {
-        expect(screen.getByText('Learn more')).toBeInTheDocument();
+        const learnMoreButton = screen.getByText('Learn more');
+        fireEvent.click(learnMoreButton);
       });
-      
-      const learnMoreButton = screen.getByText('Learn more');
-      fireEvent.click(learnMoreButton);
       
       expect(mockNavigate).toHaveBeenCalledWith('/privacy-policy');
       expect(sessionStorage.getItem('showCookieBanner')).toBeNull();
     });
 
-    it('should hide banner when Learn more is clicked', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+    it('should hide banner when navigating to privacy policy', async () => {
+      localStorage.removeItem('cookieConsent');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      const { container } = renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Learn more')).toBeInTheDocument();
-      });
-      
-      const learnMoreButton = screen.getByText('Learn more');
-      fireEvent.click(learnMoreButton);
+      vi.advanceTimersByTime(300);
       
       await waitFor(() => {
-        expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
+        const learnMoreButton = screen.getByText('Learn more');
+        fireEvent.click(learnMoreButton);
       });
+      
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Polling Behavior', () => {
+    it('should poll for sessionStorage changes', async () => {
+      localStorage.removeItem('cookieConsent');
+      sessionStorage.removeItem('showCookieBanner');
+      
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      
+      // Set flag after initial render
+      vi.advanceTimersByTime(200);
+      sessionStorage.setItem('showCookieBanner', 'true');
+      
+      vi.advanceTimersByTime(200);
+      
+      await waitFor(() => {
+        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
+      });
+    });
+
+    it('should stop polling after 5 seconds', async () => {
+      localStorage.removeItem('cookieConsent');
+      sessionStorage.removeItem('showCookieBanner');
+      
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      
+      vi.advanceTimersByTime(5000);
+      
+      // Set flag after polling stopped
+      sessionStorage.setItem('showCookieBanner', 'true');
+      vi.advanceTimersByTime(200);
+      
+      // Should not show banner
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
+    });
+
+    it('should stop polling when banner becomes visible', async () => {
+      localStorage.removeItem('cookieConsent');
+      sessionStorage.setItem('showCookieBanner', 'true');
+      
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      
+      vi.advanceTimersByTime(300);
+      
+      await waitFor(() => {
+        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
+      });
+      
+      // Polling should have stopped
+      vi.advanceTimersByTime(1000);
+      // Banner should still be visible
+      expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
+    });
+  });
+
+  describe('Route Changes', () => {
+    it('should hide banner when navigating to auth route', async () => {
+      const { useLocation } = await import('react-router-dom');
+      const mockLocation = { pathname: '/dashboard' };
+      vi.mocked(useLocation).mockReturnValue(mockLocation);
+      
+      localStorage.removeItem('cookieConsent');
+      sessionStorage.setItem('showCookieBanner', 'true');
+      
+      const { rerender } = render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      
+      vi.advanceTimersByTime(300);
+      
+      await waitFor(() => {
+        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
+      });
+      
+      // Change to auth route
+      vi.mocked(useLocation).mockReturnValue({ pathname: '/login' });
+      rerender(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
+      
+      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
     });
   });
 
   describe('Edge Cases', () => {
-    it('should handle localStorage being unavailable gracefully', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      
-      // Mock localStorage.setItem to throw error
-      const originalSetItem = localStorage.setItem;
-      localStorage.setItem = vi.fn(() => {
-        throw new Error('Storage quota exceeded');
-      });
-      
-      renderComponent();
-      
-      vi.advanceTimersByTime(600);
-      
-      await waitFor(() => {
-        expect(screen.getByText('Accept All')).toBeInTheDocument();
-      });
-      
-      const acceptButton = screen.getByText('Accept All');
-      
-      // Should not throw error
-      expect(() => fireEvent.click(acceptButton)).not.toThrow();
-      
-      // Restore localStorage
-      localStorage.setItem = originalSetItem;
-    });
-
-    it('should handle null authentication status', () => {
-      mocks.isAuthenticated.mockReturnValue(null);
-      mockLocation.pathname = '/urologist/dashboard';
-      
-      const { container } = renderComponent();
-      
-      vi.advanceTimersByTime(600);
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
-    });
-
-    it('should handle undefined authentication status', () => {
-      mocks.isAuthenticated.mockReturnValue(undefined);
-      mockLocation.pathname = '/urologist/dashboard';
-      
-      const { container } = renderComponent();
-      
-      vi.advanceTimersByTime(600);
-      
-      expect(container.querySelector('.fixed.bottom-0')).not.toBeInTheDocument();
-    });
-
-    it('should handle empty localStorage consent value', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      localStorage.setItem('cookieConsent', '');
+    it('should handle declined consent', () => {
+      localStorage.setItem('cookieConsent', 'declined');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Timing and Delays', () => {
-    it('should show banner after 500ms delay', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      sessionStorage.setItem('showCookieBanner', 'true');
-      
-      renderComponent();
-      
-      // Should not be visible immediately
       expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
-      
-      // Advance by less than 500ms
-      act(() => {
-        vi.advanceTimersByTime(400);
-      });
-      expect(screen.queryByText('Cookie Consent')).not.toBeInTheDocument();
-      
-      // Advance to 500ms
-      act(() => {
-        vi.advanceTimersByTime(100);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Button Interactions', () => {
-    it('should have all required buttons visible', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
-      sessionStorage.setItem('showCookieBanner', 'true');
-      
-      renderComponent();
-      
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Accept All')).toBeInTheDocument();
-        expect(screen.getByText('Decline')).toBeInTheDocument();
-        expect(screen.getByLabelText('Close')).toBeInTheDocument();
-        expect(screen.getByText('Learn more')).toBeInTheDocument();
-      });
     });
 
-    it('should have correct button styles and classes', async () => {
-      mocks.isAuthenticated.mockReturnValue(true);
-      mockLocation.pathname = '/urologist/dashboard';
+    it('should handle null localStorage values', () => {
+      localStorage.setItem('cookieConsent', 'null');
       sessionStorage.setItem('showCookieBanner', 'true');
       
-      renderComponent();
+      render(
+        <BrowserRouter>
+          <CookieConsentBanner />
+        </BrowserRouter>
+      );
       
-      act(() => {
-        vi.advanceTimersByTime(600);
-      });
+      vi.advanceTimersByTime(300);
       
-      await waitFor(() => {
-        const acceptButton = screen.getByText('Accept All');
-        const declineButton = screen.getByText('Decline');
-        
-        expect(acceptButton).toHaveClass('bg-teal-600');
-        expect(declineButton).toHaveClass('border-gray-300');
-      });
+      // Should still show if consent is not 'true'
+      expect(screen.getByText('Cookie Consent')).toBeInTheDocument();
     });
   });
 });

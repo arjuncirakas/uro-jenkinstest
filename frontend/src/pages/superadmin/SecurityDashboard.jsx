@@ -211,7 +211,10 @@ const SecurityDashboard = () => {
                 <span className="text-gray-600 text-sm">Loading alerts...</span>
               </div>
             </div>
-          ) : alerts.length === 0 ? (
+          ) : (() => {
+            if (alerts.length === 0) return true;
+            return false;
+          })() ? (
             <div className="text-center py-12">
               <Shield className="mx-auto h-12 w-12 text-gray-400" />
               <p className="mt-2 text-sm text-gray-500">No security alerts found</p>

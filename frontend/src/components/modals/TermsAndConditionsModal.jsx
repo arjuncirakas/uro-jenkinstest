@@ -7,16 +7,36 @@ import PropTypes from 'prop-types';
  * TermsAndConditionsModal - Modal component displaying Terms and Conditions
  */
 const TermsAndConditionsModal = ({ isOpen, onClose }) => {
+  const dialogRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (dialogRef.current) {
+      if (isOpen) {
+        dialogRef.current.showModal();
+      } else {
+        dialogRef.current.close();
+      }
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const modalContent = (
-    <div 
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[9999] animate-fadeIn p-4"
+    <dialog
+      ref={dialogRef}
+      className="fixed inset-0 bg-transparent backdrop:bg-black/40 backdrop:backdrop-blur-sm flex items-center justify-center z-[9999] p-4 border-none outline-none"
+      onCancel={onClose}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      }}
+      aria-labelledby="terms-modal-title"
     >
       <div 
         className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden transform transition-all animate-slideUp flex flex-col"
@@ -24,7 +44,7 @@ const TermsAndConditionsModal = ({ isOpen, onClose }) => {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200 flex-shrink-0 bg-gradient-to-r from-teal-50 to-white">
-          <div className="flex items-center">
+          <div className="flex items-center" id="terms-modal-title">
             <div className="flex-shrink-0">
               <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
                 <FileText className="h-5 w-5 text-teal-600" />
@@ -131,7 +151,7 @@ const TermsAndConditionsModal = ({ isOpen, onClose }) => {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 
   return createPortal(modalContent, document.body);

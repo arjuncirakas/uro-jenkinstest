@@ -187,7 +187,7 @@ export const renderGDPRSupervisoryTemplate = (incident, recipient, dpoInfo = nul
                 <td style="padding: 0 40px 30px 40px;">
                   <div style="background-color: #d1ecf1; padding: 25px; border-radius: 8px; border-left: 4px solid #0c5460;">
                     <h3 style="color: #0c5460; margin: 0 0 15px 0; font-size: 18px; font-weight: 600;">Contact Information</h3>
-                    ${dpoInfo && dpoInfo.name ? `
+                    ${dpoInfo?.name ? `
                       <p style="margin: 0 0 12px 0; color: #0c5460; font-size: 15px;">
                         <strong>Data Protection Officer:</strong><br>
                         ${dpoInfo.name}
@@ -195,11 +195,14 @@ export const renderGDPRSupervisoryTemplate = (incident, recipient, dpoInfo = nul
                       <p style="margin: 0 0 12px 0; color: #0c5460; font-size: 15px;">
                         <strong>Email:</strong> <a href="mailto:${dpoInfo.email}" style="color: #0066cc; text-decoration: none;">${dpoInfo.email}</a>
                       </p>
-                      ${dpoInfo.contact_number ? `
-                        <p style="margin: 0; color: #0c5460; font-size: 15px;">
-                          <strong>Phone:</strong> ${dpoInfo.contact_number}
-                        </p>
-                      ` : ''}
+                      ${(() => {
+                        if (dpoInfo.contact_number) {
+                          return `<p style="margin: 0; color: #0c5460; font-size: 15px;">
+                            <strong>Phone:</strong> ${dpoInfo.contact_number}
+                          </p>`;
+                        }
+                        return '';
+                      })()}
                     ` : `
                       <p style="margin: 0; color: #0c5460; font-size: 15px; line-height: 1.6;">
                         For questions regarding this incident, please contact our Data Protection Officer using the contact details provided in our privacy policy or through our official communication channels.

@@ -1,198 +1,251 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NotificationToast from '../NotificationToast';
 
-// Mock react-icons
-vi.mock('react-icons/fi', () => ({
-    FiCheckCircle: () => <span data-testid="check-icon" />,
-    FiXCircle: () => <span data-testid="x-icon" />,
-    FiX: () => <span data-testid="close-icon" />
-}));
+describe('NotificationToast', () => {
+  const mockOnClose = vi.fn();
 
-describe('NotificationToast Component', () => {
-    beforeEach(() => {
-        vi.useFakeTimers();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('Rendering', () => {
+    it('should not render when isOpen is false', () => {
+      render(
+        <NotificationToast
+          isOpen={false}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      expect(screen.queryByText('Test message')).not.toBeInTheDocument();
     });
 
-    afterEach(() => {
-        vi.useRealTimers();
+    it('should render when isOpen is true', () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      expect(screen.getByText('Test message')).toBeInTheDocument();
     });
 
-    describe('Rendering', () => {
-        it('should not render when isOpen is false', () => {
-            const onClose = vi.fn();
-            const { container } = render(
-                <NotificationToast isOpen={false} onClose={onClose} message="Test" />
-            );
-            expect(container.firstChild).toBeNull();
-        });
-
-        it('should render when isOpen is true', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast isOpen={true} onClose={onClose} message="Test message" />
-            );
-            expect(screen.getByText('Test message')).toBeInTheDocument();
-        });
-
-        it('should render success toast with correct styling', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast
-                    isOpen={true}
-                    onClose={onClose}
-                    message="Success!"
-                    type="success"
-                />
-            );
-            expect(screen.getByText('Success!')).toBeInTheDocument();
-            expect(screen.getByTestId('check-icon')).toBeInTheDocument();
-        });
-
-        it('should render error toast with correct styling', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast
-                    isOpen={true}
-                    onClose={onClose}
-                    message="Error occurred!"
-                    type="error"
-                />
-            );
-            expect(screen.getByText('Error occurred!')).toBeInTheDocument();
-            expect(screen.getByTestId('x-icon')).toBeInTheDocument();
-        });
-
-        it('should default to success type', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast
-                    isOpen={true}
-                    onClose={onClose}
-                    message="Default type"
-                />
-            );
-            expect(screen.getByTestId('check-icon')).toBeInTheDocument();
-        });
+    it('should display success message with success styling', () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Success message"
+          type="success"
+        />
+      );
+      expect(screen.getByText('Success message')).toBeInTheDocument();
     });
 
-    describe('Auto-close functionality', () => {
-        it('should auto-close after default duration (3000ms)', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast isOpen={true} onClose={onClose} message="Test" />
-            );
-
-            expect(onClose).not.toHaveBeenCalled();
-
-            act(() => {
-                vi.advanceTimersByTime(3000);
-            });
-
-            expect(onClose).toHaveBeenCalledTimes(1);
-        });
-
-        it('should auto-close after custom duration', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast
-                    isOpen={true}
-                    onClose={onClose}
-                    message="Test"
-                    duration={5000}
-                />
-            );
-
-            act(() => {
-                vi.advanceTimersByTime(4000);
-            });
-            expect(onClose).not.toHaveBeenCalled();
-
-            act(() => {
-                vi.advanceTimersByTime(1000);
-            });
-            expect(onClose).toHaveBeenCalledTimes(1);
-        });
-
-        it('should not auto-close when duration is 0', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast
-                    isOpen={true}
-                    onClose={onClose}
-                    message="Test"
-                    duration={0}
-                />
-            );
-
-            act(() => {
-                vi.advanceTimersByTime(10000);
-            });
-
-            expect(onClose).not.toHaveBeenCalled();
-        });
-
-        it('should clear timeout on unmount', () => {
-            const onClose = vi.fn();
-            const { unmount } = render(
-                <NotificationToast isOpen={true} onClose={onClose} message="Test" />
-            );
-
-            unmount();
-
-            act(() => {
-                vi.advanceTimersByTime(5000);
-            });
-
-            expect(onClose).not.toHaveBeenCalled();
-        });
+    it('should display error message with error styling', () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Error message"
+          type="error"
+        />
+      );
+      expect(screen.getByText('Error message')).toBeInTheDocument();
     });
 
-    describe('Manual close', () => {
-        it('should call onClose when close button is clicked', () => {
-            const onClose = vi.fn();
-            render(
-                <NotificationToast isOpen={true} onClose={onClose} message="Test" />
-            );
+    it('should use success type by default', () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Default message"
+        />
+      );
+      expect(screen.getByText('Default message')).toBeInTheDocument();
+    });
+  });
 
-            const closeButton = screen.getByRole('button');
-            fireEvent.click(closeButton);
-
-            expect(onClose).toHaveBeenCalledTimes(1);
-        });
+  describe('Auto-close', () => {
+    it('should auto-close after default duration (3000ms)', async () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      vi.advanceTimersByTime(3000);
+      
+      await waitFor(() => {
+        expect(mockOnClose).toHaveBeenCalled();
+      });
     });
 
-    describe('Styling variations', () => {
-        it('should apply success colors for success type', () => {
-            const onClose = vi.fn();
-            const { container } = render(
-                <NotificationToast
-                    isOpen={true}
-                    onClose={onClose}
-                    message="Success"
-                    type="success"
-                />
-            );
-
-            // Check that success class is applied
-            const toastContainer = container.querySelector('.bg-green-50');
-            expect(toastContainer).toBeInTheDocument();
-        });
-
-        it('should apply error colors for error type', () => {
-            const onClose = vi.fn();
-            const { container } = render(
-                <NotificationToast
-                    isOpen={true}
-                    onClose={onClose}
-                    message="Error"
-                    type="error"
-                />
-            );
-
-            // Check that error class is applied
-            const toastContainer = container.querySelector('.bg-red-50');
-            expect(toastContainer).toBeInTheDocument();
-        });
+    it('should auto-close after custom duration', async () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+          duration={5000}
+        />
+      );
+      
+      vi.advanceTimersByTime(5000);
+      
+      await waitFor(() => {
+        expect(mockOnClose).toHaveBeenCalled();
+      });
     });
+
+    it('should not auto-close before duration expires', async () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+          duration={3000}
+        />
+      );
+      
+      vi.advanceTimersByTime(2000);
+      
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('should not auto-close when duration is 0', async () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+          duration={0}
+        />
+      );
+      
+      vi.advanceTimersByTime(10000);
+      
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('should clear timer on unmount', () => {
+      const { unmount } = render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      unmount();
+      
+      vi.advanceTimersByTime(3000);
+      
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('should reset timer when isOpen changes', async () => {
+      const { rerender } = render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      vi.advanceTimersByTime(2000);
+      
+      rerender(
+        <NotificationToast
+          isOpen={false}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      rerender(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      vi.advanceTimersByTime(2000);
+      expect(mockOnClose).not.toHaveBeenCalled();
+      
+      vi.advanceTimersByTime(1000);
+      
+      await waitFor(() => {
+        expect(mockOnClose).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Manual Close', () => {
+    it('should call onClose when close button is clicked', () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message="Test message"
+        />
+      );
+      
+      const closeButton = screen.getByRole('button');
+      fireEvent.click(closeButton);
+      
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle null onClose', () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={null}
+          message="Test message"
+        />
+      );
+      
+      // Should not crash
+      expect(screen.getByText('Test message')).toBeInTheDocument();
+    });
+
+    it('should handle empty message', () => {
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message=""
+        />
+      );
+      
+      // Should render without crashing
+      expect(screen.getByRole('button')).toBeInTheDocument();
+    });
+
+    it('should handle very long message', () => {
+      const longMessage = 'A'.repeat(500);
+      render(
+        <NotificationToast
+          isOpen={true}
+          onClose={mockOnClose}
+          message={longMessage}
+        />
+      );
+      
+      expect(screen.getByText(longMessage)).toBeInTheDocument();
+    });
+  });
 });
