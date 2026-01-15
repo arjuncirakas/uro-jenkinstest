@@ -16,8 +16,8 @@ import {
 } from './PSAModalShared';
 import PropTypes from 'prop-types';
 
-// File upload utilities (image formats not supported due to reverse proxy limitations)
-const ALLOWED_FILE_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+// File upload utilities (only PDF allowed)
+const ALLOWED_FILE_TYPES = ['application/pdf'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const formatFileSize = (bytes) => {
@@ -209,7 +209,7 @@ const EditPSAResultModal = ({ isOpen, onClose, patient, psaResult, onSuccess }) 
                   type="file"
                   id="editPsaFile"
                   onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf"
                   className="hidden"
                 />
                 <label htmlFor="editPsaFile" className="cursor-pointer block">
@@ -217,7 +217,7 @@ const EditPSAResultModal = ({ isOpen, onClose, patient, psaResult, onSuccess }) 
                   <p className="text-sm text-gray-600">
                     {existingFileName ? 'Click to upload new file' : 'Click to upload or drag and drop'}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">PDF, DOC, DOCX up to 10MB</p>
+                  <p className="text-xs text-gray-500 mt-1">PDF only (max 10MB)</p>
                 </label>
               </div>
             )}

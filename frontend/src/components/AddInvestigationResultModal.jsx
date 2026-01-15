@@ -512,7 +512,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                 <span>{hasUploadedForm ? 'Re-upload' : 'Upload Signed'}</span>
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf"
                   onChange={(e) => {
                     const file = e.target.files[0];
                     handleFileUpload(file, investigationName, consentTemplate, isNotRequired);
@@ -573,10 +573,10 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       // Clear removeExistingFile flag when new file is selected (new file will replace old one)
       setRemoveExistingFile(false);
 
-      // Validate file type (image formats not supported due to reverse proxy limitations)
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      // Validate file type (only PDF allowed)
+      const allowedTypes = ['application/pdf'];
       if (!allowedTypes.includes(selectedFile.type)) {
-        setError('Only PDF, DOC, and DOCX files are allowed. Image files are not supported.');
+        setError('Only PDF files are allowed.');
         return;
       }
 
@@ -697,11 +697,21 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Add Investigation Result</h2>
-            {patient && (
-              <p className="text-xs text-gray-600 mt-0.5">
-                Patient: <span className="font-medium">{patient.name}</span>
-              </p>
-            )}
+            {patient && (() => {
+              // Try multiple possible property names for patient name
+              // NOSONAR: patient.name, patient.patientName, patient.fullName, patient.first_name, patient.last_name, patient.firstName, and patient.lastName are validated in PropTypes.shape()
+              const patientName = patient.name ||
+                patient.patientName ||
+                patient.fullName ||
+                (patient.first_name && patient.last_name ? `${patient.first_name} ${patient.last_name}` : null) ||
+                (patient.firstName && patient.lastName ? `${patient.firstName} ${patient.lastName}` : null) ||
+                'Unknown Patient';
+              return (
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Patient: <span className="font-medium">{patientName}</span>
+                </p>
+              );
+            })()}
             <p className="text-xs text-purple-600 mt-0.5">
               Investigation: <span className="font-medium">{investigationRequest.investigationName || investigationRequest.investigation_name}</span>
             </p>
@@ -846,7 +856,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                       type="file"
                       id="report-upload"
                       onChange={handleFileChange}
-                      accept=".pdf,.doc,.docx"
+                      accept=".pdf,application/pdf"
                       className="hidden"
                     />
                     <label
@@ -858,7 +868,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
                         {hasExistingFile ? 'Click to replace existing file or drag and drop' : 'Click to upload or drag and drop'}
                       </p>
                       <p className="text-xs text-gray-500">
-                        PDF, DOC, DOCX (max 10MB)
+                        PDF only (max 10MB)
                       </p>
                     </label>
                   </div>
@@ -993,7 +1003,14 @@ AddInvestigationResultModal.propTypes = {
   patient: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     patientId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-    patient_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+    patient_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    name: PropTypes.string,
+    patientName: PropTypes.string,
+    fullName: PropTypes.string,
+    firstName: PropTypes.string,
+    lastName: PropTypes.string,
+    first_name: PropTypes.string,
+    last_name: PropTypes.string
   }),
   existingResult: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),

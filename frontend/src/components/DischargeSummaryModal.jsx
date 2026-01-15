@@ -548,13 +548,13 @@ const DischargeSummaryModal = ({ isOpen, onClose, onSubmit, patient, pathway }) 
                   <input
                     type="file"
                     multiple
-                    accept=".pdf,.doc,.docx"
+                    accept=".pdf"
                     onChange={handleFileUpload}
                     className="hidden"
                     disabled={uploadingFile}
                   />
                 </label>
-                <p className="text-xs text-gray-500 mt-1">Accepted: PDF, DOC, DOCX (Max 10MB each)</p>
+                <p className="text-xs text-gray-500 mt-1">Accepted: PDF only (Max 10MB each)</p>
               </div>
 
               {/* Document List */}

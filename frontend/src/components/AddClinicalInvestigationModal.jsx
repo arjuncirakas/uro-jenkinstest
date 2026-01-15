@@ -558,7 +558,7 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                             {hasUploadedForm ? 'Re-upload' : 'Upload Signed'}
                                             <input
                                               type="file"
-                                              accept=".pdf,.doc,.docx"
+                                              accept=".pdf"
                                               onChange={async (e) => {
                                                 const file = e.target.files[0];
                                                 // NOSONAR: patient.id is validated in PropTypes.shape()

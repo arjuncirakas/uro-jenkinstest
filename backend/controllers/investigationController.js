@@ -1871,6 +1871,8 @@ export const serveFile = async (req, res) => {
 
 // Parse PSA file and extract values
 export const parsePSAFile = async (req, res) => {
+  let tempFilePath = null;
+  
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -1879,16 +1881,47 @@ export const parsePSAFile = async (req, res) => {
       });
     }
 
-    const filePath = req.file.path;
     const fileType = path.extname(req.file.originalname).toLowerCase();
-
     console.log('Parsing PSA file:', req.file.originalname, 'Type:', fileType);
 
-    // Extract PSA data from file
-    const result = await extractPSADataFromFile(filePath, fileType);
+    // Handle memory storage (multer.memoryStorage()) - write buffer to temp file
+    // This is needed for Excel extraction which requires a file path
+    if (req.file.buffer && !req.file.path) {
+      // Create temp directory if it doesn't exist
+      const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
 
-    // Clean up uploaded file after parsing (optional - you might want to keep it)
-    // fs.unlinkSync(filePath);
+      // Create temporary file with original extension
+      const tempFileName = `psa_parse_${Date.now()}_${Math.random().toString(36).substring(7)}${fileType}`;
+      tempFilePath = path.join(tempDir, tempFileName);
+      
+      // Write buffer to temporary file
+      fs.writeFileSync(tempFilePath, req.file.buffer);
+      console.log('Created temporary file for parsing:', tempFilePath);
+    } else if (req.file.path) {
+      // Disk storage - use existing path
+      tempFilePath = req.file.path;
+    } else {
+      throw new Error('File buffer or path not available');
+    }
+
+    // Extract PSA data from file
+    const result = await extractPSADataFromFile(tempFilePath, fileType);
+
+    // Clean up temporary file after parsing
+    if (tempFilePath && req.file.buffer) {
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+          console.log('Cleaned up temporary file:', tempFilePath);
+        }
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup temporary file:', cleanupError);
+        // Don't fail the request if cleanup fails
+      }
+    }
 
     if (result.success) {
       res.json({
@@ -1912,6 +1945,19 @@ export const parsePSAFile = async (req, res) => {
     }
   } catch (error) {
     console.error('Parse PSA file error:', error);
+    
+    // Clean up temporary file on error
+    if (tempFilePath && req.file?.buffer) {
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+          console.log('Cleaned up temporary file on error:', tempFilePath);
+        }
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup temporary file on error:', cleanupError);
+      }
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Error parsing PSA file',

@@ -38,12 +38,12 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type (image formats not supported due to reverse proxy limitations)
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      // Validate file type (only PDF allowed)
+      const allowedTypes = ['application/pdf'];
       if (!allowedTypes.includes(file.type)) {
         setErrors(prev => ({
           ...prev,
-          file: 'Please select a PDF, DOC, or DOCX file. Image files are not supported.'
+          file: 'Please select a PDF file.'
         }));
         return;
       }
@@ -218,7 +218,7 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                   type="file"
                   id="testFile"
                   onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf"
                   className="hidden"
                 />
                 <label htmlFor="testFile" className="cursor-pointer block">
@@ -247,7 +247,7 @@ const AddTestResultModal = ({ isOpen, onClose, patient, onSuccess }) => {
                     );
                   })()}
                   <p className="text-xs text-gray-500 mt-1">
-                    PDF, DOC, DOCX up to 10MB
+                    PDF only (max 10MB)
                   </p>
                 </label>
               </div>

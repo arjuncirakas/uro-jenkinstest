@@ -443,9 +443,9 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
   const handleUploadSignedForm = async (testType, template, file) => {
     if (!file || !template || !patient) return;
 
-    // Validate file type (image formats not supported due to reverse proxy limitations)
-    if (file.type !== 'application/pdf' && file.type !== 'application/msword' && !file.type.includes('openxmlformats')) {
-      alert('Please upload a PDF, DOC, or DOCX file. Image files are not supported.');
+    // Validate file type (only PDF allowed)
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a PDF file.');
       return;
     }
 
@@ -884,7 +884,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           {uploadedSignedForms.mri ? 'Re-upload' : 'Upload Signed'}
                           <input
                             type="file"
-                            accept=".pdf,.doc,.docx"
+                            accept=".pdf"
                             onChange={(e) => handleFileInputChange('mri', mriConsentForm, e)}
                             className="hidden"
                             disabled={uploadingForms.mri}
@@ -1066,7 +1066,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                           {uploadedSignedForms.biopsy ? 'Re-upload' : 'Upload Signed'}
                           <input
                             type="file"
-                            accept=".pdf,.doc,.docx"
+                            accept=".pdf"
                             onChange={(e) => handleFileInputChange('biopsy', biopsyConsentForm, e)}
                             className="hidden"
                             disabled={uploadingForms.biopsy}

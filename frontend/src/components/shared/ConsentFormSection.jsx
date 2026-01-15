@@ -69,7 +69,7 @@ const ConsentFormSection = ({
           {hasUploadedForm ? `Re-upload Signed ${investigationName}` : `Upload Signed ${investigationName}`}
           <input
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept=".pdf"
             onChange={(e) => {
               const file = e.target.files[0];
               if (file && templateToUse && !isNotRequired) {
