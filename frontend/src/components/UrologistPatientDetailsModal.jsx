@@ -2302,7 +2302,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                 <div className="flex items-center space-x-4 text-teal-700">
                   <span>{displayPatient.age ? `${displayPatient.age} years old` : 'N/A'}</span>
                   <span>UPI: {displayPatient.upi || displayPatient.patientId || 'Unknown'}</span>
-                  <span>MRN: {displayPatient.mrn || 'N/A'}</span>
                   {displayPatient.appointmentTime && (
                     <span>Appointment: {displayPatient.appointmentTime}</span>
                   )}
