@@ -485,6 +485,170 @@ export const addOtherTestResult = async (req, res) => {
   }
 };
 
+// Update other test result with file upload
+export const updateOtherTestResult = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { resultId } = req.params;
+    const {
+      testName,
+      testDate,
+      result,
+      notes,
+      status,
+      removeFile
+    } = req.body;
+
+    // Validate resultId
+    const parsedResultId = parseInt(resultId, 10);
+    if (isNaN(parsedResultId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid result ID'
+      });
+    }
+
+    // Validate required fields
+    if (!testDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Test date is required'
+      });
+    }
+
+    // Check if result exists
+    const resultCheck = await client.query(
+      `SELECT ir.id, ir.patient_id, ir.file_path, ir.file_data
+       FROM investigation_results ir
+       WHERE ir.id = $1`,
+      [parsedResultId]
+    );
+
+    if (resultCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Test result not found'
+      });
+    }
+
+    const existingResult = resultCheck.rows[0];
+
+    // Handle file upload/removal
+    let filePath = existingResult.file_path;
+    let fileName = null;
+    let encryptedFileData = null;
+
+    // If removeFile flag is set and no new file, remove the file
+    if (removeFile === 'true' || removeFile === true) {
+      // Delete old file from filesystem if it exists (backward compatibility)
+      if (filePath && fs.existsSync(path.join(process.cwd(), filePath))) {
+        try {
+          fs.unlinkSync(path.join(process.cwd(), filePath));
+        } catch (err) {
+          console.error('Error deleting old file:', err);
+        }
+      }
+      filePath = null;
+      fileName = null;
+      encryptedFileData = null;
+    } else if (req.file) {
+      // New file uploaded - replace old one
+      // Delete old file from filesystem if it exists (backward compatibility)
+      if (filePath && fs.existsSync(path.join(process.cwd(), filePath))) {
+        try {
+          fs.unlinkSync(path.join(process.cwd(), filePath));
+        } catch (err) {
+          console.error('Error deleting old file:', err);
+        }
+      }
+      // Encrypt new file buffer and store in database
+      fileName = req.file.originalname;
+      if (req.file.buffer) {
+        encryptedFileData = encryptFile(req.file.buffer);
+        // Generate reference file_path for frontend URL construction (file not actually stored here)
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        filePath = `investigations/file-${uniqueSuffix}${path.extname(fileName)}`;
+      }
+    }
+
+    // Ensure result is a string for database
+    const resultString = result !== undefined && result !== null ? String(result) : null;
+
+    // Prepare update parameters
+    const hasNewFile = req.file !== undefined;
+    const hasRemovedFile = removeFile === 'true' || removeFile === true;
+    const updateParams = [
+      testName || null, // Update test name if provided
+      testDate,
+      resultString,
+      status || null,
+      notes || null,
+      (hasNewFile || hasRemovedFile) ? filePath : null, // Update file path if file changed
+      (hasNewFile || hasRemovedFile) ? fileName : null, // Update file name if file changed
+      (hasNewFile || hasRemovedFile) ? encryptedFileData : null, // Update file data if file changed
+      parsedResultId
+    ];
+
+    // Update test result
+    const updateQuery = await client.query(
+      `UPDATE investigation_results 
+       SET test_name = COALESCE($1, test_name),
+           test_date = $2, 
+           result = COALESCE($3, result),
+           status = COALESCE($4, status),
+           notes = COALESCE($5, notes),
+           file_path = CASE WHEN $6::VARCHAR IS NOT NULL OR $6 IS NULL THEN $6::VARCHAR ELSE file_path END,
+           file_name = CASE WHEN $7::VARCHAR IS NOT NULL OR $7 IS NULL THEN $7::VARCHAR ELSE file_name END,
+           file_data = CASE WHEN $8::BYTEA IS NOT NULL OR $8 IS NULL THEN $8::BYTEA ELSE file_data END,
+           updated_at = NOW()
+       WHERE id = $9
+       RETURNING *`,
+      updateParams
+    );
+
+    const updatedResult = updateQuery.rows[0];
+
+    res.json({
+      success: true,
+      message: 'Test result updated successfully',
+      data: {
+        id: updatedResult.id,
+        patientId: updatedResult.patient_id,
+        testType: updatedResult.test_type,
+        testName: updatedResult.test_name,
+        testDate: updatedResult.test_date,
+        result: updatedResult.result,
+        referenceRange: updatedResult.reference_range,
+        status: updatedResult.status,
+        notes: updatedResult.notes,
+        filePath: updatedResult.file_path,
+        fileName: updatedResult.file_name,
+        authorName: updatedResult.author_name,
+        authorRole: updatedResult.author_role,
+        createdAt: updatedResult.created_at,
+        updatedAt: updatedResult.updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Update test result error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      detail: error.detail
+    });
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
+  }
+};
+
 // Get investigation results for a patient
 export const getInvestigationResults = async (req, res) => {
   const client = await pool.connect();

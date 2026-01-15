@@ -100,6 +100,39 @@ export const investigationService = {
     }
   },
 
+  // Update other test result with file upload
+  updateOtherTestResult: async (resultId, testData) => {
+    try {
+      const formData = new FormData();
+      
+      // Add text fields
+      Object.keys(testData).forEach(key => {
+        if (key !== 'testFile' && testData[key] !== null && testData[key] !== undefined) {
+          formData.append(key, testData[key]);
+        }
+      });
+      
+      // Add file if present
+      if (testData.testFile) {
+        formData.append('testFile', testData.testFile);
+      }
+
+      const response = await apiClient.patch(`/test-results/${resultId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return { success: true, data: response.data.data };
+    } catch (error) {
+      console.error('Error updating test result:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
+  },
+
   // Get investigation results for a patient
   getInvestigationResults: async (patientId, testType = null) => {
     try {

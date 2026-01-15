@@ -620,8 +620,22 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
     setIsSubmitting(true);
 
     try {
+      // Validate required props
+      if (!investigationRequest) {
+        setError('Investigation request information is missing');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!patient?.id && !patient?.patientId && !patient?.patient_id) {
+        setError('Patient information is missing');
+        setIsSubmitting(false);
+        return;
+      }
+
       const isUpdate = !!existingResult?.id;
       const testDate = existingResult?.testDate || existingResult?.test_date || new Date().toISOString().split('T')[0];
+      const patientId = patient?.id || patient?.patientId || patient?.patient_id;
 
       // Create the test result data
       const testData = {
@@ -636,7 +650,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       // Call the API to update or add the test result
       const resultResponse = isUpdate
         ? await investigationService.updateOtherTestResult(existingResult.id, testData)
-        : await investigationService.addOtherTestResult(patient.id, testData);
+        : await investigationService.addOtherTestResult(patientId, testData);
 
       if (resultResponse.success) {
         // Dispatch event to refresh investigation management table
@@ -660,7 +674,8 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         setIsSubmitting(false);
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      console.error('Error submitting investigation result:', err);
+      setError(err.message || 'An unexpected error occurred');
       setIsSubmitting(false);
     }
   };

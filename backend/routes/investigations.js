@@ -3,6 +3,7 @@ import {
   addPSAResult,
   updatePSAResult,
   addOtherTestResult,
+  updateOtherTestResult,
   getInvestigationResults,
   getAllInvestigations,
   deleteInvestigationResult,
@@ -99,6 +100,15 @@ router.post('/patients/:patientId/test-results',
   requireRole(['urologist', 'doctor', 'urology_nurse']),
   upload.single('testFile'),
   addOtherTestResult
+);
+
+// Update other test result with file upload
+router.patch('/test-results/:resultId',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
+  upload.single('testFile'),
+  updateOtherTestResult
 );
 
 // Get investigation results for a patient
