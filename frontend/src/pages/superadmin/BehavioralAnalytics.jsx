@@ -122,6 +122,7 @@ const BehavioralAnalytics = () => {
         fetchAnomalies();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, anomalySubTab, filters]);
 
   const handleUpdateStatus = async (anomalyId, status) => {
@@ -337,6 +338,155 @@ const BehavioralAnalytics = () => {
 
   const hasActiveFilters = filters.status || filters.severity || filters.userId || filters.startDate || filters.endDate;
 
+  // Helper function to get location display text
+  const getLocationDisplayText = (loc) => {
+    if (loc.location && loc.location.trim() !== '') {
+      return loc.location;
+    }
+    if (!loc.ip) {
+      return 'Unknown Location';
+    }
+    const ip = loc.ip.trim();
+    const isLocalIP = ip === '::1' || ip === '::ffff:127.0.0.1' || 
+      ip.startsWith('127.') || ip.startsWith('192.168.') || 
+      ip.startsWith('10.') || 
+      (ip.startsWith('172.') && parseInt(ip.split('.')[1] || '0') >= 16 && parseInt(ip.split('.')[1] || '0') <= 31);
+    if (isLocalIP) {
+      return 'Local Connection';
+    }
+    if (ip !== 'unknown') {
+      return `IP: ${ip}`;
+    }
+    return 'Unknown Location';
+  };
+
+  // Helper function to render location item
+  const renderLocationItem = (loc, idx) => {
+    const displayText = getLocationDisplayText(loc);
+    const frequency = loc.frequency || loc.count || 0;
+    return (
+      <div key={`location-${loc.ip}-${idx}`} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
+        <span className="text-xs text-gray-700">{displayText}</span>
+        <span className="text-xs text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">{frequency} login(s)</span>
+      </div>
+    );
+  };
+
+  // Helper function to render hour item
+  const renderHourItem = (hourData) => (
+    <div key={hourData.hour} className="bg-gray-50 p-2 rounded border border-gray-200 text-center">
+      <p className="text-xs text-gray-600 mb-0.5">{formatHour(hourData.hour)}</p>
+      <p className="text-sm font-bold text-gray-900">{hourData.frequency}</p>
+    </div>
+  );
+
+  // Helper function to render action item
+  const renderActionItem = (action, idx) => {
+    const actionName = action.action || 'Unknown';
+    const actionKey = `action-${actionName}-${idx}`;
+    const frequency = action.frequency || action.count || 0;
+    return (
+      <div key={actionKey} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
+        <span className="text-xs text-gray-700">{actionName}</span>
+        <span className="text-xs text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">{frequency} time(s)</span>
+      </div>
+    );
+  };
+
+  // Helper function to render location baseline
+  const renderLocationBaseline = (baselineData) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
+          <p className="text-xs text-teal-600 mb-1">Total Logins</p>
+          <p className="text-2xl font-bold text-teal-900">{baselineData?.totalLogins || 0}</p>
+        </div>
+        <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
+          <p className="text-xs text-teal-600 mb-1">Unique Locations</p>
+          <p className="text-2xl font-bold text-teal-900">{baselineData?.uniqueLocations || 0}</p>
+        </div>
+      </div>
+      {baselineData?.commonLocations && baselineData.commonLocations.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-700 mb-2">Common Locations</p>
+          <div className="space-y-1.5">
+            {baselineData.commonLocations.map(renderLocationItem)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Helper function to render time baseline
+  const renderTimeBaseline = (baselineData) => {
+    const sortedHourDistribution = baselineData?.hourDistribution 
+      ? [...baselineData.hourDistribution].sort((a, b) => a.hour - b.hour)
+      : [];
+    
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
+            <p className="text-xs text-teal-600 mb-1">Total Logins</p>
+            <p className="text-2xl font-bold text-teal-900">{baselineData?.totalLogins || 0}</p>
+          </div>
+          <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
+            <p className="text-xs text-teal-600 mb-1">Most Active Hour</p>
+            <p className="text-2xl font-bold text-teal-900">
+              {formatHour(baselineData?.averageHour)}
+            </p>
+          </div>
+        </div>
+        {sortedHourDistribution.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-gray-700 mb-2">Hourly Distribution</p>
+            <div className="grid grid-cols-6 gap-2">
+              {sortedHourDistribution.map(renderHourItem)}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Helper function to render access pattern baseline
+  const renderAccessPatternBaseline = (baselineData) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
+          <p className="text-xs text-teal-600 mb-1">Total Actions</p>
+          <p className="text-2xl font-bold text-teal-900">{baselineData?.totalActions || 0}</p>
+        </div>
+        <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
+          <p className="text-xs text-teal-600 mb-1">Unique Actions</p>
+          <p className="text-2xl font-bold text-teal-900">{baselineData?.uniqueActions || 0}</p>
+        </div>
+      </div>
+      {baselineData?.commonActions && baselineData.commonActions.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-700 mb-2">Common Actions</p>
+          <div className="space-y-1.5">
+            {baselineData.commonActions.map(renderActionItem)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Helper function to render baseline data
+  const renderBaselineData = (baseline, baselineData) => {
+    if (baseline.baseline_type === 'location') {
+      return renderLocationBaseline(baselineData);
+    }
+    if (baseline.baseline_type === 'time') {
+      return renderTimeBaseline(baselineData);
+    }
+    if (baseline.baseline_type === 'access_pattern') {
+      return renderAccessPatternBaseline(baselineData);
+    }
+    return null;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       <div className="w-full px-2 sm:px-3 lg:px-4 py-4">
@@ -502,46 +652,53 @@ const BehavioralAnalytics = () => {
               </div>
             </div>
 
-            {isLoading ? (
-              <div className="text-center py-12">
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
-                  <span className="text-gray-600 text-sm">
-                    {(() => {
-                      const prefix = anomalySubTab === 'notified' ? 'notified ' : '';
-                      return `Loading ${prefix}anomalies...`;
-                    })()}
-                  </span>
-                </div>
-              </div>
-            ) : (() => {
+            {(() => {
+              if (isLoading) {
+                const loadingPrefix = anomalySubTab === 'notified' ? 'notified ' : '';
+                return (
+                  <div className="text-center py-12">
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                      <span className="text-gray-600 text-sm">
+                        {`Loading ${loadingPrefix}anomalies...`}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+              
               const currentList = anomalySubTab === 'notified' ? notifiedAnomaliesList : anomalies;
-              return currentList.length === 0;
-            })() ? (
-              <div className="text-center py-12">
-                <div className="text-gray-500 text-sm mb-2">
-                  {(() => {
-                    if (hasActiveFilters) {
-                      const prefix = anomalySubTab === 'notified' ? 'notified ' : '';
-                      return `No ${prefix}anomalies match your filters`;
-                    }
-                    if (anomalySubTab === 'notified') {
-                      return 'No anomalies have been notified yet';
-                    }
-                    return 'No behavioral anomalies detected';
-                  })()}
-                </div>
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearFilters}
-                    className="mt-2 px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors cursor-pointer"
-                  >
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="p-4 space-y-3">
+              const isEmpty = currentList.length === 0;
+              
+              if (isEmpty) {
+                return (
+                  <div className="text-center py-12">
+                    <div className="text-gray-500 text-sm mb-2">
+                      {(() => {
+                        if (hasActiveFilters) {
+                          const prefix = anomalySubTab === 'notified' ? 'notified ' : '';
+                          return `No ${prefix}anomalies match your filters`;
+                        }
+                        if (anomalySubTab === 'notified') {
+                          return 'No anomalies have been notified yet';
+                        }
+                        return 'No behavioral anomalies detected';
+                      })()}
+                    </div>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearFilters}
+                        className="mt-2 px-4 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 transition-colors cursor-pointer"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="p-4 space-y-3">
                 {(anomalySubTab === 'notified' ? notifiedAnomaliesList : anomalies).map((anomaly) => {
                   const severityColors = getSeverityColor(anomaly.severity);
                   const statusColors = getStatusColor(anomaly.status);
@@ -650,7 +807,8 @@ const BehavioralAnalytics = () => {
                   );
                 })}
               </div>
-            )}
+            );
+            })()}
           </div>
         )}
 
@@ -716,183 +874,78 @@ const BehavioralAnalytics = () => {
             </div>
 
             {/* Baselines List */}
-            {isLoading ? (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-8 text-center">
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
-                    <span className="text-gray-600 text-sm">Loading baselines...</span>
-                  </div>
-                </div>
-              </div>
-            ) : baselines.length === 0 ? (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-8 text-center">
-                  <div className="text-gray-500 text-sm mb-2">No baselines found</div>
-                  <div className="text-gray-400 text-xs">Calculate a baseline first to view user behavior patterns</div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {baselines.map((baseline) => {
-                  const baselineData = typeof baseline.baseline_data === 'string' 
-                    ? JSON.parse(baseline.baseline_data) 
-                    : baseline.baseline_data;
-                  
-                  const renderBaselineData = () => {
-                    if (baseline.baseline_type === 'location') {
-                      return (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
-                              <p className="text-xs text-teal-600 mb-1">Total Logins</p>
-                              <p className="text-2xl font-bold text-teal-900">{baselineData?.totalLogins || 0}</p>
-                            </div>
-                            <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
-                              <p className="text-xs text-teal-600 mb-1">Unique Locations</p>
-                              <p className="text-2xl font-bold text-teal-900">{baselineData?.uniqueLocations || 0}</p>
-                            </div>
-                          </div>
-                          {baselineData?.commonLocations && baselineData.commonLocations.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-700 mb-2">Common Locations</p>
-                              <div className="space-y-1.5">
-                                {baselineData.commonLocations.map((loc, idx) => {
-                                  let displayText = 'Unknown Location';
-                                  if (loc.location && loc.location.trim() !== '') {
-                                    displayText = loc.location;
-                                  } else if (loc.ip) {
-                                    const ip = loc.ip.trim();
-                                    if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip.startsWith('127.') || 
-                                        ip.startsWith('192.168.') || ip.startsWith('10.') || 
-                                        ip.startsWith('172.16.') || ip.startsWith('172.17.') || 
-                                        ip.startsWith('172.18.') || ip.startsWith('172.19.') ||
-                                        ip.startsWith('172.20.') || ip.startsWith('172.21.') ||
-                                        ip.startsWith('172.22.') || ip.startsWith('172.23.') ||
-                                        ip.startsWith('172.24.') || ip.startsWith('172.25.') ||
-                                        ip.startsWith('172.26.') || ip.startsWith('172.27.') ||
-                                        ip.startsWith('172.28.') || ip.startsWith('172.29.') ||
-                                        ip.startsWith('172.30.') || ip.startsWith('172.31.')) {
-                                      displayText = 'Local Connection';
-                                    } else if (ip !== 'unknown') {
-                                      displayText = `IP: ${ip}`;
-                                    }
-                                  }
-                                  
-                                  return (
-                                    <div key={`location-${loc.ip}-${idx}`} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
-                                      <span className="text-xs text-gray-700">{displayText}</span>
-                                      <span className="text-xs text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">{loc.frequency || loc.count || 0} login(s)</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    } else if (baseline.baseline_type === 'time') {
-                      return (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
-                              <p className="text-xs text-teal-600 mb-1">Total Logins</p>
-                              <p className="text-2xl font-bold text-teal-900">{baselineData?.totalLogins || 0}</p>
-                            </div>
-                            <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
-                              <p className="text-xs text-teal-600 mb-1">Most Active Hour</p>
-                              <p className="text-2xl font-bold text-teal-900">
-                                {formatHour(baselineData?.averageHour)}
-                              </p>
-                            </div>
-                          </div>
-                          {baselineData?.hourDistribution && baselineData.hourDistribution.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-700 mb-2">Hourly Distribution</p>
-                              <div className="grid grid-cols-6 gap-2">
-                                {baselineData.hourDistribution
-                                  .sort((a, b) => a.hour - b.hour)
-                                  .map((hourData) => (
-                                    <div key={hourData.hour} className="bg-gray-50 p-2 rounded border border-gray-200 text-center">
-                                      <p className="text-xs text-gray-600 mb-0.5">{formatHour(hourData.hour)}</p>
-                                      <p className="text-sm font-bold text-gray-900">{hourData.frequency}</p>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    } else if (baseline.baseline_type === 'access_pattern') {
-                      return (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
-                              <p className="text-xs text-teal-600 mb-1">Total Actions</p>
-                              <p className="text-2xl font-bold text-teal-900">{baselineData?.totalActions || 0}</p>
-                            </div>
-                            <div className="bg-teal-50 p-3 rounded-lg border border-teal-200">
-                              <p className="text-xs text-teal-600 mb-1">Unique Actions</p>
-                              <p className="text-2xl font-bold text-teal-900">{baselineData?.uniqueActions || 0}</p>
-                            </div>
-                          </div>
-                          {baselineData?.commonActions && baselineData.commonActions.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-700 mb-2">Common Actions</p>
-                              <div className="space-y-1.5">
-                                {baselineData.commonActions.map((action, idx) => (
-                                  <div key={`action-${action.action || 'unknown'}-${idx}`} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
-                                    <span className="text-xs text-gray-700">{action.action || 'Unknown'}</span>
-                                    <span className="text-xs text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">{action.frequency || action.count || 0} time(s)</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-                    return null;
-                  };
-                  
-                  const getBaselineIcon = () => {
-                    if (baseline.baseline_type === 'location') {
-                      return <MapPin className="h-5 w-5 text-white" />;
-                    } else if (baseline.baseline_type === 'time') {
-                      return <Clock className="h-5 w-5 text-white" />;
-                    } else {
-                      return <Activity className="h-5 w-5 text-white" />;
-                    }
-                  };
-                  
-                  return (
-                    <div key={baseline.id} className="bg-white rounded-lg shadow-sm border border-gray-200">
-                      <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center text-white flex-shrink-0">
-                            {getBaselineIcon()}
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-semibold text-gray-900">
-                              {baseline.baseline_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                            </h3>
-                            <p className="text-xs text-gray-500">Last calculated {formatDate(baseline.calculated_at)}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="p-4 sm:p-6">
-                        {baselineData?.message && (
-                          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded">
-                            <p className="text-xs text-amber-800">{baselineData.message}</p>
-                          </div>
-                        )}
-                        {renderBaselineData()}
+            {(() => {
+              if (isLoading) {
+                return (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="p-8 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                        <span className="text-gray-600 text-sm">Loading baselines...</span>
                       </div>
                     </div>
-                  );
+                  </div>
+                );
+              }
+              
+              const hasNoBaselines = baselines.length === 0;
+              if (hasNoBaselines) {
+                return (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="p-8 text-center">
+                      <div className="text-gray-500 text-sm mb-2">No baselines found</div>
+                      <div className="text-gray-400 text-xs">Calculate a baseline first to view user behavior patterns</div>
+                    </div>
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="space-y-3">
+                  {baselines.map((baseline) => {
+                    const baselineData = typeof baseline.baseline_data === 'string' 
+                      ? JSON.parse(baseline.baseline_data) 
+                      : baseline.baseline_data;
+                    
+                    const getBaselineIcon = () => {
+                      if (baseline.baseline_type === 'location') {
+                        return <MapPin className="h-5 w-5 text-white" />;
+                      } else if (baseline.baseline_type === 'time') {
+                        return <Clock className="h-5 w-5 text-white" />;
+                      } else {
+                        return <Activity className="h-5 w-5 text-white" />;
+                      }
+                    };
+                    
+                    return (
+                      <div key={baseline.id} className="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center text-white flex-shrink-0">
+                              {getBaselineIcon()}
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-semibold text-gray-900">
+                                {baseline.baseline_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </h3>
+                              <p className="text-xs text-gray-500">Last calculated {formatDate(baseline.calculated_at)}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-4 sm:p-6">
+                          {baselineData?.message && (
+                            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded">
+                              <p className="text-xs text-amber-800">{baselineData.message}</p>
+                            </div>
+                          )}
+                          {renderBaselineData(baseline, baselineData)}
+                        </div>
+                      </div>
+                    );
                 })}
-              </div>
-            )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -912,7 +965,6 @@ const BehavioralAnalytics = () => {
         >
           <div 
             className="bg-white rounded-lg shadow-xl max-w-md w-full"
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Confirm Dismiss</h2>
@@ -963,7 +1015,6 @@ const BehavioralAnalytics = () => {
         >
           <div 
             className="bg-white rounded-lg shadow-xl max-w-md w-full"
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Confirm Notification</h2>

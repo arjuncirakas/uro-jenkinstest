@@ -21,26 +21,30 @@ const TermsAndConditionsModal = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
   const modalContent = (
     <dialog
       ref={dialogRef}
       className="fixed inset-0 bg-transparent backdrop:bg-black/40 backdrop:backdrop-blur-sm flex items-center justify-center z-[9999] p-4 border-none outline-none"
       onCancel={onClose}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      }}
+      onClick={handleBackdropClick}
+      onKeyDown={handleKeyDown}
       aria-labelledby="terms-modal-title"
+      aria-modal="true"
     >
       <div 
         className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden transform transition-all animate-slideUp flex flex-col"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200 flex-shrink-0 bg-gradient-to-r from-teal-50 to-white">

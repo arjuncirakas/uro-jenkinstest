@@ -77,13 +77,7 @@ const checkPgcrypto = async () => {
   }
 };
 
-const main = async () => {
-  console.log('\n' + '='.repeat(70));
-  console.log('🔐 TDE (Transparent Data Encryption) Server Setup');
-  console.log('='.repeat(70));
-  console.log('\nThis script will help you set up TDE on your server step-by-step.\n');
-
-  // Step 1: Check database connection
+const checkDatabaseConnectionStep = async () => {
   console.log('📋 Step 1: Checking database connection...');
   const dbConnected = await checkDatabaseConnection();
   if (!dbConnected) {
@@ -95,8 +89,9 @@ const main = async () => {
     process.exit(1);
   }
   console.log('✅ Database connection successful\n');
+};
 
-  // Step 2: Check/Set TDE Master Key
+const configureMasterKey = () => {
   console.log('📋 Step 2: TDE Master Key Configuration');
   const env = readEnvFile();
   let masterKey = process.env.TDE_MASTER_KEY || env.TDE_MASTER_KEY;
@@ -120,8 +115,6 @@ const main = async () => {
     }
     writeEnvFile(env);
     console.log('✅ Added TDE_MASTER_KEY to .env file');
-    
-    // Reload environment
     process.env.TDE_MASTER_KEY = masterKey;
   } else {
     console.log('✅ TDE_MASTER_KEY found in environment');
@@ -135,8 +128,10 @@ const main = async () => {
     console.log('   Key preview:', masterKey.substring(0, 8) + '...' + masterKey.substring(56));
   }
   console.log('');
+  return masterKey;
+};
 
-  // Step 3: Check pgcrypto extension
+const checkPgcryptoExtension = async () => {
   console.log('📋 Step 3: Checking pgcrypto extension...');
   const pgcryptoExists = await checkPgcrypto();
   if (!pgcryptoExists) {
@@ -161,8 +156,9 @@ const main = async () => {
     console.log('✅ pgcrypto extension is already enabled');
   }
   console.log('');
+};
 
-  // Step 4: Initialize TDE
+const performTDEInitialization = async () => {
   console.log('📋 Step 4: Initializing TDE...');
   try {
     const initResult = await initializeTDE();
@@ -179,8 +175,9 @@ const main = async () => {
     process.exit(1);
   }
   console.log('');
+};
 
-  // Step 5: Verify TDE
+const verifyTDESetup = async () => {
   console.log('📋 Step 5: Verifying TDE setup...');
   const verification = await verifyTDE();
   if (!verification.success) {
@@ -201,8 +198,9 @@ const main = async () => {
   console.log('   - TDE tables: Created');
   console.log('   - Encryption test: Passed');
   console.log('');
+};
 
-  // Step 6: Show status
+const displayStatusSummary = async () => {
   console.log('📋 Step 6: TDE Status Summary');
   const status = await getTDEStatus();
   if (status.success) {
@@ -221,8 +219,9 @@ const main = async () => {
     }
   }
   console.log('');
+};
 
-  // Final summary
+const displayFinalSummary = () => {
   console.log('='.repeat(70));
   console.log('✅ TDE Setup Completed Successfully!');
   console.log('='.repeat(70));
@@ -240,6 +239,21 @@ const main = async () => {
   console.log('      - Use AWS Secrets Manager / Azure Key Vault');
   console.log('\n🔒 TDE is now active and protecting your database!');
   console.log('');
+};
+
+const main = async () => {
+  console.log('\n' + '='.repeat(70));
+  console.log('🔐 TDE (Transparent Data Encryption) Server Setup');
+  console.log('='.repeat(70));
+  console.log('\nThis script will help you set up TDE on your server step-by-step.\n');
+
+  await checkDatabaseConnectionStep();
+  configureMasterKey();
+  await checkPgcryptoExtension();
+  await performTDEInitialization();
+  await verifyTDESetup();
+  await displayStatusSummary();
+  displayFinalSummary();
 };
 
 main().catch(error => {

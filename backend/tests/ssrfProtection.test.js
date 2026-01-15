@@ -326,7 +326,6 @@ describe('SSRF Protection Utilities', () => {
       // Should have removed uploads\ prefix
       expect(req.params.filePath).toBe('investigations\\file.pdf');
     });
-  });
 
     it('should handle decodeURIComponent error in middleware', () => {
       const middleware = ssrfProtection.validateFilePathMiddleware('filePath');

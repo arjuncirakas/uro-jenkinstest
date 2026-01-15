@@ -77,6 +77,18 @@ const BreachManagement = () => {
     }
   };
 
+  // Helper to check and set notified incidents
+  const processNotifiedIncidents = async (incidentsList) => {
+    const notifiedSet = new Set();
+    for (const incident of incidentsList) {
+      const hasGovNotif = await checkIncidentGovNotification(incident.id);
+      if (hasGovNotif) {
+        notifiedSet.add(incident.id);
+      }
+    }
+    setNotifiedIncidents(notifiedSet);
+  };
+
   // Fetch incidents
   const fetchIncidents = async () => {
     setIsLoading(true);
@@ -87,16 +99,7 @@ const BreachManagement = () => {
       if (response.success) {
         const incidentsList = response.data || [];
         setIncidents(incidentsList);
-        
-        // Check which incidents have been notified to government authorities
-        const notifiedSet = new Set();
-        for (const incident of incidentsList) {
-          const hasGovNotif = await checkIncidentGovNotification(incident.id);
-          if (hasGovNotif) {
-            notifiedSet.add(incident.id);
-          }
-        }
-        setNotifiedIncidents(notifiedSet);
+        await processNotifiedIncidents(incidentsList);
       } else {
         setError(response.error || 'Failed to fetch incidents');
       }
@@ -556,6 +559,17 @@ const BreachManagement = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Helper function to render notification item
+  const renderNotificationItem = (notif) => {
+    const notificationType = notif.notification_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
+    const sentDate = notif.sent_at ? ` - ${formatDate(notif.sent_at)}` : '';
+    return (
+      <span key={notif.id} className="text-xs text-gray-600">
+        {notificationType}{sentDate}
+      </span>
+    );
+  };
+
   return (
     <div className="w-full min-h-screen overflow-x-hidden">
       <div className="w-full p-2 sm:p-3 lg:p-4">
@@ -646,18 +660,27 @@ const BreachManagement = () => {
                 <h2 className="text-lg font-semibold text-gray-900">Breach Incidents</h2>
               </div>
 
-              {isLoading ? (
-                <div className="text-center py-12">
-                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
-                  <p className="mt-2 text-sm text-gray-500">Loading incidents...</p>
-                </div>
-              ) : incidents.length === 0 ? (
-                <div className="text-center py-12">
-                  <Shield className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-500">No incidents found</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-200">
+              {(() => {
+                if (isLoading) {
+                  return (
+                    <div className="text-center py-12">
+                      <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                      <p className="mt-2 text-sm text-gray-500">Loading incidents...</p>
+                    </div>
+                  );
+                }
+                
+                if (incidents.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <Shield className="mx-auto h-12 w-12 text-gray-400" />
+                      <p className="mt-2 text-sm text-gray-500">No incidents found</p>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className="divide-y divide-gray-200">
                   {incidents.map((incident) => (
                     <div key={incident.id} className="p-6 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between">
@@ -725,7 +748,8 @@ const BreachManagement = () => {
                     </div>
                   ))}
                 </div>
-              )}
+                );
+              })()}
             </div>
           </>
         )}
@@ -738,18 +762,27 @@ const BreachManagement = () => {
               <p className="text-sm text-gray-500 mt-1">All notifications sent to GDPR Supervisory Authority and HIPAA HHS</p>
             </div>
 
-            {isLoading ? (
-              <div className="text-center py-12">
-                <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
-                <p className="mt-2 text-sm text-gray-500">Loading notifications...</p>
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="text-center py-12">
-                <Mail className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-500">No government authority notifications found</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
+            {(() => {
+              if (isLoading) {
+                return (
+                  <div className="text-center py-12">
+                    <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                    <p className="mt-2 text-sm text-gray-500">Loading notifications...</p>
+                  </div>
+                );
+              }
+              
+              if (notifications.length === 0) {
+                return (
+                  <div className="text-center py-12">
+                    <Mail className="mx-auto h-12 w-12 text-gray-400" />
+                    <p className="mt-2 text-sm text-gray-500">No government authority notifications found</p>
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="space-y-4">
                 {notifications.map((notification) => (
                   <div key={notification.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                     <div className="flex items-start justify-between">
@@ -759,13 +792,14 @@ const BreachManagement = () => {
                             {notification.notification_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                           </span>
                           {(() => {
-                            const getStatusClass = (status) => {
-                              if (status === 'sent') return 'bg-green-100 text-green-800';
-                              if (status === 'failed') return 'bg-red-100 text-red-800';
-                              return 'bg-yellow-100 text-yellow-800';
-                            };
+                            let statusClass = 'bg-yellow-100 text-yellow-800';
+                            if (notification.status === 'sent') {
+                              statusClass = 'bg-green-100 text-green-800';
+                            } else if (notification.status === 'failed') {
+                              statusClass = 'bg-red-100 text-red-800';
+                            }
                             return (
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusClass(notification.status)}`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}`}>
                                 {notification.status}
                               </span>
                             );
@@ -814,7 +848,8 @@ const BreachManagement = () => {
                   </div>
                 ))}
               </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -826,18 +861,27 @@ const BreachManagement = () => {
               <p className="text-sm text-gray-500 mt-1">Manage remediations for incidents that have been notified to government authorities</p>
             </div>
 
-            {isLoading ? (
-              <div className="text-center py-12">
-                <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
-                <p className="mt-2 text-sm text-gray-500">Loading incidents...</p>
-              </div>
-            ) : notifiedIncidentsList.length === 0 ? (
-              <div className="text-center py-12">
-                <Shield className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-500">No notified incidents found. Notify an incident first to add remediations.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
+            {(() => {
+              if (isLoading) {
+                return (
+                  <div className="text-center py-12">
+                    <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                    <p className="mt-2 text-sm text-gray-500">Loading incidents...</p>
+                  </div>
+                );
+              }
+              
+              if (notifiedIncidentsList.length === 0) {
+                return (
+                  <div className="text-center py-12">
+                    <Shield className="mx-auto h-12 w-12 text-gray-400" />
+                    <p className="mt-2 text-sm text-gray-500">No notified incidents found. Notify an incident first to add remediations.</p>
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="space-y-4">
                 {notifiedIncidentsList.map((incident) => {
                   const severityColors = getSeverityColor(incident.severity);
                   const statusColors = getStatusColor(incident.status);
@@ -886,12 +930,7 @@ const BreachManagement = () => {
                             <div className="mt-2 pt-2 border-t border-gray-200">
                               <p className="text-xs text-gray-500 mb-1">Notifications Sent:</p>
                               <div className="flex flex-wrap gap-2">
-                                {incident.notifications.map((notif) => (
-                                  <span key={notif.id} className="text-xs text-gray-600">
-                                    {notif.notification_type?.replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} 
-                                    {notif.sent_at && ` - ${formatDate(notif.sent_at)}`}
-                                  </span>
-                                ))}
+                                {incident.notifications.map(renderNotificationItem)}
                               </div>
                             </div>
                           )}
@@ -922,7 +961,8 @@ const BreachManagement = () => {
                   );
                 })}
               </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -1076,8 +1116,9 @@ const BreachManagement = () => {
               </h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
+                  <label htmlFor="remediation-action-taken" className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
                   <textarea
+                    id="remediation-action-taken"
                     value={remediationForm.action_taken}
                     onChange={(e) => setRemediationForm(prev => ({ ...prev, action_taken: e.target.value }))}
                     rows={4}
@@ -1086,8 +1127,9 @@ const BreachManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Effectiveness</label>
+                  <label htmlFor="remediation-effectiveness" className="block text-sm font-medium text-gray-700 mb-1">Effectiveness</label>
                   <select
+                    id="remediation-effectiveness"
                     value={remediationForm.effectiveness}
                     onChange={(e) => setRemediationForm(prev => ({ ...prev, effectiveness: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -1099,8 +1141,9 @@ const BreachManagement = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                  <label htmlFor="remediation-notes" className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                   <textarea
+                    id="remediation-notes"
                     value={remediationForm.notes}
                     onChange={(e) => setRemediationForm(prev => ({ ...prev, notes: e.target.value }))}
                     rows={3}
@@ -1156,28 +1199,37 @@ const BreachManagement = () => {
                 </button>
               </div>
 
-              {isLoading ? (
-                <div className="text-center py-12">
-                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
-                  <p className="mt-2 text-sm text-gray-500">Loading remediations...</p>
-                </div>
-              ) : remediations.length === 0 ? (
-                <div className="text-center py-12">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-500">No remediations found for this incident</p>
-                  <button
-                    onClick={() => {
-                      setShowViewRemediationsModal(false);
-                      handleOpenAddRemediation(incidentForRemediation);
-                    }}
-                    className="mt-4 px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors cursor-pointer inline-flex items-center gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add First Remediation
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
+              {(() => {
+                if (isLoading) {
+                  return (
+                    <div className="text-center py-12">
+                      <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                      <p className="mt-2 text-sm text-gray-500">Loading remediations...</p>
+                    </div>
+                  );
+                }
+                
+                if (remediations.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                      <p className="mt-2 text-sm text-gray-500">No remediations found for this incident</p>
+                      <button
+                        onClick={() => {
+                          setShowViewRemediationsModal(false);
+                          handleOpenAddRemediation(incidentForRemediation);
+                        }}
+                        className="mt-4 px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors cursor-pointer inline-flex items-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add First Remediation
+                      </button>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className="space-y-4">
                   {remediations.map((remediation) => (
                     <div key={remediation.id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start justify-between mb-2">
@@ -1187,14 +1239,16 @@ const BreachManagement = () => {
                             Taken: {formatDate(remediation.taken_at)} by {remediation.taken_by_email || 'System'}
                           </p>
                           {remediation.effectiveness && (() => {
-                            const getEffectivenessClass = (eff) => {
-                              if (eff === 'effective') return 'bg-green-100 text-green-800';
-                              if (eff === 'partial') return 'bg-yellow-100 text-yellow-800';
-                              if (eff === 'ineffective') return 'bg-red-100 text-red-800';
-                              return 'bg-gray-100 text-gray-800';
-                            };
+                            let effectivenessClass = 'bg-gray-100 text-gray-800';
+                            if (remediation.effectiveness === 'effective') {
+                              effectivenessClass = 'bg-green-100 text-green-800';
+                            } else if (remediation.effectiveness === 'partial') {
+                              effectivenessClass = 'bg-yellow-100 text-yellow-800';
+                            } else if (remediation.effectiveness === 'ineffective') {
+                              effectivenessClass = 'bg-red-100 text-red-800';
+                            }
                             return (
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEffectivenessClass(remediation.effectiveness)}`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${effectivenessClass}`}>
                                 {remediation.effectiveness}
                               </span>
                             );
@@ -1226,7 +1280,8 @@ const BreachManagement = () => {
                     </button>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1261,8 +1316,9 @@ const BreachManagement = () => {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
+                  <label htmlFor="edit-remediation-action-taken-modal" className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
                   <textarea
+                    id="edit-remediation-action-taken-modal"
                     value={remediationForm.action_taken}
                     onChange={(e) => setRemediationForm(prev => ({ ...prev, action_taken: e.target.value }))}
                     rows={4}
@@ -1271,8 +1327,9 @@ const BreachManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Effectiveness</label>
+                  <label htmlFor="edit-remediation-effectiveness-modal" className="block text-sm font-medium text-gray-700 mb-1">Effectiveness</label>
                   <select
+                    id="edit-remediation-effectiveness-modal"
                     value={remediationForm.effectiveness}
                     onChange={(e) => setRemediationForm(prev => ({ ...prev, effectiveness: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -1284,8 +1341,9 @@ const BreachManagement = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                  <label htmlFor="edit-remediation-notes-modal" className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                   <textarea
+                    id="edit-remediation-notes-modal"
                     value={remediationForm.notes}
                     onChange={(e) => setRemediationForm(prev => ({ ...prev, notes: e.target.value }))}
                     rows={3}
@@ -1336,8 +1394,6 @@ const BreachManagement = () => {
           >
             <div 
               className="bg-white rounded-lg shadow-xl max-w-md w-full"
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
             >
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Notify Government Authority</h2>

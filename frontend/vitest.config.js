@@ -18,7 +18,8 @@ export default defineConfig({
     testTimeout: 30000,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
+      // HTML reporter removed - very slow with many files, SonarQube only needs lcov
+      reporter: ['lcov'],
       include: ['src/**/*.{js,jsx}'],
       exclude: [
         'node_modules/**',

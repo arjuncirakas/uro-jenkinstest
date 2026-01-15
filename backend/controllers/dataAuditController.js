@@ -517,6 +517,7 @@ export const verifyAuditLogIntegrityController = async (req, res) => {
       status: 'success'
     });
     
+    // verifyAuditLogIntegrity is an async function - await is required to get the resolved value
     const verificationResult = await verifyAuditLogIntegrity();
     
     res.json({
@@ -569,6 +570,7 @@ export const verifyImmutabilityStatusController = async (req, res) => {
       status: 'success'
     });
     
+    // verifyImmutabilityStatus is an async function - await is required to get the resolved value
     const statusResult = await verifyImmutabilityStatus();
     
     res.json({

@@ -204,22 +204,28 @@ const SecurityDashboard = () => {
             <h2 className="text-base sm:text-lg font-semibold text-gray-900">Security Alerts</h2>
           </div>
 
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="flex items-center justify-center space-x-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
-                <span className="text-gray-600 text-sm">Loading alerts...</span>
-              </div>
-            </div>
-          ) : (() => {
-            if (alerts.length === 0) return true;
-            return false;
-          })() ? (
-            <div className="text-center py-12">
-              <Shield className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-500">No security alerts found</p>
-            </div>
-          ) : (
+          {(() => {
+            if (isLoading) {
+              return (
+                <div className="text-center py-12">
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+                    <span className="text-gray-600 text-sm">Loading alerts...</span>
+                  </div>
+                </div>
+              );
+            }
+            
+            if (alerts.length === 0) {
+              return (
+                <div className="text-center py-12">
+                  <Shield className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-500">No security alerts found</p>
+                </div>
+              );
+            }
+            
+            return (
             <div className="divide-y divide-gray-200">
               {alerts.map((alert) => (
                 <div key={alert.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
@@ -296,7 +302,8 @@ const SecurityDashboard = () => {
                 </div>
               ))}
             </div>
-          )}
+            );
+          })()}
         </div>
       </div>
 

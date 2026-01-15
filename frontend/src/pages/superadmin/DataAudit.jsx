@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import PropTypes from 'prop-types';
+import React, { useState, useEffect } from 'react';
 import {
   Database,
   Activity,
@@ -8,7 +7,6 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
-  Info,
   X
 } from 'lucide-react';
 import {
@@ -38,14 +36,7 @@ const DataAudit = () => {
   const [chartData, setChartData] = useState(null);
   const [dataInventory, setDataInventory] = useState(null);
   const [accessLogs, setAccessLogs] = useState({ logs: [], pagination: {} });
-  // Note: These state variables are used in commented-out code sections
-  // Keeping them for future use when those features are enabled
-  // eslint-disable-next-line no-unused-vars
-  const [processingActivities, setProcessingActivities] = useState({ activities: [] });
-  // eslint-disable-next-line no-unused-vars
-  const [retentionInfo, setRetentionInfo] = useState(null);
-  // eslint-disable-next-line no-unused-vars
-  const [thirdPartySharing, setThirdPartySharing] = useState({ sharingEvents: [] });
+  // Note: These state variables are reserved for future use when those features are enabled
   
   // Modal states
   const [showPHIUsersModal, setShowPHIUsersModal] = useState(false);
@@ -68,21 +59,7 @@ const DataAudit = () => {
     limit: 20
   });
   
-  // Note: These filter setters are used in commented-out code sections
-  // eslint-disable-next-line no-unused-vars
-  const [processingFilters, setProcessingFilters] = useState({
-    startDate: '',
-    endDate: '',
-    actionType: '',
-    resourceType: ''
-  });
-  
-  // eslint-disable-next-line no-unused-vars
-  const [sharingFilters, setSharingFilters] = useState({
-    startDate: '',
-    endDate: '',
-    userId: ''
-  });
+  // Note: Filter states are reserved for future use when those features are enabled
 
   // Fetch compliance metrics (overview)
   const fetchComplianceMetrics = async () => {
@@ -144,62 +121,7 @@ const DataAudit = () => {
     }
   };
 
-  // Fetch processing activities (currently unused but kept for future use)
-  // eslint-disable-next-line no-unused-vars
-  const fetchProcessingActivities = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await dataAuditService.getProcessingActivities(processingFilters);
-      if (response.success) {
-        setProcessingActivities(response.data);
-      } else {
-        setError(response.error || 'Failed to fetch processing activities');
-      }
-    } catch (err) {
-      setError('Failed to fetch processing activities');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch retention info (currently unused but kept for future use)
-  // eslint-disable-next-line no-unused-vars
-  const fetchRetentionInfo = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await dataAuditService.getRetentionInfo();
-      if (response.success) {
-        setRetentionInfo(response.data);
-      } else {
-        setError(response.error || 'Failed to fetch retention info');
-      }
-    } catch (err) {
-      setError('Failed to fetch retention info');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch third-party sharing (currently unused but kept for future use)
-  // eslint-disable-next-line no-unused-vars
-  const fetchThirdPartySharing = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await dataAuditService.getThirdPartySharing(sharingFilters);
-      if (response.success) {
-        setThirdPartySharing(response.data);
-      } else {
-        setError(response.error || 'Failed to fetch third-party sharing');
-      }
-    } catch (err) {
-      setError('Failed to fetch third-party sharing');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Note: Fetch functions are reserved for future use when those features are enabled
 
   // Load data when tab changes
   useEffect(() => {
@@ -411,6 +333,19 @@ const DataAudit = () => {
   };
 
   // Helper functions for access logs formatting
+  const getClassificationClass = (level) => {
+    if (level === 5) return 'bg-red-100 text-red-800 border border-red-200';
+    if (level === 4) return 'bg-orange-100 text-orange-800 border border-orange-200';
+    if (level === 3) return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+    if (level === 2) return 'bg-blue-100 text-blue-800 border border-blue-200';
+    return 'bg-gray-100 text-gray-800 border border-gray-200';
+  };
+
+  // Legend formatter for charts
+  const formatLegendValue = (value) => (
+    <span style={{ color: '#374151', fontSize: '12px', fontWeight: 500 }}>{value}</span>
+  );
+
   const formatTimestampUTC = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
@@ -457,68 +392,85 @@ const DataAudit = () => {
     return formatted;
   };
 
+  // Helper: Extract from metadata object
+  const extractFromMetadata = (metadata) => {
+    if (metadata.reason) return metadata.reason;
+    if (metadata.ticket) return metadata.ticket;
+    if (metadata.ticketNumber) return `Ticket #${metadata.ticketNumber}`;
+    if (metadata.auditReq) return `Audit Req #${metadata.auditReq}`;
+    if (metadata.endpoint) {
+      const ticketMatch = metadata.endpoint.match(/ticket[#\s]*(\d+)/i) || metadata.endpoint.match(/audit[_\s]*req[#\s]*(\d+)/i);
+      if (ticketMatch) return ticketMatch[0];
+    }
+    if (metadata.description) return metadata.description;
+    if (metadata.message) return metadata.message;
+    return null;
+  };
+
+  // Helper: Extract from metadata string
+  const extractFromMetadataString = (metadataStr) => {
+    const ticketMatch = metadataStr.match(/ticket[#\s]*(\d+)/i) || metadataStr.match(/audit[_\s]*req[#\s]*(\d+)/i);
+    if (ticketMatch) return ticketMatch[0];
+    if (metadataStr.length < 100 && metadataStr.trim() !== '{}') {
+      return metadataStr;
+    }
+    return null;
+  };
+
+  // Helper: Get reason from request path
+  const getReasonFromRequestPath = (requestPath) => {
+    if (!requestPath) return null;
+    if (requestPath.includes('export')) return 'Data Export Request';
+    if (requestPath.includes('audit')) return 'Audit Request';
+    return null;
+  };
+
+  // Helper: Get reason from action type
+  const getReasonFromAction = (action, status) => {
+    if (status !== 'success') return null;
+    if (action?.includes('view') || action?.includes('get')) return 'View Request';
+    if (action?.includes('export')) return 'Export Request';
+    if (action?.includes('login') || action?.includes('auth')) return 'Authentication';
+    return 'Standard Operation';
+  };
+
+  // Extract reason/ticket from metadata
+  const extractReasonFromMetadata = (log) => {
+    if (!log.metadata) return null;
+    
+    try {
+      const metadata = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata;
+      const result = extractFromMetadata(metadata);
+      if (result) return result;
+    } catch (e) {
+      // Fall through to string parsing
+    }
+    
+    if (typeof log.metadata === 'string') {
+      return extractFromMetadataString(log.metadata);
+    }
+    
+    return null;
+  };
+
   // Extract reason/ticket from metadata, error_message, or other fields
   const getReasonOrTicket = (log) => {
     // First, try metadata
-    if (log.metadata) {
-      try {
-        const metadata = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata;
-        
-        // Check various metadata fields
-        if (metadata.reason) return metadata.reason;
-        if (metadata.ticket) return metadata.ticket;
-        if (metadata.ticketNumber) return `Ticket #${metadata.ticketNumber}`;
-        if (metadata.auditReq) return `Audit Req #${metadata.auditReq}`;
-        if (metadata.endpoint) {
-          // Extract ticket/audit req from endpoint if present
-          const ticketMatch = metadata.endpoint.match(/ticket[#\s]*(\d+)/i) || metadata.endpoint.match(/audit[_\s]*req[#\s]*(\d+)/i);
-          if (ticketMatch) return ticketMatch[0];
-        }
-        // Check if there's any meaningful description
-        if (metadata.description) return metadata.description;
-        if (metadata.message) return metadata.message;
-      } catch (e) {
-        // If parsing fails, try to extract from string
-        if (typeof log.metadata === 'string') {
-          const ticketMatch = log.metadata.match(/ticket[#\s]*(\d+)/i) || log.metadata.match(/audit[_\s]*req[#\s]*(\d+)/i);
-          if (ticketMatch) return ticketMatch[0];
-          // If it's a short meaningful string, return it
-          if (log.metadata.length < 100 && log.metadata.trim() !== '{}') {
-            return log.metadata;
-          }
-        }
-      }
-    }
+    const metadataResult = extractReasonFromMetadata(log);
+    if (metadataResult) return metadataResult;
     
     // Check error_message
     if (log.error_message) {
       return log.error_message;
     }
     
-    // Check request_path for clues
-    if (log.request_path) {
-      // If it's an export or specific action, provide context
-      if (log.request_path.includes('export')) {
-        return 'Data Export Request';
-      }
-      if (log.request_path.includes('audit')) {
-        return 'Audit Request';
-      }
-    }
+    // Check request_path
+    const pathResult = getReasonFromRequestPath(log.request_path);
+    if (pathResult) return pathResult;
     
-    // For successful actions, provide a default based on action type
-    if (log.status === 'success') {
-      if (log.action?.includes('view') || log.action?.includes('get')) {
-        return 'View Request';
-      }
-      if (log.action?.includes('export')) {
-        return 'Export Request';
-      }
-      if (log.action?.includes('login') || log.action?.includes('auth')) {
-        return 'Authentication';
-      }
-      return 'Standard Operation';
-    }
+    // Check action type
+    const actionResult = getReasonFromAction(log.action, log.status);
+    if (actionResult) return actionResult;
     
     // For failures, return error context
     if (log.status === 'failure' || log.status === 'error') {
@@ -807,7 +759,7 @@ const DataAudit = () => {
                           <Legend 
                             wrapperStyle={{ paddingTop: '20px' }}
                             iconType="line"
-                            formatter={(value) => <span style={{ color: '#374151', fontSize: '12px', fontWeight: 500 }}>{value}</span>}
+                            formatter={formatLegendValue}
                           />
                           {/* Gradient area fills for depth */}
                           <Area
@@ -1006,13 +958,6 @@ const DataAudit = () => {
                                           if (!table.classificationLevel) {
                                             return <span className="text-gray-400 text-xs">Not classified</span>;
                                           }
-                                          const getClassificationClass = (level) => {
-                                            if (level === 5) return 'bg-red-100 text-red-800 border border-red-200';
-                                            if (level === 4) return 'bg-orange-100 text-orange-800 border border-orange-200';
-                                            if (level === 3) return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
-                                            if (level === 2) return 'bg-blue-100 text-blue-800 border border-blue-200';
-                                            return 'bg-gray-100 text-gray-800 border border-gray-200';
-                                          };
                                           return (
                                             <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${getClassificationClass(table.classificationLevel)}`}>
                                               Level {table.classificationLevel}: {table.classificationLabel || 'Unknown'}
@@ -1196,8 +1141,6 @@ const DataAudit = () => {
         >
           <div 
             className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">Unique Users Accessing PHI (Last 30 Days)</h2>
@@ -1209,44 +1152,51 @@ const DataAudit = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              {modalLoading ? (
-                <div className="text-center py-12">
-                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
-                  <p className="mt-2 text-sm text-gray-500">Loading users...</p>
-                </div>
-              ) : (() => {
-                if (phiUsers.length > 0) return true;
-                return false;
-              })() ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Email</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Last Access</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {phiUsers.map((user) => (
-                        <tr key={user.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-900">{user.email}</td>
-                          <td className="px-4 py-3 text-gray-600">
-                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
-                              {user.role}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">{formatDate(user.lastAccess)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-sm text-gray-500">
-                  No users found
-                </div>
-              )}
+              {(() => {
+                if (modalLoading) {
+                  return (
+                    <div className="text-center py-12">
+                      <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                      <p className="mt-2 text-sm text-gray-500">Loading users...</p>
+                    </div>
+                  );
+                }
+                
+                if (phiUsers.length > 0) {
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Email</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Last Access</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {phiUsers.map((user) => (
+                            <tr key={user.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">{user.email}</td>
+                              <td className="px-4 py-3 text-gray-600">
+                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                                  {user.role}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">{formatDate(user.lastAccess)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className="text-center py-12 text-sm text-gray-500">
+                    No users found
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </button>
@@ -1267,7 +1217,6 @@ const DataAudit = () => {
         >
           <div 
             className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">Data Exports (Last 30 Days)</h2>
@@ -1279,62 +1228,68 @@ const DataAudit = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              {modalLoading ? (
-                <div className="text-center py-12">
-                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
-                  <p className="mt-2 text-sm text-gray-500">Loading exports...</p>
-                </div>
-              ) : (() => {
-                if (dataExports.length > 0) return true;
-                return false;
-              })() ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Timestamp</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">User</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Action</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">IP Address</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {dataExports.map((exportItem) => (
-                        <tr key={exportItem.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-900 font-mono text-xs">{formatDate(exportItem.timestamp)}</td>
-                          <td className="px-4 py-3 text-gray-600">{exportItem.user_email || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-600">
-                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
-                              {exportItem.user_role || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">{exportItem.action || 'N/A'}</td>
-                          <td className="px-4 py-3">
-                            {(() => {
-                              const getStatusClass = (status) => {
-                                if (status === 'success') return 'bg-green-100 text-green-800';
-                                return 'bg-red-100 text-red-800';
-                              };
-                              return (
-                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusClass(exportItem.status)}`}>
-                                  {exportItem.status?.toUpperCase() || 'N/A'}
+              {(() => {
+                if (modalLoading) {
+                  return (
+                    <div className="text-center py-12">
+                      <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                      <p className="mt-2 text-sm text-gray-500">Loading exports...</p>
+                    </div>
+                  );
+                }
+                
+                if (dataExports.length > 0) {
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Timestamp</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">User</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Action</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">IP Address</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {dataExports.map((exportItem) => (
+                            <tr key={exportItem.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900 font-mono text-xs">{formatDate(exportItem.timestamp)}</td>
+                              <td className="px-4 py-3 text-gray-600">{exportItem.user_email || 'N/A'}</td>
+                              <td className="px-4 py-3 text-gray-600">
+                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                                  {exportItem.user_role || 'N/A'}
                                 </span>
-                              );
-                            })()}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600 font-mono text-xs">{formatIPAddress(exportItem.ip_address)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-sm text-gray-500">
-                  No data exports found
-                </div>
-              )}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">{exportItem.action || 'N/A'}</td>
+                              <td className="px-4 py-3">
+                                {(() => {
+                                  const statusClass = exportItem.status === 'success' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800';
+                                  return (
+                                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusClass}`}>
+                                      {exportItem.status?.toUpperCase() || 'N/A'}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 font-mono text-xs">{formatIPAddress(exportItem.ip_address)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className="text-center py-12 text-sm text-gray-500">
+                    No data exports found
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </button>
@@ -1355,8 +1310,6 @@ const DataAudit = () => {
         >
           <div 
             className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">Total Verified Users</h2>
@@ -1368,61 +1321,68 @@ const DataAudit = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              {modalLoading ? (
-                <div className="text-center py-12">
-                  <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
-                  <p className="mt-2 text-sm text-gray-500">Loading users...</p>
-                </div>
-              ) : (() => {
-                if (verifiedUsers.length > 0) return true;
-                return false;
-              })() ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Email</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Created At</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {verifiedUsers.map((user) => (
-                        <tr key={user.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-900">
-                            {(() => {
-                              if (user.first_name && user.last_name) {
-                                return `${user.first_name} ${user.last_name}`;
-                              }
-                              return 'N/A';
-                            })()}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">{user.email || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-600">
-                            <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
-                              {user.role || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {user.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">{formatDate(user.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-sm text-gray-500">
-                  No verified users found
-                </div>
-              )}
+              {(() => {
+                if (modalLoading) {
+                  return (
+                    <div className="text-center py-12">
+                      <Loader2 className="mx-auto h-8 w-8 text-teal-600 animate-spin" />
+                      <p className="mt-2 text-sm text-gray-500">Loading users...</p>
+                    </div>
+                  );
+                }
+                
+                if (verifiedUsers.length > 0) {
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Email</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Role</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Created At</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {verifiedUsers.map((user) => (
+                            <tr key={user.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900">
+                                {(() => {
+                                  if (user.first_name && user.last_name) {
+                                    return `${user.first_name} ${user.last_name}`;
+                                  }
+                                  return 'N/A';
+                                })()}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">{user.email || 'N/A'}</td>
+                              <td className="px-4 py-3 text-gray-600">
+                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                                  {user.role || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                  user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {user.is_active ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">{formatDate(user.created_at)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className="text-center py-12 text-sm text-gray-500">
+                    No verified users found
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </button>
