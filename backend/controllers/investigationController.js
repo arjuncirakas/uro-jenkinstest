@@ -1436,10 +1436,91 @@ export const serveFile = async (req, res) => {
     console.log('📁 [serveFile] Step 2 - Relative path for DB lookup:', relativePath);
 
     // Check database first for encrypted file
-    const dbResult = await client.query(
+    // Try exact match first
+    let dbResult = await client.query(
       'SELECT file_path, file_name, file_data FROM investigation_results WHERE file_path = $1',
       [relativePath]
     );
+
+    // If not found, try alternative path formats (with/without uploads prefix)
+    if (dbResult.rows.length === 0) {
+      const altPath1 = relativePath.startsWith('uploads/') ? relativePath.replace(/^uploads\//, '') : `uploads/${relativePath}`;
+      dbResult = await client.query(
+        'SELECT file_path, file_name, file_data FROM investigation_results WHERE file_path = $1 OR file_path = $2',
+        [relativePath, altPath1]
+      );
+    }
+
+    // If still not found, try matching by unique identifier (timestamp-random suffix)
+    // Since files are encrypted and stored in DB, file_path is just a reference identifier
+    if (dbResult.rows.length === 0) {
+      const pathParts = relativePath.split('/');
+      const filename = pathParts[pathParts.length - 1];
+      
+      // Extract unique identifier (timestamp-random) from filename
+      // Format: result-{timestamp}-{random}.ext or similar
+      const uniqueIdMatch = filename.match(/(\d+-\d+)\.(\w+)$/);
+      
+      if (uniqueIdMatch) {
+        const uniqueSuffix = uniqueIdMatch[1]; // e.g., "1768456580448-307808785"
+        const ext = uniqueIdMatch[2]; // e.g., "pdf"
+        
+        console.log('📁 [serveFile] Trying to match by unique identifier:', {
+          requestedPath: relativePath,
+          uniqueSuffix: uniqueSuffix,
+          extension: ext
+        });
+        
+        // Match by unique suffix - try various path format patterns
+        const patterns = [
+          `%result-${uniqueSuffix}.${ext}`,     // Standard format
+          `%investigation-${uniqueSuffix}.${ext}`, // Alternative format
+          `%${uniqueSuffix}.${ext}`,           // Just unique ID + extension
+          `%${uniqueSuffix}%`                  // Just the unique ID (most flexible)
+        ];
+        
+        const patternPlaceholders = patterns.map((_, i) => `$${i + 1}`).join(' OR file_path LIKE ');
+        const query = `
+          SELECT file_path, file_name, file_data FROM investigation_results 
+          WHERE file_path LIKE ${patternPlaceholders}
+          ORDER BY 
+            CASE 
+              WHEN file_path LIKE $1 THEN 1
+              WHEN file_path LIKE $2 THEN 2
+              WHEN file_path LIKE $3 THEN 3
+              ELSE 4
+            END
+          LIMIT 1
+        `;
+        
+        dbResult = await client.query(query, patterns);
+        
+        if (dbResult.rows.length > 0) {
+          console.log('📁 [serveFile] Found investigation result file by unique identifier:', {
+            requestedPath: relativePath,
+            foundPath: dbResult.rows[0].file_path,
+            uniqueSuffix: uniqueSuffix
+          });
+        }
+      } else {
+        // Fallback: try matching by filename if unique ID extraction failed
+        console.log('📁 [serveFile] Could not extract unique identifier, trying filename match:', filename);
+        const broadPattern = `%${filename}%`;
+        dbResult = await client.query(
+          `SELECT file_path, file_name, file_data FROM investigation_results 
+           WHERE file_path LIKE $1 OR file_name LIKE $1
+           ORDER BY file_path LIMIT 1`,
+          [broadPattern]
+        );
+        
+        if (dbResult.rows.length > 0) {
+          console.log('📁 [serveFile] Found investigation result file by filename:', {
+            requestedPath: relativePath,
+            foundPath: dbResult.rows[0].file_path
+          });
+        }
+      }
+    }
 
     let fileBuffer = null;
     let fileName = null;
@@ -1493,8 +1574,56 @@ export const serveFile = async (req, res) => {
       mimeType = mimeTypes[ext] || 'application/octet-stream';
       console.log('📁 [serveFile] Step 4 - Read file from filesystem, size:', fileBuffer.length, 'bytes');
     } else {
-      // File not found
-      console.log('📁 [serveFile] ERROR - File not found in database or filesystem');
+      // File not found - log detailed information for debugging
+      console.error('📁 [serveFile] ERROR - File not found in database or filesystem', {
+        validatedPath: fullPath,
+        relativePath: relativePath,
+        originalParam: req.params.filePath
+      });
+      
+      // Try to find similar paths in database for debugging
+      const filename = relativePath.split('/').pop() || relativePath.split('\\').pop() || '';
+      
+      // Try to extract unique identifier for better debugging
+      const uniqueIdMatch = filename.match(/(\d+-\d+)\.(\w+)$/);
+      if (uniqueIdMatch) {
+        const uniqueSuffix = uniqueIdMatch[1];
+        console.log('📁 [serveFile] Extracted unique identifier from requested path:', {
+          uniqueSuffix: uniqueSuffix,
+          filename: filename,
+          requestedPath: relativePath
+        });
+        
+        // Search for files with this unique identifier
+        const uniqueIdQuery = await client.query(
+          `SELECT file_path, file_name FROM investigation_results 
+           WHERE file_path LIKE $1 OR file_path LIKE $2
+           LIMIT 5`,
+          [`%${uniqueSuffix}%`, `%result%${uniqueSuffix}%`]
+        );
+        if (uniqueIdQuery.rows.length > 0) {
+          console.log('📁 [serveFile] Found files with matching unique identifier:', uniqueIdQuery.rows.map(r => ({ path: r.file_path, name: r.file_name })));
+        }
+      }
+      
+      // Search for similar filenames
+      const debugQuery = await client.query(
+        'SELECT file_path, file_name FROM investigation_results WHERE file_path LIKE $1 OR file_name LIKE $2 LIMIT 5',
+        [`%${filename}%`, `%${filename}%`]
+      );
+      if (debugQuery.rows.length > 0) {
+        console.log('📁 [serveFile] Found similar investigation result paths in database:', debugQuery.rows.map(r => ({ path: r.file_path, name: r.file_name })));
+      } else {
+        // Try broader search
+        const broaderQuery = await client.query(
+          'SELECT file_path, file_name FROM investigation_results WHERE file_path LIKE $1 LIMIT 10',
+          ['%result%']
+        );
+        if (broaderQuery.rows.length > 0) {
+          console.log('📁 [serveFile] Sample investigation result paths in database:', broaderQuery.rows.map(r => ({ path: r.file_path, name: r.file_name })));
+        }
+      }
+      
       setCorsHeaders(req, res);
       return res.status(404).json({
         success: false,

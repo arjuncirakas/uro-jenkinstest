@@ -99,13 +99,57 @@ const ConsentForms = () => {
 
       // Extract relative path if it's a full URL or contains 'uploads/'
       let relativePath = filePath;
-      if (filePath.includes('uploads/')) {
+      
+      if (filePath.startsWith('http')) {
+        // If it's a full URL, extract the path part and decode it
+        try {
+          const url = new URL(filePath);
+          // Extract path after /api/consent-forms/files/
+          const pathMatch = url.pathname.match(/\/api\/consent-forms\/files\/(.+)$/);
+          if (pathMatch) {
+            // Decode URL-encoded path (e.g., consent-forms%2Ftemplates%2Ffile.pdf -> consent-forms/templates/file.pdf)
+            relativePath = decodeURIComponent(pathMatch[1]);
+          } else {
+            // Fallback: try to extract from pathname directly
+            relativePath = url.pathname.replace('/api/consent-forms/files/', '');
+            // Decode if it's URL-encoded
+            try {
+              relativePath = decodeURIComponent(relativePath);
+            } catch (e) {
+              // If decoding fails, use as-is
+              console.warn('Could not decode URL path, using as-is:', relativePath);
+            }
+          }
+        } catch (urlError) {
+          console.error('Error parsing URL:', urlError);
+          setError('Invalid file URL format');
+          setTimeout(() => setError(''), 3000);
+          return;
+        }
+      } else if (filePath.includes('uploads/')) {
+        // Remove 'uploads/' prefix and normalize path separators
         relativePath = filePath.replace(/^.*uploads[\\/]/, '').replace(/\\/g, '/');
-      } else if (filePath.startsWith('http')) {
-        // If it's a full URL, extract the path part
-        const url = new URL(filePath);
-        relativePath = url.pathname.replace('/api/consent-forms/files/', '');
+      } else {
+        // Normalize path separators
+        relativePath = filePath.replace(/\\/g, '/');
+        // Remove 'uploads/' prefix if present
+        if (relativePath.startsWith('uploads/')) {
+          relativePath = relativePath.replace(/^uploads\//, '');
+        }
       }
+
+      // Ensure we have a valid relative path
+      if (!relativePath || relativePath.trim() === '') {
+        setError('Could not extract file path from template');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
+
+      console.log('Superadmin viewing template:', {
+        originalPath: filePath,
+        extractedPath: relativePath,
+        templateId: template.id
+      });
 
       // Fetch the file
       const response = await consentFormService.getConsentFormFile(relativePath);
