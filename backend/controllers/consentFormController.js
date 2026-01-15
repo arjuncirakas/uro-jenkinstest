@@ -679,7 +679,13 @@ export const serveConsentFormFile = async (req, res) => {
     setCorsHeaders(req, res);
 
     // Extract relative path for database lookup
-    const relativePath = fullPath.replace(/^.*uploads[\\/]/, '').replace(/\\/g, '/');
+    // Remove 'uploads/' prefix if present, normalize path separators
+    let relativePath = fullPath.replace(/\\/g, '/');
+    if (relativePath.startsWith('uploads/')) {
+      relativePath = relativePath.replace(/^uploads\//, '');
+    }
+    // Also handle case where path might already be relative (no uploads/ prefix)
+    // Ensure we have a clean relative path for database lookup
     console.log('[serveConsentFormFile] Checking file:', {
       validatedPath: fullPath,
       relativePath: relativePath,
@@ -692,10 +698,20 @@ export const serveConsentFormFile = async (req, res) => {
     let mimeType;
 
     // Check consent_forms table (templates)
-    const templateResult = await client.query(
+    // Try exact match first, then try with different path formats
+    let templateResult = await client.query(
       'SELECT template_file_path, template_file_name, template_file_data FROM consent_forms WHERE template_file_path = $1',
       [relativePath]
     );
+
+    // If not found, try alternative path formats (with/without uploads prefix)
+    if (templateResult.rows.length === 0) {
+      const altPath1 = relativePath.startsWith('uploads/') ? relativePath.replace(/^uploads\//, '') : `uploads/${relativePath}`;
+      templateResult = await client.query(
+        'SELECT template_file_path, template_file_name, template_file_data FROM consent_forms WHERE template_file_path = $1 OR template_file_path = $2',
+        [relativePath, altPath1]
+      );
+    }
 
     if (templateResult.rows.length > 0 && templateResult.rows[0].template_file_data) {
       // Encrypted template file from database
@@ -723,10 +739,20 @@ export const serveConsentFormFile = async (req, res) => {
       }
     } else {
       // Check patient_consent_forms table
-      const patientResult = await client.query(
+      // Try exact match first, then try with different path formats
+      let patientResult = await client.query(
         'SELECT file_path, file_name, file_data FROM patient_consent_forms WHERE file_path = $1',
         [relativePath]
       );
+
+      // If not found, try alternative path formats (with/without uploads prefix)
+      if (patientResult.rows.length === 0) {
+        const altPath1 = relativePath.startsWith('uploads/') ? relativePath.replace(/^uploads\//, '') : `uploads/${relativePath}`;
+        patientResult = await client.query(
+          'SELECT file_path, file_name, file_data FROM patient_consent_forms WHERE file_path = $1 OR file_path = $2',
+          [relativePath, altPath1]
+        );
+      }
 
       if (patientResult.rows.length > 0 && patientResult.rows[0].file_data) {
         // Encrypted patient consent file from database
@@ -768,8 +794,24 @@ export const serveConsentFormFile = async (req, res) => {
         };
         mimeType = mimeTypes[ext] ?? 'application/octet-stream';
       } else {
-        // File not found
-        console.error('[serveConsentFormFile] File not found in database or filesystem');
+        // File not found - log detailed information for debugging
+        console.error('[serveConsentFormFile] File not found in database or filesystem', {
+          validatedPath: fullPath,
+          relativePath: relativePath,
+          originalParam: req.params.filePath,
+          checkedTemplatePath: relativePath,
+          checkedPatientPath: relativePath
+        });
+        
+        // Try to find similar paths in database for debugging
+        const debugTemplateQuery = await client.query(
+          'SELECT template_file_path FROM consent_forms WHERE template_file_path LIKE $1 LIMIT 5',
+          [`%${relativePath.split('/').pop() || relativePath.split('\\').pop() || ''}%`]
+        );
+        if (debugTemplateQuery.rows.length > 0) {
+          console.log('[serveConsentFormFile] Found similar template paths in database:', debugTemplateQuery.rows.map(r => r.template_file_path));
+        }
+        
         setCorsHeaders(req, res);
         return res.status(404).json({
           success: false,

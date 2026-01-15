@@ -490,10 +490,12 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                   patientConsentForm?.signed_filePath;
 
                                 // Only consider it signed if the file path indicates a manually uploaded file
-                                // (starts with 'uploads/consent-forms/patients/') and not a template reference
+                                // File paths can be stored with or without 'uploads/' prefix (database vs filesystem)
+                                // Must contain 'consent-forms/patients/' and not be a template or auto-generated
                                 const hasUploadedForm = filePath &&
-                                  filePath.startsWith('uploads/consent-forms/patients/') &&
+                                  (filePath.includes('consent-forms/patients/') || filePath.includes('consent-forms\\patients\\')) &&
                                   !filePath.includes('templates/') &&
+                                  !filePath.includes('templates\\') &&
                                   !filePath.includes('auto-generated');
                                 const requiresConsent = ['biopsy', 'trus', 'mri'].includes(type.value.toLowerCase());
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, FileText, ChevronDown } from 'lucide-react';
+import PropTypes from 'prop-types';
 import { consentFormService } from '../../services/consentFormService';
 
 const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) => {
@@ -12,6 +13,7 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
   const [error, setError] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Populate form if editing
   useEffect(() => {
@@ -37,10 +39,6 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
     setError('');
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -56,6 +54,16 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
       setFormData(prev => ({ ...prev, template_file: file }));
       setFileName(file.name);
       setError('');
+    }
+  };
+
+  const handleRemoveFile = (e) => {
+    e.stopPropagation();
+    setFormData(prev => ({ ...prev, template_file: null }));
+    setFileName(template && template.template_file_name ? template.template_file_name : '');
+    // Reset the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -275,9 +283,10 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
                 <label className="cursor-pointer">
                   <span className="text-teal-600 hover:text-teal-700 font-medium">
-                    Choose a file
+                    {template && !formData.template_file ? 'Click to upload new file' : 'Choose a file'}
                   </span>
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept=".pdf"
                     onChange={handleFileChange}
@@ -287,14 +296,35 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
                 <p className="text-sm text-gray-500 mt-1">or drag and drop</p>
                 <p className="text-xs text-gray-400 mt-2">PDF up to 10MB</p>
                 {fileName && (
-                  <div className="mt-3 text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded inline-block">
+                  <div className="mt-3 flex items-center justify-center">
                     {template && !formData.template_file ? (
-                      <span className="flex items-center gap-2">
+                      <div className="text-sm text-gray-700 bg-blue-50 px-3 py-2 rounded inline-flex flex-col items-center gap-1 border border-blue-200">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-600" />
+                          <span className="text-blue-900">Current file: {fileName}</span>
+                        </div>
+                        <p className="text-xs text-blue-700">Upload a new file to replace it</p>
+                      </div>
+                    ) : formData.template_file ? (
+                      <div className="text-sm text-gray-700 bg-teal-50 px-3 py-2 rounded inline-flex items-center gap-2 border border-teal-200">
                         <FileText className="h-4 w-4 text-teal-600" />
-                        <span>Current file: {fileName}</span>
-                      </span>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-teal-900">{fileName}</span>
+                          <span className="text-xs text-teal-700">{(formData.template_file.size / 1024).toFixed(2)} KB</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          className="ml-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded p-1 transition-colors"
+                          title="Remove file"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
                     ) : (
-                      fileName
+                      <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded inline-block">
+                        {fileName}
+                      </div>
                     )}
                   </div>
                 )}
@@ -322,6 +352,13 @@ const AddConsentFormModal = ({ isOpen, onClose, onSuccess, template = null }) =>
       </div>
     </div>
   );
+};
+
+AddConsentFormModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  onSuccess: PropTypes.func.isRequired,
+  template: PropTypes.object
 };
 
 export default AddConsentFormModal;

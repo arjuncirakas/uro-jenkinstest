@@ -367,8 +367,13 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
       return false;
     }
     
-    const lowerPath = filePath.toLowerCase();
-    return !lowerPath.includes('template') && !lowerPath.includes('auto-generated');
+    // Check if patient has uploaded a consent form
+    // File paths can be stored with or without 'uploads/' prefix (database vs filesystem)
+    // Must contain 'consent-forms/patients/' and not be a template or auto-generated
+    return (filePath.includes('consent-forms/patients/') || filePath.includes('consent-forms\\patients\\')) &&
+           !filePath.includes('templates/') && 
+           !filePath.includes('templates\\') &&
+           !filePath.includes('auto-generated');
   };
 
   // Helper function to get button className

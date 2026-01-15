@@ -183,8 +183,14 @@ export const computeConsentFormData = (investigationName, getConsentFormTemplate
   
   const filePath = patientConsentForm?.file_path || patientConsentForm?.filePath ||
     patientConsentForm?.signed_file_path || patientConsentForm?.signed_filePath;
-  const hasUploadedForm = filePath?.startsWith('uploads/consent-forms/patients/') &&
-    !filePath.includes('templates/') && !filePath.includes('auto-generated');
+  // Check if patient has uploaded a consent form
+  // File paths can be stored with or without 'uploads/' prefix (database vs filesystem)
+  // Must contain 'consent-forms/patients/' and not be a template or auto-generated
+  const hasUploadedForm = filePath && 
+    (filePath.includes('consent-forms/patients/') || filePath.includes('consent-forms\\patients\\')) &&
+    !filePath.includes('templates/') && 
+    !filePath.includes('templates\\') &&
+    !filePath.includes('auto-generated');
 
   return {
     isPSATest: false,
