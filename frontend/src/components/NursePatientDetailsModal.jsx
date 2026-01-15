@@ -2074,7 +2074,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     const handleTestResultAdded = (event) => {
       const { patientId: eventPatientId } = event.detail || {};
       const currentPatientId = patient?.id || patient?.patientId || patient?.patient_id;
-      
+
       // Only refresh if the event is for the current patient
       if (isOpen && currentPatientId && eventPatientId && eventPatientId === currentPatientId) {
         console.log('🔄 NursePatientDetailsModal: Refreshing investigation results after test result update');
@@ -2088,6 +2088,25 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       window.removeEventListener('testResultAdded', handleTestResultAdded);
     };
   }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchInvestigations, fetchInvestigationRequests]);
+
+  // Listen for consentFormUploaded event to refresh consent forms
+  useEffect(() => {
+    const handleConsentFormUploaded = (event) => {
+      const { patientId: eventPatientId } = event.detail || {};
+      const currentPatientId = patient?.id || patient?.patientId || patient?.patient_id;
+
+      // Only refresh if the event is for the current patient
+      if (isOpen && currentPatientId && eventPatientId && eventPatientId === currentPatientId) {
+        console.log('🔄 NursePatientDetailsModal: Refreshing consent forms after upload');
+        fetchConsentForms();
+      }
+    };
+
+    window.addEventListener('consentFormUploaded', handleConsentFormUploaded);
+    return () => {
+      window.removeEventListener('consentFormUploaded', handleConsentFormUploaded);
+    };
+  }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchConsentForms]);
 
   // Lock body scroll when modal is open
   useEffect(() => {

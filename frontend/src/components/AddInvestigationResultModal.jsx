@@ -274,6 +274,11 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         await new Promise(resolve => setTimeout(resolve, 1000));
         await fetchConsentForms();
 
+        // Dispatch event to notify patient details modals to refresh consent forms
+        window.dispatchEvent(new CustomEvent('consentFormUploaded', {
+          detail: { patientId, testName, templateId: template.id }
+        }));
+
         setConsentFormNotification({ type: 'success', message: `${testName} signed consent form uploaded successfully` });
         // Clear notification after 5 seconds
         setTimeout(() => setConsentFormNotification({ type: '', message: '' }), 5000);

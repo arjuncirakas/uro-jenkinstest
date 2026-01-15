@@ -862,7 +862,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     const handleTestResultAdded = (event) => {
       const { patientId: eventPatientId } = event.detail || {};
       const currentPatientId = patient?.id || patient?.patientId || patient?.patient_id;
-      
+
       // Only refresh if the event is for the current patient
       if (isOpen && currentPatientId && eventPatientId && eventPatientId === currentPatientId) {
         console.log('🔄 UrologistPatientDetailsModal: Refreshing investigation results after test result update');
@@ -876,6 +876,25 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       window.removeEventListener('testResultAdded', handleTestResultAdded);
     };
   }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchInvestigations, fetchInvestigationRequests]);
+
+  // Listen for consentFormUploaded event to refresh consent forms
+  useEffect(() => {
+    const handleConsentFormUploaded = (event) => {
+      const { patientId: eventPatientId } = event.detail || {};
+      const currentPatientId = patient?.id || patient?.patientId || patient?.patient_id;
+
+      // Only refresh if the event is for the current patient
+      if (isOpen && currentPatientId && eventPatientId && eventPatientId === currentPatientId) {
+        console.log('🔄 UrologistPatientDetailsModal: Refreshing consent forms after upload');
+        fetchConsentForms();
+      }
+    };
+
+    window.addEventListener('consentFormUploaded', handleConsentFormUploaded);
+    return () => {
+      window.removeEventListener('consentFormUploaded', handleConsentFormUploaded);
+    };
+  }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchConsentForms]);
 
   // Listen for PDF viewer events
   useEffect(() => {
