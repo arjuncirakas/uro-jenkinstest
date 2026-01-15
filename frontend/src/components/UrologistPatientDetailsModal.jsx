@@ -827,6 +827,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       fetchAppointments();
       fetchMDTMeetings();
       fetchConsentForms();
+      
+      // Fetch discharge summary if patient is discharged or on post-op-followup
+      const currentPatient = fullPatientData || patient;
+      const isDischarged = (currentPatient.carePathway && currentPatient.carePathway.toLowerCase() === 'discharge') ||
+        (currentPatient.pathway && currentPatient.pathway.toLowerCase() === 'discharge') ||
+        currentPatient.status === 'Discharged';
+      if (isDischarged || currentPatient.category === 'post-op-followup') {
+        fetchDischargeSummary();
+      }
 
       // Also set any existing data from props
       if (patient.recentNotes) {
@@ -846,7 +855,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setHasSurgeryAppointment(false);
       setFullPatientData(null);
     }
-  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData, fetchConsentForms, fetchNotes, fetchInvestigations, fetchInvestigationRequests]);
+  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData, fetchConsentForms, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchDischargeSummary, fullPatientData]);
 
   // Listen for testResultAdded event to refresh investigation results
   useEffect(() => {
@@ -2558,10 +2567,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
               {/* Discharge Summary tab - only visible for post-op-followup patients */}
               {/* Discharge Summary tab - visible for post-op-followup patients and discharged patients */}
-              {(patient.category === 'post-op-followup' ||
-                (patient.carePathway && patient.carePathway.toLowerCase() === 'discharge') ||
-                (patient.pathway && patient.pathway.toLowerCase() === 'discharge') ||
-                patient.status === 'Discharged') && (
+              {(() => {
+                const currentPatient = fullPatientData || patient;
+                return currentPatient.category === 'post-op-followup' ||
+                  (currentPatient.carePathway && currentPatient.carePathway.toLowerCase() === 'discharge') ||
+                  (currentPatient.pathway && currentPatient.pathway.toLowerCase() === 'discharge') ||
+                  currentPatient.status === 'Discharged';
+              })() && (
                   <button
                     onClick={() => setActiveTab('dischargeSummary')}
                     className={`px-4 py-3 font-medium text-sm relative flex items-center ${activeTab === 'dischargeSummary'
@@ -3801,10 +3813,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
             )}
 
             {/* Discharge Summary Tab - visible for post-op-followup patients and discharged patients */}
-            {activeTab === 'dischargeSummary' && (patient.category === 'post-op-followup' ||
-              (patient.carePathway && patient.carePathway.toLowerCase() === 'discharge') ||
-              (patient.pathway && patient.pathway.toLowerCase() === 'discharge') ||
-              patient.status === 'Discharged') && (
+            {activeTab === 'dischargeSummary' && (() => {
+              const currentPatient = fullPatientData || patient;
+              return currentPatient.category === 'post-op-followup' ||
+                (currentPatient.carePathway && currentPatient.carePathway.toLowerCase() === 'discharge') ||
+                (currentPatient.pathway && currentPatient.pathway.toLowerCase() === 'discharge') ||
+                currentPatient.status === 'Discharged';
+            })() && (
                 <div className="flex w-full h-full overflow-y-auto p-6">
                   {loadingDischargeSummary ? (
                     <div className="flex items-center justify-center w-full">
@@ -5046,8 +5061,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 rounded-b-xl">
             <div className="flex items-center justify-center gap-4">
               {(() => {
-                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
-                const patientStatus = patient?.status || '';
+                // Use fullPatientData if available (most up-to-date), otherwise fall back to patient prop
+                const currentPatient = fullPatientData || patient;
+                const carePathway = currentPatient?.carePathway || currentPatient?.care_pathway || currentPatient?.pathway || '';
+                const patientStatus = currentPatient?.status || '';
                 const isDischarged = carePathway.toLowerCase() === 'discharge' || patientStatus === 'Discharged';
                 
                 // Don't show transfer buttons if patient is already discharged
@@ -7014,6 +7031,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         const res = await patientService.updatePatientPathway(patient.id, payload);
                         if (res.success) {
                           transferSucceeded = true;
+                          
+                          // Immediately update local patient state to reflect discharge status
+                          if (selectedPathway === 'Discharge') {
+                            setFullPatientData(prev => ({
+                              ...prev,
+                              carePathway: 'Discharge',
+                              care_pathway: 'Discharge',
+                              status: 'Discharged'
+                            }));
+                          }
 
                           // Book appointment for Post-op Followup if scheduler is configured (should always be set due to defaults)
                           if (selectedPathway === 'Post-op Followup' && postOpFollowupScheduler.appointmentDate) {
@@ -7345,13 +7372,27 @@ ${transferDetails.additionalNotes}` : ''}
                           setSuccessModalAppointmentDetails(appointmentDetails);
                           setIsSuccessModalOpen(true);
 
+                          // If transferred to Discharge, update local state immediately and fetch discharge summary
+                          if (selectedPathway === 'Discharge') {
+                            console.log('🔄 Transferring to Discharge - updating state and fetching discharge summary...');
+                            
+                            // Update local patient state immediately so buttons are hidden right away
+                            setFullPatientData(prev => ({
+                              ...prev,
+                              carePathway: 'Discharge',
+                              care_pathway: 'Discharge',
+                              status: 'Discharged'
+                            }));
+                            
+                            // Fetch the discharge summary
+                            await fetchDischargeSummary();
+                            
+                            // Switch to discharge summary tab to show it immediately
+                            setActiveTab('dischargeSummary');
+                          }
+
                           // Refresh patient data to update pipeline with new care pathway
                           await fetchFullPatientData();
-
-                          // If transferred to Discharge, fetch the discharge summary
-                          if (selectedPathway === 'Discharge') {
-                            await fetchDischargeSummary();
-                          }
 
                           // Refresh appointment check, especially important for Surgery Pathway
                           checkSurgeryAppointment();
