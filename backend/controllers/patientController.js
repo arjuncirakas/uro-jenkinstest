@@ -2305,7 +2305,7 @@ export const updatePatientPathway = async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { pathway, reason, notes, skipAutoBooking, appointmentStartDate, appointmentInterval } = req.body;
+    const { pathway, reason, notes, skipAutoBooking, appointmentStartDate, appointmentInterval, skipNoteCreation } = req.body;
     const userId = req.user.id;
 
     const allowed = ['Active Monitoring', 'Surgery Pathway', 'Medication', 'Radiotherapy', 'Post-op Transfer', 'Post-op Followup', 'Discharge'];
@@ -2624,16 +2624,23 @@ export const updatePatientPathway = async (req, res) => {
     // This allows for comprehensive data entry with proper fields and document uploads
 
     // CREATE CLINICAL NOTE FOR PATHWAY TRANSFER (after auto-booking so we can include appointment details)
-    if (userName && userRole) {
+    // Skip if frontend already created a note (skipNoteCreation flag)
+    if (userName && userRole && !skipNoteCreation) {
       try {
         console.log(`[updatePatientPathway] Creating clinical note for pathway transfer...`);
 
-        // Create detailed clinical note content
-        let noteContent = `🔄 PATHWAY TRANSFER\n\n` +
-          `Patient transferred to: ${pathway}\n` +
+        // Ensure pathway is valid - should never be empty at this point due to validation above
+        const validPathway = pathway && pathway.trim() ? pathway.trim() : 'Not specified';
+        if (validPathway === 'Not specified') {
+          console.error(`[updatePatientPathway] WARNING: Pathway is empty or invalid: ${pathway}`);
+        }
+
+        // Create detailed clinical note content using format that matches frontend parser
+        let noteContent = `PATHWAY TRANSFER\n\n` +
+          `Transfer To: ${validPathway}\n` +
           `Previous pathway: ${patientData.care_pathway || 'None'}\n` +
-          `Reason: ${reason || 'Not specified'}\n` +
-          `Clinical Notes: ${notes || 'None'}`;
+          `Reason for Transfer:\n${reason || 'Not specified'}\n` +
+          `Clinical Rationale:\n${notes || 'Not specified'}`;
 
         // Add auto-booking info if appointment was created
         if (autoBookedAppointment) {

@@ -371,8 +371,30 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       if (trimmedLine === 'PATHWAY TRANSFER' || trimmedLine === 'PATHWAY TRANSFER - MEDICATION PRESCRIBED') {
         data.title = trimmedLine;
       } else if (trimmedLine.includes('Transfer To:')) {
-        currentKey = 'transferTo';
-        data[currentKey] = trimmedLine.replace('Transfer To:', '').trim();
+        // Extract the pathway name from "Transfer To: ..."
+        // Handle both inline format "Transfer To: Surgery Pathway" and potential multi-line format
+        const pathwayMatch = trimmedLine.match(/Transfer To:\s*(.+)/i);
+        if (pathwayMatch && pathwayMatch[1].trim()) {
+          currentKey = 'transferTo';
+          data[currentKey] = pathwayMatch[1].trim();
+        } else {
+          // If "Transfer To:" is on its own line, check next line
+          const currentIndex = lines.indexOf(trimmedLine);
+          if (currentIndex < lines.length - 1) {
+            const nextLine = lines[currentIndex + 1]?.trim();
+            if (nextLine && !nextLine.includes(':') && !nextLine.match(/^(Priority|Reason|Clinical|Additional|Prescribed|Follow-up|Surgery|Post-operative)/i)) {
+              currentKey = 'transferTo';
+              data[currentKey] = nextLine;
+            }
+          }
+        }
+      } else if (trimmedLine.includes('Patient transferred to:')) {
+        // Handle backend format for backward compatibility
+        const pathwayMatch = trimmedLine.match(/Patient transferred to:\s*(.+)/i);
+        if (pathwayMatch && pathwayMatch[1].trim()) {
+          currentKey = 'transferTo';
+          data[currentKey] = pathwayMatch[1].trim();
+        }
       } else if (trimmedLine.includes('Priority:')) {
         currentKey = 'priority';
         data[currentKey] = trimmedLine.replace('Priority:', '').trim();
@@ -424,13 +446,34 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       return 'bg-green-100 text-green-700 border-green-200';
     };
 
+    // Get the actual pathway name - use patient's current pathway if "Not specified"
+    const extractedPathway = (data.transferTo || '').trim();
+    const patientPathway = (patient?.carePathway || patient?.care_pathway || patient?.pathway || '').trim();
+
+    // Debug: Log if pathway is not specified
+    if (!extractedPathway || extractedPathway === 'Not specified' || extractedPathway === '') {
+      console.warn('⚠️ Pathway not specified in note:', {
+        extractedPathway,
+        patientPathway,
+        noteContent: content.substring(0, 200),
+        noteType,
+        data
+      });
+    }
+
+    const displayPathway = extractedPathway && extractedPathway !== 'Not specified' && extractedPathway !== ''
+      ? extractedPathway
+      : (patientPathway && patientPathway !== 'Not specified' && patientPathway !== ''
+          ? patientPathway
+          : 'Not specified');
+
     return (
       <div className="space-y-3">
         {/* Transfer To and Priority in same row */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <div className="text-sm font-medium text-gray-500 mb-1">Transfer To</div>
-            <div className="text-base text-gray-900">{data.transferTo || 'Not specified'}</div>
+            <div className="text-base text-gray-900">{displayPathway}</div>
           </div>
           {data.priority && (
             <span className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${getPriorityColor(data.priority)}`}>
@@ -710,8 +753,25 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
           return true;
         });
 
-        console.log('✅ NursePatientDetailsModal: Processed notes:', filteredNotes);
-        setClinicalNotes(filteredNotes);
+        // Deduplicate notes by ID to prevent duplicates
+        const uniqueNotes = [];
+        const seenIds = new Set();
+        filteredNotes.forEach(note => {
+          if (note.id && !seenIds.has(note.id)) {
+            seenIds.add(note.id);
+            uniqueNotes.push(note);
+          } else if (!note.id) {
+            // Handle notes without IDs by content hash
+            const contentHash = note.content ? note.content.substring(0, 100) + (note.createdAt || note.created_at || '') : '';
+            if (!seenIds.has(contentHash)) {
+              seenIds.add(contentHash);
+              uniqueNotes.push(note);
+            }
+          }
+        });
+        
+        console.log('✅ NursePatientDetailsModal: Processed notes (deduplicated):', uniqueNotes.length, 'notes');
+        setClinicalNotes(uniqueNotes);
       } else {
         setNotesError(result.error || 'Failed to fetch notes');
         console.error('❌ NursePatientDetailsModal: Error fetching notes:', result.error);

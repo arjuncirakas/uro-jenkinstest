@@ -436,8 +436,25 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
           return true;
         });
-        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes:', filteredNotes);
-        setClinicalNotes(filteredNotes);
+        // Deduplicate notes by ID to prevent duplicates
+        const uniqueNotes = [];
+        const seenIds = new Set();
+        filteredNotes.forEach(note => {
+          if (note.id && !seenIds.has(note.id)) {
+            seenIds.add(note.id);
+            uniqueNotes.push(note);
+          } else if (!note.id) {
+            // Handle notes without IDs by content hash
+            const contentHash = note.content ? note.content.substring(0, 100) + (note.createdAt || note.created_at || '') : '';
+            if (!seenIds.has(contentHash)) {
+              seenIds.add(contentHash);
+              uniqueNotes.push(note);
+            }
+          }
+        });
+        
+        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes (deduplicated):', uniqueNotes.length, 'notes');
+        setClinicalNotes(uniqueNotes);
       } else {
         console.log('❌ UrologistPatientDetailsModal: Failed to fetch notes:', result.error);
         setNotesError(result.error || 'Failed to fetch notes');
@@ -1269,8 +1286,26 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         data.title = trimmedLine;
       } else if (trimmedLine.includes('Transfer To:')) {
         // Extract the pathway name from "Transfer To: ..."
+        // Handle both inline format "Transfer To: Surgery Pathway" and potential multi-line format
         const pathwayMatch = trimmedLine.match(/Transfer To:\s*(.+)/i);
-        if (pathwayMatch) {
+        if (pathwayMatch && pathwayMatch[1].trim()) {
+          currentKey = 'transferTo';
+          data[currentKey] = pathwayMatch[1].trim();
+        } else {
+          // If "Transfer To:" is on its own line, check next line
+          const currentIndex = lines.indexOf(trimmedLine);
+          if (currentIndex < lines.length - 1) {
+            const nextLine = lines[currentIndex + 1]?.trim();
+            if (nextLine && !nextLine.includes(':') && !nextLine.match(/^(Priority|Reason|Clinical|Additional|Prescribed|Follow-up|Surgery|Post-operative)/i)) {
+              currentKey = 'transferTo';
+              data[currentKey] = nextLine;
+            }
+          }
+        }
+      } else if (trimmedLine.includes('Patient transferred to:')) {
+        // Handle backend format for backward compatibility
+        const pathwayMatch = trimmedLine.match(/Patient transferred to:\s*(.+)/i);
+        if (pathwayMatch && pathwayMatch[1].trim()) {
           currentKey = 'transferTo';
           data[currentKey] = pathwayMatch[1].trim();
         }
@@ -1326,12 +1361,25 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     };
 
     // Get the actual pathway name - use patient's current pathway if "Not specified"
-    const extractedPathway = data.transferTo || '';
-    const patientPathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+    const extractedPathway = (data.transferTo || '').trim();
+    const patientPathway = (patient?.carePathway || patient?.care_pathway || patient?.pathway || '').trim();
 
-    const displayPathway = extractedPathway && extractedPathway !== 'Not specified' && extractedPathway.trim() !== ''
+    // Debug: Log if pathway is not specified
+    if (!extractedPathway || extractedPathway === 'Not specified' || extractedPathway === '') {
+      console.warn('⚠️ Pathway not specified in note:', {
+        extractedPathway,
+        patientPathway,
+        noteContent: content.substring(0, 200),
+        noteType,
+        data
+      });
+    }
+
+    const displayPathway = extractedPathway && extractedPathway !== 'Not specified' && extractedPathway !== ''
       ? extractedPathway
-      : (patientPathway || 'Not specified');
+      : (patientPathway && patientPathway !== 'Not specified' && patientPathway !== ''
+          ? patientPathway
+          : 'Not specified');
 
     // Debug logging
     if (extractedPathway === 'Not specified' || !extractedPathway || extractedPathway.trim() === '') {
@@ -6799,6 +6847,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           reason: transferDetails.reason,
                           notes: transferDetails.clinicalRationale || transferDetails.additionalNotes || '',
                           skipAutoBooking: surgeryScheduled || (selectedPathway === 'Post-op Followup'), // Skip auto-booking for Post-op Followup (we'll handle it manually)
+                          skipNoteCreation: true, // Frontend creates detailed note, so skip backend note creation
                           // Pass the selected date and frequency to backend for automatic appointment booking
                           appointmentStartDate: hasSelectedDate ? appointmentBooking.appointmentDate : null,
                           appointmentInterval: hasSelectedDate ? parseInt(recurringAppointments.interval) || 3 : null
@@ -7065,12 +7114,6 @@ ${transferDetails.additionalNotes}` : ''}
                               console.log('✅ Created note data:', noteResult.data);
                               noteCreated = true;
                               createdNoteData = noteResult.data; // Store the note data
-                              // Update the clinical notes list in the UI immediately
-                              setClinicalNotes(prev => {
-                                const newNotes = [noteResult.data, ...prev];
-                                console.log('✅ Updated clinical notes state, total notes:', newNotes.length);
-                                return newNotes;
-                              });
                             } else {
                               console.error('❌ Failed to create clinical note for pathway transfer:', noteResult.error);
                               console.error('❌ Note result:', noteResult);
@@ -7088,7 +7131,7 @@ ${transferDetails.additionalNotes}` : ''}
 
                           // Small delay to ensure note is committed to database before fetching
                           if (noteCreated) {
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // Increased delay to 1 second
+                            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay since we'll fetch notes
                           }
 
                           let message = `Patient successfully transferred to ${selectedPathway}`;
@@ -7154,47 +7197,8 @@ ${transferDetails.additionalNotes}` : ''}
                           await fetchMDTMeetings();
 
                           // Refresh clinical notes to show the new transfer note
-                          // If note was created, add it to state first to ensure it's visible immediately
-                          if (noteCreated && createdNoteData) {
-                            console.log('✅ Adding created note to state before fetchNotes');
-                            setClinicalNotes(prev => {
-                              // Check if note already exists (shouldn't, but just in case)
-                              const noteExists = prev.some(note => note.id === createdNoteData.id);
-                              if (!noteExists) {
-                                console.log('✅ Adding created note to beginning of list');
-                                return [createdNoteData, ...prev];
-                              }
-                              return prev;
-                            });
-                          }
-
-                          // Fetch notes from database (this will replace the state, but we'll add our note back if needed)
+                          // Fetch notes from database - this will include the newly created note
                           await fetchNotes();
-
-                          // After fetchNotes, ensure our created note is still in the list
-                          // If it was filtered out or not yet in database, add it back
-                          if (noteCreated && createdNoteData) {
-                            setClinicalNotes(prev => {
-                              // Check if the created note is already in the fetched list
-                              const noteExists = prev.some(note =>
-                                note.id === createdNoteData.id ||
-                                (note.content && note.content.includes('PATHWAY TRANSFER'))
-                              );
-
-                              if (!noteExists) {
-                                console.log('⚠️ Created note not found after fetchNotes, adding it back to state');
-                                console.log('⚠️ Created note data:', createdNoteData);
-                                console.log('⚠️ Current notes count:', prev.length);
-                                // Add the created note back to the beginning of the list
-                                return [createdNoteData, ...prev];
-                              } else {
-                                console.log('✅ Created note found in fetched notes');
-                              }
-                              return prev;
-                            });
-                          }
-
-                          console.log('✅ Note refresh completed, timeline should show the transfer note');
 
                           // Dispatch event if transferred to Surgery Pathway
                           if (selectedPathway === 'Surgery Pathway') {

@@ -696,7 +696,9 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         {/* Header */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Add Investigation Result</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {existingResult?.id ? 'Edit Investigation Result' : 'Add Investigation Result'}
+            </h2>
             {patient && (() => {
               // Try multiple possible property names for patient name
               // NOSONAR: patient.name, patient.patientName, patient.fullName, patient.first_name, patient.last_name, patient.firstName, and patient.lastName are validated in PropTypes.shape()
