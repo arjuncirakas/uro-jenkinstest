@@ -2537,8 +2537,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-2xl font-bold">{patientName}</h2>
                   <div className="text-right">
-                    <div className="text-sm font-medium text-teal-800">Referred by</div>
-                    <div className="text-sm text-teal-700">{displayPatient.referringDepartment || displayPatient.referringDoctor || displayPatient.referring_department || displayPatient.referring_doctor || 'Not Specified'}</div>
+                    <div className="text-sm font-medium text-teal-800">GP</div>
+                    <div className="text-sm text-teal-700">{displayPatient.referredByGP || displayPatient.gpName || displayPatient.gp_name || displayPatient.referred_by_gp || displayPatient.referringDoctor || displayPatient.referring_doctor || 'Not Specified'}</div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4 text-teal-700">

@@ -2440,12 +2440,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-2xl font-bold">{patientName}</h2>
-                  {displayPatient.referredByGP && (
-                    <div className="text-right">
-                      <div className="text-sm font-medium text-teal-800">Referred by</div>
-                      <div className="text-sm text-teal-700">{displayPatient.referredByGP} (GP)</div>
-                    </div>
-                  )}
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-teal-800">GP</div>
+                    <div className="text-sm text-teal-700">{displayPatient.referredByGP || displayPatient.gpName || displayPatient.gp_name || displayPatient.referred_by_gp || 'Not Specified'}</div>
+                  </div>
                 </div>
                 <div className="flex items-center space-x-4 text-teal-700">
                   <span>{displayPatient.age ? `${displayPatient.age} years old` : 'N/A'}</span>
