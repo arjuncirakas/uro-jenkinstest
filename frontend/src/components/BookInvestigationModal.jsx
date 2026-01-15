@@ -40,7 +40,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
     trus: null,
     biopsy: null
   });
-  const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  const [printingConsentForm, setPrintingConsentForm] = useState(null); // null or 'MRI' or 'TRUS' or 'Biopsy'
 
   // PDF viewer state
   const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
@@ -408,7 +408,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       }
     }
 
-    setPrintingConsentForm(true);
+    setPrintingConsentForm(testName);
 
     try {
       const result = await getConsentFormBlobUrl(template, testName, patient);
@@ -424,7 +424,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
       console.error('Error loading consent form:', error);
       alert('Failed to load consent form. Please try again.');
     } finally {
-      setPrintingConsentForm(false);
+      setPrintingConsentForm(null);
     }
   };
 
@@ -861,13 +861,13 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(mriConsentForm, 'MRI')}
-                          disabled={(!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false) || printingConsentForm}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false) || printingConsentForm
+                          disabled={(!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false) || printingConsentForm === 'MRI'}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!mriConsentForm.is_auto_generated && !mriConsentForm.template_file_url && templateAvailability.mri === false) || printingConsentForm === 'MRI'
                             ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
                             : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
                             }`}
                         >
-                          {printingConsentForm ? (
+                          {printingConsentForm === 'MRI' ? (
                             <>
                               <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
                               <span>Loading...</span>
@@ -952,13 +952,13 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(trusConsentForm, 'TRUS')}
-                          disabled={(!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false) || printingConsentForm}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false) || printingConsentForm
+                          disabled={(!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false) || printingConsentForm === 'TRUS'}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!trusConsentForm.is_auto_generated && !trusConsentForm.template_file_url && templateAvailability.trus === false) || printingConsentForm === 'TRUS'
                             ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
                             : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
                             }`}
                         >
-                          {printingConsentForm ? (
+                          {printingConsentForm === 'TRUS' ? (
                             <>
                               <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
                               <span>Loading...</span>
@@ -1043,13 +1043,13 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                         <button
                           type="button"
                           onClick={() => handlePrintConsentForm(biopsyConsentForm, 'Biopsy')}
-                          disabled={(!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false) || printingConsentForm}
-                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false) || printingConsentForm
+                          disabled={(!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false) || printingConsentForm === 'Biopsy'}
+                          className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${(!biopsyConsentForm.is_auto_generated && !biopsyConsentForm.template_file_url && templateAvailability.biopsy === false) || printingConsentForm === 'Biopsy'
                             ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed'
                             : 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100'
                             }`}
                         >
-                          {printingConsentForm ? (
+                          {printingConsentForm === 'Biopsy' ? (
                             <>
                               <div className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
                               <span>Loading...</span>
