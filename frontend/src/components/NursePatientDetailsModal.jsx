@@ -652,7 +652,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         {/* Clinical Notes */}
         {data.clinicalNotes && data.clinicalNotes.trim() && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <div className="text-sm font-medium text-blue-900 mb-1.5">Clinical Notes</div>
+            <div className="text-sm font-medium text-blue-900 mb-1.5">Notes</div>
             <div className="text-sm text-blue-800 whitespace-pre-line">{data.clinicalNotes.trim()}</div>
           </div>
         )}
