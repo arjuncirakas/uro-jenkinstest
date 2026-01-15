@@ -3,11 +3,14 @@ import rateLimit from 'express-rate-limit';
 // Check if rate limiting is enabled
 // SECURITY FIX: Enable by default in production to prevent the 503 infrastructure response
 // The application should handle rate limiting at layer 7 with proper 429 responses
+// TEMPORARILY DISABLED - Rate limiting turned off for now
 const isProduction = process.env.NODE_ENV === 'production';
 const rateLimitSetting = process.env.ENABLE_RATE_LIMITING;
-const isRateLimitingEnabled = rateLimitSetting !== undefined
-  ? rateLimitSetting === 'true'
-  : isProduction; // Default: enabled in production
+const isRateLimitingEnabled = false; // TEMPORARILY DISABLED - Set to false to turn off rate limiting
+// Original logic (commented out for now):
+// const isRateLimitingEnabled = rateLimitSetting !== undefined
+//   ? rateLimitSetting === 'true'
+//   : isProduction; // Default: enabled in production
 
 // Log rate limiting status
 console.log(`🛡️  Rate Limiting: ${isRateLimitingEnabled ? 'ENABLED' : 'DISABLED'}`);
