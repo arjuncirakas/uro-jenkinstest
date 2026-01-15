@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FiSearch } from 'react-icons/fi';
-import { IoChevronForward, IoNotificationsOutline } from 'react-icons/io5';
-import { BsCalendar3 } from 'react-icons/bs';
+import { IoNotificationsOutline } from 'react-icons/io5';
 import NotificationModal from '../../components/NotificationModal';
 import GPPatientDetailsModal from '../../components/GPPatientDetailsModal';
+import GlobalPatientSearch from '../../components/GlobalPatientSearch';
+import DigitalClock from '../../components/DigitalClock';
 import { gpService } from '../../services/gpService';
 import authService from '../../services/authService';
 
@@ -138,6 +138,13 @@ const Dashboard = () => {
     setIsNotificationOpen(false); // Close notification modal
   };
 
+  // Handle patient select from search
+  const handlePatientSelect = (patient) => {
+    console.log('Selected patient:', patient);
+    setSelectedPatient(patient.id || patient);
+    setIsPatientDetailsModalOpen(true);
+  };
+
   // Handle notification count update
   const handleNotificationCountChange = (count) => {
     setNotificationCount(count);
@@ -186,16 +193,14 @@ const Dashboard = () => {
         <div className="pl-12 lg:pl-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">GP Dashboard</h1>
           </div>
-          {/* Search Bar and Notification */}
-          <div className="w-full lg:w-96 flex items-center gap-3">
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Quick Access to Patient Records"
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-              />
-            </div>
+          {/* Search Bar, Clock, and Notification */}
+          <div className="w-full lg:w-auto lg:max-w-3xl flex items-center gap-3">
+            <GlobalPatientSearch
+              placeholder="Quick Access to Patient Records"
+              onPatientSelect={handlePatientSelect}
+            />
+            {/* Digital Clock */}
+            <DigitalClock />
             {/* Notification Icon */}
             <div className="relative">
               <button 

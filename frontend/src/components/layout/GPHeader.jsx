@@ -37,8 +37,8 @@ const GPHeader = ({ title, subtitle, searchPlaceholder = "Search patients by nam
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{title}</h1>
           <p className="text-gray-500 text-sm mt-1">{subtitle}</p>
         </div>
-        {/* Search Bar and Notification */}
-        <div className="w-full lg:w-96 flex items-center gap-3">
+        {/* Search Bar, Clock, and Notification */}
+        <div className="w-full lg:w-auto lg:max-w-3xl flex items-center gap-3">
           <GlobalPatientSearch
             placeholder={searchPlaceholder}
             onPatientSelect={handlePatientSelect}
