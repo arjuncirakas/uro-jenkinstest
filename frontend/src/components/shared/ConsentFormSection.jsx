@@ -40,15 +40,15 @@ const ConsentFormSection = ({
         <button
           type="button"
           onClick={() => templateToUse && !isNotRequired && handlePrintConsentForm(templateToUse, investigationName)}
-          disabled={!templateToUse || printingConsentForm || isNotRequired}
-          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && !printingConsentForm && !isNotRequired
+          disabled={!templateToUse || printingConsentForm === investigationName || isNotRequired}
+          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${templateToUse && printingConsentForm !== investigationName && !isNotRequired
             ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
             : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
           title={isNotRequired
             ? 'Test is marked as Not Required. Consent form actions are disabled.'
-            : getPrintButtonTitle(templateToUse, printingConsentForm)}
+            : getPrintButtonTitle(templateToUse, printingConsentForm === investigationName)}
         >
-          {printingConsentForm ? (
+          {printingConsentForm === investigationName ? (
             <>
               <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
               <span>Loading...</span>
@@ -114,7 +114,7 @@ ConsentFormSection.propTypes = {
   investigationName: PropTypes.string.isRequired,
   templateToUse: PropTypes.object,
   hasUploadedForm: PropTypes.bool.isRequired,
-  printingConsentForm: PropTypes.bool.isRequired,
+  printingConsentForm: PropTypes.oneOfType([PropTypes.string, PropTypes.oneOf([null])]),
   uploadingConsentForms: PropTypes.object.isRequired,
   getPrintButtonTitle: PropTypes.func.isRequired,
   handlePrintConsentForm: PropTypes.func.isRequired,

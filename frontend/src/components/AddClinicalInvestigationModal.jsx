@@ -46,7 +46,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
   const [consentFormTemplates, setConsentFormTemplates] = useState([]);
   const [patientConsentForms, setPatientConsentForms] = useState([]);
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
-  const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  const [printingConsentForm, setPrintingConsentForm] = useState(null); // null or testName string
 
   // PDF viewer state
   const [isPDFViewerModalOpen, setIsPDFViewerModalOpen] = useState(false);
@@ -165,7 +165,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
       return;
     }
 
-    setPrintingConsentForm(true);
+    setPrintingConsentForm(testName);
     setError('');
 
     try {
@@ -182,7 +182,7 @@ const AddClinicalInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) 
       console.error('Error loading consent form:', error);
       setError('Failed to load consent form. Please try again.');
     } finally {
-      setPrintingConsentForm(false);
+      setPrintingConsentForm(null);
     }
   };
 
@@ -531,14 +531,14 @@ ${notes ? `Clinical Notes:\n${notes}` : ''}`.trim();
                                           <button
                                             type="button"
                                             onClick={() => consentTemplate && handlePrintConsentForm(consentTemplate, test)}
-                                            disabled={!consentTemplate || printingConsentForm}
-                                            className={`px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 ${consentTemplate && !printingConsentForm
+                                            disabled={!consentTemplate || printingConsentForm === test}
+                                            className={`px-2 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 ${consentTemplate && printingConsentForm !== test
                                                 ? 'text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100'
                                                 : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'
                                               }`}
-                                            title={getPrintButtonTitle(consentTemplate, printingConsentForm)}
+                                            title={getPrintButtonTitle(consentTemplate, printingConsentForm === test)}
                                           >
-                                            {printingConsentForm ? (
+                                            {printingConsentForm === test ? (
                                               <>
                                                 <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
                                                 <span>Loading...</span>

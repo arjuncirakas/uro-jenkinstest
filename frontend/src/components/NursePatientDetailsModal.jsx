@@ -132,7 +132,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
   const [patientConsentForms, setPatientConsentForms] = useState([]);
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
   const [uploadingConsentForms, setUploadingConsentForms] = useState({});
-  const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  const [printingConsentForm, setPrintingConsentForm] = useState(null); // null or investigationName string
 
   // Discharge summary state
   const [dischargeSummary, setDischargeSummary] = useState(null);
@@ -1224,7 +1224,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       return;
     }
 
-    setPrintingConsentForm(true);
+    setPrintingConsentForm(testName);
 
     try {
       const result = await getConsentFormBlobUrl(template, testName, patient);
@@ -1244,7 +1244,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       setErrorModalMessage('Failed to load consent form. Please try again.');
       setIsErrorModalOpen(true);
     } finally {
-      setPrintingConsentForm(false);
+      setPrintingConsentForm(null);
     }
   };
 

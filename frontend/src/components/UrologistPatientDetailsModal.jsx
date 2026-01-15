@@ -91,7 +91,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [patientConsentForms, setPatientConsentForms] = useState([]);
   const [loadingConsentForms, setLoadingConsentForms] = useState(false);
   const [uploadingConsentForms, setUploadingConsentForms] = useState({});
-  const [printingConsentForm, setPrintingConsentForm] = useState(false);
+  const [printingConsentForm, setPrintingConsentForm] = useState(null); // null or investigationName string
   const [viewingConsentForm, setViewingConsentForm] = useState(false);
 
   // Transfer form states
@@ -938,7 +938,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       return;
     }
 
-    setPrintingConsentForm(true);
+    setPrintingConsentForm(testName);
     let pdfViewerOpened = false;
 
     try {
@@ -966,7 +966,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
         setIsErrorModalOpen(true);
       }
     } finally {
-      setPrintingConsentForm(false);
+      setPrintingConsentForm(null);
     }
   };
 
