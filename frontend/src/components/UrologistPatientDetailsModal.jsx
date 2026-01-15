@@ -453,7 +453,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           }
         });
         
-        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes (deduplicated):', uniqueNotes.length, 'notes');
+        // Sort notes by creation date (newest first) to ensure chronological order
+        uniqueNotes.sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.created_at || 0);
+          const dateB = new Date(b.createdAt || b.created_at || 0);
+          return dateB - dateA; // Newest first
+        });
+        
+        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes (deduplicated and sorted):', uniqueNotes.length, 'notes');
         setClinicalNotes(uniqueNotes);
       } else {
         console.log('❌ UrologistPatientDetailsModal: Failed to fetch notes:', result.error);
@@ -2658,6 +2665,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             if (!processedIndices.has(index)) {
                               organizedNotes.push({ note, index, isSubNote: false });
                             }
+                          });
+
+                          // Sort all organized notes by creation date (newest first) to ensure chronological order
+                          organizedNotes.sort((a, b) => {
+                            const dateA = new Date(a.note.createdAt || a.note.created_at || 0);
+                            const dateB = new Date(b.note.createdAt || b.note.created_at || 0);
+                            return dateB - dateA; // Newest first
                           });
 
                           return organizedNotes.map(({ note, isSubNote }, displayIndex) => {
