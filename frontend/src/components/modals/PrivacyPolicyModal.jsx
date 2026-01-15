@@ -7,17 +7,23 @@ import PropTypes from 'prop-types';
  * PrivacyPolicyModal - Modal component displaying Privacy Policy
  */
 const PrivacyPolicyModal = ({ isOpen, onClose }) => {
-  const dialogRef = React.useRef(null);
-
   React.useEffect(() => {
-    if (dialogRef.current) {
-      if (isOpen) {
-        dialogRef.current.showModal();
-      } else {
-        dialogRef.current.close();
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
       }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
     }
-  }, [isOpen]);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -27,24 +33,17 @@ const PrivacyPolicyModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  };
-
   const modalContent = (
-    <dialog
-      ref={dialogRef}
-      className="fixed inset-0 bg-transparent backdrop:bg-black/40 backdrop:backdrop-blur-sm flex items-center justify-center z-[9999] p-4 border-none outline-none"
-      onCancel={onClose}
+    <div
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
       onClick={handleBackdropClick}
-      onKeyDown={handleKeyDown}
+      role="dialog"
       aria-labelledby="privacy-modal-title"
       aria-modal="true"
     >
       <div 
         className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden transform transition-all animate-slideUp flex flex-col"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200 flex-shrink-0 bg-gradient-to-r from-teal-50 to-white">
@@ -191,7 +190,7 @@ const PrivacyPolicyModal = ({ isOpen, onClose }) => {
           </button>
         </div>
       </div>
-    </dialog>
+    </div>
   );
 
   return createPortal(modalContent, document.body);
