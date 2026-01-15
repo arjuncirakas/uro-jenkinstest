@@ -5,6 +5,7 @@ import NotificationModal from '../NotificationModal';
 import ProfileDropdown from '../ProfileDropdown';
 import GlobalPatientSearch from '../GlobalPatientSearch';
 import NursePatientDetailsModal from '../NursePatientDetailsModal';
+import DigitalClock from '../DigitalClock';
 
 const NurseHeader = ({ 
   title, 
@@ -75,6 +76,8 @@ const NurseHeader = ({
                 onPatientSelect={handlePatientSelect}
               />
             )}
+            {/* Digital Clock */}
+            <DigitalClock />
             {/* Notification Icon */}
             <div className="relative">
               <button 
@@ -114,6 +117,8 @@ const NurseHeader = ({
         {/* Notification and Profile Icons when search is hidden */}
         {hideSearch && (
           <div className="flex items-center gap-3">
+            {/* Digital Clock */}
+            <DigitalClock />
             {/* Notification Icon */}
             <div className="relative">
               <button 

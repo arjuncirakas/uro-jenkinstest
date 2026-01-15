@@ -5,6 +5,7 @@ import { FiSearch } from 'react-icons/fi';
 import PatientDetailsModalWrapper from '../../components/PatientDetailsModalWrapper';
 import NotificationModal from '../../components/NotificationModal';
 import ProfileDropdown from '../../components/ProfileDropdown';
+import DigitalClock from '../../components/DigitalClock';
 import { patientService } from '../../services/patientService';
 
 const Patients = () => {
@@ -300,6 +301,8 @@ const Patients = () => {
           </div>
           {/* Notification and Profile Icons */}
           <div className="flex items-center gap-3">
+            {/* Digital Clock */}
+            <DigitalClock />
             {/* Notification Icon */}
             <div className="relative">
               <button

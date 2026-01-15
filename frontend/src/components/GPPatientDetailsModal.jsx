@@ -320,20 +320,32 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                    <p className="text-sm text-gray-900">{fullName}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                    <p className="text-sm text-gray-900">{patientData.firstName || patientData.first_name || 'N/A'}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">UPI</label>
-                    <p className="text-sm text-gray-900">{patientData.upi}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                    <p className="text-sm text-gray-900">{patientData.lastName || patientData.last_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                    <p className="text-sm text-gray-900">
+                      {patientData.dateOfBirth || patientData.date_of_birth
+                        ? new Date(patientData.dateOfBirth || patientData.date_of_birth).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                          })
+                        : 'N/A'}
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
                     <p className="text-sm text-gray-900">{patientData.age ? `${patientData.age} years` : 'Not available'}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                    <p className="text-sm text-gray-900">{patientData.gender || 'Not specified'}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">UPI</label>
+                    <p className="text-sm text-gray-900">{patientData.upi}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
@@ -342,6 +354,21 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <p className="text-sm text-gray-900">{formattedEmail}</p>
+                  </div>
+                </div>
+                
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
+                    <p className="text-sm text-gray-900">{patientData.postcode || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <p className="text-sm text-gray-900">{patientData.city || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                    <p className="text-sm text-gray-900">{patientData.state || 'N/A'}</p>
                   </div>
                 </div>
                 
@@ -366,7 +393,11 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Referring GP</label>
-                    <p className="text-sm text-gray-900">{patientData.referredByGP || (patientData.createdByName ? `Dr. ${patientData.createdByName}` : 'Not available')}</p>
+                    <p className="text-sm text-gray-900">{patientData.referredByGP || patientData.gpName || patientData.gp_name || (patientData.createdByName ? `Dr. ${patientData.createdByName}` : 'Not available')}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Referring Department</label>
+                    <p className="text-sm text-gray-900">{patientData.referringDepartment || patientData.referring_department || 'N/A'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Referral Date</label>
@@ -382,7 +413,7 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Urologist</label>
-                    <p className="text-sm text-gray-900">{patientData.assignedUrologist || 'Not assigned'}</p>
+                    <p className="text-sm text-gray-900">{patientData.assignedUrologist || patientData.assigned_urologist || 'Not assigned'}</p>
                   </div>
                 </div>
               </div>
@@ -469,24 +500,244 @@ const GPPatientDetailsModal = ({ isOpen, onClose, patientId }) => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Medical History</label>
-                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.medicalHistory || 'Not available'}</p>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.medicalHistory || patientData.medical_history || 'Not available'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Current Medications</label>
-                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.currentMedications || 'None recorded'}</p>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.currentMedications || patientData.current_medications || 'None recorded'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
                     <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.allergies || 'None recorded'}</p>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Social History</label>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.socialHistory || patientData.social_history || 'None recorded'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Family History</label>
+                    <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.familyHistory || patientData.family_history || 'None recorded'}</p>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
                     <p className="text-sm text-gray-900 whitespace-pre-line">{patientData.notes || 'None recorded'}</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact</label>
-                    <p className="text-sm text-gray-900">{formattedEmergencyContact}</p>
+                </div>
+              </div>
+
+              {/* Emergency Contact */}
+              <div className="bg-white border border-gray-200 rounded p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                    <IoHeart className="w-6 h-6 text-teal-600" />
                   </div>
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900">Emergency Contact</h4>
+                    <p className="text-sm text-gray-600">Emergency contact information</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
+                    <p className="text-sm text-gray-900">{patientData.emergencyContactName || patientData.emergency_contact_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
+                    <p className="text-sm text-gray-900">{patientData.emergencyContactPhone || patientData.emergency_contact_phone || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
+                    <p className="text-sm text-gray-900">{patientData.emergencyContactRelationship || patientData.emergency_contact_relationship || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Nurse Triage Information */}
+              <div className="bg-white border border-gray-200 rounded p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                    <FaStethoscope className="w-6 h-6 text-teal-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900">Nurse Triage Information</h4>
+                    <p className="text-sm text-gray-600">Symptoms & Presentation - Chief Complaint</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {(() => {
+                    // Parse triage symptoms if it's a JSON string
+                    let triageSymptoms = patientData.triageSymptoms || patientData.triage_symptoms;
+                    if (typeof triageSymptoms === 'string') {
+                      try {
+                        triageSymptoms = JSON.parse(triageSymptoms);
+                      } catch (e) {
+                        triageSymptoms = [];
+                      }
+                    }
+
+                    // Ensure it's an array
+                    if (!Array.isArray(triageSymptoms)) {
+                      triageSymptoms = [];
+                    }
+
+                    return triageSymptoms && triageSymptoms.length > 0 ? (
+                      <div className="space-y-3">
+                        {triageSymptoms.map((symptom, index) => {
+                          // Normalize field names (handle both camelCase and snake_case)
+                          const symptomName = symptom.name || '';
+                          const ipssScore = symptom.ipssScore || symptom.ipss_score || null;
+                          const duration = symptom.duration || null;
+                          const durationUnit = symptom.durationUnit || symptom.duration_unit || '';
+                          const frequency = symptom.frequency || null;
+                          const notes = symptom.notes || null;
+                          const isCustom = symptom.isCustom || false;
+
+                          return (
+                            <div key={index} className={`border border-gray-200 rounded-lg p-4 ${isCustom ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className="font-medium text-gray-900 text-base">{symptomName}</span>
+                                    {isCustom && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">(Custom)</span>}
+                                  </div>
+                                  <div className={`grid gap-3 text-sm mb-3 ${symptomName === 'LUTS'
+                                    ? (frequency ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2')
+                                    : (frequency ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')
+                                    }`}>
+                                    {symptomName === 'LUTS' && (
+                                      <div>
+                                        <span className="text-gray-600">IPSS Score:</span>
+                                        <span className="ml-2 font-medium text-gray-900">{ipssScore || 'N/A'}</span>
+                                      </div>
+                                    )}
+                                    {duration && (
+                                      <div>
+                                        <span className="text-gray-600">Duration:</span>
+                                        <span className="ml-2 font-medium text-gray-900">
+                                          {duration} {durationUnit || 'months'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {frequency && (
+                                      <div>
+                                        <span className="text-gray-600">Frequency:</span>
+                                        <span className="ml-2 font-medium text-gray-900">
+                                          {frequency} {symptomName === 'Nocturia' ? (frequency === 1 ? 'time per night' : 'times per night') : 'times'}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {notes && (
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                      <span className="text-gray-600 text-sm font-medium">Notes:</span>
+                                      <div className="mt-1 text-sm text-gray-900 whitespace-pre-line bg-white p-2 rounded border border-gray-200">
+                                        {notes}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <p>No triage symptoms recorded.</p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Exam & Prior Tests */}
+              <div className="bg-white border border-gray-200 rounded p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                    <IoDocument className="w-6 h-6 text-teal-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900">Exam & Prior Tests</h4>
+                    <p className="text-sm text-gray-600">Examination findings and prior test results</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* DRE Findings */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">DRE (Digital Rectal Exam)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-gray-600">DRE Done:</span>
+                        <span className="ml-2 font-medium text-gray-900">
+                          {(patientData.dreDone || patientData.dre_done) ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      {(patientData.dreDone || patientData.dre_done) && (patientData.dreFindings || patientData.dre_findings) && (
+                        <div>
+                          <span className="text-gray-600">DRE Findings:</span>
+                          <span className="ml-2 font-medium text-gray-900">{patientData.dreFindings || patientData.dre_findings}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Prior Prostate Biopsy */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Prior Prostate Biopsy</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-gray-600">Prior Biopsy:</span>
+                        <span className="ml-2 font-medium text-gray-900">
+                          {(patientData.priorBiopsy || patientData.prior_biopsy) === 'yes' ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      {(patientData.priorBiopsy || patientData.prior_biopsy) === 'yes' && (patientData.priorBiopsyDate || patientData.prior_biopsy_date) && (
+                        <div>
+                          <span className="text-gray-600">Biopsy Date:</span>
+                          <span className="ml-2 font-medium text-gray-900">
+                            {new Date(patientData.priorBiopsyDate || patientData.prior_biopsy_date).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                      )}
+                      {(patientData.priorBiopsy || patientData.prior_biopsy) === 'yes' && (patientData.gleasonScore || patientData.gleason_score) && (
+                        <div>
+                          <span className="text-gray-600">Gleason Score:</span>
+                          <span className="ml-2 font-medium text-gray-900">{patientData.gleasonScore || patientData.gleason_score}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Comorbidities */}
+                  {(patientData.comorbidities || []) && (patientData.comorbidities || []).length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Comorbidities</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {(patientData.comorbidities || []).map((comorbidity, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-teal-100 text-teal-700 text-sm rounded-full font-medium"
+                          >
+                            {comorbidity}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show message if no data */}
+                  {!(patientData.dreDone || patientData.dre_done) && (patientData.priorBiopsy || patientData.prior_biopsy) !== 'yes' && (!patientData.comorbidities || patientData.comorbidities.length === 0) && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No exam or prior test information available.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

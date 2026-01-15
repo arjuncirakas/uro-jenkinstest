@@ -8,6 +8,7 @@ import MDTScheduleDetailsModal from '../../components/MDTScheduleDetailsModal';
 import MDTNotesModal from '../../components/MDTNotesModal';
 import ProfileDropdown from '../../components/ProfileDropdown';
 import GlobalPatientSearch from '../../components/GlobalPatientSearch';
+import DigitalClock from '../../components/DigitalClock';
 import { bookingService } from '../../services/bookingService';
 import { patientService } from '../../services/patientService';
 import { mdtService } from '../../services/mdtService';
@@ -1194,6 +1195,8 @@ const UrologistDashboard = () => {
           </div>
           {/* Notification and Profile Icons */}
           <div className="flex items-center gap-3">
+            {/* Digital Clock */}
+            <DigitalClock />
             {/* Notification Icon */}
             <div className="relative">
               <button

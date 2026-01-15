@@ -202,7 +202,7 @@ const patientBaseFields = (isCreate = true) => ({
   currentMedications: textField('Current medications', 2000),
   allergies: textField('Allergies', 1000),
   assignedUrologist: textField('Assigned urologist', 255),
-  emergencyContactName: textField('Emergency contact name', 100),
+  emergencyContactName: textField('Emergency contact name', 255),
   emergencyContactPhone: phoneField(false, 'Emergency contact'),
   emergencyContactRelationship: textField('Emergency contact relationship', 50),
   priority: enumField('Priority', VALID_VALUES.PRIORITIES, false, isCreate ? 'Normal' : undefined),

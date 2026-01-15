@@ -228,7 +228,7 @@ const medicalFieldsForUpdate = () => [
 ];
 
 const emergencyContactFields = () => [
-  textField('emergencyContactName', 'Emergency contact name', 100),
+  textField('emergencyContactName', 'Emergency contact name', 255),
   phoneField('emergencyContactPhone', 'Emergency contact phone'),
   textField('emergencyContactRelationship', 'Emergency contact relationship', 50),
 ];

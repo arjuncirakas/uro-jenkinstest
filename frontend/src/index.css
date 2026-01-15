@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'DigitalFont';
+  src: url('/digitalfont.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 *{
   font-family: "Poppins", sans-serif;
 }

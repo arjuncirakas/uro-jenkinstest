@@ -446,7 +446,7 @@ export const initializeDatabase = async () => {
           current_medications TEXT,
           allergies TEXT,
           assigned_urologist VARCHAR(255),
-          emergency_contact_name VARCHAR(100),
+          emergency_contact_name VARCHAR(255),
           emergency_contact_phone VARCHAR(500),
           emergency_contact_relationship VARCHAR(50),
           priority VARCHAR(20) DEFAULT 'Normal' CHECK (priority IN ('Low', 'Normal', 'High', 'Urgent')),
@@ -559,8 +559,36 @@ export const initializeDatabase = async () => {
 
     // Ensure gp_name and gp_contact columns exist on patients (for external GPs)
     try {
-      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS gp_name VARCHAR(100)`);
+      await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS gp_name VARCHAR(255)`);
       await client.query(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS gp_contact VARCHAR(255)`);
+      // Update existing gp_name column size if it exists and is smaller
+      await client.query(`
+        DO $$ 
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'patients' 
+            AND column_name = 'gp_name' 
+            AND character_maximum_length < 255
+          ) THEN
+            ALTER TABLE patients ALTER COLUMN gp_name TYPE VARCHAR(255);
+          END IF;
+        END $$;
+      `);
+      // Update existing emergency_contact_name column size if it exists and is smaller
+      await client.query(`
+        DO $$ 
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'patients' 
+            AND column_name = 'emergency_contact_name' 
+            AND character_maximum_length < 255
+          ) THEN
+            ALTER TABLE patients ALTER COLUMN emergency_contact_name TYPE VARCHAR(255);
+          END IF;
+        END $$;
+      `);
       console.log('✅ Ensured patients.gp_name and patients.gp_contact columns');
     } catch (e) {
       console.log('⚠️  Ensuring gp_name and gp_contact columns:', e.message);

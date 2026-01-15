@@ -4,6 +4,7 @@ import { IoNotificationsOutline } from 'react-icons/io5';
 import NotificationModal from '../NotificationModal';
 import GlobalPatientSearch from '../GlobalPatientSearch';
 import GPPatientDetailsModal from '../GPPatientDetailsModal';
+import DigitalClock from '../DigitalClock';
 
 const GPHeader = ({ title, subtitle, searchPlaceholder = "Search patients by name, UPI, or status" }) => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -42,6 +43,8 @@ const GPHeader = ({ title, subtitle, searchPlaceholder = "Search patients by nam
             placeholder={searchPlaceholder}
             onPatientSelect={handlePatientSelect}
           />
+          {/* Digital Clock */}
+          <DigitalClock />
           {/* Notification Icon */}
           <div className="relative">
             <button

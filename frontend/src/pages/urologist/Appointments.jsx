@@ -6,6 +6,7 @@ import ProfileDropdown from '../../components/ProfileDropdown';
 import Calendar from '../../components/Calendar';
 import DailyAppointmentsList from '../../components/DailyAppointmentsList';
 import AppointmentDetailsModal from '../../components/AppointmentDetailsModal';
+import DigitalClock from '../../components/DigitalClock';
 import { bookingService } from '../../services/bookingService';
 import tokenService from '../../services/tokenService';
 
@@ -162,6 +163,8 @@ const Appointments = () => {
 
               {/* Notification and Profile Icons */}
               <div className="flex items-center gap-3">
+                {/* Digital Clock */}
+                <DigitalClock />
                 {/* Notification Icon */}
                 <div className="relative">
                   <button
@@ -200,6 +203,8 @@ const Appointments = () => {
           )}
           {currentView === 'daily' && (
             <div className="flex items-center gap-3">
+              {/* Digital Clock */}
+              <DigitalClock />
               {/* Notification Icon */}
               <div className="relative">
                 <button
