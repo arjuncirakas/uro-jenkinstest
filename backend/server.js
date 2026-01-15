@@ -5,6 +5,9 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 
+// Load environment variables FIRST before any other imports that depend on them
+dotenv.config();
+
 // Import database and routes
 import { testConnection, initializeDatabase } from './config/database.js';
 import authRoutes from './routes/auth.js';
@@ -30,9 +33,6 @@ import { initAutoNoShowScheduler } from './schedulers/autoNoShowScheduler.js';
 import { protectApiRoutes } from './middleware/apiAuth.js';
 import { restrictHealthCheckAccess } from './middleware/healthCheckAuth.js';
 import { auditMiddleware, auditAuthMiddleware } from './middleware/auditMiddleware.js';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
