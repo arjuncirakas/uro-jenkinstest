@@ -433,6 +433,26 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData, fetchConsentForms]);
 
+  // Listen for testResultAdded event to refresh investigation results
+  useEffect(() => {
+    const handleTestResultAdded = (event) => {
+      const { patientId: eventPatientId } = event.detail || {};
+      const currentPatientId = patient?.id || patient?.patientId || patient?.patient_id;
+      
+      // Only refresh if the event is for the current patient
+      if (isOpen && currentPatientId && eventPatientId && eventPatientId === currentPatientId) {
+        console.log('🔄 UrologistPatientDetailsModal: Refreshing investigation results after test result update');
+        fetchInvestigations();
+        fetchInvestigationRequests();
+      }
+    };
+
+    window.addEventListener('testResultAdded', handleTestResultAdded);
+    return () => {
+      window.removeEventListener('testResultAdded', handleTestResultAdded);
+    };
+  }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchInvestigations, fetchInvestigationRequests]);
+
   // Listen for PDF viewer events
   useEffect(() => {
     const handleOpenPDFViewer = (event) => {

@@ -2002,6 +2002,26 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     }
   }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchFullPatientData, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchMDTMeetings, fetchAppointments, fetchConsentForms, fetchDischargeSummary, isPostOpFollowupPatient]);
 
+  // Listen for testResultAdded event to refresh investigation results
+  useEffect(() => {
+    const handleTestResultAdded = (event) => {
+      const { patientId: eventPatientId } = event.detail || {};
+      const currentPatientId = patient?.id || patient?.patientId || patient?.patient_id;
+      
+      // Only refresh if the event is for the current patient
+      if (isOpen && currentPatientId && eventPatientId && eventPatientId === currentPatientId) {
+        console.log('🔄 NursePatientDetailsModal: Refreshing investigation results after test result update');
+        fetchInvestigations();
+        fetchInvestigationRequests();
+      }
+    };
+
+    window.addEventListener('testResultAdded', handleTestResultAdded);
+    return () => {
+      window.removeEventListener('testResultAdded', handleTestResultAdded);
+    };
+  }, [isOpen, patient?.id, patient?.patientId, patient?.patient_id, fetchInvestigations, fetchInvestigationRequests]);
+
   // Lock body scroll when modal is open
   useEffect(() => {
     if (isOpen) {

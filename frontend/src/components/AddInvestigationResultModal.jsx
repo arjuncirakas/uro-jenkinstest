@@ -656,7 +656,7 @@ const AddInvestigationResultModal = ({ isOpen, onClose, investigationRequest, pa
         // Dispatch event to refresh investigation management table
         window.dispatchEvent(new CustomEvent('testResultAdded', {
           detail: {
-            patientId: patient?.id,
+            patientId: patientId, // Use the extracted patientId variable
             requestId: investigationRequest.id,
             testName: investigationRequest.investigationName || investigationRequest.investigation_name
           }
