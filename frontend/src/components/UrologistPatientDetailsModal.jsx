@@ -66,6 +66,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   const [selectedPathway, setSelectedPathway] = useState('');
   const [isDischargeSummaryModalOpen, setIsDischargeSummaryModalOpen] = useState(false);
   const [dischargeSummaryCreated, setDischargeSummaryCreated] = useState(false);
+  // Discharge summary state
+  const [dischargeSummary, setDischargeSummary] = useState(null);
+  const [loadingDischargeSummary, setLoadingDischargeSummary] = useState(false);
+  const [dischargeSummaryError, setDischargeSummaryError] = useState(null);
   const [isEditSurgeryAppointmentModalOpen, setIsEditSurgeryAppointmentModalOpen] = useState(false);
   const [selectedSurgeryAppointment, setSelectedSurgeryAppointment] = useState(null);
   const [hasSurgeryAppointment, setHasSurgeryAppointment] = useState(false);
@@ -392,6 +396,158 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       console.error('Error fetching consent forms:', error);
     } finally {
       setLoadingConsentForms(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
+
+  // Fetch discharge summary
+  const fetchDischargeSummary = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) return;
+
+    setLoadingDischargeSummary(true);
+    setDischargeSummaryError(null);
+
+    try {
+      const { patientService } = await import('../services/patientService');
+      const result = await patientService.getDischargeSummary(patientId);
+
+      if (result.success && result.data) {
+        // Parse JSON fields if they are strings (PostgreSQL JSON fields might be strings)
+        const summary = { ...result.data };
+
+        // Parse JSON fields if needed
+        if (typeof summary.diagnosis === 'string') {
+          try {
+            summary.diagnosis = JSON.parse(summary.diagnosis);
+          } catch (e) {
+            console.warn('Failed to parse diagnosis JSON:', e);
+          }
+        }
+        // Normalize diagnosis structure - ensure secondary is an array
+        if (summary.diagnosis) {
+          if (!summary.diagnosis.primary) summary.diagnosis.primary = '';
+          if (!summary.diagnosis.secondary) {
+            summary.diagnosis.secondary = [];
+          } else if (typeof summary.diagnosis.secondary === 'string') {
+            try {
+              const parsed = JSON.parse(summary.diagnosis.secondary);
+              summary.diagnosis.secondary = Array.isArray(parsed) ? parsed : [parsed];
+            } catch (e) {
+              summary.diagnosis.secondary = summary.diagnosis.secondary ? [summary.diagnosis.secondary] : [];
+            }
+          } else if (!Array.isArray(summary.diagnosis.secondary)) {
+            summary.diagnosis.secondary = summary.diagnosis.secondary ? [summary.diagnosis.secondary] : [];
+          }
+        }
+
+        if (typeof summary.procedure === 'string') {
+          try {
+            summary.procedure = JSON.parse(summary.procedure);
+          } catch (e) {
+            console.warn('Failed to parse procedure JSON:', e);
+          }
+        }
+        if (summary.procedure) {
+          if (!summary.procedure.name) summary.procedure.name = '';
+          if (!summary.procedure.date) summary.procedure.date = '';
+          if (!summary.procedure.surgeon) summary.procedure.surgeon = '';
+          if (!summary.procedure.findings) summary.procedure.findings = '';
+        }
+
+        if (typeof summary.investigations === 'string') {
+          try {
+            summary.investigations = JSON.parse(summary.investigations);
+          } catch (e) {
+            console.warn('Failed to parse investigations JSON:', e);
+          }
+        }
+        if (!Array.isArray(summary.investigations)) {
+          summary.investigations = summary.investigations ? [summary.investigations] : [];
+        }
+
+        if (typeof summary.medications === 'string') {
+          try {
+            summary.medications = JSON.parse(summary.medications);
+          } catch (e) {
+            console.warn('Failed to parse medications JSON:', e);
+          }
+        }
+        if (summary.medications) {
+          if (!summary.medications.discharged) {
+            summary.medications.discharged = [];
+          } else if (!Array.isArray(summary.medications.discharged)) {
+            summary.medications.discharged = [];
+          }
+          if (!summary.medications.stopped) {
+            summary.medications.stopped = [];
+          } else if (!Array.isArray(summary.medications.stopped)) {
+            summary.medications.stopped = [];
+          }
+        }
+
+        if (typeof summary.followUp === 'string') {
+          try {
+            summary.followUp = JSON.parse(summary.followUp);
+          } catch (e) {
+            console.warn('Failed to parse followUp JSON:', e);
+          }
+        }
+        if (summary.followUp) {
+          if (!summary.followUp.catheterRemoval) {
+            summary.followUp.catheterRemoval = { date: '', location: '', instructions: '' };
+          }
+          if (!summary.followUp.postOpReview) {
+            summary.followUp.postOpReview = { date: '', location: '', instructions: '' };
+          }
+          if (!summary.followUp.additionalInstructions) {
+            summary.followUp.additionalInstructions = [];
+          } else if (!Array.isArray(summary.followUp.additionalInstructions)) {
+            summary.followUp.additionalInstructions = [summary.followUp.additionalInstructions];
+          }
+        }
+
+        if (typeof summary.gpActions === 'string') {
+          try {
+            summary.gpActions = JSON.parse(summary.gpActions);
+          } catch (e) {
+            console.warn('Failed to parse gpActions JSON:', e);
+          }
+        }
+        if (!Array.isArray(summary.gpActions)) {
+          summary.gpActions = summary.gpActions ? [summary.gpActions] : [];
+        }
+
+        if (typeof summary.documents === 'string') {
+          try {
+            summary.documents = JSON.parse(summary.documents);
+          } catch (e) {
+            console.warn('Failed to parse documents JSON:', e);
+          }
+        }
+        if (!Array.isArray(summary.documents)) {
+          summary.documents = summary.documents ? [summary.documents] : [];
+        }
+
+        // Calculate length of stay if not provided
+        if (!summary.length_of_stay && summary.admission_date && summary.discharge_date) {
+          const admission = new Date(summary.admission_date);
+          const discharge = new Date(summary.discharge_date);
+          const diffTime = Math.abs(discharge - admission);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          summary.length_of_stay = `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+        }
+
+        setDischargeSummary(summary);
+      } else {
+        setDischargeSummaryError(result.error || 'Failed to fetch discharge summary');
+        setDischargeSummary(null);
+      }
+    } catch (error) {
+      console.error('Error fetching discharge summary:', error);
+      setDischargeSummaryError('Failed to fetch discharge summary');
+      setDischargeSummary(null);
+    } finally {
+      setLoadingDischargeSummary(false);
     }
   }, [patient?.id, patient?.patientId, patient?.patient_id]);
 
@@ -1718,75 +1874,29 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
   if (!isOpen || !patient) return null;
 
-  // Sample discharge summary data
-  const dischargeSummary = {
-    dischargeDate: '2024-09-20',
-    dischargeTime: '14:30',
-    admissionDate: '2024-09-10',
-    lengthOfStay: '10 days',
-    consultantName: 'Dr. Thompson',
-    ward: 'Urology Ward - Room 302',
+  // Use fetched discharge summary or fallback to empty object
+  const displayDischargeSummary = dischargeSummary || {
+    dischargeDate: '',
+    dischargeTime: '',
+    admissionDate: '',
+    lengthOfStay: '',
+    consultantName: '',
+    ward: '',
     diagnosis: {
-      primary: 'Localized Prostate Adenocarcinoma (Gleason 7, 3+4)',
-      secondary: [
-        'Benign Prostatic Hyperplasia',
-        'Hypertension (controlled)'
-      ]
+      primary: '',
+      secondary: []
     },
-    procedure: {
-      name: 'Robot-Assisted Laparoscopic Radical Prostatectomy',
-      date: '2024-09-11',
-      surgeon: 'Dr. Thompson',
-      findings: 'Successful nerve-sparing radical prostatectomy performed. No intraoperative complications. Estimated blood loss: 150ml. All specimens sent for histopathology.'
-    },
-    clinicalSummary: 'Patient admitted for elective radical prostatectomy for localized prostate cancer. Pre-operative assessment satisfactory. Surgery performed without complications. Post-operative recovery uncomplicated with good pain control. Patient mobilizing well. Catheter in-situ with clear urine output. Patient educated on catheter care and pelvic floor exercises.',
-    investigations: [
-      { test: 'PSA', result: '4.5 ng/mL', date: '2024-09-05' },
-      { test: 'Full Blood Count', result: 'Within normal limits', date: '2024-09-09' },
-      { test: 'Renal Function', result: 'eGFR >60 ml/min', date: '2024-09-09' },
-      { test: 'ECG', result: 'Normal sinus rhythm', date: '2024-09-09' }
-    ],
+    procedure: null,
+    clinicalSummary: '',
+    investigations: [],
     medications: {
-      discharged: [
-        { name: 'Tamsulosin', dose: '400mcg', frequency: 'Once daily', duration: '4 weeks', instructions: 'Take in the morning after food' },
-        { name: 'Paracetamol', dose: '1g', frequency: 'Four times daily', duration: '1 week', instructions: 'For pain relief as needed' },
-        { name: 'Diclofenac', dose: '50mg', frequency: 'Three times daily', duration: '5 days', instructions: 'Take with food. For pain relief' },
-        { name: 'Amlodipine', dose: '5mg', frequency: 'Once daily', duration: 'Continue', instructions: 'Continue regular medication for hypertension' }
-      ],
-      stopped: [
-        { name: 'Aspirin 75mg', reason: 'Stopped 1 week pre-operatively' }
-      ]
+      discharged: [],
+      stopped: []
     },
-    followUp: {
-      catheterRemoval: {
-        date: '2024-09-27',
-        location: 'Urology Outpatient Clinic',
-        instructions: 'Catheter to remain in-situ for 7 days. Attend clinic for removal and trial without catheter.'
-      },
-      postOpReview: {
-        date: '2024-10-18',
-        location: 'Urology Outpatient Clinic',
-        instructions: 'Post-operative review with histology results. PSA check at 6 weeks.'
-      },
-      additionalInstructions: [
-        'Pelvic floor exercises - information leaflet provided',
-        'Avoid heavy lifting (>10kg) for 6 weeks',
-        'Avoid driving for 2 weeks',
-        'Contact urology team if fever, heavy bleeding, or concerns'
-      ]
-    },
-    gpActions: [
-      'Continue antihypertensive medication (Amlodipine 5mg OD)',
-      'Patient may require support with catheter care',
-      'Monitor for any complications and refer back if concerns',
-      'Patient may experience urinary incontinence initially - this should improve with pelvic floor exercises'
-    ],
-    dischargedBy: 'Dr. Sarah Wilson, Urology Registrar',
-    documents: [
-      { id: 1, name: 'Discharge Summary Letter.pdf', type: 'pdf', size: '245 KB' },
-      { id: 2, name: 'Patient Information - Post-Prostatectomy.pdf', type: 'pdf', size: '1.2 MB' },
-      { id: 3, name: 'Medication Chart.pdf', type: 'pdf', size: '890 KB' }
-    ]
+    followUp: null,
+    gpActions: [],
+    dischargedBy: '',
+    documents: []
   };
 
   // Latest PSA result from API data
@@ -2239,6 +2349,9 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
         setDischargeSummaryCreated(true);
         setIsDischargeSummaryModalOpen(false);
+
+        // Fetch the newly created discharge summary
+        await fetchDischargeSummary();
 
         // Ensure selectedPathway is set to 'Discharge' before opening pathway modal
         setSelectedPathway('Discharge');
@@ -3693,48 +3806,66 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
               (patient.pathway && patient.pathway.toLowerCase() === 'discharge') ||
               patient.status === 'Discharged') && (
                 <div className="flex w-full h-full overflow-y-auto p-6">
-                  <div className="w-full mx-auto space-y-6">
-                    {/* Header Section */}
-                    <div className="bg-white rounded-lg border border-gray-200 p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-2xl font-bold text-gray-900">Discharge Summary</h2>
-                        <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
-                          Discharged
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">Patient Name</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{patient.patientName || patient.name}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi}</p>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.dischargeDate}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">Length of Stay</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.lengthOfStay}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">Consultant</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.consultantName}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">Ward</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.ward}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase">Discharge Time</p>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.dischargeTime}</p>
-                        </div>
-                      </div>
+                  {loadingDischargeSummary ? (
+                    <div className="flex items-center justify-center w-full">
+                      <div className="text-gray-500">Loading discharge summary...</div>
                     </div>
+                  ) : dischargeSummaryError ? (
+                    <div className="flex items-center justify-center w-full">
+                      <div className="text-red-500">Error: {dischargeSummaryError}</div>
+                    </div>
+                  ) : !displayDischargeSummary ? (
+                    <div className="flex items-center justify-center w-full">
+                      <div className="text-gray-500">No discharge summary available</div>
+                    </div>
+                  ) : (
+                    <div className="w-full mx-auto space-y-6">
+                      {/* Header Section */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-2xl font-bold text-gray-900">Discharge Summary</h2>
+                          <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                            Discharged
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase">Patient Name</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{patient.patientName || patient.name || displayPatient.name}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi || displayPatient.upi}</p>
+                          </div>
+                          {displayDischargeSummary.admission_date && (
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase">Admission Date</p>
+                              <p className="text-sm font-semibold text-gray-900 mt-1">{new Date(displayDischargeSummary.admission_date).toLocaleDateString()}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.discharge_date ? new Date(displayDischargeSummary.discharge_date).toLocaleDateString() : displayDischargeSummary.dischargeDate || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase">Length of Stay</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.length_of_stay || displayDischargeSummary.lengthOfStay || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase">Consultant</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.consultant_name || displayDischargeSummary.consultantName || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase">Ward</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.ward || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase">Discharge Time</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.discharge_time || displayDischargeSummary.dischargeTime || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
 
                     {/* Diagnosis Section */}
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -3746,16 +3877,16 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         <div>
                           <p className="text-sm font-medium text-gray-700">Primary Diagnosis:</p>
                           <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">
-                            {dischargeSummary.diagnosis?.primary || 'Not specified'}
+                            {displayDischargeSummary.diagnosis?.primary || 'Not specified'}
                           </p>
                         </div>
-                        {dischargeSummary.diagnosis?.secondary &&
-                          Array.isArray(dischargeSummary.diagnosis.secondary) &&
-                          dischargeSummary.diagnosis.secondary.length > 0 && (
+                        {displayDischargeSummary.diagnosis?.secondary &&
+                          Array.isArray(displayDischargeSummary.diagnosis.secondary) &&
+                          displayDischargeSummary.diagnosis.secondary.length > 0 && (
                             <div>
                               <p className="text-sm font-medium text-gray-700">Secondary Diagnosis:</p>
                               <ul className="mt-1 space-y-1">
-                                {dischargeSummary.diagnosis.secondary.map((diag, idx) => (
+                                {displayDischargeSummary.diagnosis.secondary.map((diag, idx) => (
                                   <li key={idx} className="text-sm text-gray-900 bg-gray-50 p-2 rounded">• {diag}</li>
                                 ))}
                               </ul>
@@ -3765,7 +3896,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     </div>
 
                     {/* Procedure Section */}
-                    {dischargeSummary.procedure && (
+                    {displayDischargeSummary.procedure && (
                       <div className="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                           <FaStethoscope className="mr-2 text-teal-600" />
@@ -3775,21 +3906,21 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <p className="text-sm font-medium text-gray-700">Procedure:</p>
-                              <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.name || 'Not specified'}</p>
+                              <p className="text-sm text-gray-900 mt-1">{displayDischargeSummary.procedure?.name || 'Not specified'}</p>
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-700">Date:</p>
-                              <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.date || 'Not specified'}</p>
+                              <p className="text-sm text-gray-900 mt-1">{displayDischargeSummary.procedure?.date ? new Date(displayDischargeSummary.procedure.date).toLocaleDateString() : 'Not specified'}</p>
                             </div>
                             <div className="col-span-2">
                               <p className="text-sm font-medium text-gray-700">Surgeon:</p>
-                              <p className="text-sm text-gray-900 mt-1">{dischargeSummary.procedure?.surgeon || 'Not specified'}</p>
+                              <p className="text-sm text-gray-900 mt-1">{displayDischargeSummary.procedure?.surgeon || 'Not specified'}</p>
                             </div>
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-700">Operative Findings:</p>
                             <p className="text-sm text-gray-900 mt-1 bg-gray-50 p-3 rounded">
-                              {dischargeSummary.procedure?.findings || 'Not specified'}
+                              {displayDischargeSummary.procedure?.findings || displayDischargeSummary.procedure?.complications || 'Not specified'}
                             </p>
                           </div>
                         </div>
@@ -3803,12 +3934,12 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         Clinical Summary
                       </h3>
                       <p className="text-sm text-gray-900 leading-relaxed bg-gray-50 p-4 rounded">
-                        {dischargeSummary.clinicalSummary || 'No clinical summary available'}
+                        {displayDischargeSummary.clinical_summary || displayDischargeSummary.clinicalSummary || 'No clinical summary available'}
                       </p>
                     </div>
 
                     {/* Investigations */}
-                    {dischargeSummary.investigations && Array.isArray(dischargeSummary.investigations) && dischargeSummary.investigations.length > 0 && (
+                    {displayDischargeSummary.investigations && Array.isArray(displayDischargeSummary.investigations) && displayDischargeSummary.investigations.length > 0 && (
                       <div className="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                           <IoAnalytics className="mr-2 text-teal-600" />
@@ -3824,11 +3955,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                              {dischargeSummary.investigations.map((inv, idx) => (
+                              {displayDischargeSummary.investigations.map((inv, idx) => (
                                 <tr key={idx}>
-                                  <td className="py-2 px-4 text-sm text-gray-900">{inv.test}</td>
-                                  <td className="py-2 px-4 text-sm text-gray-500">{inv.date}</td>
-                                  <td className="py-2 px-4 text-sm text-gray-900">{inv.result}</td>
+                                  <td className="py-2 px-4 text-sm text-gray-900">{inv.test || inv.testName || 'N/A'}</td>
+                                  <td className="py-2 px-4 text-sm text-gray-500">{inv.date || inv.testDate || 'N/A'}</td>
+                                  <td className="py-2 px-4 text-sm text-gray-900">{inv.result || inv.result_value || 'N/A'}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -3838,14 +3969,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     )}
 
                     {/* Medications */}
-                    {dischargeSummary.medications && (
+                    {displayDischargeSummary.medications && (
                       <div className="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                           <FaPills className="mr-2 text-teal-600" />
                           Medications
                         </h3>
 
-                        {Array.isArray(dischargeSummary.medications) ? (
+                        {Array.isArray(displayDischargeSummary.medications) ? (
                           <div className="overflow-x-auto">
                             <table className="w-full">
                               <thead>
@@ -3858,13 +3989,13 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200">
-                                {dischargeSummary.medications.map((med, idx) => (
+                                {displayDischargeSummary.medications.map((med, idx) => (
                                   <tr key={idx}>
-                                    <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name}</td>
-                                    <td className="py-2 px-4 text-sm text-gray-500">{med.dose}</td>
-                                    <td className="py-2 px-4 text-sm text-gray-500">{med.frequency}</td>
-                                    <td className="py-2 px-4 text-sm text-gray-500">{med.duration}</td>
-                                    <td className="py-2 px-4 text-sm text-gray-500">{med.instructions}</td>
+                                    <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name || 'N/A'}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.dose || 'N/A'}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.frequency || 'N/A'}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.duration || 'N/A'}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-500">{med.instructions || 'N/A'}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -3873,7 +4004,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         ) : (
                           // Legacy support for object structure
                           <>
-                            {dischargeSummary.medications.discharged && dischargeSummary.medications.discharged.length > 0 && (
+                            {displayDischargeSummary.medications.discharged && displayDischargeSummary.medications.discharged.length > 0 && (
                               <div className="mb-6">
                                 <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Discharge Medications</h4>
                                 <div className="overflow-x-auto">
@@ -3888,7 +4019,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                      {dischargeSummary.medications.discharged.map((med, idx) => (
+                                      {displayDischargeSummary.medications.discharged.map((med, idx) => (
                                         <tr key={idx}>
                                           <td className="py-2 px-4 text-sm font-medium text-gray-900">{med.name}</td>
                                           <td className="py-2 px-4 text-sm text-gray-500">{med.dose}</td>
@@ -3903,11 +4034,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               </div>
                             )}
 
-                            {dischargeSummary.medications.stopped && dischargeSummary.medications.stopped.length > 0 && (
+                            {displayDischargeSummary.medications.stopped && displayDischargeSummary.medications.stopped.length > 0 && (
                               <div>
                                 <h4 className="text-sm font-medium text-gray-700 mb-3 uppercase">Stopped Medications</h4>
                                 <ul className="space-y-2">
-                                  {dischargeSummary.medications.stopped.map((med, idx) => (
+                                  {displayDischargeSummary.medications.stopped.map((med, idx) => (
                                     <li key={idx} className="text-sm text-gray-900 bg-red-50 p-3 rounded border border-red-100 flex justify-between">
                                       <span className="font-medium">{med.name}</span>
                                       <span className="text-red-600">{med.reason}</span>
@@ -3924,36 +4055,36 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     {/* Follow Up & GP Actions */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Follow Up */}
-                      {dischargeSummary.followUp && (
+                      {displayDischargeSummary.followUp && (
                         <div className="bg-white rounded-lg border border-gray-200 p-6">
                           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                             <IoCalendar className="mr-2 text-teal-600" />
                             Follow Up Plan
                           </h3>
                           <div className="space-y-4">
-                            {dischargeSummary.followUp.catheterRemoval && (
+                            {displayDischargeSummary.followUp.catheterRemoval && (
                               <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                 <p className="text-xs font-bold text-blue-800 uppercase mb-1">Catheter Removal</p>
-                                <p className="text-sm font-medium text-blue-900">{dischargeSummary.followUp.catheterRemoval.date}</p>
-                                <p className="text-xs text-blue-700 mt-1">{dischargeSummary.followUp.catheterRemoval.location}</p>
-                                <p className="text-xs text-blue-700 mt-1 italic">{dischargeSummary.followUp.catheterRemoval.instructions}</p>
+                                <p className="text-sm font-medium text-blue-900">{displayDischargeSummary.followUp.catheterRemoval.date}</p>
+                                <p className="text-xs text-blue-700 mt-1">{displayDischargeSummary.followUp.catheterRemoval.location}</p>
+                                <p className="text-xs text-blue-700 mt-1 italic">{displayDischargeSummary.followUp.catheterRemoval.instructions}</p>
                               </div>
                             )}
 
-                            {dischargeSummary.followUp.postOpReview && (
+                            {displayDischargeSummary.followUp.postOpReview && (
                               <div className="bg-teal-50 p-3 rounded border border-teal-100">
                                 <p className="text-xs font-bold text-teal-800 uppercase mb-1">Post-Op Review</p>
-                                <p className="text-sm font-medium text-teal-900">{dischargeSummary.followUp.postOpReview.date}</p>
-                                <p className="text-xs text-teal-700 mt-1">{dischargeSummary.followUp.postOpReview.location}</p>
-                                <p className="text-xs text-teal-700 mt-1 italic">{dischargeSummary.followUp.postOpReview.instructions}</p>
+                                <p className="text-sm font-medium text-teal-900">{displayDischargeSummary.followUp.postOpReview.date}</p>
+                                <p className="text-xs text-teal-700 mt-1">{displayDischargeSummary.followUp.postOpReview.location}</p>
+                                <p className="text-xs text-teal-700 mt-1 italic">{displayDischargeSummary.followUp.postOpReview.instructions}</p>
                               </div>
                             )}
 
-                            {dischargeSummary.followUp.additionalInstructions && (
+                            {displayDischargeSummary.followUp.additionalInstructions && (
                               <div>
                                 <p className="text-xs font-medium text-gray-500 uppercase mb-2">Instructions</p>
                                 <ul className="list-disc list-inside space-y-1">
-                                  {dischargeSummary.followUp.additionalInstructions.map((inst, idx) => (
+                                  {displayDischargeSummary.followUp.additionalInstructions.map((inst, idx) => (
                                     <li key={idx} className="text-sm text-gray-700">{inst}</li>
                                   ))}
                                 </ul>
@@ -3964,14 +4095,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       )}
 
                       {/* GP Actions */}
-                      {dischargeSummary.gpActions && (
+                      {displayDischargeSummary.gpActions && (
                         <div className="bg-white rounded-lg border border-gray-200 p-6">
                           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                             <FaUserMd className="mr-2 text-teal-600" />
                             GP Actions
                           </h3>
                           <ul className="space-y-2">
-                            {dischargeSummary.gpActions.map((action, idx) => (
+                            {displayDischargeSummary.gpActions.map((action, idx) => (
                               <li key={idx} className="flex items-start space-x-2 text-sm text-gray-700 bg-yellow-50 p-3 rounded border border-yellow-100">
                                 <IoCheckmarkCircle className="text-yellow-600 mt-0.5 flex-shrink-0" />
                                 <span>{action}</span>
@@ -3983,14 +4114,14 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                     </div>
 
                     {/* Documents */}
-                    {dischargeSummary.documents && dischargeSummary.documents.length > 0 && (
+                    {displayDischargeSummary.documents && displayDischargeSummary.documents.length > 0 && (
                       <div className="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                           <IoDocument className="mr-2 text-teal-600" />
                           Discharge Documents
                         </h3>
                         <div className="space-y-2">
-                          {dischargeSummary.documents.map((doc) => (
+                          {displayDischargeSummary.documents.map((doc) => (
                             <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-200 hover:border-teal-300 transition-colors">
                               <div className="flex items-center space-x-3">
                                 <div className="text-2xl text-red-500">
@@ -4009,7 +4140,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                         </div>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -4831,15 +4963,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
                       <div className="bg-green-50 p-4 rounded border border-green-200">
                         <p className="text-sm font-semibold text-gray-900 mb-2">Post-Operative Review</p>
-                        <p className="text-sm text-gray-700"><span className="font-medium">Date:</span> {dischargeSummary.followUp.postOpReview.date}</p>
-                        <p className="text-sm text-gray-700"><span className="font-medium">Location:</span> {dischargeSummary.followUp.postOpReview.location}</p>
-                        <p className="text-sm text-gray-700 mt-2">{dischargeSummary.followUp.postOpReview.instructions}</p>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Date:</span> {displayDischargeSummary.followUp.postOpReview.date}</p>
+                        <p className="text-sm text-gray-700"><span className="font-medium">Location:</span> {displayDischargeSummary.followUp.postOpReview.location}</p>
+                        <p className="text-sm text-gray-700 mt-2">{displayDischargeSummary.followUp.postOpReview.instructions}</p>
                       </div>
 
                       <div>
                         <p className="text-sm font-medium text-gray-700 mb-2">Additional Instructions:</p>
                         <ul className="space-y-1">
-                          {dischargeSummary.followUp.additionalInstructions.map((instruction, idx) => (
+                          {displayDischargeSummary.followUp.additionalInstructions.map((instruction, idx) => (
                             <li key={idx} className="text-sm text-gray-900 bg-gray-50 p-2 rounded flex items-start">
                               <IoCheckmarkCircle className="text-teal-600 mr-2 mt-0.5 flex-shrink-0" />
                               <span>{instruction}</span>
@@ -4857,7 +4989,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                       Actions Required by GP
                     </h3>
                     <ul className="space-y-2">
-                      {dischargeSummary.gpActions.map((action, idx) => (
+                      {displayDischargeSummary.gpActions && displayDischargeSummary.gpActions.map((action, idx) => (
                         <li key={idx} className="text-sm text-gray-900 bg-yellow-50 p-3 rounded border border-yellow-200 flex items-start">
                           <IoAlertCircle className="text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
                           <span>{action}</span>
@@ -4899,10 +5031,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                   {/* Footer */}
                   <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Discharged by:</span> {dischargeSummary.dischargedBy}
+                      <span className="font-medium">Discharged by:</span> {displayDischargeSummary.discharged_by || displayDischargeSummary.dischargedBy || 'N/A'}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      Document generated on {dischargeSummary.dischargeDate} at {dischargeSummary.dischargeTime}
+                      Document generated on {displayDischargeSummary.discharge_date ? new Date(displayDischargeSummary.discharge_date).toLocaleDateString() : displayDischargeSummary.dischargeDate || 'N/A'} at {displayDischargeSummary.discharge_time || displayDischargeSummary.dischargeTime || 'N/A'}
                     </p>
                   </div>
                 </div>
@@ -4913,171 +5045,185 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
           {/* Fixed Footer */}
           <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 rounded-b-xl">
             <div className="flex items-center justify-center gap-4">
-              <span className="text-sm font-medium text-gray-700">Transfer to:</span>
-              <div className="flex gap-3">
-                {(() => {
-                  const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
-                  const patientCategory = patient?.category || '';
-
-                  // Determine patient type - check in order of specificity (most specific first)
-                  const isSurgeryPathway = carePathway === 'Surgery Pathway' || patientCategory === 'surgery-pathway';
-                  const isPostOp = (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') ||
-                    patientCategory === 'post-op-followup';
-                  const isMedication = carePathway === 'Medication';
-                  const isNewPatient = !carePathway || carePathway === '' || carePathway === 'OPD Queue' ||
-                    patientCategory === 'new' || !patientCategory;
-
-                  // For Surgery Pathway Patients: Active Surveillance, Medication, Radiotherapy, Post-op Followup, Discharge */}
-                  if (isSurgeryPathway) {
-                    return (
-                      <>
-                        <button onClick={() => handleTransfer('Active Surveillance')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoHeart className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <FaPills className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoMedical className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Post-op Followup')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <FaStethoscope className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Post-op Followup</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoCheckmark className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                        </button>
-                      </>
-                    );
-                  }
-
-                  // For Post-op Followup Patients: Medication, Discharge only
-                  if (isPostOp) {
-                    return (
-                      <>
-                        <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <FaPills className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoCheckmark className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                        </button>
-                      </>
-                    );
-                  }
-
-                  // For Medication Pathway Patients: Active Surveillance, Discharge only
-                  if (isMedication) {
-                    return (
-                      <>
-                        <button onClick={() => handleTransfer('Active Surveillance')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoHeart className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoCheckmark className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                        </button>
-                      </>
-                    );
-                  }
-
-                  // For New Patients: Active Monitoring, Surgery Pathway, Medication, Radiotherapy, Discharge
-                  if (isNewPatient) {
-                    return (
-                      <>
-                        <button onClick={() => handleTransfer('Active Monitoring')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoHeart className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Monitoring</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Surgery Pathway')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <FaStethoscope className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <FaPills className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoMedical className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoCheckmark className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                        </button>
-                      </>
-                    );
-                  }
-
-                  // Fallback: For patients on other pathways (Active Monitoring, Active Surveillance, Radiotherapy, etc.)
-                  if (patient && carePathway) {
-                    return (
-                      <>
-                        <button onClick={() => handleTransfer('Surgery Pathway')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <FaStethoscope className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <FaPills className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoMedical className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
-                        </button>
-                        <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
-                          <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
-                            <IoCheckmark className="text-teal-600 text-sm" />
-                          </div>
-                          <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
-                        </button>
-                      </>
-                    );
-                  }
-
+              {(() => {
+                const carePathway = patient?.carePathway || patient?.care_pathway || patient?.pathway || '';
+                const patientStatus = patient?.status || '';
+                const isDischarged = carePathway.toLowerCase() === 'discharge' || patientStatus === 'Discharged';
+                
+                // Don't show transfer buttons if patient is already discharged
+                if (isDischarged) {
                   return null;
-                })()}
-              </div>
+                }
+                
+                return (
+                  <>
+                    <span className="text-sm font-medium text-gray-700">Transfer to:</span>
+                    <div className="flex gap-3">
+                      {(() => {
+                        const patientCategory = patient?.category || '';
+
+                        // Determine patient type - check in order of specificity (most specific first)
+                        const isSurgeryPathway = carePathway === 'Surgery Pathway' || patientCategory === 'surgery-pathway';
+                        const isPostOp = (carePathway === 'Post-op Transfer' || carePathway === 'Post-op Followup') ||
+                          patientCategory === 'post-op-followup';
+                        const isMedication = carePathway === 'Medication';
+                        const isNewPatient = !carePathway || carePathway === '' || carePathway === 'OPD Queue' ||
+                          patientCategory === 'new' || !patientCategory;
+
+                        // For Surgery Pathway Patients: Active Surveillance, Medication, Radiotherapy, Post-op Followup, Discharge
+                        if (isSurgeryPathway) {
+                          return (
+                            <>
+                              <button onClick={() => handleTransfer('Active Surveillance')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoHeart className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <FaPills className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoMedical className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Post-op Followup')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <FaStethoscope className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Post-op Followup</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoCheckmark className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                              </button>
+                            </>
+                          );
+                        }
+
+                        // For Post-op Followup Patients: Medication, Discharge only
+                        if (isPostOp) {
+                          return (
+                            <>
+                              <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <FaPills className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoCheckmark className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                              </button>
+                            </>
+                          );
+                        }
+
+                        // For Medication Pathway Patients: Active Surveillance, Discharge only
+                        if (isMedication) {
+                          return (
+                            <>
+                              <button onClick={() => handleTransfer('Active Surveillance')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoHeart className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Surveillance</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoCheckmark className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                              </button>
+                            </>
+                          );
+                        }
+
+                        // For New Patients: Active Monitoring, Surgery Pathway, Medication, Radiotherapy, Discharge
+                        if (isNewPatient) {
+                          return (
+                            <>
+                              <button onClick={() => handleTransfer('Active Monitoring')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoHeart className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Active Monitoring</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Surgery Pathway')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <FaStethoscope className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <FaPills className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoMedical className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoCheckmark className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                              </button>
+                            </>
+                          );
+                        }
+
+                        // Fallback: For patients on other pathways (Active Monitoring, Active Surveillance, Radiotherapy, etc.)
+                        if (patient && carePathway) {
+                          return (
+                            <>
+                              <button onClick={() => handleTransfer('Surgery Pathway')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <FaStethoscope className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Surgery Pathway</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Medication')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <FaPills className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Medication</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Radiotherapy')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoMedical className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Radiotherapy</span>
+                              </button>
+                              <button onClick={() => handleTransfer('Discharge')} className="flex flex-col items-center p-3 bg-white rounded-md hover:bg-gray-50 transition-colors min-w-[110px] border border-gray-200">
+                                <div className="w-8 h-8 bg-teal-50 rounded-md flex items-center justify-center mb-2">
+                                  <IoCheckmark className="text-teal-600 text-sm" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 text-center leading-tight">Discharge</span>
+                              </button>
+                            </>
+                          );
+                        }
+
+                        return null;
+                      })()}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -7201,6 +7347,11 @@ ${transferDetails.additionalNotes}` : ''}
 
                           // Refresh patient data to update pipeline with new care pathway
                           await fetchFullPatientData();
+
+                          // If transferred to Discharge, fetch the discharge summary
+                          if (selectedPathway === 'Discharge') {
+                            await fetchDischargeSummary();
+                          }
 
                           // Refresh appointment check, especially important for Surgery Pathway
                           checkSurgeryAppointment();
