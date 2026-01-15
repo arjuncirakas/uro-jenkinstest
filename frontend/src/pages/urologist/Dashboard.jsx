@@ -12,6 +12,7 @@ import { bookingService } from '../../services/bookingService';
 import { patientService } from '../../services/patientService';
 import { mdtService } from '../../services/mdtService';
 import authService from '../../services/authService';
+import tokenService from '../../services/tokenService';
 
 const UrologistDashboard = () => {
   // State for tracking active tab
@@ -1029,7 +1030,6 @@ const UrologistDashboard = () => {
             console.error('[Dashboard] Authentication not ready after retry');
 
             // Try to refresh token if it exists but is expired
-            const tokenService = (await import('../../services/tokenService.js')).default;
             if (tokenService.getAccessToken() || tokenService.getRefreshToken()) {
               console.log('[Dashboard] Attempting token refresh...');
               const refreshed = await tokenService.refreshIfNeeded();
@@ -1047,7 +1047,6 @@ const UrologistDashboard = () => {
           }
         } else {
           // Token exists, but might need refresh - check proactively
-          const tokenService = (await import('../../services/tokenService.js')).default;
           if (tokenService.needsRefresh()) {
             console.log('[Dashboard] Token needs refresh, refreshing...');
             await tokenService.refreshIfNeeded();

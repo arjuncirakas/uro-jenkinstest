@@ -519,7 +519,7 @@ export const updateOtherTestResult = async (req, res) => {
 
     // Check if result exists
     const resultCheck = await client.query(
-      `SELECT ir.id, ir.patient_id, ir.file_path, ir.file_data
+      `SELECT ir.id, ir.patient_id, ir.file_path, ir.file_name, ir.file_data
        FROM investigation_results ir
        WHERE ir.id = $1`,
       [parsedResultId]
@@ -533,11 +533,19 @@ export const updateOtherTestResult = async (req, res) => {
     }
 
     const existingResult = resultCheck.rows[0];
+    
+    // Log existing file info for debugging
+    console.log('🔍 UpdateOtherTestResult - Existing result file info:', {
+      resultId: parsedResultId,
+      existingFilePath: existingResult.file_path,
+      existingFileName: existingResult.file_name,
+      hasFileData: !!existingResult.file_data
+    });
 
     // Handle file upload/removal
     let filePath = existingResult.file_path;
-    let fileName = null;
-    let encryptedFileData = null;
+    let fileName = existingResult.file_name;
+    let encryptedFileData = existingResult.file_data;
 
     // If removeFile flag is set and no new file, remove the file
     if (removeFile === 'true' || removeFile === true) {
@@ -578,36 +586,81 @@ export const updateOtherTestResult = async (req, res) => {
     // Prepare update parameters
     const hasNewFile = req.file !== undefined;
     const hasRemovedFile = removeFile === 'true' || removeFile === true;
-    const updateParams = [
-      testName || null, // Update test name if provided
-      testDate,
-      resultString,
-      status || null,
-      notes || null,
-      (hasNewFile || hasRemovedFile) ? filePath : null, // Update file path if file changed
-      (hasNewFile || hasRemovedFile) ? fileName : null, // Update file name if file changed
-      (hasNewFile || hasRemovedFile) ? encryptedFileData : null, // Update file data if file changed
-      parsedResultId
-    ];
-
-    // Update test result
-    const updateQuery = await client.query(
-      `UPDATE investigation_results 
-       SET test_name = COALESCE($1, test_name),
-           test_date = $2, 
-           result = COALESCE($3, result),
-           status = COALESCE($4, status),
-           notes = COALESCE($5, notes),
-           file_path = CASE WHEN $6::VARCHAR IS NOT NULL OR $6 IS NULL THEN $6::VARCHAR ELSE file_path END,
-           file_name = CASE WHEN $7::VARCHAR IS NOT NULL OR $7 IS NULL THEN $7::VARCHAR ELSE file_name END,
-           file_data = CASE WHEN $8::BYTEA IS NOT NULL OR $8 IS NULL THEN $8::BYTEA ELSE file_data END,
-           updated_at = NOW()
-       WHERE id = $9
-       RETURNING *`,
-      updateParams
-    );
+    const fileChanged = hasNewFile || hasRemovedFile;
+    
+    // Build dynamic UPDATE query based on whether file was changed
+    let updateQuery;
+    if (fileChanged) {
+      // File was changed - update file fields
+      const updateParams = [
+        testName || null, // Update test name if provided
+        testDate,
+        resultString,
+        status || null,
+        notes || null,
+        filePath, // Update file path (can be null if removed)
+        fileName, // Update file name (can be null if removed)
+        encryptedFileData, // Update file data (can be null if removed)
+        parsedResultId
+      ];
+      
+      updateQuery = await client.query(
+        `UPDATE investigation_results 
+         SET test_name = COALESCE($1, test_name),
+             test_date = $2, 
+             result = COALESCE($3, result),
+             status = COALESCE($4, status),
+             notes = COALESCE($5, notes),
+             file_path = $6,
+             file_name = $7,
+             file_data = $8,
+             updated_at = NOW()
+         WHERE id = $9
+         RETURNING *`,
+        updateParams
+      );
+    } else {
+      // File was not changed - don't update file fields (preserve existing values)
+      // Explicitly preserve file_path, file_name, and file_data from existing result
+      const updateParams = [
+        testName || null, // Update test name if provided
+        testDate,
+        resultString,
+        status || null,
+        notes || null,
+        filePath, // Preserve existing file_path (can be null if no file was ever uploaded)
+        fileName, // Preserve existing file_name (can be null if no file was ever uploaded)
+        encryptedFileData, // Preserve existing file_data (can be null if no file was ever uploaded)
+        parsedResultId
+      ];
+      
+      updateQuery = await client.query(
+        `UPDATE investigation_results 
+         SET test_name = COALESCE($1, test_name),
+             test_date = $2, 
+             result = COALESCE($3, result),
+             status = COALESCE($4, status),
+             notes = COALESCE($5, notes),
+             file_path = COALESCE($6, file_path),
+             file_name = COALESCE($7, file_name),
+             file_data = COALESCE($8, file_data),
+             updated_at = NOW()
+         WHERE id = $9
+         RETURNING *`,
+        updateParams
+      );
+    }
 
     const updatedResult = updateQuery.rows[0];
+    
+    // Log updated result file info for debugging
+    console.log('✅ UpdateOtherTestResult - Updated result file info:', {
+      resultId: parsedResultId,
+      updatedFilePath: updatedResult.file_path,
+      updatedFileName: updatedResult.file_name,
+      hasFileData: !!updatedResult.file_data,
+      fileChanged: fileChanged
+    });
 
     res.json({
       success: true,

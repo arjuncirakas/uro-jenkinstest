@@ -395,6 +395,241 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
     }
   }, [patient?.id, patient?.patientId, patient?.patient_id]);
 
+  // Fetch clinical notes
+  const fetchNotes = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    console.log('🔍 UrologistPatientDetailsModal: fetchNotes called with patient ID:', patientId);
+    if (!patientId) {
+      console.log('❌ UrologistPatientDetailsModal: No patient ID, returning early');
+      return;
+    }
+
+    setLoadingNotes(true);
+    setNotesError(null);
+
+    try {
+      console.log('🔍 UrologistPatientDetailsModal: Calling notesService.getPatientNotes with patient ID:', patientId);
+      const result = await notesService.getPatientNotes(patientId);
+      console.log('🔍 UrologistPatientDetailsModal: fetchNotes result:', result);
+      if (result.success) {
+        // Use the notes data directly from backend (now provides consistent format)
+        const notes = result.data.notes || result.data || [];
+        // Filter out unwanted notes
+        const filteredNotes = notes.filter(note => {
+          const content = note.content || '';
+          const noteType = note.type || '';
+
+          // Remove notes that say "Appointment type changed from..."
+          if (content.includes('Appointment type changed from')) {
+            return false;
+          }
+
+          // Remove investigation requests that were automatically created from investigation management
+          // These should only appear in "Other Test Results & Reports", not in clinical notes
+          if (noteType === 'investigation_request' && content.includes('Automatically created from investigation management')) {
+            console.log('🗑️ Filtering out automatic investigation request note:', {
+              noteId: note.id,
+              content: content.substring(0, 100)
+            });
+            return false;
+          }
+
+          return true;
+        });
+        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes:', filteredNotes);
+        setClinicalNotes(filteredNotes);
+      } else {
+        console.log('❌ UrologistPatientDetailsModal: Failed to fetch notes:', result.error);
+        setNotesError(result.error || 'Failed to fetch notes');
+      }
+    } catch (err) {
+      console.error('❌ UrologistPatientDetailsModal: Error fetching notes:', err);
+      setNotesError('Failed to fetch notes');
+    } finally {
+      setLoadingNotes(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
+
+  // Fetch investigation results
+  const fetchInvestigations = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) return;
+
+    setLoadingInvestigations(true);
+    setInvestigationsError(null);
+
+    try {
+      const result = await investigationService.getInvestigationResults(patientId);
+      console.log('🔍 UrologistPatientDetailsModal: Investigation results response:', result);
+
+      if (result.success) {
+        // Handle different response structures
+        const investigations = Array.isArray(result.data)
+          ? result.data
+          : (result.data?.results || result.data?.investigations || []);
+
+        console.log('✅ UrologistPatientDetailsModal: Processed investigations:', investigations);
+
+        // Filter PSA results
+        const psaResults = investigations.filter(inv =>
+          inv.testType === 'psa' || inv.test_type === 'PSA' || inv.test_type === 'psa'
+        );
+        setPsaResults(psaResults);
+
+        // Filter non-PSA results
+        const otherTestResults = investigations.filter(inv =>
+          inv.testType !== 'psa' && inv.test_type !== 'PSA' && inv.test_type !== 'psa'
+        );
+        setOtherTestResults(otherTestResults);
+
+        console.log('✅ UrologistPatientDetailsModal: PSA results:', psaResults);
+        console.log('✅ UrologistPatientDetailsModal: Other test results:', otherTestResults);
+      } else {
+        setInvestigationsError(result.error || 'Failed to fetch investigations');
+        console.error('❌ UrologistPatientDetailsModal: Investigation fetch failed:', result.error);
+      }
+    } catch (err) {
+      setInvestigationsError('Failed to fetch investigations');
+      console.error('❌ UrologistPatientDetailsModal: Error fetching investigations:', err);
+    } finally {
+      setLoadingInvestigations(false);
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id]);
+
+  // Ensure main test requests (MRI, TRUS, Biopsy) exist for patients with investigations
+  const ensureMainTestRequests = useCallback(async (existingRequests) => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) return;
+
+    // Check if patient has investigation data (mri, trus, biopsy status)
+    // These come from the investigation management page
+    const hasInvestigationData = patient.mri || patient.trus || patient.biopsy ||
+      patient.mriStatus || patient.trusStatus || patient.biopsyStatus;
+
+    if (!hasInvestigationData) return;
+
+    const mainTests = [
+      { name: 'MRI', key: 'mri' },
+      { name: 'TRUS', key: 'trus' },
+      { name: 'Biopsy', key: 'biopsy' }
+    ];
+
+    // Check which tests need to be created
+    const testsToCreate = [];
+
+    for (const test of mainTests) {
+      // Check if request already exists for this test
+      const testNameUpper = test.name.toUpperCase();
+      const existingRequest = existingRequests.find(req => {
+        const reqName = (req.investigationName || req.investigation_name || '').toUpperCase();
+        return reqName === testNameUpper || reqName.includes(testNameUpper) || testNameUpper.includes(reqName);
+      });
+
+      if (!existingRequest) {
+        // Check the status - only create if not 'not_required'
+        const status = patient[test.key] || patient[`${test.key}Status`] || 'pending';
+        if (status !== 'not_required' && status !== 'NOT_REQUIRED') {
+          testsToCreate.push(test.name);
+        }
+      }
+    }
+
+    // Create missing investigation requests
+    if (testsToCreate.length > 0) {
+      console.log('🔍 UrologistPatientDetailsModal: Creating investigation requests for:', testsToCreate);
+
+      // Don't set scheduledDate for automatically created requests
+      // This ensures they are created as requests (not appointments) and won't appear in the appointments list
+
+      for (const testName of testsToCreate) {
+        try {
+          const result = await investigationService.createInvestigationRequest(patientId, {
+            investigationType: 'clinical_investigation',
+            testNames: [testName],
+            priority: 'routine',
+            notes: 'Automatically created from investigation management',
+            scheduledDate: null, // Don't set a date - this makes it a request, not an appointment
+            scheduledTime: null
+          });
+
+          if (result.success) {
+            console.log(`✅ Created investigation request for ${testName}`);
+          } else {
+            console.error(`❌ Failed to create investigation request for ${testName}:`, result.error);
+          }
+        } catch (error) {
+          console.error(`❌ Exception creating investigation request for ${testName}:`, error);
+        }
+      }
+
+      // Refresh investigation requests after creating
+      if (testsToCreate.length > 0) {
+        setTimeout(async () => {
+          const refreshResult = await investigationService.getInvestigationRequests(patientId);
+          if (refreshResult.success) {
+            const requests = Array.isArray(refreshResult.data)
+              ? refreshResult.data
+              : (refreshResult.data?.requests || []);
+            setInvestigationRequests(requests);
+          }
+        }, 500);
+      }
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id, patient?.mri, patient?.trus, patient?.biopsy, patient?.mriStatus, patient?.trusStatus, patient?.biopsyStatus]);
+
+  // Fetch investigation requests
+  const fetchInvestigationRequests = useCallback(async () => {
+    const patientId = patient?.id || patient?.patientId || patient?.patient_id;
+    if (!patientId) {
+      console.log('⚠️ fetchInvestigationRequests: No patient ID');
+      return;
+    }
+
+    console.log(`🔍 fetchInvestigationRequests: Starting for patient ID: ${patientId}`);
+    setLoadingRequests(true);
+    setRequestsError(null);
+
+    try {
+      const result = await investigationService.getInvestigationRequests(patientId);
+      console.log('🔍 UrologistPatientDetailsModal: Investigation requests API response:', result);
+      console.log('🔍 Result success:', result.success);
+      console.log('🔍 Result data:', result.data);
+
+      if (result.success) {
+        const requests = Array.isArray(result.data)
+          ? result.data
+          : (result.data?.requests || []);
+
+        console.log('✅ UrologistPatientDetailsModal: Parsed investigation requests:', requests);
+        console.log('✅ Number of requests:', requests.length);
+
+        // Log each request
+        requests.forEach((req, index) => {
+          console.log(`  Request ${index + 1}:`, req.investigationName || req.investigation_name, `(ID: ${req.id})`);
+        });
+
+        setInvestigationRequests(requests);
+        console.log('✅ State updated with requests');
+
+        // Automatically create investigation requests for MRI, TRUS, and Biopsy if patient has investigations
+        // Call this after setting requests to avoid race conditions
+        ensureMainTestRequests(requests).catch(error => {
+          console.error('Error ensuring main test requests:', error);
+        });
+      } else {
+        setRequestsError(result.error || 'Failed to fetch investigation requests');
+        console.error('❌ UrologistPatientDetailsModal: Investigation requests fetch failed:', result.error);
+      }
+    } catch (err) {
+      setRequestsError('Failed to fetch investigation requests');
+      console.error('❌ UrologistPatientDetailsModal: Error fetching investigation requests:', err);
+      console.error('❌ Error stack:', err.stack);
+    } finally {
+      setLoadingRequests(false);
+      console.log('✅ fetchInvestigationRequests: Complete');
+    }
+  }, [patient?.id, patient?.patientId, patient?.patient_id, ensureMainTestRequests]);
+
   // Load patient data when modal opens
   useEffect(() => {
     console.log('🔍 UrologistPatientDetailsModal: useEffect triggered', { isOpen, patient });
@@ -431,7 +666,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setHasSurgeryAppointment(false);
       setFullPatientData(null);
     }
-  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData, fetchConsentForms]);
+  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData, fetchConsentForms, fetchNotes, fetchInvestigations, fetchInvestigationRequests]);
 
   // Listen for testResultAdded event to refresh investigation results
   useEffect(() => {
@@ -489,235 +724,6 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
   useEffect(() => {
     setTransferDetails(prev => ({ ...prev, surgeryTime: '', surgeryStartTime: '', surgeryEndTime: '' }));
   }, [transferDetails.surgeryDate]);
-
-  // API functions
-  const fetchNotes = async () => {
-    console.log('🔍 UrologistPatientDetailsModal: fetchNotes called with patient ID:', patient?.id);
-    if (!patient?.id) {
-      console.log('❌ UrologistPatientDetailsModal: No patient ID, returning early');
-      return;
-    }
-
-    setLoadingNotes(true);
-    setNotesError(null);
-
-    try {
-      console.log('🔍 UrologistPatientDetailsModal: Calling notesService.getPatientNotes with patient ID:', patient.id);
-      const result = await notesService.getPatientNotes(patient.id);
-      console.log('🔍 UrologistPatientDetailsModal: fetchNotes result:', result);
-      if (result.success) {
-        // Use the notes data directly from backend (now provides consistent format)
-        const notes = result.data.notes || result.data || [];
-        // Filter out unwanted notes
-        const filteredNotes = notes.filter(note => {
-          const content = note.content || '';
-          const noteType = note.type || '';
-
-          // Remove notes that say "Appointment type changed from..."
-          if (content.includes('Appointment type changed from')) {
-            return false;
-          }
-
-          // Remove investigation requests that were automatically created from investigation management
-          // These should only appear in "Other Test Results & Reports", not in clinical notes
-          if (noteType === 'investigation_request' && content.includes('Automatically created from investigation management')) {
-            console.log('🗑️ Filtering out automatic investigation request note:', {
-              noteId: note.id,
-              content: content.substring(0, 100)
-            });
-            return false;
-          }
-
-          return true;
-        });
-        console.log('✅ UrologistPatientDetailsModal: Setting clinical notes:', filteredNotes);
-        setClinicalNotes(filteredNotes);
-      } else {
-        console.log('❌ UrologistPatientDetailsModal: Failed to fetch notes:', result.error);
-        setNotesError(result.error || 'Failed to fetch notes');
-      }
-    } catch (err) {
-      console.error('❌ UrologistPatientDetailsModal: Error fetching notes:', err);
-      setNotesError('Failed to fetch notes');
-    } finally {
-      setLoadingNotes(false);
-    }
-  };
-
-  const fetchInvestigations = async () => {
-    if (!patient?.id) return;
-
-    setLoadingInvestigations(true);
-    setInvestigationsError(null);
-
-    try {
-      const result = await investigationService.getInvestigationResults(patient.id);
-      console.log('🔍 UrologistPatientDetailsModal: Investigation results response:', result);
-
-      if (result.success) {
-        // Handle different response structures
-        const investigations = Array.isArray(result.data)
-          ? result.data
-          : (result.data?.results || result.data?.investigations || []);
-
-        console.log('✅ UrologistPatientDetailsModal: Processed investigations:', investigations);
-
-        // Filter PSA results
-        const psaResults = investigations.filter(inv =>
-          inv.testType === 'psa' || inv.test_type === 'PSA' || inv.test_type === 'psa'
-        );
-        setPsaResults(psaResults);
-
-        // Filter non-PSA results
-        const otherTestResults = investigations.filter(inv =>
-          inv.testType !== 'psa' && inv.test_type !== 'PSA' && inv.test_type !== 'psa'
-        );
-        setOtherTestResults(otherTestResults);
-
-        console.log('✅ UrologistPatientDetailsModal: PSA results:', psaResults);
-        console.log('✅ UrologistPatientDetailsModal: Other test results:', otherTestResults);
-      } else {
-        setInvestigationsError(result.error || 'Failed to fetch investigations');
-        console.error('❌ UrologistPatientDetailsModal: Investigation fetch failed:', result.error);
-      }
-    } catch (err) {
-      setInvestigationsError('Failed to fetch investigations');
-      console.error('❌ UrologistPatientDetailsModal: Error fetching investigations:', err);
-    } finally {
-      setLoadingInvestigations(false);
-    }
-  };
-
-  const fetchInvestigationRequests = async () => {
-    if (!patient?.id) {
-      console.log('⚠️ fetchInvestigationRequests: No patient ID');
-      return;
-    }
-
-    console.log(`🔍 fetchInvestigationRequests: Starting for patient ID: ${patient.id}`);
-    setLoadingRequests(true);
-    setRequestsError(null);
-
-    try {
-      const result = await investigationService.getInvestigationRequests(patient.id);
-      console.log('🔍 UrologistPatientDetailsModal: Investigation requests API response:', result);
-      console.log('🔍 Result success:', result.success);
-      console.log('🔍 Result data:', result.data);
-
-      if (result.success) {
-        const requests = Array.isArray(result.data)
-          ? result.data
-          : (result.data?.requests || []);
-
-        console.log('✅ UrologistPatientDetailsModal: Parsed investigation requests:', requests);
-        console.log('✅ Number of requests:', requests.length);
-
-        // Log each request
-        requests.forEach((req, index) => {
-          console.log(`  Request ${index + 1}:`, req.investigationName || req.investigation_name, `(ID: ${req.id})`);
-        });
-
-        setInvestigationRequests(requests);
-        console.log('✅ State updated with requests');
-
-        // Automatically create investigation requests for MRI, TRUS, and Biopsy if patient has investigations
-        // Call this after setting requests to avoid race conditions
-        ensureMainTestRequests(requests).catch(error => {
-          console.error('Error ensuring main test requests:', error);
-        });
-      } else {
-        setRequestsError(result.error || 'Failed to fetch investigation requests');
-        console.error('❌ UrologistPatientDetailsModal: Investigation requests fetch failed:', result.error);
-      }
-    } catch (err) {
-      setRequestsError('Failed to fetch investigation requests');
-      console.error('❌ UrologistPatientDetailsModal: Error fetching investigation requests:', err);
-      console.error('❌ Error stack:', err.stack);
-    } finally {
-      setLoadingRequests(false);
-      console.log('✅ fetchInvestigationRequests: Complete');
-    }
-  };
-
-  // Ensure main test requests (MRI, TRUS, Biopsy) exist for patients with investigations
-  const ensureMainTestRequests = async (existingRequests) => {
-    if (!patient?.id) return;
-
-    // Check if patient has investigation data (mri, trus, biopsy status)
-    // These come from the investigation management page
-    const hasInvestigationData = patient.mri || patient.trus || patient.biopsy ||
-      patient.mriStatus || patient.trusStatus || patient.biopsyStatus;
-
-    if (!hasInvestigationData) return;
-
-    const mainTests = [
-      { name: 'MRI', key: 'mri' },
-      { name: 'TRUS', key: 'trus' },
-      { name: 'Biopsy', key: 'biopsy' }
-    ];
-
-    // Check which tests need to be created
-    const testsToCreate = [];
-
-    for (const test of mainTests) {
-      // Check if request already exists for this test
-      const testNameUpper = test.name.toUpperCase();
-      const existingRequest = existingRequests.find(req => {
-        const reqName = (req.investigationName || req.investigation_name || '').toUpperCase();
-        return reqName === testNameUpper || reqName.includes(testNameUpper) || testNameUpper.includes(reqName);
-      });
-
-      if (!existingRequest) {
-        // Check the status - only create if not 'not_required'
-        const status = patient[test.key] || patient[`${test.key}Status`] || 'pending';
-        if (status !== 'not_required' && status !== 'NOT_REQUIRED') {
-          testsToCreate.push(test.name);
-        }
-      }
-    }
-
-    // Create missing investigation requests
-    if (testsToCreate.length > 0) {
-      console.log('🔍 UrologistPatientDetailsModal: Creating investigation requests for:', testsToCreate);
-
-      // Don't set scheduledDate for automatically created requests
-      // This ensures they are created as requests (not appointments) and won't appear in the appointments list
-
-      for (const testName of testsToCreate) {
-        try {
-          const result = await investigationService.createInvestigationRequest(patient.id, {
-            investigationType: 'clinical_investigation',
-            testNames: [testName],
-            priority: 'routine',
-            notes: 'Automatically created from investigation management',
-            scheduledDate: null, // Don't set a date - this makes it a request, not an appointment
-            scheduledTime: null
-          });
-
-          if (result.success) {
-            console.log(`✅ Created investigation request for ${testName}`);
-          } else {
-            console.error(`❌ Failed to create investigation request for ${testName}:`, result.error);
-          }
-        } catch (error) {
-          console.error(`❌ Exception creating investigation request for ${testName}:`, error);
-        }
-      }
-
-      // Refresh investigation requests after creating
-      if (testsToCreate.length > 0) {
-        setTimeout(async () => {
-          const refreshResult = await investigationService.getInvestigationRequests(patient.id);
-          if (refreshResult.success) {
-            const requests = Array.isArray(refreshResult.data)
-              ? refreshResult.data
-              : (refreshResult.data?.requests || []);
-            setInvestigationRequests(requests);
-          }
-        }, 500);
-      }
-    }
-  };
 
   // Get consent form template for a test - using shared utility
   const getConsentFormTemplate = (testName) => {
@@ -3420,7 +3426,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                         referenceRange: result.referenceRange || result.reference_range || 'N/A',
                                         status: result.status || 'Completed',
                                         notes: result.notes || result.comments || '',
-                                        filePath: result.filePath || result.file_path,
+                                        filePath: (result.filePath || result.file_path || '').trim() || null,
+                                        fileName: (result.fileName || result.file_name || '').trim() || null,
                                         authorName: result.authorName || result.author_name,
                                         authorRole: result.authorRole || result.author_role,
                                         createdAt: result.createdAt || result.created_at

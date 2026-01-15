@@ -3288,7 +3288,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                         referenceRange: result.referenceRange || result.reference_range || 'N/A',
                                         status: result.status || 'Completed',
                                         notes: result.notes || result.comments || '',
-                                        filePath: result.filePath || result.file_path,
+                                        filePath: (result.filePath || result.file_path || '').trim() || null,
+                                        fileName: (result.fileName || result.file_name || '').trim() || null,
                                         authorName: result.authorName || result.author_name,
                                         authorRole: result.authorRole || result.author_role,
                                         createdAt: result.createdAt || result.created_at
