@@ -4152,88 +4152,86 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               </div>
                             )}
                           </>
-                            )}
+                        )}
                           </div>
                         )}
-                      </div>
-                    )}
 
-                    {/* Follow-up Arrangements */}
-                    {displayDischargeSummary.followUp && (
-                      <div className="bg-white rounded-lg border border-gray-200 p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                          <IoCalendar className="mr-2 text-teal-600" />
-                          Follow-up Arrangements
-                        </h3>
-                        <div className="space-y-4">
-                          {displayDischargeSummary.followUp.catheterRemoval && (
-                            <div className="bg-blue-50 p-4 rounded border border-blue-200">
-                              <p className="text-sm font-semibold text-gray-900 mb-2">Catheter Removal</p>
-                              <p className="text-sm text-gray-700">
-                                <span className="font-medium">Date:</span> {displayDischargeSummary.followUp.catheterRemoval?.date || 'Not specified'}
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <span className="font-medium">Location:</span> {displayDischargeSummary.followUp.catheterRemoval?.location || 'Not specified'}
-                              </p>
-                              {displayDischargeSummary.followUp.catheterRemoval?.instructions && (
-                                <p className="text-sm text-gray-700 mt-2">{displayDischargeSummary.followUp.catheterRemoval.instructions}</p>
+                        {/* Follow-up Arrangements */}
+                        {displayDischargeSummary.followUp && (
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                              <IoCalendar className="mr-2 text-teal-600" />
+                              Follow-up Arrangements
+                            </h3>
+                            <div className="space-y-4">
+                              {displayDischargeSummary.followUp.catheterRemoval && (
+                                <div className="bg-blue-50 p-4 rounded border border-blue-200">
+                                  <p className="text-sm font-semibold text-gray-900 mb-2">Catheter Removal</p>
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium">Date:</span> {displayDischargeSummary.followUp.catheterRemoval?.date || 'Not specified'}
+                                  </p>
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium">Location:</span> {displayDischargeSummary.followUp.catheterRemoval?.location || 'Not specified'}
+                                  </p>
+                                  {displayDischargeSummary.followUp.catheterRemoval?.instructions && (
+                                    <p className="text-sm text-gray-700 mt-2">{displayDischargeSummary.followUp.catheterRemoval.instructions}</p>
+                                  )}
+                                </div>
                               )}
+
+                              {displayDischargeSummary.followUp.postOpReview && (
+                                <div className="bg-green-50 p-4 rounded border border-green-200">
+                                  <p className="text-sm font-semibold text-gray-900 mb-2">Post-Operative Review</p>
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium">Date:</span> {displayDischargeSummary.followUp.postOpReview?.date || 'Not specified'}
+                                  </p>
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium">Location:</span> {displayDischargeSummary.followUp.postOpReview?.location || 'Not specified'}
+                                  </p>
+                                  {displayDischargeSummary.followUp.postOpReview?.instructions && (
+                                    <p className="text-sm text-gray-700 mt-2">{displayDischargeSummary.followUp.postOpReview.instructions}</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {displayDischargeSummary.followUp.additionalInstructions &&
+                                Array.isArray(displayDischargeSummary.followUp.additionalInstructions) &&
+                                displayDischargeSummary.followUp.additionalInstructions.length > 0 && (
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-700 mb-2">Additional Instructions:</p>
+                                    <ul className="space-y-1">
+                                      {displayDischargeSummary.followUp.additionalInstructions.map((instruction, idx) => (
+                                        <li key={idx} className="text-sm text-gray-900 bg-gray-50 p-2 rounded flex items-start">
+                                          <IoCheckmarkCircle className="text-teal-600 mr-2 mt-0.5 flex-shrink-0" />
+                                          <span>{instruction}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* GP Actions */}
+                        {displayDischargeSummary.gpActions &&
+                          Array.isArray(displayDischargeSummary.gpActions) &&
+                          displayDischargeSummary.gpActions.length > 0 && (
+                            <div className="bg-white rounded-lg border border-gray-200 p-6">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                <FaUserMd className="mr-2 text-teal-600" />
+                                Actions Required by GP
+                              </h3>
+                              <ul className="space-y-2">
+                                {displayDischargeSummary.gpActions.map((action, idx) => (
+                                  <li key={idx} className="text-sm text-gray-900 bg-yellow-50 p-3 rounded border border-yellow-200 flex items-start">
+                                    <IoAlertCircle className="text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
+                                    <span>{action}</span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           )}
-
-                          {displayDischargeSummary.followUp.postOpReview && (
-                            <div className="bg-green-50 p-4 rounded border border-green-200">
-                              <p className="text-sm font-semibold text-gray-900 mb-2">Post-Operative Review</p>
-                              <p className="text-sm text-gray-700">
-                                <span className="font-medium">Date:</span> {displayDischargeSummary.followUp.postOpReview?.date || 'Not specified'}
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <span className="font-medium">Location:</span> {displayDischargeSummary.followUp.postOpReview?.location || 'Not specified'}
-                              </p>
-                              {displayDischargeSummary.followUp.postOpReview?.instructions && (
-                                <p className="text-sm text-gray-700 mt-2">{displayDischargeSummary.followUp.postOpReview.instructions}</p>
-                              )}
-                            </div>
-                          )}
-
-                          {displayDischargeSummary.followUp.additionalInstructions &&
-                            Array.isArray(displayDischargeSummary.followUp.additionalInstructions) &&
-                            displayDischargeSummary.followUp.additionalInstructions.length > 0 && (
-                              <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">Additional Instructions:</p>
-                                <ul className="space-y-1">
-                                  {displayDischargeSummary.followUp.additionalInstructions.map((instruction, idx) => (
-                                    <li key={idx} className="text-sm text-gray-900 bg-gray-50 p-2 rounded flex items-start">
-                                      <IoCheckmarkCircle className="text-teal-600 mr-2 mt-0.5 flex-shrink-0" />
-                                      <span>{instruction}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* GP Actions */}
-                    {displayDischargeSummary.gpActions &&
-                      Array.isArray(displayDischargeSummary.gpActions) &&
-                      displayDischargeSummary.gpActions.length > 0 && (
-                        <div className="bg-white rounded-lg border border-gray-200 p-6">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <FaUserMd className="mr-2 text-teal-600" />
-                            Actions Required by GP
-                          </h3>
-                          <ul className="space-y-2">
-                            {displayDischargeSummary.gpActions.map((action, idx) => (
-                              <li key={idx} className="text-sm text-gray-900 bg-yellow-50 p-3 rounded border border-yellow-200 flex items-start">
-                                <IoAlertCircle className="text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
-                                <span>{action}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
                       </>
                     )}
                   </div>
