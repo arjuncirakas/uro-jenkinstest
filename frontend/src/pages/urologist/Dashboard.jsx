@@ -797,28 +797,40 @@ const UrologistDashboard = () => {
           };
         });
 
-        // Filter out past meetings and completed meetings (only keep upcoming ones)
-        // Allow meetings today that haven't happened yet (compare dates, not exact time for today)
+        // Filter out past meetings and completed meetings
+        // Include ALL meetings for today (until 11:59 PM) and all future meetings
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        const endOfToday = new Date(today);
+        endOfToday.setHours(23, 59, 59, 999);
         
         const upcomingMeetings = mapped.filter(item => {
-          // Exclude if meeting time has passed (but allow meetings today)
+          // Include all meetings for today (regardless of time - show until 11:59 PM)
           const meetingDate = new Date(item._dt);
           meetingDate.setHours(0, 0, 0, 0);
           const isToday = meetingDate.getTime() === today.getTime();
           
-          // If meeting is in the past (and not today), exclude it
-          if (!isToday && item._dt < now.getTime()) {
-            return false;
+          // If meeting is for today, always include it (until end of day)
+          if (isToday) {
+            // Only exclude if status indicates completion
+            const status = (item.status || '').toLowerCase();
+            if (status === 'completed' || status === 'done' || status === 'finished' || status === 'closed') {
+              return false;
+            }
+            return true;
           }
           
-          // Exclude if status indicates completion (case-insensitive check)
-          const status = (item.status || '').toLowerCase();
-          if (status === 'completed' || status === 'done' || status === 'finished' || status === 'closed') {
-            return false;
+          // For future meetings, include if not completed
+          if (item._dt > endOfToday.getTime()) {
+            const status = (item.status || '').toLowerCase();
+            if (status === 'completed' || status === 'done' || status === 'finished' || status === 'closed') {
+              return false;
+            }
+            return true;
           }
-          return true;
+          
+          // Exclude past meetings (before today)
+          return false;
         });
 
         // Sort by datetime (ascending - earliest first)
@@ -1117,7 +1129,7 @@ const UrologistDashboard = () => {
     
     switch (mdtView) {
       case 'day': {
-        // Show meetings for today only
+        // Show meetings for today only (until 11:59 PM)
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
         
@@ -1125,11 +1137,12 @@ const UrologistDashboard = () => {
           if (!schedule._dt) return false;
           const meetingDate = new Date(schedule._dt);
           meetingDate.setHours(0, 0, 0, 0);
+          // Include all meetings scheduled for today
           return meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < tomorrow.getTime();
         });
       }
       case 'week': {
-        // Show meetings for the next 7 days
+        // Show meetings for today and the next 7 days (including today until 11:59 PM)
         const weekEnd = new Date(today);
         weekEnd.setDate(weekEnd.getDate() + 7);
         
@@ -1137,6 +1150,7 @@ const UrologistDashboard = () => {
           if (!schedule._dt) return false;
           const meetingDate = new Date(schedule._dt);
           meetingDate.setHours(0, 0, 0, 0);
+          // Include all meetings from today onwards up to 7 days
           return meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < weekEnd.getTime();
         });
       }
