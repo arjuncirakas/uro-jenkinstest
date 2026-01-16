@@ -714,11 +714,39 @@ export const deleteUser = async (req, res) => {
       const doctor = existingDoctor.rows[0];
       const doctorEmail = doctor.email;
 
+      // Get the user ID if a user record exists (for cleanup)
+      const userRecord = await client.query(
+        'SELECT id FROM users WHERE email = $1 AND role != \'superadmin\'',
+        [doctorEmail]
+      );
+      
+      const userId = userRecord.rows.length > 0 ? userRecord.rows[0].id : null;
+
       // Delete password setup tokens for the user (if exists)
       await client.query(
         'DELETE FROM password_setup_tokens WHERE email = $1',
         [doctorEmail]
       );
+
+      // Clean up related records if user exists
+      if (userId) {
+        const cleanupQueries = [
+          { query: 'DELETE FROM refresh_tokens WHERE user_id = $1', name: 'refresh_tokens' },
+          { query: 'DELETE FROM active_sessions WHERE user_id = $1', name: 'active_sessions' },
+          { query: 'DELETE FROM otp_verifications WHERE user_id = $1', name: 'otp_verifications' },
+          { query: 'DELETE FROM password_reset_tokens WHERE user_id = $1', name: 'password_reset_tokens' },
+          { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' }
+        ];
+        
+        for (const { query, name } of cleanupQueries) {
+          try {
+            await client.query(query, [userId]);
+          } catch (cleanupError) {
+            // Log but don't fail - some tables might not exist or have CASCADE constraints
+            console.warn(`Warning: Could not delete from ${name} for user ${userId}:`, cleanupError.message);
+          }
+        }
+      }
 
       // Delete the corresponding user record if it exists (but not superadmin)
       await client.query(
@@ -794,6 +822,26 @@ export const deleteUser = async (req, res) => {
         [id]
       );
       
+      // Clean up related records before deleting user
+      // Use individual try-catch blocks to handle cases where tables might not exist
+      // or have different constraints
+      const cleanupQueries = [
+        { query: 'DELETE FROM refresh_tokens WHERE user_id = $1', name: 'refresh_tokens' },
+        { query: 'DELETE FROM active_sessions WHERE user_id = $1', name: 'active_sessions' },
+        { query: 'DELETE FROM otp_verifications WHERE user_id = $1', name: 'otp_verifications' },
+        { query: 'DELETE FROM password_reset_tokens WHERE user_id = $1', name: 'password_reset_tokens' },
+        { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' }
+      ];
+      
+      for (const { query, name } of cleanupQueries) {
+        try {
+          await client.query(query, [id]);
+        } catch (cleanupError) {
+          // Log but don't fail - some tables might not exist or have CASCADE constraints
+          console.warn(`Warning: Could not delete from ${name} for user ${id}:`, cleanupError.message);
+        }
+      }
+      
       // Delete user (foreign keys with SET NULL will preserve patient records)
       await client.query('DELETE FROM users WHERE id = $1', [id]);
 
@@ -816,18 +864,22 @@ export const deleteUser = async (req, res) => {
     console.error('❌ Delete user error:', error);
     console.error('Error code:', error.code);
     console.error('Error detail:', error.detail);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     
     // Check for foreign key constraint errors
     if (error.code === '23503') {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete user due to existing references. Please run the database migration script first: npm run fix-user-constraints'
+        message: 'Cannot delete user due to existing references. Please run the database migration script first: npm run fix-user-constraints',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
     
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Failed to delete user. Please try again or contact support if the issue persists.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     client.release();
