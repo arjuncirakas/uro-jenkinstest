@@ -681,10 +681,13 @@ export const updateUser = async (req, res) => {
 // Delete user (superadmin only) - handles both users and doctors
 export const deleteUser = async (req, res) => {
   const client = await pool.connect();
+  let transactionStarted = false;
   
   try {
     let { id } = req.params;
     id = parseInt(id);
+    
+    console.log(`🗑️  Attempting to delete user with ID: ${id}`);
 
     // Check if this is a doctor from doctors table (ID > 1000000)
     // Doctors from doctors table have IDs offset by 1000000 to avoid conflicts
@@ -696,6 +699,7 @@ export const deleteUser = async (req, res) => {
       const realDoctorId = id - 1000000;
       
       await client.query('BEGIN'); // Start transaction
+      transactionStarted = true;
       
       // Check if doctor exists
       const existingDoctor = await client.query(
@@ -769,6 +773,7 @@ export const deleteUser = async (req, res) => {
     } else {
       // This is a regular user from the users table
       await client.query('BEGIN'); // Start transaction
+      transactionStarted = true;
       
       // Check if user exists
       const existingUser = await client.query(
@@ -797,17 +802,32 @@ export const deleteUser = async (req, res) => {
       if (doctorResult.rows.length > 0) {
         const doctorId = doctorResult.rows[0].id;
         
+        console.log(`📋 Found doctor record with ID: ${doctorId}, attempting to delete...`);
+        
         // Delete password setup tokens for the user
         await client.query(
           'DELETE FROM password_setup_tokens WHERE email = $1',
           [userEmail]
         );
         
-        // Delete the doctor record
+        // Check for appointments referencing this doctor
+        const appointmentCheck = await client.query(
+          'SELECT COUNT(*) as count FROM appointments WHERE urologist_id = $1',
+          [doctorId]
+        );
+        const appointmentCount = parseInt(appointmentCheck.rows[0]?.count || 0);
+        
+        if (appointmentCount > 0) {
+          console.log(`⚠️  Found ${appointmentCount} appointments referencing doctor ${doctorId}. These will be set to NULL.`);
+        }
+        
+        // Delete the doctor record (appointments.urologist_id has ON DELETE SET NULL)
         await client.query(
           'DELETE FROM doctors WHERE id = $1',
           [doctorId]
         );
+        
+        console.log(`✅ Doctor record ${doctorId} deleted successfully`);
       } else {
         // Delete password setup tokens for the user (if exists)
         await client.query(
@@ -821,6 +841,8 @@ export const deleteUser = async (req, res) => {
         'SELECT COUNT(*) as count FROM patients WHERE created_by = $1',
         [id]
       );
+      
+      console.log(`📊 User ${id} has created ${patientCount.rows[0]?.count || 0} patients`);
       
       // Clean up related records before deleting user
       // Use individual try-catch blocks to handle cases where tables might not exist
@@ -843,7 +865,9 @@ export const deleteUser = async (req, res) => {
       }
       
       // Delete user (foreign keys with SET NULL will preserve patient records)
+      console.log(`🗑️  Attempting to delete user record with ID: ${id}...`);
       await client.query('DELETE FROM users WHERE id = $1', [id]);
+      console.log(`✅ User record ${id} deleted successfully`);
 
       await client.query('COMMIT'); // Commit transaction
 
@@ -855,10 +879,13 @@ export const deleteUser = async (req, res) => {
 
   } catch (error) {
     // Rollback transaction if it was started
-    try {
-      await client.query('ROLLBACK');
-    } catch (rollbackError) {
-      console.error('Error rolling back transaction:', rollbackError);
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+        console.log('✅ Transaction rolled back successfully');
+      } catch (rollbackError) {
+        console.error('❌ Error rolling back transaction:', rollbackError);
+      }
     }
     
     console.error('❌ Delete user error:', error);
@@ -866,6 +893,7 @@ export const deleteUser = async (req, res) => {
     console.error('Error detail:', error.detail);
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
+    console.error('User ID attempted:', req.params.id);
     
     // Check for foreign key constraint errors
     if (error.code === '23503') {
@@ -876,10 +904,19 @@ export const deleteUser = async (req, res) => {
       });
     }
     
+    // Check for other database errors
+    if (error.code && error.code.startsWith('23')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Database constraint violation. Cannot delete user.',
+        error: process.env.NODE_ENV === 'development' ? `${error.message} (Code: ${error.code})` : undefined
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Failed to delete user. Please try again or contact support if the issue persists.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' ? `${error.message} (Code: ${error.code || 'N/A'})` : undefined
     });
   } finally {
     client.release();
