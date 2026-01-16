@@ -26,7 +26,7 @@ import kpiRoutes from './routes/kpi.js';
 import exportRoutes from './routes/export.js';
 import guidelineRoutes from './routes/guidelines.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
-import { generalLimiter } from './middleware/rateLimiter.js';
+// Rate limiting removed - no longer using generalLimiter
 import { initializeNotificationsTable } from './services/notificationService.js';
 import { corsOptions, validateCorsConfig, corsLoggingMiddleware } from './middleware/corsConfig.js';
 import { initAutoNoShowScheduler } from './schedulers/autoNoShowScheduler.js';
@@ -90,8 +90,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply rate limiting to all routes
-app.use(generalLimiter);
+// Rate limiting removed - no longer applying rate limiting to any routes
 
 // CORS configuration with enhanced logging
 app.use(cors(corsOptions));

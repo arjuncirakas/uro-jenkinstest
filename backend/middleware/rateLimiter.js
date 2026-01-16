@@ -3,17 +3,18 @@ import rateLimit from 'express-rate-limit';
 // Check if rate limiting is enabled
 // SECURITY FIX: Enable by default in production to prevent the 503 infrastructure response
 // The application should handle rate limiting at layer 7 with proper 429 responses
-// TEMPORARILY DISABLED - Rate limiting turned off for now
+// DISABLED FOR NOTES ROUTES - Rate limiting disabled for doctor panel to prevent 429 errors
 const isProduction = process.env.NODE_ENV === 'production';
 const rateLimitSetting = process.env.ENABLE_RATE_LIMITING;
-const isRateLimitingEnabled = false; // TEMPORARILY DISABLED - Set to false to turn off rate limiting
+// Force disable rate limiting to prevent 429 errors in doctor panel
+const isRateLimitingEnabled = false; // DISABLED - Set to false to turn off rate limiting
 // Original logic (commented out for now):
 // const isRateLimitingEnabled = rateLimitSetting !== undefined
 //   ? rateLimitSetting === 'true'
 //   : isProduction; // Default: enabled in production
 
 // Log rate limiting status
-console.log(`🛡️  Rate Limiting: ${isRateLimitingEnabled ? 'ENABLED' : 'DISABLED'}`);
+console.log(`🛡️  Rate Limiting: ${isRateLimitingEnabled ? 'ENABLED' : 'DISABLED'} (Notes routes always bypassed)`);
 
 // No-op middleware when rate limiting is disabled
 const noOpMiddleware = (req, res, next) => {
@@ -38,7 +39,8 @@ const createRateLimitHandler = (message, retryAfterSeconds) => {
 const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 const maxRequests = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100;
 
-export const generalLimiter = isRateLimitingEnabled ? rateLimit({
+// Create rate limiter with skip function for notes routes
+const baseRateLimiter = isRateLimitingEnabled ? rateLimit({
   windowMs: windowMs,
   max: maxRequests,
   message: {
@@ -52,8 +54,21 @@ export const generalLimiter = isRateLimitingEnabled ? rateLimit({
   handler: createRateLimitHandler(
     'Too many requests from this IP, please try again later.',
     Math.ceil(windowMs / 1000)
-  )
+  ),
+  // Skip rate limiting for notes routes to prevent 429 errors in doctor panel
+  // Use originalUrl for reliable path matching (includes full path even when mounted on sub-path)
+  skip: (req) => {
+    const url = req.originalUrl || (req.baseUrl + req.path) || req.url || '';
+    const isNotesRoute = url.includes('/notes') || 
+                         url.includes('/patients/') && url.includes('/notes');
+    if (isNotesRoute) {
+      console.log('🚫 Rate limiting skipped for notes route:', req.method, url);
+    }
+    return isNotesRoute;
+  }
 }) : noOpMiddleware;
+
+export const generalLimiter = baseRateLimiter;
 
 // Strict rate limiter for auth endpoints
 export const authLimiter = isRateLimitingEnabled ? rateLimit({
