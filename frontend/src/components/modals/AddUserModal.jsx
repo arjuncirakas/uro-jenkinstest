@@ -242,7 +242,17 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         // Automatically set department to Urology
         const urologyDept = departments.find(d => d.name.toLowerCase() === 'urology');
         if (urologyDept) {
+          console.log('✅ [AddUserModal] Auto-setting department_id to Urology:', urologyDept.id);
           updatedFormData.department_id = urologyDept.id;
+          // Clear any existing department_id error
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.department_id;
+            return newErrors;
+          });
+        } else {
+          console.warn('⚠️ [AddUserModal] Urology department not found when selecting doctor role');
+          console.warn('⚠️ [AddUserModal] Available departments:', departments.map(d => d.name));
         }
       } else {
         updatedFormData.department_id = '';
@@ -337,44 +347,85 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
 
     console.log('📝 [AddUserModal] Form submission started');
     console.log('📝 [AddUserModal] Form data:', formData);
+    console.log('📝 [AddUserModal] Available departments:', departments);
 
     dispatch(clearError());
     setShowErrorModal(false);
     setShowSuccessModal(false);
     setErrorMessage('');
 
-    if (!validateForm()) {
-      console.warn('⚠️ [AddUserModal] Form validation failed');
-      console.warn('⚠️ [AddUserModal] Validation errors:', errors);
-      return;
-    }
-
-    // Ensure department_id is set when role is 'doctor' (Urologist)
-    let finalDepartmentId = formData.department_id;
+    // CRITICAL: Set department_id BEFORE validation if role is 'doctor' (Urologist)
+    let updatedFormData = { ...formData };
     if (formData.role === 'doctor' && !formData.department_id) {
       console.warn('⚠️ [AddUserModal] Role is doctor but department_id is missing, attempting to set it...');
-      const urologyDept = departments.find(d => d.name.toLowerCase() === 'urology');
+      
+      // Check if departments are still loading
+      if (loadingDepartments) {
+        console.warn('⚠️ [AddUserModal] Departments are still loading, waiting...');
+        setErrorMessage('Please wait for departments to load, then try again.');
+        setShowErrorModal(true);
+        return;
+      }
+      
+      // Check if departments list is empty
+      if (!departments || departments.length === 0) {
+        console.error('❌ [AddUserModal] Departments list is empty');
+        setErrorMessage('Departments not loaded. Please refresh the page and try again.');
+        setShowErrorModal(true);
+        return;
+      }
+      
+      const urologyDept = departments.find(d => {
+        const deptName = d.name ? d.name.toLowerCase().trim() : '';
+        return deptName === 'urology';
+      });
+      
       if (urologyDept) {
-        console.log('✅ [AddUserModal] Found Urology department, using department_id:', urologyDept.id);
-        finalDepartmentId = urologyDept.id;
+        console.log('✅ [AddUserModal] Found Urology department, setting department_id:', urologyDept.id);
+        updatedFormData.department_id = urologyDept.id;
+        // Update form state immediately
+        setFormData(updatedFormData);
+        // Clear any existing department_id error
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.department_id;
+          return newErrors;
+        });
       } else {
         console.error('❌ [AddUserModal] Urology department not found in departments list');
+        console.error('❌ [AddUserModal] Departments available:', departments.map(d => ({ id: d.id, name: d.name })));
         setErrorMessage('Urology department not found. Please contact support.');
         setShowErrorModal(true);
         return;
       }
     }
 
+    // Validate form with updated data
+    const validationErrors = {};
+    Object.keys(updatedFormData).forEach(key => {
+      const error = validateField(key, updatedFormData[key], updatedFormData, true);
+      if (error) {
+        validationErrors[key] = error;
+      }
+    });
+
+    if (Object.keys(validationErrors).length > 0) {
+      console.warn('⚠️ [AddUserModal] Form validation failed');
+      console.warn('⚠️ [AddUserModal] Validation errors:', validationErrors);
+      setErrors(validationErrors);
+      return;
+    }
+
     try {
       // Prepare data for submission - sanitize and trim name fields
       const submitData = {
-        ...formData,
+        ...updatedFormData,
         // Sanitize and trim name fields to prevent XSS while preserving spaces between words
-        firstName: sanitizeInput(formData.firstName.trim(), { preserveWhitespace: true }),
-        lastName: sanitizeInput(formData.lastName.trim(), { preserveWhitespace: true }),
-        organization: sanitizeInput(formData.organization.trim(), { preserveWhitespace: true }),
-        department_id: formData.role === 'doctor' && finalDepartmentId
-          ? parseInt(finalDepartmentId, 10)
+        firstName: sanitizeInput(updatedFormData.firstName.trim(), { preserveWhitespace: true }),
+        lastName: sanitizeInput(updatedFormData.lastName.trim(), { preserveWhitespace: true }),
+        organization: sanitizeInput(updatedFormData.organization.trim(), { preserveWhitespace: true }),
+        department_id: updatedFormData.role === 'doctor' && updatedFormData.department_id
+          ? parseInt(updatedFormData.department_id, 10)
           : undefined
       };
 
