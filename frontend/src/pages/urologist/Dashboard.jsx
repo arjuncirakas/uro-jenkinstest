@@ -756,7 +756,16 @@ const UrologistDashboard = () => {
         const palette = ['teal', 'blue', 'purple', 'orange'];
         const mapped = meetings.map(m => {
           // Parse meeting date and time to create a datetime object
-          const meetingDate = new Date(m.meetingDate);
+          // Handle date string format "YYYY-MM-DD" correctly to avoid timezone issues
+          let meetingDate;
+          if (typeof m.meetingDate === 'string' && m.meetingDate.includes('-')) {
+            // Parse date string as local date (not UTC)
+            const [year, month, day] = m.meetingDate.split('-').map(Number);
+            meetingDate = new Date(year, month - 1, day);
+          } else {
+            meetingDate = new Date(m.meetingDate);
+          }
+          
           const timeStr = m.meetingTime || '00:00';
 
           // Parse time string (expected format: "HH:MM" or "HH:MM:SS")
@@ -789,11 +798,21 @@ const UrologistDashboard = () => {
         });
 
         // Filter out past meetings and completed meetings (only keep upcoming ones)
+        // Allow meetings today that haven't happened yet (compare dates, not exact time for today)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
         const upcomingMeetings = mapped.filter(item => {
-          // Exclude if meeting time has passed
-          if (item._dt < now.getTime()) {
+          // Exclude if meeting time has passed (but allow meetings today)
+          const meetingDate = new Date(item._dt);
+          meetingDate.setHours(0, 0, 0, 0);
+          const isToday = meetingDate.getTime() === today.getTime();
+          
+          // If meeting is in the past (and not today), exclude it
+          if (!isToday && item._dt < now.getTime()) {
             return false;
           }
+          
           // Exclude if status indicates completion (case-insensitive check)
           const status = (item.status || '').toLowerCase();
           if (status === 'completed' || status === 'done' || status === 'finished' || status === 'closed') {
@@ -805,8 +824,8 @@ const UrologistDashboard = () => {
         // Sort by datetime (ascending - earliest first)
         upcomingMeetings.sort((a, b) => a._dt - b._dt);
 
-        // Remove the temporary _dt field
-        setMdtSchedules(upcomingMeetings.map(({ _dt, ...rest }) => rest));
+        // Keep _dt field for filtering by Day/Week/Month view
+        setMdtSchedules(upcomingMeetings);
       } else {
         setMdtSchedulesError(result.error || 'Failed to fetch MDT schedules');
         setMdtSchedules([]);
@@ -1086,6 +1105,57 @@ const UrologistDashboard = () => {
   useEffect(() => {
     fetchMdtSchedules();
   }, [mdtView]);
+
+  // Filter MDT schedules based on selected view (Day/Week/Month)
+  const filteredMdtSchedules = useMemo(() => {
+    if (!mdtSchedules || mdtSchedules.length === 0) {
+      return [];
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (mdtView) {
+      case 'day': {
+        // Show meetings for today only
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        return mdtSchedules.filter(schedule => {
+          if (!schedule._dt) return false;
+          const meetingDate = new Date(schedule._dt);
+          meetingDate.setHours(0, 0, 0, 0);
+          return meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < tomorrow.getTime();
+        });
+      }
+      case 'week': {
+        // Show meetings for the next 7 days
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        
+        return mdtSchedules.filter(schedule => {
+          if (!schedule._dt) return false;
+          const meetingDate = new Date(schedule._dt);
+          meetingDate.setHours(0, 0, 0, 0);
+          return meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < weekEnd.getTime();
+        });
+      }
+      case 'month': {
+        // Show meetings for the next 30 days
+        const monthEnd = new Date(today);
+        monthEnd.setDate(monthEnd.getDate() + 30);
+        
+        return mdtSchedules.filter(schedule => {
+          if (!schedule._dt) return false;
+          const meetingDate = new Date(schedule._dt);
+          meetingDate.setHours(0, 0, 0, 0);
+          return meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < monthEnd.getTime();
+        });
+      }
+      default:
+        return mdtSchedules;
+    }
+  }, [mdtSchedules, mdtView]);
 
   const getStatusBadge = (status, color) => {
     const colorClasses = {
@@ -1708,12 +1778,12 @@ const UrologistDashboard = () => {
                       <div className="text-center py-8 text-red-500 text-sm">
                         Error: {mdtSchedulesError}
                       </div>
-                    ) : mdtSchedules.length === 0 ? (
+                    ) : filteredMdtSchedules.length === 0 ? (
                       <div className="text-center py-8 text-gray-500 text-sm">
                         No MDT schedules for this period
                       </div>
                     ) : (
-                      mdtSchedules.map((schedule) => (
+                      filteredMdtSchedules.map((schedule) => (
                         <div
                           key={schedule.id}
                           onClick={() => {
