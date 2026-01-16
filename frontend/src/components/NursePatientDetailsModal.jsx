@@ -3651,13 +3651,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Patient Name</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{patient.patientName || patient.name}</p>
+                              <p className="text-sm font-semibold text-gray-900 mt-1">{patientName}</p>
                             </div>
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi}</p>
-                            </div>
-
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
                               <p className="text-sm font-semibold text-gray-900 mt-1">
@@ -3665,16 +3660,8 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                               </p>
                             </div>
                             <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase">Length of Stay</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.lengthOfStay}</p>
-                            </div>
-                            <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Consultant</p>
                               <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.consultantName}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase">Ward</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{dischargeSummary.ward}</p>
                             </div>
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Discharge Time</p>
