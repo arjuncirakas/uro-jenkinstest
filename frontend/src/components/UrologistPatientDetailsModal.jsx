@@ -3940,11 +3940,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Patient Name</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{patient.patientName || patient.name || displayPatient.name}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase">MRN</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{patient.mrn || patient.upi || displayPatient.upi}</p>
+                              <p className="text-sm font-semibold text-gray-900 mt-1">{patientName}</p>
                             </div>
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Discharge Date</p>
@@ -3953,16 +3949,8 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               </p>
                             </div>
                             <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase">Length of Stay</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.length_of_stay || displayDischargeSummary.lengthOfStay || 'N/A'}</p>
-                            </div>
-                            <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Consultant</p>
                               <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.consultant_name || displayDischargeSummary.consultantName || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase">Ward</p>
-                              <p className="text-sm font-semibold text-gray-900 mt-1">{displayDischargeSummary.ward || 'N/A'}</p>
                             </div>
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase">Discharge Time</p>
