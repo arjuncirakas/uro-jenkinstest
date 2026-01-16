@@ -540,7 +540,7 @@ export const getComplianceMetrics = async () => {
     const failedLoginsQuery = await client.query(`
       SELECT COUNT(*) as count
       FROM audit_logs
-      WHERE action LIKE 'auth.%' 
+      WHERE action = 'auth.login' 
         AND status = 'failure'
         AND timestamp >= $1
     `, [thirtyDaysAgo]);
@@ -550,7 +550,7 @@ export const getComplianceMetrics = async () => {
     const successfulLoginsQuery = await client.query(`
       SELECT COUNT(*) as count
       FROM audit_logs
-      WHERE action LIKE 'auth.%' 
+      WHERE action = 'auth.login' 
         AND status = 'success'
         AND timestamp >= $1
     `, [thirtyDaysAgo]);
@@ -645,7 +645,7 @@ export const getChartData = async () => {
         COUNT(*) FILTER (WHERE status = 'success') as successful_logins,
         COUNT(*) FILTER (WHERE status = 'failure') as failed_logins
       FROM audit_logs
-      WHERE action LIKE 'auth.%'
+      WHERE action = 'auth.login'
         AND timestamp >= $1
       GROUP BY DATE_TRUNC('day', timestamp)::date
       ORDER BY DATE_TRUNC('day', timestamp)::date ASC
