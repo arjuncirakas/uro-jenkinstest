@@ -829,11 +829,11 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       fetchConsentForms();
       
       // Fetch discharge summary if patient is discharged or on post-op-followup
-      const currentPatient = fullPatientData || patient;
-      const isDischarged = (currentPatient.carePathway && currentPatient.carePathway.toLowerCase() === 'discharge') ||
-        (currentPatient.pathway && currentPatient.pathway.toLowerCase() === 'discharge') ||
-        currentPatient.status === 'Discharged';
-      if (isDischarged || currentPatient.category === 'post-op-followup') {
+      // Use patient prop instead of fullPatientData to avoid dependency loop
+      const isDischarged = (patient.carePathway && patient.carePathway.toLowerCase() === 'discharge') ||
+        (patient.pathway && patient.pathway.toLowerCase() === 'discharge') ||
+        patient.status === 'Discharged';
+      if (isDischarged || patient.category === 'post-op-followup') {
         fetchDischargeSummary();
       }
 
@@ -855,7 +855,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
       setHasSurgeryAppointment(false);
       setFullPatientData(null);
     }
-  }, [isOpen, patient?.id, checkSurgeryAppointment, fetchAppointments, fetchMDTMeetings, fetchFullPatientData, fetchConsentForms, fetchNotes, fetchInvestigations, fetchInvestigationRequests, fetchDischargeSummary, fullPatientData]);
+    // Removed fullPatientData from dependencies to prevent infinite loop
+    // Only depend on isOpen and patient.id to trigger when modal opens or patient changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, patient?.id]);
 
   // Listen for testResultAdded event to refresh investigation results
   useEffect(() => {
