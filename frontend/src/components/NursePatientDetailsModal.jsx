@@ -292,7 +292,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     lines.forEach(line => {
       const trimmedLine = line.trim();
 
-      if (trimmedLine.includes('New Appointment:')) {
+      if (trimmedLine.includes('New Appointment:') || trimmedLine.includes('New Surgery Appointment:')) {
         data.hasNewAppointment = true;
       } else if (trimmedLine.startsWith('- Date:')) {
         data.newDate = trimmedLine.replace('- Date:', '').trim();
@@ -307,7 +307,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       <div className="space-y-3">
         {data.hasNewAppointment && (
           <div>
-            <div className="text-sm font-medium text-gray-500 mb-1">New Appointment</div>
+            <div className="text-sm font-medium text-gray-500 mb-1">New Surgery Appointment</div>
             <div className="space-y-1">
               {data.newDate && (
                 <div className="text-sm text-gray-900">Date: {data.newDate}</div>
@@ -2853,6 +2853,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                           return organizedNotes.map(({ note, isSubNote }, displayIndex) => {
                             const noteContent = note.content || '';
                             const isRescheduleNote = noteContent.includes('SURGERY APPOINTMENT RESCHEDULED');
+                            
+                            // Check if there's a next item (main note or sub-note) to connect to
+                            const hasNextItem = displayIndex < organizedNotes.length - 1;
+                            const nextItem = hasNextItem ? organizedNotes[displayIndex + 1] : null;
+                            const nextIsSubNote = nextItem?.isSubNote || false;
 
                             return (
                               <div key={note.id || displayIndex} className={`flex gap-4 ${isSubNote ? 'ml-8 -mt-4' : ''}`}>
@@ -2865,14 +2870,19 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                                       <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
                                         {getNoteIcon(note.type)}
                                       </div>
+                                      {/* Connect sub-note to next item if there is one */}
+                                      {hasNextItem && (
+                                        <div className={`w-0.5 ${nextIsSubNote ? 'h-4' : 'h-8'} mt-1 ${isRescheduleNote ? 'bg-orange-200' : 'bg-teal-200'}`}></div>
+                                      )}
                                     </>
                                   ) : (
                                     <>
                                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}>
                                         {getNoteIcon(note.type)}
                                       </div>
-                                      {displayIndex < organizedNotes.length - 1 && !isSubNote && (
-                                        <div className={`w-0.5 h-16 mt-2 ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}></div>
+                                      {/* Always show connecting line if there's a next item */}
+                                      {hasNextItem && (
+                                        <div className={`w-0.5 ${nextIsSubNote ? 'h-12' : 'h-16'} mt-2 ${isRescheduleNote ? 'bg-orange-100' : 'bg-teal-100'}`}></div>
                                       )}
                                     </>
                                   )}

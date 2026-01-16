@@ -125,7 +125,7 @@ const EditSurgeryAppointmentModal = ({ isOpen, onClose, appointment, patient, on
             
             const rescheduleNoteContent = `SURGERY APPOINTMENT RESCHEDULED
 
-New Appointment:
+New Surgery Appointment:
 - Date: ${formattedNewDate}
 - Time: ${formData.surgeryTime}
 
