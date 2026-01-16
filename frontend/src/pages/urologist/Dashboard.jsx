@@ -747,8 +747,10 @@ const UrologistDashboard = () => {
 
     try {
       const result = await mdtService.getMyMDTMeetings();
+      console.log('🔍 fetchMdtSchedules: API result:', result);
       if (result.success) {
         const meetings = result.data?.meetings || [];
+        console.log('🔍 fetchMdtSchedules: Meetings from API:', meetings.length, meetings);
         // Get current date/time for filtering
         const now = new Date();
 
@@ -756,12 +758,23 @@ const UrologistDashboard = () => {
         const palette = ['teal', 'blue', 'purple', 'orange'];
         const mapped = meetings.map(m => {
           // Parse meeting date and time to create a datetime object
-          // Handle date string format "YYYY-MM-DD" correctly to avoid timezone issues
+          // Handle both ISO date strings (2026-01-16T00:00:00.000Z) and simple date strings (2026-01-16)
           let meetingDate;
-          if (typeof m.meetingDate === 'string' && m.meetingDate.includes('-')) {
-            // Parse date string as local date (not UTC)
-            const [year, month, day] = m.meetingDate.split('-').map(Number);
-            meetingDate = new Date(year, month - 1, day);
+          if (typeof m.meetingDate === 'string') {
+            // Extract date part from ISO string (YYYY-MM-DD) or use simple date string
+            let dateStr = m.meetingDate;
+            if (dateStr.includes('T')) {
+              // ISO format: extract just the date part before 'T'
+              dateStr = dateStr.split('T')[0];
+            }
+            
+            // Parse date string as local date (not UTC) to avoid timezone issues
+            if (dateStr.includes('-')) {
+              const [year, month, day] = dateStr.split('-').map(Number);
+              meetingDate = new Date(year, month - 1, day);
+            } else {
+              meetingDate = new Date(m.meetingDate);
+            }
           } else {
             meetingDate = new Date(m.meetingDate);
           }
@@ -777,9 +790,15 @@ const UrologistDashboard = () => {
           const meetingDateTime = new Date(meetingDate);
           meetingDateTime.setHours(hours, minutes, 0, 0);
 
+          // Normalize date to YYYY-MM-DD format for consistent display
+          let normalizedDate = m.meetingDate;
+          if (typeof m.meetingDate === 'string' && m.meetingDate.includes('T')) {
+            normalizedDate = m.meetingDate.split('T')[0];
+          }
+          
           return {
             id: m.id,
-            date: m.meetingDate,
+            date: normalizedDate,
             time: formatTime(m.meetingTime), // Formatted time for display
             department: 'MDT',
             location: 'Clinic',
@@ -836,6 +855,7 @@ const UrologistDashboard = () => {
         // Sort by datetime (ascending - earliest first)
         upcomingMeetings.sort((a, b) => a._dt - b._dt);
 
+        console.log('🔍 fetchMdtSchedules: Filtered upcoming meetings:', upcomingMeetings.length, upcomingMeetings);
         // Keep _dt field for filtering by Day/Week/Month view
         setMdtSchedules(upcomingMeetings);
       } else {
@@ -1121,11 +1141,13 @@ const UrologistDashboard = () => {
   // Filter MDT schedules based on selected view (Day/Week/Month)
   const filteredMdtSchedules = useMemo(() => {
     if (!mdtSchedules || mdtSchedules.length === 0) {
+      console.log('🔍 filteredMdtSchedules: No schedules to filter');
       return [];
     }
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    console.log('🔍 filteredMdtSchedules: Filtering', mdtSchedules.length, 'schedules for view:', mdtView, 'today:', today);
     
     switch (mdtView) {
       case 'day': {
@@ -1133,26 +1155,38 @@ const UrologistDashboard = () => {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
         
-        return mdtSchedules.filter(schedule => {
-          if (!schedule._dt) return false;
+        const filtered = mdtSchedules.filter(schedule => {
+          if (!schedule._dt) {
+            console.log('🔍 filteredMdtSchedules: Schedule missing _dt:', schedule);
+            return false;
+          }
           const meetingDate = new Date(schedule._dt);
           meetingDate.setHours(0, 0, 0, 0);
-          // Include all meetings scheduled for today
-          return meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < tomorrow.getTime();
+          const isInRange = meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < tomorrow.getTime();
+          console.log('🔍 filteredMdtSchedules: Day filter - meetingDate:', meetingDate, 'isInRange:', isInRange, 'schedule:', schedule);
+          return isInRange;
         });
+        console.log('🔍 filteredMdtSchedules: Day view filtered to', filtered.length, 'meetings');
+        return filtered;
       }
       case 'week': {
         // Show meetings for today and the next 7 days (including today until 11:59 PM)
         const weekEnd = new Date(today);
         weekEnd.setDate(weekEnd.getDate() + 7);
         
-        return mdtSchedules.filter(schedule => {
-          if (!schedule._dt) return false;
+        const filtered = mdtSchedules.filter(schedule => {
+          if (!schedule._dt) {
+            console.log('🔍 filteredMdtSchedules: Schedule missing _dt:', schedule);
+            return false;
+          }
           const meetingDate = new Date(schedule._dt);
           meetingDate.setHours(0, 0, 0, 0);
-          // Include all meetings from today onwards up to 7 days
-          return meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < weekEnd.getTime();
+          const isInRange = meetingDate.getTime() >= today.getTime() && meetingDate.getTime() < weekEnd.getTime();
+          console.log('🔍 filteredMdtSchedules: Week filter - meetingDate:', meetingDate, 'today:', today, 'weekEnd:', weekEnd, 'isInRange:', isInRange, 'schedule:', schedule);
+          return isInRange;
         });
+        console.log('🔍 filteredMdtSchedules: Week view filtered to', filtered.length, 'meetings');
+        return filtered;
       }
       case 'month': {
         // Show meetings for the next 30 days
