@@ -335,13 +335,34 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    console.log('📝 [AddUserModal] Form submission started');
+    console.log('📝 [AddUserModal] Form data:', formData);
+
     dispatch(clearError());
     setShowErrorModal(false);
     setShowSuccessModal(false);
     setErrorMessage('');
 
     if (!validateForm()) {
+      console.warn('⚠️ [AddUserModal] Form validation failed');
+      console.warn('⚠️ [AddUserModal] Validation errors:', errors);
       return;
+    }
+
+    // Ensure department_id is set when role is 'doctor' (Urologist)
+    let finalDepartmentId = formData.department_id;
+    if (formData.role === 'doctor' && !formData.department_id) {
+      console.warn('⚠️ [AddUserModal] Role is doctor but department_id is missing, attempting to set it...');
+      const urologyDept = departments.find(d => d.name.toLowerCase() === 'urology');
+      if (urologyDept) {
+        console.log('✅ [AddUserModal] Found Urology department, using department_id:', urologyDept.id);
+        finalDepartmentId = urologyDept.id;
+      } else {
+        console.error('❌ [AddUserModal] Urology department not found in departments list');
+        setErrorMessage('Urology department not found. Please contact support.');
+        setShowErrorModal(true);
+        return;
+      }
     }
 
     try {
@@ -352,12 +373,18 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         firstName: sanitizeInput(formData.firstName.trim(), { preserveWhitespace: true }),
         lastName: sanitizeInput(formData.lastName.trim(), { preserveWhitespace: true }),
         organization: sanitizeInput(formData.organization.trim(), { preserveWhitespace: true }),
-        department_id: formData.role === 'doctor' && formData.department_id
-          ? parseInt(formData.department_id, 10)
+        department_id: formData.role === 'doctor' && finalDepartmentId
+          ? parseInt(finalDepartmentId, 10)
           : undefined
       };
 
+      console.log('📤 [AddUserModal] Submitting data:', submitData);
+      console.log('📤 [AddUserModal] Role:', submitData.role);
+      console.log('📤 [AddUserModal] Department ID:', submitData.department_id);
+
       const result = await dispatch(createUser(submitData));
+      
+      console.log('📥 [AddUserModal] Create user result:', result);
 
       if (result.type.endsWith('/fulfilled') && result.payload && result.payload.success) {
         setCreatedUser({
@@ -375,20 +402,26 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         setShowErrorModal(false);
         dispatch(clearError());
       } else if (result.type.endsWith('/rejected')) {
+        console.error('❌ [AddUserModal] Create user action rejected');
+        console.error('❌ [AddUserModal] Rejected payload:', result.payload);
+        console.error('❌ [AddUserModal] Rejected error:', result.error);
         const rejectedError = result.payload || result.error || 'Failed to create user. Please try again.';
         const message = typeof rejectedError === 'string' ? rejectedError : (rejectedError?.message || 'Failed to create user. Please try again.');
+        console.error('❌ [AddUserModal] Error message to display:', message);
         setErrorMessage(message);
         setShowSuccessModal(false);
         setShowErrorModal(true);
       } else {
-        console.error('Create user action fulfilled but not successful:', result.payload);
+        console.error('❌ [AddUserModal] Create user action fulfilled but not successful');
+        console.error('❌ [AddUserModal] Result payload:', result.payload);
         const message = result.payload?.message || 'User creation failed. Please check all fields and try again.';
         setErrorMessage(message);
         setShowSuccessModal(false);
         setShowErrorModal(true);
       }
     } catch (error) {
-      console.error('Error creating user:', error);
+      console.error('❌ [AddUserModal] Unexpected error creating user:', error);
+      console.error('❌ [AddUserModal] Error stack:', error.stack);
       const message = error?.message || error?.toString() || 'An unexpected error occurred while creating the user. Please try again.';
       setErrorMessage(message);
       setShowSuccessModal(false);

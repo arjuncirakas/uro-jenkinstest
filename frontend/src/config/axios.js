@@ -25,8 +25,21 @@ apiClient.interceptors.request.use(
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log(`🔐 [Axios] Request to ${config.url} - Token found`);
     } else {
-      console.warn(`[Axios] Request to ${config.url} - No token found in localStorage`);
+      console.warn(`⚠️ [Axios] Request to ${config.url} - No token found in localStorage`);
+    }
+    
+    // Log request details for POST requests to /superadmin/users
+    if (config.method === 'post' && config.url?.includes('/superadmin/users')) {
+      console.log('📤 [Axios] POST /superadmin/users request:', {
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        method: config.method,
+        data: config.data,
+        headers: config.headers
+      });
     }
     
     // Add request timestamp for debugging
@@ -35,7 +48,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('[Axios] Request interceptor error:', error);
+    console.error('❌ [Axios] Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -47,7 +60,16 @@ apiClient.interceptors.response.use(
     if (response.config.metadata) {
       const endTime = new Date();
       const duration = endTime - response.config.metadata.startTime;
-      console.log(`API Request to ${response.config.url} took ${duration}ms`);
+      console.log(`✅ [Axios] Request to ${response.config.url} took ${duration}ms`);
+    }
+    
+    // Log response details for POST requests to /superadmin/users
+    if (response.config.method === 'post' && response.config.url?.includes('/superadmin/users')) {
+      console.log('📥 [Axios] POST /superadmin/users response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data
+      });
     }
     
     return response;
@@ -139,7 +161,23 @@ apiClient.interceptors.response.use(
     
     // Handle network errors
     if (!error.response) {
-      console.error('Network error:', error.message);
+      console.error('❌ [Axios] Network error:', error.message);
+      console.error('❌ [Axios] Network error details:', {
+        message: error.message,
+        code: error.code,
+        config: error.config
+      });
+    }
+    
+    // Log error details for POST requests to /superadmin/users
+    if (error.config?.method === 'post' && error.config?.url?.includes('/superadmin/users')) {
+      console.error('❌ [Axios] POST /superadmin/users error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        request: error.config?.data
+      });
     }
     
     return Promise.reject(error);

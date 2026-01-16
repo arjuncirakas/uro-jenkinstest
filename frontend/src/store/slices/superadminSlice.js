@@ -30,10 +30,15 @@ export const createUser = createAsyncThunk(
   'superadmin/createUser',
   async (userData, { rejectWithValue }) => {
     try {
+      console.log('🔄 [Redux] createUser action dispatched with data:', userData);
       const response = await superadminService.createUser(userData);
+      console.log('✅ [Redux] createUser action fulfilled with response:', response);
       return response; // Service already returns response.data from axios
     } catch (error) {
-      return rejectWithValue(error.message);
+      console.error('❌ [Redux] createUser action rejected with error:', error);
+      const errorMessage = error.message || 'Failed to create user';
+      console.error('❌ [Redux] Error message:', errorMessage);
+      return rejectWithValue(errorMessage);
     }
   }
 );

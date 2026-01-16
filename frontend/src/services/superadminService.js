@@ -110,9 +110,19 @@ class SuperadminService {
   // Create new user
   async createUser(userData) {
     try {
+      console.log('🚀 [SuperadminService] Creating user with data:', userData);
+      console.log('🚀 [SuperadminService] API endpoint: /superadmin/users');
+      console.log('🚀 [SuperadminService] Request payload:', JSON.stringify(userData, null, 2));
+      
       const response = await apiClient.post('/superadmin/users', userData);
+      
+      console.log('✅ [SuperadminService] User created successfully:', response.data);
       return response.data;
     } catch (error) {
+      console.error('❌ [SuperadminService] Error creating user:', error);
+      console.error('❌ [SuperadminService] Error response:', error.response?.data);
+      console.error('❌ [SuperadminService] Error status:', error.response?.status);
+      console.error('❌ [SuperadminService] Error message:', error.message);
       throw handleApiError(error);
     }
   }
