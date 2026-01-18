@@ -183,12 +183,13 @@ const initializeAuditLogImmutability = async (client) => {
         AND trigger_name IN ('audit_logs_prevent_delete', 'audit_logs_prevent_update')
     `);
     
-    if (parseInt(triggersExist.rows[0].count) === 2) {
-      console.log('✅ Audit log immutability triggers already exist');
-      return;
-    }
+    const triggersCount = parseInt(triggersExist.rows[0].count);
     
-    console.log('🔒 Setting up database-level audit log immutability...');
+    if (triggersCount === 2) {
+      console.log('✅ Audit log immutability triggers already exist, updating functions...');
+    } else {
+      console.log('🔒 Setting up database-level audit log immutability...');
+    }
     
     // Create DELETE prevention function
     await client.query(`
@@ -205,9 +206,33 @@ const initializeAuditLogImmutability = async (client) => {
       CREATE OR REPLACE FUNCTION prevent_audit_log_update()
       RETURNS TRIGGER AS $$
       BEGIN
-        -- Prevent all updates to maintain immutability
-        -- This ensures audit logs cannot be modified after creation
-        RAISE EXCEPTION 'Audit logs are immutable and cannot be modified. Update attempted on log ID: %', OLD.id;
+        -- Allow setting user_id to NULL when a user is deleted (foreign key ON DELETE SET NULL)
+        -- This preserves audit trail integrity while allowing user deletion
+        -- All other fields remain immutable
+        IF (
+          OLD.id IS DISTINCT FROM NEW.id OR
+          OLD.timestamp IS DISTINCT FROM NEW.timestamp OR
+          (OLD.user_id IS DISTINCT FROM NEW.user_id AND NEW.user_id IS NOT NULL) OR
+          OLD.user_email IS DISTINCT FROM NEW.user_email OR
+          OLD.user_role IS DISTINCT FROM NEW.user_role OR
+          OLD.action IS DISTINCT FROM NEW.action OR
+          OLD.resource_type IS DISTINCT FROM NEW.resource_type OR
+          OLD.resource_id IS DISTINCT FROM NEW.resource_id OR
+          OLD.ip_address IS DISTINCT FROM NEW.ip_address OR
+          OLD.user_agent IS DISTINCT FROM NEW.user_agent OR
+          OLD.request_method IS DISTINCT FROM NEW.request_method OR
+          OLD.request_path IS DISTINCT FROM NEW.request_path OR
+          OLD.status IS DISTINCT FROM NEW.status OR
+          OLD.error_code IS DISTINCT FROM NEW.error_code OR
+          OLD.error_message IS DISTINCT FROM NEW.error_message OR
+          OLD.metadata IS DISTINCT FROM NEW.metadata OR
+          OLD.previous_hash IS DISTINCT FROM NEW.previous_hash OR
+          OLD.created_at IS DISTINCT FROM NEW.created_at
+        ) THEN
+          RAISE EXCEPTION 'Audit logs are immutable and cannot be modified. Update attempted on log ID: %', OLD.id;
+        END IF;
+        
+        RETURN NEW;
       END;
       $$ LANGUAGE plpgsql;
     `);

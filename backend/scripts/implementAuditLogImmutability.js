@@ -53,12 +53,13 @@ const createPreventUpdateFunction = async (client) => {
     CREATE OR REPLACE FUNCTION prevent_audit_log_update()
     RETURNS TRIGGER AS $$
     BEGIN
-      -- Allow updates only to specific system fields (if needed for archival)
-      -- For now, prevent all updates
+      -- Allow setting user_id to NULL when a user is deleted (foreign key ON DELETE SET NULL)
+      -- This preserves audit trail integrity while allowing user deletion
+      -- All other fields remain immutable
       IF (
         OLD.id IS DISTINCT FROM NEW.id OR
         OLD.timestamp IS DISTINCT FROM NEW.timestamp OR
-        OLD.user_id IS DISTINCT FROM NEW.user_id OR
+        (OLD.user_id IS DISTINCT FROM NEW.user_id AND NEW.user_id IS NOT NULL) OR
         OLD.user_email IS DISTINCT FROM NEW.user_email OR
         OLD.user_role IS DISTINCT FROM NEW.user_role OR
         OLD.action IS DISTINCT FROM NEW.action OR
