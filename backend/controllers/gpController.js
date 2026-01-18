@@ -239,6 +239,22 @@ export const getGPById = async (req, res) => {
 
 // Create new GP
 export const createGP = async (req, res) => {
+  // Track if response has been sent to prevent double responses
+  let responseSent = false;
+  
+  const sendResponse = (status, json) => {
+    if (!responseSent) {
+      responseSent = true;
+      res.status(status).json(json);
+    }
+  };
+
+  // Log incoming request for debugging
+  console.log('📝 [createGP] Received request:', {
+    body: { ...req.body, email: req.body?.email ? `${req.body.email.substring(0, 3)}***` : 'missing' },
+    user: req.user ? { id: req.user.id, role: req.user.role } : 'not authenticated'
+  });
+
   try {
     await withDatabaseClient(async (client) => {
       try {
@@ -248,43 +264,110 @@ export const createGP = async (req, res) => {
         const validation = validateGPRequest(req, client);
         if (!validation.isValid) {
           await client.query('ROLLBACK');
-          return res.status(validation.response.status).json(validation.response.json);
+          return sendResponse(validation.response.status, validation.response.json);
         }
 
         const { first_name, last_name, email, phone, organization } = req.body;
+
+        // Validate required fields
+        if (!first_name || !last_name || !email || !phone) {
+          await client.query('ROLLBACK');
+          return sendResponse(400, {
+            success: false,
+            error: 'Missing required fields: first_name, last_name, email, and phone are required'
+          });
+        }
 
         // Check if user already exists
         const userCheck = await checkUserExists(client, email, phone);
         if (userCheck.exists) {
           await client.query('ROLLBACK');
-          return res.status(userCheck.response.status).json(userCheck.response.json);
+          return sendResponse(userCheck.response.status, userCheck.response.json);
         }
 
         // Generate password and hash
-        const tempPassword = generateSecurePassword();
-        const saltRounds = 12;
-        const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
+        let tempPassword;
+        let passwordHash;
+        try {
+          tempPassword = generateSecurePassword();
+          const saltRounds = 12;
+          passwordHash = await bcrypt.hash(tempPassword, saltRounds);
+        } catch (hashError) {
+          await client.query('ROLLBACK');
+          console.error('❌ Error generating password hash:', hashError);
+          return sendResponse(500, {
+            success: false,
+            error: 'Failed to generate password'
+          });
+        }
 
         // Encrypt email and phone
-        const encryptedEmail = email ? encrypt(email) : null;
-        const encryptedPhone = phone ? encrypt(phone) : null;
-        
-        // Create searchable hashes
-        const emailHash = email ? createSearchableHash(email) : null;
-        const phoneHash = phone ? createSearchableHash(phone) : null;
+        let encryptedEmail, encryptedPhone, emailHash, phoneHash;
+        try {
+          encryptedEmail = email ? encrypt(email) : null;
+          encryptedPhone = phone ? encrypt(phone) : null;
+          
+          // Create searchable hashes
+          emailHash = email ? createSearchableHash(email) : null;
+          phoneHash = phone ? createSearchableHash(phone) : null;
+        } catch (encryptError) {
+          await client.query('ROLLBACK');
+          console.error('❌ Error encrypting data:', encryptError);
+          return sendResponse(500, {
+            success: false,
+            error: 'Failed to encrypt user data'
+          });
+        }
 
         // Insert new GP with encrypted data and hashes
-        const result = await client.query(
-          `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified, email_hash, phone_hash) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
-           RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-          [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', true, true, emailHash, phoneHash]
-        );
+        let result;
+        try {
+          result = await client.query(
+            `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified, email_hash, phone_hash) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+             RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
+            [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', true, true, emailHash, phoneHash]
+          );
+        } catch (dbError) {
+          await client.query('ROLLBACK');
+          console.error('❌ Database error inserting GP:', dbError);
+          console.error('❌ Database error code:', dbError.code);
+          console.error('❌ Database error detail:', dbError.detail);
+          
+          if (dbError.code === '23505') {
+            return sendResponse(409, {
+              success: false,
+              error: 'GP with this email or phone already exists'
+            });
+          }
+          
+          return sendResponse(500, {
+            success: false,
+            error: 'Failed to create GP in database',
+            details: process.env.NODE_ENV === 'development' ? dbError.message : undefined
+          });
+        }
+
+        if (!result || !result.rows || result.rows.length === 0) {
+          await client.query('ROLLBACK');
+          console.error('❌ No rows returned from INSERT query');
+          return sendResponse(500, {
+            success: false,
+            error: 'Failed to create GP - no data returned'
+          });
+        }
 
         const newGP = result.rows[0];
         
         // Decrypt for response
-        const decryptedGP = decryptFields(newGP, USER_ENCRYPTED_FIELDS);
+        let decryptedGP;
+        try {
+          decryptedGP = decryptFields(newGP, USER_ENCRYPTED_FIELDS);
+        } catch (decryptError) {
+          console.error('❌ Error decrypting GP data:', decryptError);
+          // Continue anyway - use encrypted data if decryption fails
+          decryptedGP = newGP;
+        }
 
         // Send password email - wrap in try-catch to prevent email errors from failing the entire operation
         let emailSent = false;
@@ -309,37 +392,45 @@ export const createGP = async (req, res) => {
           console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
         }
 
-        res.status(201).json({
+        sendResponse(201, {
           success: true,
           message: emailSent
             ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
             : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
           data: {
             userId: decryptedGP.id,
-            email: decryptedGP.email, // Decrypted
-            firstName: decryptedGP.first_name,
-            lastName: decryptedGP.last_name,
-            role: decryptedGP.role,
+            email: decryptedGP.email || email, // Use decrypted or fallback to original
+            firstName: decryptedGP.first_name || first_name,
+            lastName: decryptedGP.last_name || last_name,
+            role: decryptedGP.role || 'gp',
             emailSent,
             emailError: emailError || null,
             ...(emailSent ? {} : { tempPassword: tempPassword })
           }
         });
       } catch (error) {
-        await client.query('ROLLBACK');
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('❌ Error during rollback:', rollbackError);
+        }
+        
         console.error('❌ Error creating GP (inner catch):', error);
         console.error('❌ Error details:', {
           message: error.message,
           code: error.code,
+          detail: error.detail,
+          constraint: error.constraint,
           stack: error.stack
         });
+        
         if (error.code === '23505') {
-          res.status(409).json({
+          sendResponse(409, {
             success: false,
             error: 'GP with this email or phone already exists'
           });
         } else {
-          res.status(500).json({
+          sendResponse(500, {
             success: false,
             error: 'Failed to create GP',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -355,7 +446,7 @@ export const createGP = async (req, res) => {
       code: error.code,
       stack: error.stack
     });
-    res.status(500).json({
+    sendResponse(500, {
       success: false,
       error: 'Failed to create GP',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
