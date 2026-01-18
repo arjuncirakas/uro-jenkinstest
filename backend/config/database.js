@@ -151,6 +151,35 @@ export const initializeDatabase = async () => {
         console.log(`⚠️  Role constraint update: ${err.message}`);
       }
 
+      // Ensure email and phone columns are large enough for encrypted data
+      try {
+        const emailColumn = await client.query(`
+          SELECT character_maximum_length 
+          FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'email';
+        `);
+        
+        const phoneColumn = await client.query(`
+          SELECT character_maximum_length 
+          FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'phone';
+        `);
+
+        // Alter email column if it's smaller than 500
+        if (emailColumn.rows.length > 0 && (emailColumn.rows[0].character_maximum_length === null || emailColumn.rows[0].character_maximum_length < 500)) {
+          await client.query('ALTER TABLE users ALTER COLUMN email TYPE VARCHAR(500)');
+          console.log('✅ Increased email column to VARCHAR(500) for encrypted data');
+        }
+
+        // Alter phone column if it's smaller than 500
+        if (phoneColumn.rows.length > 0 && (phoneColumn.rows[0].character_maximum_length === null || phoneColumn.rows[0].character_maximum_length < 500)) {
+          await client.query('ALTER TABLE users ALTER COLUMN phone TYPE VARCHAR(500)');
+          console.log('✅ Increased phone column to VARCHAR(500) for encrypted data');
+        }
+      } catch (err) {
+        console.log(`⚠️  Column size update: ${err.message}`);
+      }
+
     } else {
       // Table doesn't exist, create it with all columns
       console.log('📋 Creating users table with all columns...');

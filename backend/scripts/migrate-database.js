@@ -139,6 +139,60 @@ const migrateDatabase = async () => {
       console.log('✅ Migration 2 already applied');
     }
 
+    // Migration 3: Increase email and phone column sizes for encrypted data
+    const migration3 = '2024-01-02-increase-encrypted-column-sizes';
+    const migration3Exists = await client.query(
+      'SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)',
+      [migration3]
+    );
+
+    if (!migration3Exists.rows[0].exists) {
+      console.log('📋 Applying migration: Increase email and phone column sizes for encrypted data...');
+      
+      try {
+        // Check current column sizes
+        const emailColumn = await client.query(`
+          SELECT character_maximum_length 
+          FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'email';
+        `);
+        
+        const phoneColumn = await client.query(`
+          SELECT character_maximum_length 
+          FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'phone';
+        `);
+
+        // Alter email column if it's smaller than 500
+        if (emailColumn.rows.length > 0 && (emailColumn.rows[0].character_maximum_length === null || emailColumn.rows[0].character_maximum_length < 500)) {
+          await client.query('ALTER TABLE users ALTER COLUMN email TYPE VARCHAR(500)');
+          console.log('  ✅ Increased email column to VARCHAR(500)');
+        } else {
+          console.log('  ✅ Email column already has sufficient size');
+        }
+
+        // Alter phone column if it's smaller than 500
+        if (phoneColumn.rows.length > 0 && (phoneColumn.rows[0].character_maximum_length === null || phoneColumn.rows[0].character_maximum_length < 500)) {
+          await client.query('ALTER TABLE users ALTER COLUMN phone TYPE VARCHAR(500)');
+          console.log('  ✅ Increased phone column to VARCHAR(500)');
+        } else {
+          console.log('  ✅ Phone column already has sufficient size');
+        }
+
+        // Record migration
+        await client.query(
+          'INSERT INTO schema_migrations (version, description) VALUES ($1, $2)',
+          [migration3, 'Increase email and phone column sizes to VARCHAR(500) for encrypted data']
+        );
+        console.log('✅ Migration 3 completed');
+      } catch (err) {
+        console.error('  ❌ Error in migration 3:', err.message);
+        // Don't fail the entire migration, but log the error
+      }
+    } else {
+      console.log('✅ Migration 3 already applied');
+    }
+
     // Create indexes
     console.log('📋 Creating/updating indexes...');
     const indexes = [
