@@ -239,97 +239,128 @@ export const getGPById = async (req, res) => {
 
 // Create new GP
 export const createGP = async (req, res) => {
-  await withDatabaseClient(async (client) => {
-    try {
-      await client.query('BEGIN');
+  try {
+    await withDatabaseClient(async (client) => {
+      try {
+        await client.query('BEGIN');
 
-      // Validate request
-      const validation = validateGPRequest(req, client);
-      if (!validation.isValid) {
-        await client.query('ROLLBACK');
-        return res.status(validation.response.status).json(validation.response.json);
-      }
-
-      const { first_name, last_name, email, phone, organization } = req.body;
-
-      // Check if user already exists
-      const userCheck = await checkUserExists(client, email, phone);
-      if (userCheck.exists) {
-        await client.query('ROLLBACK');
-        return res.status(userCheck.response.status).json(userCheck.response.json);
-      }
-
-      // Generate password and hash
-      const tempPassword = generateSecurePassword();
-      const saltRounds = 12;
-      const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
-
-      // Encrypt email and phone
-      const encryptedEmail = email ? encrypt(email) : null;
-      const encryptedPhone = phone ? encrypt(phone) : null;
-      
-      // Create searchable hashes
-      const emailHash = email ? createSearchableHash(email) : null;
-      const phoneHash = phone ? createSearchableHash(phone) : null;
-
-      // Insert new GP with encrypted data and hashes
-      const result = await client.query(
-        `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified, email_hash, phone_hash) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
-         RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-        [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', true, true, emailHash, phoneHash]
-      );
-
-      const newGP = result.rows[0];
-      
-      // Decrypt for response
-      const decryptedGP = decryptFields(newGP, USER_ENCRYPTED_FIELDS);
-
-      // Send password email
-      const { emailSent, emailError } = await sendPasswordEmailWithLogging(email, first_name, tempPassword);
-
-      await client.query('COMMIT');
-
-      // Log the result
-      if (emailSent) {
-        console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), email sent to ${email}`);
-      } else {
-        console.warn(`⚠️ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), but email failed: ${emailError || 'Unknown error'}`);
-        console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
-      }
-
-      res.status(201).json({
-        success: true,
-        message: emailSent
-          ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
-          : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
-        data: {
-          userId: decryptedGP.id,
-          email: decryptedGP.email, // Decrypted
-          firstName: decryptedGP.first_name,
-          lastName: decryptedGP.last_name,
-          role: decryptedGP.role,
-          emailSent,
-          emailError: emailError || null,
-          ...(emailSent ? {} : { tempPassword: tempPassword })
+        // Validate request
+        const validation = validateGPRequest(req, client);
+        if (!validation.isValid) {
+          await client.query('ROLLBACK');
+          return res.status(validation.response.status).json(validation.response.json);
         }
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Error creating GP:', error);
-      if (error.code === '23505') {
-        res.status(409).json({
-          success: false,
-          error: 'GP with this email or phone already exists'
+
+        const { first_name, last_name, email, phone, organization } = req.body;
+
+        // Check if user already exists
+        const userCheck = await checkUserExists(client, email, phone);
+        if (userCheck.exists) {
+          await client.query('ROLLBACK');
+          return res.status(userCheck.response.status).json(userCheck.response.json);
+        }
+
+        // Generate password and hash
+        const tempPassword = generateSecurePassword();
+        const saltRounds = 12;
+        const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
+
+        // Encrypt email and phone
+        const encryptedEmail = email ? encrypt(email) : null;
+        const encryptedPhone = phone ? encrypt(phone) : null;
+        
+        // Create searchable hashes
+        const emailHash = email ? createSearchableHash(email) : null;
+        const phoneHash = phone ? createSearchableHash(phone) : null;
+
+        // Insert new GP with encrypted data and hashes
+        const result = await client.query(
+          `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified, email_hash, phone_hash) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+           RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
+          [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', true, true, emailHash, phoneHash]
+        );
+
+        const newGP = result.rows[0];
+        
+        // Decrypt for response
+        const decryptedGP = decryptFields(newGP, USER_ENCRYPTED_FIELDS);
+
+        // Send password email - wrap in try-catch to prevent email errors from failing the entire operation
+        let emailSent = false;
+        let emailError = null;
+        try {
+          const emailResult = await sendPasswordEmailWithLogging(email, first_name, tempPassword);
+          emailSent = emailResult.emailSent;
+          emailError = emailResult.emailError;
+        } catch (emailErr) {
+          console.error('❌ Exception during email sending in createGP:', emailErr);
+          emailError = emailErr.message || 'Unknown email error';
+          // Don't throw - allow GP creation to succeed even if email fails
+        }
+
+        await client.query('COMMIT');
+
+        // Log the result
+        if (emailSent) {
+          console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), email sent to ${email}`);
+        } else {
+          console.warn(`⚠️ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), but email failed: ${emailError || 'Unknown error'}`);
+          console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
+        }
+
+        res.status(201).json({
+          success: true,
+          message: emailSent
+            ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
+            : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
+          data: {
+            userId: decryptedGP.id,
+            email: decryptedGP.email, // Decrypted
+            firstName: decryptedGP.first_name,
+            lastName: decryptedGP.last_name,
+            role: decryptedGP.role,
+            emailSent,
+            emailError: emailError || null,
+            ...(emailSent ? {} : { tempPassword: tempPassword })
+          }
         });
-      } else {
-        res.status(500).json({
-          success: false,
-          error: 'Failed to create GP'
+      } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error creating GP (inner catch):', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
         });
+        if (error.code === '23505') {
+          res.status(409).json({
+            success: false,
+            error: 'GP with this email or phone already exists'
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            error: 'Failed to create GP',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+          });
+        }
       }
-    }
-  });
+    });
+  } catch (error) {
+    // Handle database connection errors or other errors from withDatabaseClient
+    console.error('❌ Error creating GP (outer catch - database connection or other):', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create GP',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 };
 
 // Helper function to validate update request
