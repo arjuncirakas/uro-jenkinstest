@@ -33,13 +33,90 @@ export const createUser = async (req, res) => {
       });
     }
 
+    // For urologist or doctor role, ensure Urology department exists and get its ID
+    let urologyDepartmentId = null;
+    if (role === 'urologist' || role === 'doctor') {
+      // Check if Urology department exists
+      const urologyDept = await client.query(`
+        SELECT id, name, is_active
+        FROM departments
+        WHERE LOWER(TRIM(name)) = 'urology'
+        LIMIT 1
+      `);
+      
+      if (urologyDept.rows.length === 0) {
+        // Create Urology department if it doesn't exist
+        // Use ON CONFLICT to prevent race conditions if multiple requests try to create it simultaneously
+        console.log('📋 [createUser] Urology department not found, creating it...');
+        const createDept = await client.query(`
+          INSERT INTO departments (name, description, is_active)
+          VALUES ($1, $2, true)
+          ON CONFLICT (name) DO NOTHING
+          RETURNING id
+        `, ['Urology', 'Urology Department - Specialized care for urological conditions']);
+        
+        // Check if department was created or already existed (due to race condition)
+        if (createDept.rows.length === 0) {
+          // Department was created by another request, fetch it
+          console.log('⚠️ [createUser] Urology department was created by another request, fetching it...');
+          const existingDept = await client.query(`
+            SELECT id, is_active
+            FROM departments
+            WHERE LOWER(TRIM(name)) = 'urology'
+            LIMIT 1
+          `);
+          if (existingDept.rows.length > 0) {
+            urologyDepartmentId = existingDept.rows[0].id;
+            // Ensure it's active
+            if (!existingDept.rows[0].is_active) {
+              await client.query(`
+                UPDATE departments
+                SET is_active = true
+                WHERE id = $1
+              `, [urologyDepartmentId]);
+              console.log('✅ [createUser] Urology department reactivated');
+            }
+            console.log('✅ [createUser] Found existing Urology department with ID:', urologyDepartmentId);
+          }
+        } else {
+          urologyDepartmentId = createDept.rows[0].id;
+          console.log('✅ [createUser] Urology department created with ID:', urologyDepartmentId);
+        }
+      } else {
+        urologyDepartmentId = urologyDept.rows[0].id;
+        // Ensure it's active
+        if (!urologyDept.rows[0].is_active) {
+          await client.query(`
+            UPDATE departments
+            SET is_active = true
+            WHERE id = $1
+          `, [urologyDepartmentId]);
+          console.log('✅ [createUser] Urology department reactivated');
+        }
+        console.log('✅ [createUser] Found Urology department with ID:', urologyDepartmentId);
+      }
+    }
+    
     // Validate department_id is provided when role is doctor
-    if (role === 'doctor' && !department_id) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        message: 'Department is required when role is doctor'
-      });
+    // If not provided, use Urology department ID
+    let finalDepartmentId = department_id;
+    if (role === 'doctor' && !finalDepartmentId) {
+      if (urologyDepartmentId) {
+        finalDepartmentId = urologyDepartmentId;
+        console.log('✅ [createUser] Auto-assigning doctor to Urology department:', finalDepartmentId);
+      } else {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: 'Department is required when role is doctor'
+        });
+      }
+    }
+    
+    // For urologist role, always use Urology department
+    if (role === 'urologist') {
+      finalDepartmentId = urologyDepartmentId;
+      console.log('✅ [createUser] Assigning urologist to Urology department:', finalDepartmentId);
     }
 
     // Check if user already exists
@@ -77,13 +154,14 @@ export const createUser = async (req, res) => {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(tempPassword, saltRounds);
 
-    // If role is doctor, create doctor record first
+    // If role is doctor or urologist, create doctor record first
     let doctorId = null;
     let finalRole = role; // Default to the role from request
     
-    if (role === 'doctor' && department_id) {
+    // Use finalDepartmentId (which is set to Urology for urologist/doctor roles)
+    if ((role === 'doctor' || role === 'urologist') && finalDepartmentId) {
       // Validate department exists
-      const deptResult = await client.query('SELECT id, name FROM departments WHERE id = $1 AND is_active = true', [department_id]);
+      const deptResult = await client.query('SELECT id, name FROM departments WHERE id = $1 AND is_active = true', [finalDepartmentId]);
       if (deptResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({
@@ -95,16 +173,19 @@ export const createUser = async (req, res) => {
       const specialization = deptResult.rows[0].name;
       const departmentName = deptResult.rows[0].name;
 
-      // If department is urology (exact match or starts with "urology" followed by space/end), change role from 'doctor' to 'urologist'
-      // Use word boundary to avoid matching "neurology" which contains "urology"
-      if (departmentName) {
+      // If role is 'doctor' and department is urology, change role to 'urologist'
+      // If role is already 'urologist', keep it as 'urologist'
+      if (role === 'doctor' && departmentName) {
         const deptNameLower = departmentName.toLowerCase().trim();
         // Check if department name is exactly "urology" or starts with "urology" followed by space or end
-        // This prevents matching "neurology" which contains "urology" as a substring
         if (deptNameLower === 'urology' || /^urology(\s|$)/.test(deptNameLower)) {
           finalRole = 'urologist';
           console.log(`[createUser] Department is urology, changing role from 'doctor' to 'urologist'`);
         }
+      } else if (role === 'urologist') {
+        // Ensure urologist role is maintained
+        finalRole = 'urologist';
+        console.log(`[createUser] Role is urologist, maintaining urologist role`);
       }
 
       // Check if doctor already exists with this email
@@ -121,12 +202,12 @@ export const createUser = async (req, res) => {
         });
       }
 
-      // Insert into doctors table
+      // Insert into doctors table - use finalDepartmentId (Urology for urologists)
       const doctorResult = await client.query(`
         INSERT INTO doctors (first_name, last_name, email, phone, department_id, specialization)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
-      `, [firstName, lastName, email, phone, department_id, specialization]);
+      `, [firstName, lastName, email, phone, finalDepartmentId, specialization]);
 
       doctorId = doctorResult.rows[0].id;
     }

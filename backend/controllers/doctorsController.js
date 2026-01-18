@@ -518,9 +518,44 @@ export const deleteDoctor = async (req, res) => {
 
 // Get all departments
 export const getAllDepartments = async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN'); // Start transaction
+    
     const { is_active = true } = req.query;
     
+    // CRITICAL: Ensure Urology department exists - create it if it doesn't
+    const urologyCheck = await client.query(`
+      SELECT id, name, description, is_active
+      FROM departments
+      WHERE LOWER(TRIM(name)) = 'urology'
+      LIMIT 1
+    `);
+    
+    if (urologyCheck.rows.length === 0) {
+      console.log('📋 [getAllDepartments] Urology department not found, creating it...');
+      await client.query(`
+        INSERT INTO departments (name, description, is_active)
+        VALUES ($1, $2, true)
+        ON CONFLICT (name) DO NOTHING
+      `, ['Urology', 'Urology Department - Specialized care for urological conditions']);
+      console.log('✅ [getAllDepartments] Urology department created successfully');
+    } else {
+      // Ensure it's active
+      if (!urologyCheck.rows[0].is_active) {
+        await client.query(`
+          UPDATE departments
+          SET is_active = true
+          WHERE LOWER(TRIM(name)) = 'urology'
+        `);
+        console.log('✅ [getAllDepartments] Urology department reactivated');
+      }
+    }
+    
+    await client.query('COMMIT'); // Commit transaction
+    
+    // Now fetch all departments
     const result = await pool.query(`
       SELECT id, name, description, is_active, created_at, updated_at
       FROM departments
@@ -534,11 +569,14 @@ export const getAllDepartments = async (req, res) => {
       count: result.rows.length
     });
   } catch (error) {
+    await client.query('ROLLBACK'); // Rollback on error
     console.error('Error fetching departments:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch departments'
     });
+  } finally {
+    client.release();
   }
 };
 

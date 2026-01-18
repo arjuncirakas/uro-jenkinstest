@@ -81,12 +81,38 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
     const fetchDepartments = async () => {
       setLoadingDepartments(true);
       try {
+        console.log('📋 [AddUserModal] Fetching departments...');
         const response = await doctorsService.getAllDepartments({ is_active: true });
         if (response.success) {
+          console.log('✅ [AddUserModal] Departments fetched:', response.data);
           setDepartments(response.data);
+          
+          // Verify Urology department exists
+          const urologyDept = response.data.find(d => {
+            const deptName = d.name ? d.name.toLowerCase().trim() : '';
+            return deptName === 'urology';
+          });
+          
+          if (urologyDept) {
+            console.log('✅ [AddUserModal] Urology department found:', urologyDept);
+          } else {
+            console.warn('⚠️ [AddUserModal] Urology department not found in response, but backend should auto-create it');
+            // Backend will auto-create it on next fetch, but we can try fetching again
+            setTimeout(async () => {
+              try {
+                const retryResponse = await doctorsService.getAllDepartments({ is_active: true });
+                if (retryResponse.success) {
+                  setDepartments(retryResponse.data);
+                  console.log('✅ [AddUserModal] Departments refreshed after retry');
+                }
+              } catch (retryErr) {
+                console.error('Error retrying department fetch:', retryErr);
+              }
+            }, 1000);
+          }
         }
       } catch (err) {
-        console.error('Error fetching departments:', err);
+        console.error('❌ [AddUserModal] Error fetching departments:', err);
       } finally {
         setLoadingDepartments(false);
       }
@@ -170,8 +196,8 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         }
         break;
       case 'department_id':
-        if (formDataToValidate.role === 'doctor' && !value) {
-          error = 'Department is required when role is Doctor';
+        if ((formDataToValidate.role === 'doctor' || formDataToValidate.role === 'urologist') && !value) {
+          error = 'Department is required when role is Urologist';
         }
         break;
       default:
@@ -238,12 +264,20 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
     };
 
     if (name === 'role') {
-      if (value === 'doctor') {
-        // Automatically set department to Urology
-        const urologyDept = departments.find(d => d.name.toLowerCase() === 'urology');
+      if (value === 'doctor' || value === 'urologist') {
+        // Automatically set department to Urology for both doctor and urologist roles
+        console.log('🔍 [AddUserModal] Role changed to', value, ', looking for Urology department...');
+        console.log('🔍 [AddUserModal] Available departments:', departments.map(d => ({ id: d.id, name: d.name })));
+        
+        const urologyDept = departments.find(d => {
+          if (!d.name) return false;
+          const deptName = d.name.toLowerCase().trim();
+          return deptName === 'urology' || deptName.startsWith('urology');
+        });
+        
         if (urologyDept) {
           console.log('✅ [AddUserModal] Auto-setting department_id to Urology:', urologyDept.id);
-          updatedFormData.department_id = urologyDept.id;
+          updatedFormData.department_id = String(urologyDept.id);
           // Clear any existing department_id error
           setErrors(prev => {
             const newErrors = { ...prev };
@@ -251,8 +285,9 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
             return newErrors;
           });
         } else {
-          console.warn('⚠️ [AddUserModal] Urology department not found when selecting doctor role');
-          console.warn('⚠️ [AddUserModal] Available departments:', departments.map(d => d.name));
+          console.warn('⚠️ [AddUserModal] Urology department not found when selecting', value, 'role');
+          console.warn('⚠️ [AddUserModal] Available departments:', departments.map(d => ({ id: d.id, name: d.name })));
+          // Don't set error here - we'll handle it on submit (backend will auto-create)
         }
       } else {
         updatedFormData.department_id = '';
@@ -354,11 +389,11 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
     setShowSuccessModal(false);
     setErrorMessage('');
 
-    // CRITICAL: Set department_id BEFORE validation if role is 'doctor' (Urologist)
+    // CRITICAL: Set department_id BEFORE validation if role is 'doctor' or 'urologist' (Urologist)
     let updatedFormData = { ...formData };
-    if (formData.role === 'doctor' && !formData.department_id) {
-      console.warn('⚠️ [AddUserModal] Role is doctor but department_id is missing, attempting to set it...');
-      
+    
+    // Always ensure department_id is set for doctor or urologist role (both map to Urologist in UI)
+    if (updatedFormData.role === 'doctor' || updatedFormData.role === 'urologist') {
       // Check if departments are still loading
       if (loadingDepartments) {
         console.warn('⚠️ [AddUserModal] Departments are still loading, waiting...');
@@ -375,22 +410,16 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         return;
       }
       
+      // Find Urology department - try multiple name variations
       const urologyDept = departments.find(d => {
-        const deptName = d.name ? d.name.toLowerCase().trim() : '';
-        return deptName === 'urology';
+        if (!d.name) return false;
+        const deptName = d.name.toLowerCase().trim();
+        return deptName === 'urology' || deptName.startsWith('urology');
       });
       
       if (urologyDept) {
         console.log('✅ [AddUserModal] Found Urology department, setting department_id:', urologyDept.id);
-        updatedFormData.department_id = urologyDept.id;
-        // Update form state immediately
-        setFormData(updatedFormData);
-        // Clear any existing department_id error
-        setErrors(prev => {
-          const newErrors = { ...prev };
-          delete newErrors.department_id;
-          return newErrors;
-        });
+        updatedFormData.department_id = String(urologyDept.id); // Ensure it's a string for consistency
       } else {
         console.error('❌ [AddUserModal] Urology department not found in departments list');
         console.error('❌ [AddUserModal] Departments available:', departments.map(d => ({ id: d.id, name: d.name })));
@@ -400,12 +429,25 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
       }
     }
 
-    // Validate form with updated data
+    // Update form state with department_id if it was set
+    if (updatedFormData.department_id !== formData.department_id) {
+      setFormData(updatedFormData);
+      // Clear any existing department_id error
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.department_id;
+        return newErrors;
+      });
+    }
+
+    // Validate form with updated data (use updatedFormData, not formData)
+    console.log('🔍 [AddUserModal] Validating form with data:', updatedFormData);
     const validationErrors = {};
     Object.keys(updatedFormData).forEach(key => {
       const error = validateField(key, updatedFormData[key], updatedFormData, true);
       if (error) {
         validationErrors[key] = error;
+        console.warn(`⚠️ [AddUserModal] Validation error for ${key}:`, error);
       }
     });
 
@@ -415,8 +457,18 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
       setErrors(validationErrors);
       return;
     }
+    
+    console.log('✅ [AddUserModal] Form validation passed, proceeding with API call');
 
     try {
+      // Final check: Ensure department_id is set for doctor/urologist role
+      if ((updatedFormData.role === 'doctor' || updatedFormData.role === 'urologist') && !updatedFormData.department_id) {
+        console.error('❌ [AddUserModal] CRITICAL: Role is', updatedFormData.role, 'but department_id is still missing after all checks!');
+        setErrorMessage('Unable to set department. Please refresh the page and try again.');
+        setShowErrorModal(true);
+        return;
+      }
+
       // Prepare data for submission - sanitize and trim name fields
       const submitData = {
         ...updatedFormData,
@@ -424,14 +476,25 @@ const AddUserModal = ({ isOpen, onClose, onSuccess }) => {
         firstName: sanitizeInput(updatedFormData.firstName.trim(), { preserveWhitespace: true }),
         lastName: sanitizeInput(updatedFormData.lastName.trim(), { preserveWhitespace: true }),
         organization: sanitizeInput(updatedFormData.organization.trim(), { preserveWhitespace: true }),
-        department_id: updatedFormData.role === 'doctor' && updatedFormData.department_id
-          ? parseInt(updatedFormData.department_id, 10)
+        department_id: (updatedFormData.role === 'doctor' || updatedFormData.role === 'urologist') && updatedFormData.department_id
+          ? parseInt(String(updatedFormData.department_id), 10)
           : undefined
       };
+
+      // Final validation: Ensure department_id is a valid number for doctor/urologist role
+      if (submitData.role === 'doctor' || submitData.role === 'urologist') {
+        if (!submitData.department_id || isNaN(submitData.department_id)) {
+          console.error('❌ [AddUserModal] CRITICAL: department_id is invalid:', submitData.department_id);
+          setErrorMessage('Invalid department ID. Please refresh the page and try again.');
+          setShowErrorModal(true);
+          return;
+        }
+      }
 
       console.log('📤 [AddUserModal] Submitting data:', submitData);
       console.log('📤 [AddUserModal] Role:', submitData.role);
       console.log('📤 [AddUserModal] Department ID:', submitData.department_id);
+      console.log('📤 [AddUserModal] Department ID type:', typeof submitData.department_id);
 
       const result = await dispatch(createUser(submitData));
       
