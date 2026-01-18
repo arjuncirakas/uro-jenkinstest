@@ -820,7 +820,8 @@ export const deleteUser = async (req, res) => {
           { query: 'DELETE FROM active_sessions WHERE user_id = $1', name: 'active_sessions' },
           { query: 'DELETE FROM otp_verifications WHERE user_id = $1', name: 'otp_verifications' },
           { query: 'DELETE FROM password_reset_tokens WHERE user_id = $1', name: 'password_reset_tokens' },
-          { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' }
+          { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' },
+          { query: 'DELETE FROM mdt_team_members WHERE user_id = $1', name: 'mdt_team_members' }
         ];
         
         for (const { query, name } of cleanupQueries) {
@@ -933,7 +934,8 @@ export const deleteUser = async (req, res) => {
         { query: 'DELETE FROM active_sessions WHERE user_id = $1', name: 'active_sessions' },
         { query: 'DELETE FROM otp_verifications WHERE user_id = $1', name: 'otp_verifications' },
         { query: 'DELETE FROM password_reset_tokens WHERE user_id = $1', name: 'password_reset_tokens' },
-        { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' }
+        { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' },
+        { query: 'DELETE FROM mdt_team_members WHERE user_id = $1', name: 'mdt_team_members' }
       ];
       
       for (const { query, name } of cleanupQueries) {
@@ -978,29 +980,37 @@ export const deleteUser = async (req, res) => {
     
     // Check for foreign key constraint errors
     if (error.code === '23503') {
+      const constraintInfo = error.detail || error.message || 'Unknown constraint';
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete user due to existing references. Please run the database migration script first: npm run fix-user-constraints',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        message: 'Cannot delete user due to existing references in the database. Please ensure all related records are cleaned up first.',
+        error: process.env.NODE_ENV === 'development' ? constraintInfo : undefined
       });
     }
     
     // Check for other database errors
     if (error.code && error.code.startsWith('23')) {
+      const constraintInfo = error.detail || error.message || 'Unknown constraint violation';
       return res.status(400).json({
         success: false,
         message: 'Database constraint violation. Cannot delete user.',
-        error: process.env.NODE_ENV === 'development' ? `${error.message} (Code: ${error.code})` : undefined
+        error: process.env.NODE_ENV === 'development' ? constraintInfo : undefined
       });
     }
+    
+    // Provide a more informative error message
+    const errorMessage = error.message || 'Unknown error occurred';
+    const errorCode = error.code || 'N/A';
     
     res.status(500).json({
       success: false,
       message: 'Failed to delete user. Please try again or contact support if the issue persists.',
-      error: process.env.NODE_ENV === 'development' ? `${error.message} (Code: ${error.code || 'N/A'})` : undefined
+      error: process.env.NODE_ENV === 'development' ? `${errorMessage} (Code: ${errorCode})` : undefined
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 
