@@ -836,15 +836,37 @@ export const deleteUser = async (req, res) => {
           { query: 'UPDATE discharge_summaries SET updated_by = NULL WHERE updated_by = $1', name: 'discharge_summaries.updated_by' }
         ];
         
+        // Execute cleanup queries with savepoints to prevent transaction abortion
         for (const { query, name } of cleanupQueries) {
+          const savepointName = `sp_${name.replace(/[^a-zA-Z0-9]/g, '_')}_${userId}`;
           try {
-            const result = await client.query(query, [userId]);
-            if (result.rowCount > 0) {
-              console.log(`✅ Cleaned up ${result.rowCount} record(s) from ${name} for user ${userId}`);
+            // Create a savepoint for this cleanup operation
+            // If this fails, the transaction is already aborted
+            await client.query(`SAVEPOINT ${savepointName}`);
+            
+            try {
+              const result = await client.query(query, [userId]);
+              if (result.rowCount > 0) {
+                console.log(`✅ Cleaned up ${result.rowCount} record(s) from ${name} for user ${userId}`);
+              }
+              
+              // Release the savepoint on success
+              await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+            } catch (queryError) {
+              // Rollback to savepoint to continue with other cleanup operations
+              await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+              console.warn(`Warning: Could not clean up ${name} for user ${userId}:`, queryError.message);
+              // Continue with next cleanup query
             }
-          } catch (cleanupError) {
-            // Log but don't fail - some tables might not exist or have CASCADE constraints
-            console.warn(`Warning: Could not clean up ${name} for user ${userId}:`, cleanupError.message);
+          } catch (savepointError) {
+            // If we can't even create a savepoint, the transaction is aborted
+            // Check if it's a transaction abort error
+            if (savepointError.message && savepointError.message.includes('aborted')) {
+              console.error(`Transaction aborted, cannot create savepoint for ${name}. Rolling back entire transaction.`);
+              throw savepointError;
+            }
+            // For other savepoint errors, log and continue (might be a naming issue)
+            console.warn(`Could not create savepoint for ${name}:`, savepointError.message);
           }
         }
       }
@@ -973,21 +995,46 @@ export const deleteUser = async (req, res) => {
         { query: 'UPDATE security_incidents SET created_by = NULL WHERE created_by = $1', name: 'security_incidents.created_by' }
       ];
       
+      // Execute cleanup queries with savepoints to prevent transaction abortion
       for (const { query, name } of cleanupQueries) {
+        const savepointName = `sp_${name.replace(/[^a-zA-Z0-9]/g, '_')}_${id}`;
         try {
-          const result = await client.query(query, [id]);
-          if (result.rowCount > 0) {
-            console.log(`✅ Cleaned up ${result.rowCount} record(s) from ${name} for user ${id}`);
+          // Create a savepoint for this cleanup operation
+          // If this fails, the transaction is already aborted
+          await client.query(`SAVEPOINT ${savepointName}`);
+          
+          try {
+            const result = await client.query(query, [id]);
+            if (result.rowCount > 0) {
+              console.log(`✅ Cleaned up ${result.rowCount} record(s) from ${name} for user ${id}`);
+            }
+            
+            // Release the savepoint on success
+            await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+          } catch (queryError) {
+            // Rollback to savepoint to continue with other cleanup operations
+            await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+            console.warn(`Warning: Could not clean up ${name} for user ${id}:`, queryError.message);
+            // Continue with next cleanup query
           }
-        } catch (cleanupError) {
-          // Log but don't fail - some tables might not exist or have CASCADE constraints
-          console.warn(`Warning: Could not clean up ${name} for user ${id}:`, cleanupError.message);
+        } catch (savepointError) {
+          // If we can't even create a savepoint, the transaction is aborted
+          // Check if it's a transaction abort error
+          if (savepointError.message && savepointError.message.includes('aborted')) {
+            console.error(`Transaction aborted, cannot create savepoint for ${name}. Rolling back entire transaction.`);
+            throw savepointError;
+          }
+          // For other savepoint errors, log and continue (might be a naming issue)
+          console.warn(`Could not create savepoint for ${name}:`, savepointError.message);
         }
       }
       
       // Before deleting, check for any remaining foreign key references
       // This helps identify constraints that might not have been cleaned up
+      // Use a savepoint to ensure this doesn't abort the transaction if it fails
+      const fkCheckSavepoint = `sp_fk_check_${id}`;
       try {
+        await client.query(`SAVEPOINT ${fkCheckSavepoint}`);
         const fkCheck = await client.query(`
           SELECT 
             tc.table_name, 
@@ -1013,9 +1060,15 @@ export const deleteUser = async (req, res) => {
             console.log(`  - ${fk.table_name}.${fk.column_name} (constraint: ${fk.constraint_name})`);
           });
         }
+        await client.query(`RELEASE SAVEPOINT ${fkCheckSavepoint}`);
       } catch (fkCheckError) {
-        // Non-critical - just for logging
-        console.warn('Could not check foreign key constraints:', fkCheckError.message);
+        // Rollback to savepoint and continue - this is non-critical
+        try {
+          await client.query(`ROLLBACK TO SAVEPOINT ${fkCheckSavepoint}`);
+          console.warn('Could not check foreign key constraints:', fkCheckError.message);
+        } catch (rollbackError) {
+          console.warn('Could not rollback FK check savepoint:', rollbackError.message);
+        }
       }
       
       // Delete user (foreign keys with SET NULL will preserve patient records)
