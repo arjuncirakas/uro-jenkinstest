@@ -647,6 +647,102 @@ export const addPatient = async (req, res) => {
     // Format date_of_birth for response (use decrypted value or fallback to formatted input)
     const responseDateOfBirth = decryptedPatient.date_of_birth || formattedDateOfBirth;
 
+    // Create clinical note summary with Medical Information, PSA Information, and Exam & Prior Tests
+    try {
+      // Get user details for author information
+      const userQuery = await client.query(
+        'SELECT first_name, last_name FROM users WHERE id = $1',
+        [req.user.id]
+      );
+
+      const authorName = userQuery.rows.length > 0
+        ? `${userQuery.rows[0].first_name} ${userQuery.rows[0].last_name}`
+        : 'System';
+
+      // Build clinical note summary
+      const noteSections = [];
+
+      // Medical Information Section
+      const medicalInfoSections = [];
+      if (medicalHistory && medicalHistory.trim()) {
+        medicalInfoSections.push(`Medical History: ${medicalHistory.trim()}`);
+      }
+      if (currentMedications && currentMedications.trim()) {
+        medicalInfoSections.push(`Current Medications: ${currentMedications.trim()}`);
+      }
+      if (allergies && allergies.trim()) {
+        medicalInfoSections.push(`Allergies: ${allergies.trim()}`);
+      }
+      if (socialHistory && socialHistory.trim()) {
+        medicalInfoSections.push(`Social History: ${socialHistory.trim()}`);
+      }
+      if (familyHistory && familyHistory.trim()) {
+        medicalInfoSections.push(`Family History: ${familyHistory.trim()}`);
+      }
+      if (Array.isArray(comorbidities) && comorbidities.length > 0) {
+        medicalInfoSections.push(`Comorbidities: ${comorbidities.join(', ')}`);
+      }
+
+      if (medicalInfoSections.length > 0) {
+        noteSections.push('=== Medical Information ===');
+        noteSections.push(...medicalInfoSections);
+        noteSections.push(''); // Empty line for spacing
+      }
+
+      // PSA Information Section
+      if (initialPSA) {
+        noteSections.push('=== PSA Information ===');
+        noteSections.push(`Initial PSA: ${initialPSA}`);
+        if (formattedInitialPSADate) {
+          noteSections.push(`Initial PSA Date: ${formattedInitialPSADate}`);
+        }
+        noteSections.push(''); // Empty line for spacing
+      }
+
+      // Exam & Prior Tests Section
+      const examSections = [];
+      if (dreDone !== undefined && dreDone !== null) {
+        examSections.push(`DRE Performed: ${dreDone ? 'Yes' : 'No'}`);
+        if (dreDone && dreFindings && dreFindings.trim()) {
+          examSections.push(`DRE Findings: ${dreFindings.trim()}`);
+        }
+      }
+      if (priorBiopsy && priorBiopsy !== 'no') {
+        examSections.push(`Prior Biopsy: ${priorBiopsy}`);
+        if (formattedPriorBiopsyDate) {
+          examSections.push(`Prior Biopsy Date: ${formattedPriorBiopsyDate}`);
+        }
+        if (gleasonScore && gleasonScore.trim()) {
+          examSections.push(`Gleason Score: ${gleasonScore.trim()}`);
+        }
+      } else if (priorBiopsy === 'no') {
+        examSections.push('Prior Biopsy: No');
+      }
+
+      if (examSections.length > 0) {
+        noteSections.push('=== Exam & Prior Tests ===');
+        noteSections.push(...examSections);
+      }
+
+      // Only create note if there's content
+      if (noteSections.length > 0) {
+        const noteContent = noteSections.join('\n').trim();
+        
+        // Insert the clinical note
+        await client.query(
+          `INSERT INTO patient_notes (
+            patient_id, note_content, note_type, author_id, author_name, author_role
+          ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [newPatient.id, noteContent, 'clinical', req.user.id, authorName, req.user.role]
+        );
+
+        console.log(`[addPatient] Created clinical note summary for patient ${newPatient.id}`);
+      }
+    } catch (noteError) {
+      // Log error but don't fail patient creation if note creation fails
+      console.error('[addPatient] Error creating clinical note summary:', noteError);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Patient added successfully',

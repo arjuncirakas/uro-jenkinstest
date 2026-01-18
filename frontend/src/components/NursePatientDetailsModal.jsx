@@ -329,6 +329,88 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     );
   };
 
+  // Render structured clinical note with proper formatting
+  const renderStructuredClinicalNote = (content) => {
+    const lines = content.split('\n');
+    const sections = [];
+    let currentSection = null;
+    let currentSectionItems = [];
+
+    lines.forEach((line, index) => {
+      const trimmedLine = line.trim();
+      
+      // Check for section headers
+      if (trimmedLine.startsWith('===') && trimmedLine.endsWith('===')) {
+        // Save previous section if exists
+        if (currentSection) {
+          sections.push({
+            title: currentSection,
+            items: currentSectionItems
+          });
+        }
+        // Start new section
+        currentSection = trimmedLine.replace(/===/g, '').trim();
+        currentSectionItems = [];
+      } else if (trimmedLine && currentSection) {
+        // Add item to current section
+        currentSectionItems.push(trimmedLine);
+      } else if (!trimmedLine && currentSectionItems.length > 0) {
+        // Empty line - keep it for spacing but don't add as item
+      }
+    });
+
+    // Add last section
+    if (currentSection && currentSectionItems.length > 0) {
+      sections.push({
+        title: currentSection,
+        items: currentSectionItems
+      });
+    }
+
+    // If no sections found, return plain text
+    if (sections.length === 0) {
+      return <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-line">{content}</p>;
+    }
+
+    return (
+      <div className="space-y-4">
+        {sections.map((section, sectionIndex) => (
+          <div key={sectionIndex} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <h4 className="text-sm font-semibold text-gray-900 mb-3 pb-2 border-b border-gray-300">
+              {section.title}
+            </h4>
+            <div className="space-y-2">
+              {section.items.map((item, itemIndex) => {
+                // Parse key-value pairs
+                const colonIndex = item.indexOf(':');
+                if (colonIndex > 0) {
+                  const key = item.substring(0, colonIndex).trim();
+                  const value = item.substring(colonIndex + 1).trim();
+                  return (
+                    <div key={itemIndex} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
+                      <span className="text-sm font-medium text-gray-700 min-w-[140px] sm:min-w-[180px]">
+                        {key}:
+                      </span>
+                      <span className="text-sm text-gray-900 flex-1">
+                        {value || <span className="text-gray-400 italic">Not specified</span>}
+                      </span>
+                    </div>
+                  );
+                }
+                // If no colon, just display as is
+                return (
+                  <div key={itemIndex} className="text-sm text-gray-900">
+                    {item}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   // Helper function to render pathway transfer notes with structured formatting
   const renderPathwayTransferNote = (content, noteType = null) => {
     const lines = content.split('\n').filter(line => line.trim());
@@ -344,6 +426,11 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     // Check if this is a clinical investigation note
     const isClinicalInvestigation = content.includes('CLINICAL INVESTIGATION') || noteType === 'clinical_investigation';
 
+    // Check if this is a structured clinical note (with === sections)
+    const isStructuredNote = content.includes('=== Medical Information ===') || 
+                             content.includes('=== PSA Information ===') || 
+                             content.includes('=== Exam & Prior Tests ===');
+
     // Check if this is a pathway transfer note (either has PATHWAY TRANSFER header or is pathway_transfer type)
     const isPathwayTransferNote = content.includes('PATHWAY TRANSFER') || noteType === 'pathway_transfer';
 
@@ -357,8 +444,12 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
       return renderInvestigationRequestNote(content, 'clinical_investigation');
     }
 
+    if (isStructuredNote) {
+      return renderStructuredClinicalNote(content);
+    }
+
     if (!isPathwayTransferNote) {
-      return <p className="text-gray-700 leading-relaxed text-sm">{content}</p>;
+      return <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-line">{content}</p>;
     }
 
     const data = {};
