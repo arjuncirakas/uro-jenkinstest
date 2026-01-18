@@ -820,16 +820,31 @@ export const deleteUser = async (req, res) => {
           { query: 'DELETE FROM active_sessions WHERE user_id = $1', name: 'active_sessions' },
           { query: 'DELETE FROM otp_verifications WHERE user_id = $1', name: 'otp_verifications' },
           { query: 'DELETE FROM password_reset_tokens WHERE user_id = $1', name: 'password_reset_tokens' },
+          { query: 'DELETE FROM password_history WHERE user_id = $1', name: 'password_history' },
           { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' },
-          { query: 'DELETE FROM mdt_team_members WHERE user_id = $1', name: 'mdt_team_members' }
+          { query: 'DELETE FROM mdt_team_members WHERE user_id = $1', name: 'mdt_team_members' },
+          { query: 'UPDATE patients SET created_by = NULL WHERE created_by = $1', name: 'patients.created_by' },
+          { query: 'UPDATE patients SET referred_by_gp_id = NULL WHERE referred_by_gp_id = $1', name: 'patients.referred_by_gp_id' },
+          { query: 'UPDATE patient_notes SET author_id = NULL WHERE author_id = $1', name: 'patient_notes.author_id' },
+          { query: 'UPDATE investigation_results SET author_id = NULL WHERE author_id = $1', name: 'investigation_results.author_id' },
+          { query: 'UPDATE appointments SET urologist_id = NULL WHERE urologist_id = $1', name: 'appointments.urologist_id' },
+          { query: 'UPDATE appointments SET created_by = NULL WHERE created_by = $1', name: 'appointments.created_by' },
+          { query: 'UPDATE investigation_bookings SET created_by = NULL WHERE created_by = $1', name: 'investigation_bookings.created_by' },
+          { query: 'UPDATE mdt_meetings SET created_by = NULL WHERE created_by = $1', name: 'mdt_meetings.created_by' },
+          { query: 'UPDATE discharge_summaries SET consultant_id = NULL WHERE consultant_id = $1', name: 'discharge_summaries.consultant_id' },
+          { query: 'UPDATE discharge_summaries SET created_by = NULL WHERE created_by = $1', name: 'discharge_summaries.created_by' },
+          { query: 'UPDATE discharge_summaries SET updated_by = NULL WHERE updated_by = $1', name: 'discharge_summaries.updated_by' }
         ];
         
         for (const { query, name } of cleanupQueries) {
           try {
-            await client.query(query, [userId]);
+            const result = await client.query(query, [userId]);
+            if (result.rowCount > 0) {
+              console.log(`✅ Cleaned up ${result.rowCount} record(s) from ${name} for user ${userId}`);
+            }
           } catch (cleanupError) {
             // Log but don't fail - some tables might not exist or have CASCADE constraints
-            console.warn(`Warning: Could not delete from ${name} for user ${userId}:`, cleanupError.message);
+            console.warn(`Warning: Could not clean up ${name} for user ${userId}:`, cleanupError.message);
           }
         }
       }
@@ -929,22 +944,78 @@ export const deleteUser = async (req, res) => {
       // Clean up related records before deleting user
       // Use individual try-catch blocks to handle cases where tables might not exist
       // or have different constraints
+      // This comprehensive cleanup handles all possible foreign key references
       const cleanupQueries = [
         { query: 'DELETE FROM refresh_tokens WHERE user_id = $1', name: 'refresh_tokens' },
         { query: 'DELETE FROM active_sessions WHERE user_id = $1', name: 'active_sessions' },
         { query: 'DELETE FROM otp_verifications WHERE user_id = $1', name: 'otp_verifications' },
         { query: 'DELETE FROM password_reset_tokens WHERE user_id = $1', name: 'password_reset_tokens' },
+        { query: 'DELETE FROM password_history WHERE user_id = $1', name: 'password_history' },
         { query: 'DELETE FROM notifications WHERE user_id = $1', name: 'notifications' },
-        { query: 'DELETE FROM mdt_team_members WHERE user_id = $1', name: 'mdt_team_members' }
+        { query: 'DELETE FROM mdt_team_members WHERE user_id = $1', name: 'mdt_team_members' },
+        { query: 'UPDATE patients SET created_by = NULL WHERE created_by = $1', name: 'patients.created_by' },
+        { query: 'UPDATE patients SET referred_by_gp_id = NULL WHERE referred_by_gp_id = $1', name: 'patients.referred_by_gp_id' },
+        { query: 'UPDATE patient_notes SET author_id = NULL WHERE author_id = $1', name: 'patient_notes.author_id' },
+        { query: 'UPDATE investigation_results SET author_id = NULL WHERE author_id = $1', name: 'investigation_results.author_id' },
+        { query: 'UPDATE appointments SET urologist_id = NULL WHERE urologist_id = $1', name: 'appointments.urologist_id' },
+        { query: 'UPDATE appointments SET created_by = NULL WHERE created_by = $1', name: 'appointments.created_by' },
+        { query: 'UPDATE investigation_bookings SET created_by = NULL WHERE created_by = $1', name: 'investigation_bookings.created_by' },
+        { query: 'UPDATE mdt_meetings SET created_by = NULL WHERE created_by = $1', name: 'mdt_meetings.created_by' },
+        { query: 'UPDATE discharge_summaries SET consultant_id = NULL WHERE consultant_id = $1', name: 'discharge_summaries.consultant_id' },
+        { query: 'UPDATE discharge_summaries SET created_by = NULL WHERE created_by = $1', name: 'discharge_summaries.created_by' },
+        { query: 'UPDATE discharge_summaries SET updated_by = NULL WHERE updated_by = $1', name: 'discharge_summaries.updated_by' },
+        { query: 'UPDATE clinical_guideline_checks SET checked_by = NULL WHERE checked_by = $1', name: 'clinical_guideline_checks.checked_by' },
+        { query: 'UPDATE pathway_recommendations SET validated_by = NULL WHERE validated_by = $1', name: 'pathway_recommendations.validated_by' },
+        { query: 'UPDATE behavioral_anomalies SET reviewed_by = NULL WHERE reviewed_by = $1', name: 'behavioral_anomalies.reviewed_by' },
+        { query: 'UPDATE breach_incidents SET reported_by = NULL WHERE reported_by = $1', name: 'breach_incidents.reported_by' },
+        { query: 'UPDATE breach_notifications SET sent_by = NULL WHERE sent_by = $1', name: 'breach_notifications.sent_by' },
+        { query: 'UPDATE breach_response_actions SET taken_by = NULL WHERE taken_by = $1', name: 'breach_response_actions.taken_by' },
+        { query: 'UPDATE security_incidents SET created_by = NULL WHERE created_by = $1', name: 'security_incidents.created_by' }
       ];
       
       for (const { query, name } of cleanupQueries) {
         try {
-          await client.query(query, [id]);
+          const result = await client.query(query, [id]);
+          if (result.rowCount > 0) {
+            console.log(`✅ Cleaned up ${result.rowCount} record(s) from ${name} for user ${id}`);
+          }
         } catch (cleanupError) {
           // Log but don't fail - some tables might not exist or have CASCADE constraints
-          console.warn(`Warning: Could not delete from ${name} for user ${id}:`, cleanupError.message);
+          console.warn(`Warning: Could not clean up ${name} for user ${id}:`, cleanupError.message);
         }
+      }
+      
+      // Before deleting, check for any remaining foreign key references
+      // This helps identify constraints that might not have been cleaned up
+      try {
+        const fkCheck = await client.query(`
+          SELECT 
+            tc.table_name, 
+            kcu.column_name,
+            tc.constraint_name
+          FROM information_schema.table_constraints AS tc
+          JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+          JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+            AND ccu.table_schema = tc.table_schema
+          WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND ccu.table_name = 'users'
+            AND ccu.column_name = 'id'
+            AND tc.table_schema = 'public'
+        `);
+        
+        if (fkCheck.rows.length > 0) {
+          console.log(`📋 Found ${fkCheck.rows.length} foreign key constraint(s) referencing users.id`);
+          // Log all constraints for debugging
+          fkCheck.rows.forEach(fk => {
+            console.log(`  - ${fk.table_name}.${fk.column_name} (constraint: ${fk.constraint_name})`);
+          });
+        }
+      } catch (fkCheckError) {
+        // Non-critical - just for logging
+        console.warn('Could not check foreign key constraints:', fkCheckError.message);
       }
       
       // Delete user (foreign keys with SET NULL will preserve patient records)
@@ -981,20 +1052,38 @@ export const deleteUser = async (req, res) => {
     // Check for foreign key constraint errors
     if (error.code === '23503') {
       const constraintInfo = error.detail || error.message || 'Unknown constraint';
+      // Log full error details for debugging in production
+      console.error('Foreign key constraint violation details:', {
+        code: error.code,
+        detail: error.detail,
+        message: error.message,
+        constraint: error.constraint,
+        table: error.table,
+        schema: error.schema
+      });
       return res.status(400).json({
         success: false,
         message: 'Cannot delete user due to existing references in the database. Please ensure all related records are cleaned up first.',
-        error: process.env.NODE_ENV === 'development' ? constraintInfo : undefined
+        error: error.detail || error.message || 'Foreign key constraint violation'
       });
     }
     
     // Check for other database errors
     if (error.code && error.code.startsWith('23')) {
       const constraintInfo = error.detail || error.message || 'Unknown constraint violation';
+      // Log full error details for debugging in production
+      console.error('Database constraint violation details:', {
+        code: error.code,
+        detail: error.detail,
+        message: error.message,
+        constraint: error.constraint,
+        table: error.table,
+        schema: error.schema
+      });
       return res.status(400).json({
         success: false,
         message: 'Database constraint violation. Cannot delete user.',
-        error: process.env.NODE_ENV === 'development' ? constraintInfo : undefined
+        error: error.detail || error.message || 'Database constraint violation'
       });
     }
     
@@ -1002,10 +1091,21 @@ export const deleteUser = async (req, res) => {
     const errorMessage = error.message || 'Unknown error occurred';
     const errorCode = error.code || 'N/A';
     
+    // Log full error for debugging in production
+    console.error('Delete user error details:', {
+      code: error.code,
+      message: error.message,
+      detail: error.detail,
+      constraint: error.constraint,
+      table: error.table,
+      schema: error.schema,
+      stack: error.stack
+    });
+    
     res.status(500).json({
       success: false,
       message: 'Failed to delete user. Please try again or contact support if the issue persists.',
-      error: process.env.NODE_ENV === 'development' ? `${errorMessage} (Code: ${errorCode})` : undefined
+      error: error.message || 'Internal server error'
     });
   } finally {
     if (client) {
