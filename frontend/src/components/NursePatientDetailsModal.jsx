@@ -32,6 +32,7 @@ import { createRequestFromMatchOrTest as createRequestFromMatchOrTestHelper, cre
 import EditPatientModal from './EditPatientModal';
 import { calculatePSAVelocity } from '../utils/psaVelocity';
 import { getPatientPipelineStage } from '../utils/patientPipeline';
+import AppointmentBookingSection from './AppointmentBookingSection';
 
 const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }) => {
   const [activeTab, setActiveTab] = useState('clinicalNotes');
@@ -689,15 +690,100 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         console.log('✅ NursePatientDetailsModal: Fetched full patient details:', result.data);
         console.log('📋 Care Pathway from API:', result.data.carePathway || result.data.care_pathway);
 
-        // Merge with original patient data to preserve carePathway if API doesn't return it
+        // Fetch appointments to get the next appointment data
+        let nextAppointmentData = {
+          next_appointment_date: patient.next_appointment_date || patient.nextAppointmentDate,
+          nextAppointmentDate: patient.nextAppointmentDate || patient.next_appointment_date,
+          next_appointment_time: patient.next_appointment_time || patient.nextAppointmentTime,
+          nextAppointmentTime: patient.nextAppointmentTime || patient.next_appointment_time,
+          next_appointment_type: patient.next_appointment_type || patient.nextAppointmentType,
+          nextAppointmentType: patient.nextAppointmentType || patient.next_appointment_type,
+          next_appointment_urologist: patient.next_appointment_urologist || patient.nextAppointmentUrologist,
+          nextAppointmentUrologist: patient.nextAppointmentUrologist || patient.next_appointment_urologist,
+          next_appointment_id: patient.next_appointment_id || patient.nextAppointmentId,
+          nextAppointmentId: patient.nextAppointmentId || patient.next_appointment_id
+        };
+
+        // Try to fetch appointments to get the latest appointment data
+        try {
+          const appointmentsResult = await bookingService.getPatientAppointments(patient.id);
+          if (appointmentsResult.success && appointmentsResult.data) {
+            const appointments = Array.isArray(appointmentsResult.data) 
+              ? appointmentsResult.data 
+              : (appointmentsResult.data.appointments || []);
+            
+            // Also fetch investigation bookings
+            const investigationsResult = await bookingService.getPatientInvestigationBookings(patient.id);
+            let allAppointments = [...appointments];
+            if (investigationsResult.success && investigationsResult.data) {
+              const investigations = Array.isArray(investigationsResult.data)
+                ? investigationsResult.data
+                : (investigationsResult.data.bookings || []);
+              // Transform investigation bookings to match appointment format
+              const transformedInvestigations = investigations.map(inv => ({
+                ...inv,
+                appointment_date: inv.scheduled_date || inv.scheduledDate,
+                appointment_time: inv.scheduled_time || inv.scheduledTime,
+                appointment_type: 'investigation',
+                urologist_name: inv.investigation_name || inv.investigationName
+              }));
+              allAppointments = [...allAppointments, ...transformedInvestigations];
+            }
+
+            // Find the next upcoming appointment (investigation or urologist)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const upcomingAppointments = allAppointments
+              .filter(apt => {
+                const aptDate = new Date(apt.appointment_date || apt.scheduled_date || apt.appointmentDate || apt.scheduledDate);
+                aptDate.setHours(0, 0, 0, 0);
+                const status = apt.status || '';
+                return aptDate >= today && (status === 'scheduled' || status === 'confirmed');
+              })
+              .sort((a, b) => {
+                const dateA = new Date(a.appointment_date || a.scheduled_date || a.appointmentDate || a.scheduledDate);
+                const dateB = new Date(b.appointment_date || b.scheduled_date || b.appointmentDate || b.scheduledDate);
+                return dateA - dateB;
+              });
+
+            if (upcomingAppointments.length > 0) {
+              const nextApt = upcomingAppointments[0];
+              nextAppointmentData = {
+                next_appointment_date: nextApt.appointment_date || nextApt.scheduled_date || nextApt.appointmentDate || nextApt.scheduledDate,
+                nextAppointmentDate: nextApt.appointment_date || nextApt.scheduled_date || nextApt.appointmentDate || nextApt.scheduledDate,
+                next_appointment_time: nextApt.appointment_time || nextApt.scheduled_time || nextApt.appointmentTime || nextApt.scheduledTime,
+                nextAppointmentTime: nextApt.appointment_time || nextApt.scheduled_time || nextApt.appointmentTime || nextApt.scheduledTime,
+                next_appointment_type: nextApt.appointment_type || nextApt.type || (nextApt.scheduled_date ? 'investigation' : 'urologist'),
+                nextAppointmentType: nextApt.appointment_type || nextApt.type || (nextApt.scheduled_date ? 'investigation' : 'urologist'),
+                next_appointment_urologist: nextApt.urologist_name || nextApt.urologistName || nextApt.investigation_name || nextApt.investigationName,
+                nextAppointmentUrologist: nextApt.urologist_name || nextApt.urologistName || nextApt.investigation_name || nextApt.investigationName,
+                next_appointment_id: nextApt.id,
+                nextAppointmentId: nextApt.id
+              };
+            }
+          }
+        } catch (apptError) {
+          console.warn('⚠️ NursePatientDetailsModal: Could not fetch appointments, using original patient data:', apptError);
+        }
+
+        // Merge with original patient data to preserve carePathway and appointment data
         const mergedData = {
           ...result.data,
           // Preserve carePathway from original patient if not in API response
           carePathway: result.data.carePathway || result.data.care_pathway || patient.carePathway || patient.care_pathway,
-          care_pathway: result.data.care_pathway || result.data.carePathway || patient.care_pathway || patient.carePathway
+          care_pathway: result.data.care_pathway || result.data.carePathway || patient.care_pathway || patient.carePathway,
+          // Add appointment data
+          ...nextAppointmentData
         };
 
         console.log('📋 Merged Care Pathway:', mergedData.carePathway);
+        console.log('📅 Merged Appointment Data:', {
+          date: mergedData.next_appointment_date,
+          type: mergedData.next_appointment_type,
+          time: mergedData.next_appointment_time,
+          urologist: mergedData.next_appointment_urologist
+        });
         setFullPatientData(mergedData);
       } else {
         console.error('❌ NursePatientDetailsModal: Failed to fetch patient details:', result.error);
@@ -707,7 +793,7 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     } finally {
       setLoadingPatientData(false);
     }
-  }, [patient?.id, patient?.carePathway, patient?.care_pathway]);
+  }, [patient?.id, patient?.carePathway, patient?.care_pathway, patient?.next_appointment_date, patient?.nextAppointmentDate]);
 
   // Fetch notes for the patient
   const fetchNotes = useCallback(async () => {
@@ -2514,18 +2600,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
     <>
       <div
         className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-hidden"
-        onWheel={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onTouchMove={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
         onClick={(e) => {
-          // Prevent backdrop click from scrolling
+          // Close modal when clicking backdrop
           if (e.target === e.currentTarget) {
-            e.preventDefault();
+            onClose();
           }
         }}
       >
@@ -3091,24 +3169,53 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
                 {/* Other Test Results Section - Right Side */}
                 <div className="w-1/2 p-6">
-                  <div className="bg-white rounded-lg border border-gray-200 h-full flex flex-col">
-                    <div className="px-6 py-4 border-b border-gray-100">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                          <IoDocument className="mr-2 text-teal-600" />
-                          Other Test Results & Reports
-                        </h3>
-                        <button
-                          onClick={() => setIsAddInvestigationModalOpen(true)}
-                          className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors text-sm font-medium flex items-center space-x-1.5"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>Add Test</span>
-                        </button>
-                      </div>
-                    </div>
+                  <AppointmentBookingSection
+                    patient={fullPatientData || patient}
+                    onAppointmentBooked={(data) => {
+                      // Refresh patient data after appointment is booked
+                      if (fetchFullPatientData) {
+                        fetchFullPatientData();
+                      }
+                      if (fetchInvestigationRequests) {
+                        fetchInvestigationRequests();
+                      }
+                      if (fetchInvestigations) {
+                        fetchInvestigations();
+                      }
+                    }}
+                    onRefresh={() => {
+                      if (fetchFullPatientData) {
+                        fetchFullPatientData();
+                      }
+                      if (fetchInvestigationRequests) {
+                        fetchInvestigationRequests();
+                      }
+                      if (fetchInvestigations) {
+                        fetchInvestigations();
+                      }
+                    }}
+                    showTestResults={true}
+                    otherTestResults={otherTestResults}
+                    investigationRequests={investigationRequests}
+                    testResultsContent={
+                      <div className="bg-white rounded-lg border border-gray-200 h-full flex flex-col">
+                        <div className="px-6 py-4 border-b border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                              <IoDocument className="mr-2 text-teal-600" />
+                              Other Test Results & Reports
+                            </h3>
+                            <button
+                              onClick={() => setIsAddInvestigationModalOpen(true)}
+                              className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors text-sm font-medium flex items-center space-x-1.5"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Add Test</span>
+                            </button>
+                          </div>
+                        </div>
 
-                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="flex-1 overflow-y-auto p-6">
                       {(loadingInvestigations || loadingRequests) ? (
                         <div className="flex items-center justify-center py-8">
                           <div className="flex items-center space-x-2">
@@ -3449,8 +3556,10 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
                           </button>
                         </div>
                       )}
-                    </div>
-                  </div>
+                        </div>
+                      </div>
+                    }
+                  />
                 </div>
               </div>
             )}
