@@ -23,6 +23,7 @@ import { doctorsService } from '../../services/doctorsService';
 import ErrorModal from '../../components/modals/ErrorModal';
 import SuccessModal from '../../components/modals/SuccessModal';
 import AddUserModal from '../../components/modals/AddUserModal';
+import ViewUserModal from '../../components/modals/ViewUserModal';
 import { Building2 } from 'lucide-react';
 
 const Users = () => {
@@ -47,6 +48,8 @@ const Users = () => {
   const [selectedDepartment, setSelectedDepartment] = useState(filters.department_id || '');
   const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showViewUserModal, setShowViewUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
 
   // Fetch departments when category is doctor
   useEffect(() => {
@@ -265,6 +268,11 @@ const Users = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleViewUser = (user) => {
+    setSelectedUser(user);
+    setShowViewUserModal(true);
   };
 
   const handleDeleteUser = (user) => {
@@ -683,6 +691,14 @@ const Users = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center space-x-2">
                             <button
+                              onClick={() => handleViewUser(user)}
+                              className="inline-flex items-center px-3 py-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="View User Details"
+                            >
+                              <Eye className="h-4 w-4 mr-1.5" />
+                              <span className="text-xs font-medium">View</span>
+                            </button>
+                            <button
                               onClick={() => handleResendPasswordSetup(user)}
                               disabled={resendingUserId === user.id}
                               className="inline-flex items-center px-3 py-1.5 text-teal-600 hover:text-teal-900 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -887,6 +903,16 @@ const Users = () => {
           }
           dispatch(getAllUsers(currentFilters));
         }}
+      />
+
+      {/* View User Modal */}
+      <ViewUserModal
+        isOpen={showViewUserModal}
+        onClose={() => {
+          setShowViewUserModal(false);
+          setSelectedUser(null);
+        }}
+        user={selectedUser}
       />
     </div>
   );

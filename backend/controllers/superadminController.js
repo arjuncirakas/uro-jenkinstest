@@ -2,6 +2,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import pool from '../config/database.js';
 import { sendPasswordSetupEmail } from '../services/emailService.js';
+import { decryptFields } from '../services/encryptionService.js';
+import { USER_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 
 // Map role to category
 const getCategoryFromRole = (role) => {
@@ -444,10 +446,26 @@ export const getAllUsers = async (req, res) => {
     const countResult = await client.query(countQuery, countParams);
     const totalUsers = parseInt(countResult.rows[0].total);
 
+    // Decrypt email and phone fields for all users
+    const decryptedUsers = result.rows.map(user => {
+      try {
+        const decryptedUser = decryptFields(user, USER_ENCRYPTED_FIELDS);
+        return {
+          ...user,
+          email: decryptedUser.email,
+          phone: decryptedUser.phone
+        };
+      } catch (decryptError) {
+        console.error('❌ Error decrypting user data:', decryptError);
+        // Return original data if decryption fails
+        return user;
+      }
+    });
+
     res.json({
       success: true,
       data: {
-        users: result.rows,
+        users: decryptedUsers,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalUsers / limit),
@@ -579,11 +597,27 @@ export const filterUsers = async (req, res) => {
     
     console.log('🔍 Query result count:', result.rows.length);
     
+    // Decrypt email and phone fields for all users
+    const decryptedUsers = result.rows.map(user => {
+      try {
+        const decryptedUser = decryptFields(user, USER_ENCRYPTED_FIELDS);
+        return {
+          ...user,
+          email: decryptedUser.email,
+          phone: decryptedUser.phone
+        };
+      } catch (decryptError) {
+        console.error('❌ Error decrypting user data:', decryptError);
+        // Return original data if decryption fails
+        return user;
+      }
+    });
+    
     res.json({
       success: true,
       data: {
-        users: result.rows,
-        count: result.rows.length
+        users: decryptedUsers,
+        count: decryptedUsers.length
       }
     });
     
@@ -620,10 +654,24 @@ export const getUserById = async (req, res) => {
       });
     }
 
+    // Decrypt email and phone fields
+    let decryptedUser;
+    try {
+      decryptedUser = decryptFields(result.rows[0], USER_ENCRYPTED_FIELDS);
+    } catch (decryptError) {
+      console.error('❌ Error decrypting user data:', decryptError);
+      // Return original data if decryption fails
+      decryptedUser = result.rows[0];
+    }
+
     res.json({
       success: true,
       data: {
-        user: result.rows[0]
+        user: {
+          ...result.rows[0],
+          email: decryptedUser.email,
+          phone: decryptedUser.phone
+        }
       }
     });
 
