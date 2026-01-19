@@ -47,31 +47,125 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
     return typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500';
   };
 
-  // Parse notes to separate surgery time from other notes
+  // Parse notes to separate surgery time from other notes and format JSON notes
   const parseNotes = (notes) => {
-    if (!notes) return { surgeryTime: null, otherNotes: null };
+    if (!notes) return { surgeryTime: null, otherNotes: null, formattedNotes: null, isMdtNotes: false };
+    
+    // Try to parse as JSON first (for MDT meeting notes)
+    let parsedNotes = null;
+    let isJson = false;
+    try {
+      parsedNotes = typeof notes === 'string' ? JSON.parse(notes) : notes;
+      isJson = true;
+    } catch (e) {
+      // Not JSON, treat as plain text
+      parsedNotes = null;
+    }
     
     // Check if notes contain "Surgery Time:" - match the time pattern and everything after it on the same line
     const surgeryTimeMatch = notes.match(/Surgery Time:\s*([0-9]{1,2}:[0-9]{2})/i);
     const surgeryTime = surgeryTimeMatch ? surgeryTimeMatch[1] : null;
     
-    // Remove surgery time line from notes
-    let otherNotes = notes;
-    if (surgeryTime) {
-      // Remove the entire "Surgery Time: XX:XX" line (including any text after it on the same line)
-      // Match from "Surgery Time:" to end of line or newline
-      otherNotes = notes.replace(/Surgery Time:\s*[0-9]{1,2}:[0-9]{2}[^\n]*\n?/i, '').trim();
-      // Also handle if it's at the end without newline
-      otherNotes = otherNotes.replace(/Surgery Time:\s*[0-9]{1,2}:[0-9]{2}[^\n]*$/i, '').trim();
+    // If it's JSON (MDT notes), format it nicely
+    let formattedNotes = null;
+    let otherNotes = null;
+    
+    if (isJson && parsedNotes) {
+      // Format MDT notes
+      const formatted = [];
+      
+      if (parsedNotes.clinicalSummary) {
+        formatted.push({ label: 'Clinical Summary', value: parsedNotes.clinicalSummary });
+      }
+      
+      if (parsedNotes.content) {
+        formatted.push({ label: 'Discussion', value: parsedNotes.content });
+      }
+      
+      if (parsedNotes.mdtOutcome) {
+        formatted.push({ label: 'MDT Outcome', value: parsedNotes.mdtOutcome });
+      }
+      
+      if (parsedNotes.recommendations && Array.isArray(parsedNotes.recommendations) && parsedNotes.recommendations.length > 0) {
+        formatted.push({ label: 'Clinical Recommendations', value: parsedNotes.recommendations });
+      }
+      
+      if (parsedNotes.actionItems && Array.isArray(parsedNotes.actionItems) && parsedNotes.actionItems.length > 0) {
+        formatted.push({ label: 'Follow-up Action Items', value: parsedNotes.actionItems });
+      }
+      
+      if (parsedNotes.attendees && Array.isArray(parsedNotes.attendees) && parsedNotes.attendees.length > 0) {
+        formatted.push({ label: 'Team Members', value: parsedNotes.attendees });
+      }
+      
+      formattedNotes = formatted;
+    } else {
+      // Plain text notes - remove surgery time line if present
+      otherNotes = notes;
+      if (surgeryTime) {
+        // Remove the entire "Surgery Time: XX:XX" line (including any text after it on the same line)
+        otherNotes = notes.replace(/Surgery Time:\s*[0-9]{1,2}:[0-9]{2}[^\n]*\n?/i, '').trim();
+        otherNotes = otherNotes.replace(/Surgery Time:\s*[0-9]{1,2}:[0-9]{2}[^\n]*$/i, '').trim();
+      }
+      otherNotes = otherNotes || null;
     }
     
     return {
       surgeryTime,
-      otherNotes: otherNotes || null
+      otherNotes,
+      formattedNotes,
+      isMdtNotes: isJson
     };
   };
 
-  const { surgeryTime, otherNotes } = parseNotes(appointment.notes);
+  const { surgeryTime, otherNotes, formattedNotes, isMdtNotes } = parseNotes(appointment.notes);
+  
+  // Extract doctor name from notes if it's MDT notes, otherwise use appointment data
+  const getDoctorName = () => {
+    // If it's MDT notes, try to get doctor from meta.author or attendees
+    if (isMdtNotes && formattedNotes) {
+      try {
+        const notesJson = typeof appointment.notes === 'string' ? JSON.parse(appointment.notes) : appointment.notes;
+        if (notesJson.meta && notesJson.meta.author) {
+          return notesJson.meta.author;
+        }
+        if (notesJson.attendees && Array.isArray(notesJson.attendees) && notesJson.attendees.length > 0) {
+          // Get first attendee and remove department suffix if present
+          const firstAttendee = notesJson.attendees[0];
+          return firstAttendee.replace(/\s*\([^)]*\)$/, ''); // Remove "(Department)" suffix
+        }
+      } catch (e) {
+        // Fall through to default
+      }
+    }
+    
+    // Default: use appointment urologist fields
+    const urologistName = appointment.urologist || 
+                         appointment.doctorName || 
+                         appointment.doctor_name || 
+                         appointment.urologist_name || '';
+    
+    // Remove "Dr. MDT Meeting" or similar generic names
+    if (urologistName.toLowerCase().includes('mdt meeting') || 
+        urologistName.toLowerCase().includes('meeting')) {
+      // Try to get from notes if available
+      if (isMdtNotes) {
+        try {
+          const notesJson = typeof appointment.notes === 'string' ? JSON.parse(appointment.notes) : appointment.notes;
+          if (notesJson.meta && notesJson.meta.author) {
+            return notesJson.meta.author;
+          }
+        } catch (e) {
+          // Fall through
+        }
+      }
+      return 'Unassigned';
+    }
+    
+    return urologistName || 'Unassigned';
+  };
+  
+  const doctorName = getDoctorName();
 
   // Prepare patient object for UpdateAppointmentModal
   const getPatientForReschedule = () => {
@@ -254,13 +348,37 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
           )}
 
           {/* Appointment Notes */}
-          {otherNotes && (
+          {(formattedNotes || otherNotes) && (
             <div className="bg-blue-50 border border-blue-200 rounded p-4">
-              <h5 className="font-semibold text-blue-900 text-sm mb-2 flex items-center gap-2">
+              <h5 className="font-semibold text-blue-900 text-sm mb-3 flex items-center gap-2">
                 <FiFileText className="w-4 h-4 text-blue-600" />
-                Appointment Notes
+                {isMdtNotes ? 'MDT Meeting Notes' : 'Appointment Notes'}
               </h5>
-              <p className="text-sm text-blue-800 whitespace-pre-line">{otherNotes}</p>
+              {formattedNotes ? (
+                <div className="space-y-4">
+                  {formattedNotes.map((item, idx) => (
+                    <div key={idx} className="bg-white rounded p-3 border border-blue-100">
+                      <h6 className="font-semibold text-blue-900 text-xs mb-2 uppercase tracking-wide">
+                        {item.label}
+                      </h6>
+                      {Array.isArray(item.value) ? (
+                        <ul className="space-y-2">
+                          {item.value.map((val, valIdx) => (
+                            <li key={valIdx} className="text-sm text-blue-800 flex items-start gap-2">
+                              <span className="text-blue-600 mt-1">•</span>
+                              <span>{val}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-blue-800 whitespace-pre-line">{item.value}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-blue-800 whitespace-pre-line">{otherNotes}</p>
+              )}
             </div>
           )}
 
@@ -281,7 +399,7 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
               <div>
                 <span className="text-gray-600">Urologist:</span>
                 <span className="ml-2 font-medium text-gray-900">
-                  {appointment.urologist || appointment.doctorName || appointment.doctor_name || appointment.urologist_name || 'Unassigned'}
+                  {doctorName}
                 </span>
               </div>
             </div>

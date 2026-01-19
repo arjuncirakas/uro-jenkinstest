@@ -2892,8 +2892,10 @@ export const getAvailableTimeSlots = async (req, res) => {
     }
 
     // Check if doctor exists - try doctors table first, then users table
+    // IMPORTANT: Always use doctors.id for querying appointments, not users.id
     let doctor = null;
     let doctorSource = null;
+    let finalDoctorId = doctorId; // Default to provided ID
 
     // Try doctors table first
     const doctorsTableQuery = `SELECT id, first_name, last_name, specialization FROM doctors WHERE id = $1 AND is_active = true`;
@@ -2902,16 +2904,34 @@ export const getAvailableTimeSlots = async (req, res) => {
     if (doctorsTableResult.rows.length > 0) {
       doctor = doctorsTableResult.rows[0];
       doctorSource = 'doctors_table';
+      finalDoctorId = doctor.id; // Use doctors.id
       console.log(`[getAvailableTimeSlots] Found doctor in doctors table: ${doctor.first_name} ${doctor.last_name} (${doctor.specialization})`);
     } else {
       // Try users table for backwards compatibility
-      const usersTableQuery = `SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role IN ('urologist', 'doctor', 'radiologist', 'pathologist', 'oncologist')`;
+      const usersTableQuery = `SELECT id, first_name, last_name, role, email FROM users WHERE id = $1 AND role IN ('urologist', 'doctor', 'radiologist', 'pathologist', 'oncologist')`;
       const usersTableResult = await client.query(usersTableQuery, [doctorId]);
 
       if (usersTableResult.rows.length > 0) {
         doctor = usersTableResult.rows[0];
         doctorSource = 'users_table';
-        console.log(`[getAvailableTimeSlots] Found doctor in users table: ${doctor.first_name} ${doctor.last_name} (${doctor.role})`);
+        
+        // If found in users table, find corresponding doctors.id
+        const userEmail = usersTableResult.rows[0].email;
+        const doctorByEmailCheck = await client.query(
+          'SELECT id, first_name, last_name, specialization FROM doctors WHERE email = $1 AND is_active = true',
+          [userEmail]
+        );
+
+        if (doctorByEmailCheck.rows.length > 0) {
+          // Use doctors.id instead of users.id
+          finalDoctorId = doctorByEmailCheck.rows[0].id;
+          doctor = doctorByEmailCheck.rows[0];
+          console.log(`[getAvailableTimeSlots] Converted users.id ${doctorId} to doctors.id ${finalDoctorId}`);
+        } else {
+          // Keep users.id as fallback (shouldn't happen in normal flow)
+          finalDoctorId = doctorId;
+          console.log(`[getAvailableTimeSlots] Warning: Doctor found in users table but not in doctors table. Using users.id ${doctorId}`);
+        }
       }
     }
 
@@ -2923,7 +2943,7 @@ export const getAvailableTimeSlots = async (req, res) => {
       });
     }
 
-    console.log(`[getAvailableTimeSlots] Checking availability for doctor: ${doctor.first_name} ${doctor.last_name} from ${doctorSource}`);
+    console.log(`[getAvailableTimeSlots] Checking availability for doctor: ${doctor.first_name} ${doctor.last_name} from ${doctorSource}, using doctor ID: ${finalDoctorId}`);
 
     // Generate all possible time slots (9:00 AM to 5:00 PM, 30-minute intervals)
     const allSlots = [];
@@ -2938,9 +2958,11 @@ export const getAvailableTimeSlots = async (req, res) => {
     // CRITICAL: Check BOTH investigation_bookings AND appointments tables
     // to prevent double-booking the same doctor at the same time
 
-    console.log(`[getAvailableTimeSlots] Checking bookings for doctor ${doctorId} on ${date}`);
+    console.log(`[getAvailableTimeSlots] Checking bookings for doctor ${finalDoctorId} (original ID: ${doctorId}) on ${date}`);
 
     // Query 1: Check investigation bookings for this doctor
+    // Note: Investigation bookings don't have a direct doctor_id, so we check all for the date
+    // This might need to be refined if investigation bookings are doctor-specific
     const investigationQuery = `
       SELECT ib.scheduled_time, ib.status, ib.investigation_name,
              p.first_name || ' ' || p.last_name as patient_name
@@ -2951,6 +2973,7 @@ export const getAvailableTimeSlots = async (req, res) => {
     `;
 
     // Query 2: Check urologist appointments for this doctor (including surgery appointments)
+    // CRITICAL: Use finalDoctorId (doctors.id) not the original doctorId (which might be users.id)
     // EXCLUDE automatic appointments - they don't block slots
     const appointmentsQuery = `
       SELECT a.appointment_time, a.status, a.notes, a.appointment_type, a.surgery_type,
@@ -2963,12 +2986,12 @@ export const getAvailableTimeSlots = async (req, res) => {
       AND a.appointment_type != 'automatic'
     `;
 
-    // Execute both queries
+    // Execute both queries - use finalDoctorId for appointments query
     const investigationResult = await client.query(investigationQuery, [date]);
-    const appointmentsResult = await client.query(appointmentsQuery, [doctorId, date]);
+    const appointmentsResult = await client.query(appointmentsQuery, [finalDoctorId, date]);
 
     console.log(`[getAvailableTimeSlots] Found ${investigationResult.rows.length} investigation bookings on ${date}`);
-    console.log(`[getAvailableTimeSlots] Found ${appointmentsResult.rows.length} urologist appointments for doctor ${doctorId} on ${date}`);
+    console.log(`[getAvailableTimeSlots] Found ${appointmentsResult.rows.length} urologist appointments for doctor ${finalDoctorId} (original ID: ${doctorId}) on ${date}`);
 
     // Combine booked times from both tables
     const bookedTimesFromInvestigations = investigationResult.rows.map(row => {
