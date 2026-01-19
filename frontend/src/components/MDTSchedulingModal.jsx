@@ -281,11 +281,16 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
   };
 
   const addTeamMember = (selectedMember) => {
-    if (selectedMember && !mdtForm.teamMembers.includes(selectedMember.name)) {
-      setMdtForm(prev => ({
-        ...prev,
-        teamMembers: [...prev.teamMembers, selectedMember.name]
-      }));
+    if (selectedMember && selectedMember.name && typeof selectedMember.name === 'string' && selectedMember.name.trim() !== '') {
+      const memberName = selectedMember.name.trim();
+      if (!mdtForm.teamMembers.includes(memberName)) {
+        setMdtForm(prev => ({
+          ...prev,
+          teamMembers: [...prev.teamMembers, memberName]
+        }));
+      }
+    } else {
+      console.error('Invalid team member data:', selectedMember);
     }
   };
 
@@ -349,15 +354,35 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
         if (response.success) {
           console.log('Doctor created successfully, updating dropdown and refreshing lists...');
           
+          // Get first_name and last_name from response, with fallback to doctorData
+          const firstName = response.data?.first_name || doctorData.first_name || '';
+          const lastName = response.data?.last_name || doctorData.last_name || '';
+          const specialization = response.data?.specialization || response.data?.department_name || department.name || '';
+          
+          // Ensure we have valid names
+          if (!firstName && !lastName) {
+            console.error('Invalid doctor data: missing first_name and last_name');
+            setAddMemberErrorMessage('Failed to create team member: missing name information.');
+            setShowAddMemberErrorModal(true);
+            setIsAddingMember(false);
+            return;
+          }
+          
+          // Format the name properly
+          const fullName = `${firstName} ${lastName}`.trim();
+          const formattedName = specialization ? `${fullName} (${specialization})` : fullName;
+          
           // Prepare the object used by the dropdown immediately
           const newDoctor = {
             id: response.data.id,
-            name: doctorsService.formatDoctorName(response.data),
-            first_name: response.data.first_name,
-            last_name: response.data.last_name,
-            specialization: response.data.specialization, // backend sends department name here
+            name: formattedName,
+            first_name: firstName,
+            last_name: lastName,
+            specialization: specialization,
             department_name: department.name
           };
+
+          console.log('New doctor object:', newDoctor);
 
           // Optimistically add to the available list so it appears instantly
           setAvailableTeamMembers(prev => {
@@ -375,7 +400,7 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
           setShowAddTeamMemberModal(false);
           
           // Show success modal
-          setAddMemberSuccessMessage(`${newDoctor.name} has been added successfully and is now available as a team member.`);
+          setAddMemberSuccessMessage(`${formattedName} has been added successfully and is now available as a team member.`);
           setShowAddMemberSuccessModal(true);
         } else {
           console.error('Failed to create doctor:', response);
