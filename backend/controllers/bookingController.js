@@ -3254,6 +3254,19 @@ export const getAllAppointments = async (req, res) => {
       console.log(`⚠️ [getAllAppointments ${requestId}] No urologistId provided but user is ${userRole} - this should not happen`);
     }
 
+    // Get doctor's name for filtering investigation bookings (which use doctor name, not ID)
+    let doctorName = null;
+    if (doctorId) {
+      const doctorNameResult = await client.query(
+        'SELECT first_name, last_name FROM doctors WHERE id = $1',
+        [doctorId]
+      );
+      if (doctorNameResult.rows.length > 0) {
+        doctorName = `${doctorNameResult.rows[0].first_name} ${doctorNameResult.rows[0].last_name}`.trim();
+        console.log(`📅 [getAllAppointments ${requestId}] Doctor name for filtering: "${doctorName}"`);
+      }
+    }
+
     // Build first part - urologist appointments (includes regular consultations and surgery appointments)
     // Note: Date parameters will be added later to the outer query, so inner query uses $1 for urologist filter
     let urologistWhere = ['a.status != \'cancelled\''];
@@ -3316,7 +3329,12 @@ export const getAllAppointments = async (req, res) => {
       INNER JOIN patients p ON a.patient_id = p.id
       LEFT JOIN doctors d ON a.urologist_id = d.id
       WHERE ${urologistWhere.join(' AND ')}
-      
+    `;
+    
+    // Add investigation bookings - only if we have doctorId and doctorName to filter
+    if (doctorId && doctorName) {
+      const invParamIndex = innerQueryParams.length + 1;
+      query += `
       UNION ALL
       
       SELECT 
@@ -3347,7 +3365,15 @@ export const getAllAppointments = async (req, res) => {
       WHERE ib.status != 'cancelled'
         AND ib.scheduled_date IS NOT NULL
         AND ib.status NOT IN ('requested', 'requested_urgent')
-      
+        AND TRIM(ib.investigation_name) = $${invParamIndex}
+      `;
+      console.log(`📅 [getAllAppointments ${requestId}] Added investigation bookings filter for doctor: "${doctorName}"`);
+    }
+    
+    // Add MDT meetings - only if we have doctorId and userId to filter
+    if (doctorId && userId) {
+      const mdtParamIndex = innerQueryParams.length + (doctorName ? 2 : 1);
+      query += `
       UNION ALL
       
       SELECT 
@@ -3378,10 +3404,23 @@ export const getAllAppointments = async (req, res) => {
       WHERE m.status != 'cancelled'
         AND m.meeting_date IS NOT NULL
         AND m.meeting_time IS NOT NULL
-    `;
+        AND (m.created_by = $${mdtParamIndex} OR EXISTS (SELECT 1 FROM mdt_team_members mtm WHERE mtm.mdt_meeting_id = m.id AND mtm.user_id = $${mdtParamIndex}))
+      `;
+      console.log(`📅 [getAllAppointments ${requestId}] Added MDT meetings filter for user: ${userId}`);
+    }
 
     // Combine inner query params with date params for final query
+    // Add doctor name for investigation bookings filter if we have it
     queryParams = [...innerQueryParams];
+    if (doctorId && doctorName) {
+      queryParams.push(doctorName);
+      console.log(`📅 [getAllAppointments ${requestId}] Added doctor name to params: "${doctorName}"`);
+    }
+    // Add userId for MDT meetings filter if we have it
+    if (doctorId && userId) {
+      queryParams.push(userId);
+      console.log(`📅 [getAllAppointments ${requestId}] Added userId to params: ${userId}`);
+    }
 
     let whereConditions = [];
 
