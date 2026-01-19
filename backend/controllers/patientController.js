@@ -3191,18 +3191,43 @@ export const getPatientsDueForReview = async (req, res) => {
     // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
     // Appointments have urologist_id pointing to doctors.id
     let doctorId = null;
+    let doctorName = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
-      // Find doctor record by email (since doctors and users are linked by email)
-      const doctorCheck = await client.query(
-        'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
-        [userEmail]
-      );
-      if (doctorCheck.rows.length > 0) {
-        doctorId = doctorCheck.rows[0].id;
-        console.log(`👥 [getPatientsDueForReview ${requestId}] Found doctor record with id: ${doctorId} for user ${userId}`);
+      // Note: users.email is encrypted, doctors.email is plaintext, so we need to decrypt
+      const { decryptFields } = await import('../services/encryptionService.js');
+      const { USER_ENCRYPTED_FIELDS } = await import('../constants/encryptionFields.js');
+      const decryptedUser = decryptFields({ email: userEmail }, USER_ENCRYPTED_FIELDS);
+      const decryptedEmail = decryptedUser.email;
+      
+      if (decryptedEmail) {
+        // Find doctor record by decrypted email
+        const doctorCheck = await client.query(
+          'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
+          [decryptedEmail]
+        );
+        if (doctorCheck.rows.length > 0) {
+          doctorId = doctorCheck.rows[0].id;
+          doctorName = `${doctorCheck.rows[0].first_name} ${doctorCheck.rows[0].last_name}`.trim();
+          console.log(`👥 [getPatientsDueForReview ${requestId}] Found doctor record with id: ${doctorId}, name: "${doctorName}" for user ${userId}`);
+        } else {
+          console.log(`👥 [getPatientsDueForReview ${requestId}] No doctor record found for user ${userId} with email ${decryptedEmail} - returning empty results`);
+          // Return empty results if no doctor record exists
+          client.release();
+          return res.json({
+            success: true,
+            data: {
+              patients: [],
+              summary: {
+                total: 0,
+                postOpFollowup: 0,
+                investigation: 0,
+                surgical: 0
+              }
+            }
+          });
+        }
       } else {
-        console.log(`👥 [getPatientsDueForReview ${requestId}] No doctor record found for user ${userId} - returning empty results`);
-        // Return empty results if no doctor record exists
+        console.log(`👥 [getPatientsDueForReview ${requestId}] Could not decrypt email for user ${userId} - returning empty results`);
         client.release();
         return res.json({
           success: true,
@@ -3232,9 +3257,14 @@ export const getPatientsDueForReview = async (req, res) => {
     console.log(`[getPatientsDueForReview] Fetching appointments from ${startDateStr} to ${endDateStr} for doctor ${doctorId}`);
 
     // For urologists/doctors, get appointments assigned to them using doctors.id only
+    // Also include investigation bookings and follow-up appointments assigned to them
     // For nurses, get all appointments in the department
-    const appointmentsQuery = (userRole === 'urologist' || userRole === 'doctor')
-      ? `SELECT 
+    let appointmentsQuery;
+    let queryParams;
+    
+    if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+      // Include urologist appointments, investigation bookings, and follow-up appointments
+      let baseQuery = `SELECT 
           a.id,
           a.patient_id,
           a.appointment_date,
@@ -3254,9 +3284,46 @@ export const getPatientsDueForReview = async (req, res) => {
          INNER JOIN patients p ON a.patient_id = p.id
          WHERE a.appointment_date BETWEEN $1 AND $2
          AND a.urologist_id = $3
-         AND a.status IN ('scheduled', 'confirmed')
-         ORDER BY a.appointment_date, a.appointment_time`
-      : `SELECT 
+         AND a.status IN ('scheduled', 'confirmed')`;
+      
+      let paramIndex = 4;
+      if (doctorName) {
+        baseQuery += `
+         UNION ALL
+         
+         SELECT 
+          ib.id,
+          ib.patient_id,
+          ib.scheduled_date as appointment_date,
+          ib.scheduled_time as appointment_time,
+          'investigation' as appointment_type,
+          NULL as urologist_id,
+          ib.investigation_name as urologist_name,
+          ib.notes,
+          ib.status,
+          p.first_name,
+          p.last_name,
+          p.upi,
+          p.date_of_birth,
+          p.gender,
+          p.care_pathway
+         FROM investigation_bookings ib
+         INNER JOIN patients p ON ib.patient_id = p.id
+         WHERE ib.scheduled_date BETWEEN $1 AND $2
+         AND ib.status IN ('scheduled', 'confirmed')
+         AND TRIM(ib.investigation_name) = $` + paramIndex;
+      }
+      
+      baseQuery += `
+         ORDER BY appointment_date, appointment_time`;
+      
+      appointmentsQuery = baseQuery;
+      queryParams = doctorName 
+        ? [startDateStr, endDateStr, doctorId, doctorName]
+        : [startDateStr, endDateStr, doctorId];
+    } else {
+      // For nurses, show all appointments
+      appointmentsQuery = `SELECT 
           a.id,
           a.patient_id,
           a.appointment_date,
@@ -3277,11 +3344,8 @@ export const getPatientsDueForReview = async (req, res) => {
          WHERE a.appointment_date BETWEEN $1 AND $2
          AND a.status IN ('scheduled', 'confirmed')
          ORDER BY a.appointment_date, a.appointment_time`;
-
-    // Use doctors.id only (appointments use doctors.id)
-    const queryParams = (userRole === 'urologist' || userRole === 'doctor')
-      ? [startDateStr, endDateStr, doctorId]
-      : [startDateStr, endDateStr];
+      queryParams = [startDateStr, endDateStr];
+    }
 
     const result = await client.query(appointmentsQuery, queryParams);
 

@@ -1471,22 +1471,31 @@ export const getUpcomingAppointments = async (req, res) => {
     const userRole = req.user?.role;
     const userEmail = req.user?.email;
 
-    // For urologists/doctors, get their doctor ID
+    // For urologists/doctors, get their doctor ID and name
     let doctorId = null;
+    let doctorName = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
       try {
-        // Find doctor by email (doctors table links to users via email)
+        // Note: users.email is encrypted, doctors.email is plaintext, so we need to decrypt
         if (userEmail) {
-          const doctorCheck = await client.query(
-            `SELECT id FROM doctors WHERE email = $1 AND is_active = true`,
-            [userEmail]
-          );
+          const { decryptFields } = await import('../services/encryptionService.js');
+          const { USER_ENCRYPTED_FIELDS } = await import('../constants/encryptionFields.js');
+          const decryptedUser = decryptFields({ email: userEmail }, USER_ENCRYPTED_FIELDS);
+          const decryptedEmail = decryptedUser.email;
+          
+          if (decryptedEmail) {
+            const doctorCheck = await client.query(
+              `SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true`,
+              [decryptedEmail]
+            );
 
-          if (doctorCheck.rows.length > 0) {
-            doctorId = doctorCheck.rows[0].id;
-            console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
-          } else {
-            console.log(`📅 [getUpcomingAppointments ${requestId}] No doctor record found for user ${userId}`);
+            if (doctorCheck.rows.length > 0) {
+              doctorId = doctorCheck.rows[0].id;
+              doctorName = `${doctorCheck.rows[0].first_name} ${doctorCheck.rows[0].last_name}`.trim();
+              console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId}, name: "${doctorName}" for user ${userId}`);
+            } else {
+              console.log(`📅 [getUpcomingAppointments ${requestId}] No doctor record found for user ${userId} with email ${decryptedEmail}`);
+            }
           }
         }
       } catch (doctorIdError) {
@@ -1529,9 +1538,9 @@ export const getUpcomingAppointments = async (req, res) => {
 
     if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
       // For urologists/doctors, include their urologist appointments (filtered by doctor)
-      // plus ALL investigation bookings in the date range.
+      // plus investigation bookings assigned to them (filtered by doctor name)
       if (endDateStr) {
-        query = `
+        let baseQuery = `
           SELECT 
             a.id,
             a.patient_id,
@@ -1553,7 +1562,11 @@ export const getUpcomingAppointments = async (req, res) => {
             AND a.appointment_date <= $2
             AND a.status != 'cancelled'
             AND a.urologist_id = $3
-          
+        `;
+        
+        let paramIndex = 4;
+        if (doctorName) {
+          baseQuery += `
           UNION ALL
           
           SELECT 
@@ -1576,13 +1589,20 @@ export const getUpcomingAppointments = async (req, res) => {
           WHERE ib.scheduled_date >= $1
             AND ib.scheduled_date <= $2
             AND ib.status != 'cancelled'
-          
+            AND TRIM(ib.investigation_name) = $` + paramIndex;
+          paramIndex++;
+        }
+        
+        baseQuery += `
           ORDER BY appointment_date ASC, appointment_time ASC
-          LIMIT $4 OFFSET $5
-        `;
-        queryParams = [tomorrowStr, endDateStr, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
+          LIMIT $` + paramIndex + ` OFFSET $` + (paramIndex + 1);
+        
+        query = baseQuery;
+        queryParams = doctorName 
+          ? [tomorrowStr, endDateStr, doctorId, doctorName, parseInt(limit, 10), parseInt(offset, 10)]
+          : [tomorrowStr, endDateStr, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
       } else {
-        query = `
+        let baseQuery = `
           SELECT 
             a.id,
             a.patient_id,
@@ -1603,7 +1623,11 @@ export const getUpcomingAppointments = async (req, res) => {
           WHERE a.appointment_date > $1
             AND a.status != 'cancelled'
             AND a.urologist_id = $2
-          
+        `;
+        
+        let paramIndex = 3;
+        if (doctorName) {
+          baseQuery += `
           UNION ALL
           
           SELECT 
@@ -1625,11 +1649,18 @@ export const getUpcomingAppointments = async (req, res) => {
           JOIN patients p ON ib.patient_id = p.id
           WHERE ib.scheduled_date > $1
             AND ib.status != 'cancelled'
-          
+            AND TRIM(ib.investigation_name) = $` + paramIndex;
+          paramIndex++;
+        }
+        
+        baseQuery += `
           ORDER BY appointment_date ASC, appointment_time ASC
-          LIMIT $3 OFFSET $4
-        `;
-        queryParams = [today, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
+          LIMIT $` + paramIndex + ` OFFSET $` + (paramIndex + 1);
+        
+        query = baseQuery;
+        queryParams = doctorName
+          ? [today, doctorId, doctorName, parseInt(limit, 10), parseInt(offset, 10)]
+          : [today, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
       }
     } else {
       // For nurses, show ALL appointment types (urologist, surgery, follow-up, investigation)
@@ -3365,7 +3396,7 @@ export const getAllAppointments = async (req, res) => {
       WHERE ib.status != 'cancelled'
         AND ib.scheduled_date IS NOT NULL
         AND ib.status NOT IN ('requested', 'requested_urgent')
-        AND TRIM(ib.investigation_name) = $${invParamIndex}
+        AND TRIM(ib.investigation_name) = $` + invParamIndex + `
       `;
       console.log(`📅 [getAllAppointments ${requestId}] Added investigation bookings filter for doctor: "${doctorName}"`);
     }
@@ -3404,7 +3435,7 @@ export const getAllAppointments = async (req, res) => {
       WHERE m.status != 'cancelled'
         AND m.meeting_date IS NOT NULL
         AND m.meeting_time IS NOT NULL
-        AND (m.created_by = $${mdtParamIndex} OR EXISTS (SELECT 1 FROM mdt_team_members mtm WHERE mtm.mdt_meeting_id = m.id AND mtm.user_id = $${mdtParamIndex}))
+        AND (m.created_by = $` + mdtParamIndex + ` OR EXISTS (SELECT 1 FROM mdt_team_members mtm WHERE mtm.mdt_meeting_id = m.id AND mtm.user_id = $` + mdtParamIndex + `))
       `;
       console.log(`📅 [getAllAppointments ${requestId}] Added MDT meetings filter for user: ${userId}`);
     }
