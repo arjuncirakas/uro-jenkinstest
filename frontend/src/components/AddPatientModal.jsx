@@ -120,6 +120,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
   const [gps, setGps] = useState([]);
   const [loadingGPs, setLoadingGPs] = useState(false);
   const [isAddGPModalOpen, setIsAddGPModalOpen] = useState(false);
+  const [pendingGPSelection, setPendingGPSelection] = useState(null);
 
 
 
@@ -160,6 +161,25 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       }
     }
   }, [gps, currentUserRole, isOpen]);
+
+  // Auto-select newly added GP when it appears in the list
+  useEffect(() => {
+    if (pendingGPSelection && gps.length > 0) {
+      const newGP = gps.find(gp => {
+        const gpId = gp.id?.toString() || String(gp.id);
+        const pendingId = pendingGPSelection?.toString() || String(pendingGPSelection);
+        return gpId === pendingId;
+      });
+      
+      if (newGP) {
+        setFormData(prev => ({
+          ...prev,
+          referringGP: newGP.id?.toString() || String(newGP.id)
+        }));
+        setPendingGPSelection(null); // Clear pending selection
+      }
+    }
+  }, [gps, pendingGPSelection]);
 
   const fetchUrologists = async () => {
     setLoadingUrologists(true);
@@ -229,21 +249,18 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     }
   };
 
-  const handleGPAdded = (newGPData) => {
-    // Refresh GP list after adding new GP
-    fetchGPs().then(() => {
-      // Auto-select the newly added GP if data is provided
-      if (newGPData && newGPData.userId) {
-        // Wait a bit for the list to update, then select the new GP
-        setTimeout(() => {
-          setFormData(prev => ({
-            ...prev,
-            referringGP: newGPData.userId?.toString() || String(newGPData.userId)
-          }));
-        }, 300);
-      }
-    });
+  const handleGPAdded = async (newGPData) => {
+    // Close the Add GP modal first
     setIsAddGPModalOpen(false);
+    
+    // Set pending GP selection if data is provided
+    if (newGPData && newGPData.userId) {
+      setPendingGPSelection(newGPData.userId);
+    }
+    
+    // Refresh GP list after adding new GP
+    // The useEffect will handle auto-selection when the new GP appears in the list
+    await fetchGPs();
   };
 
 
