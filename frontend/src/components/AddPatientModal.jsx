@@ -165,6 +165,8 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
   // Auto-select newly added GP when it appears in the list
   useEffect(() => {
     if (pendingGPSelection && gps.length > 0) {
+      console.log('🔍 Looking for pending GP:', pendingGPSelection);
+      console.log('📋 Current GP list:', gps);
       const newGP = gps.find(gp => {
         const gpId = gp.id?.toString() || String(gp.id);
         const pendingId = pendingGPSelection?.toString() || String(pendingGPSelection);
@@ -172,11 +174,14 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
       });
       
       if (newGP) {
+        console.log('✅ Found new GP, auto-selecting:', newGP);
         setFormData(prev => ({
           ...prev,
           referringGP: newGP.id?.toString() || String(newGP.id)
         }));
         setPendingGPSelection(null); // Clear pending selection
+      } else {
+        console.log('⏳ New GP not yet in list, waiting...');
       }
     }
   }, [gps, pendingGPSelection]);
@@ -207,13 +212,20 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
     setLoadingGPs(true);
     try {
       const result = await bookingService.getAvailableGPs();
-      console.log('📋 Fetched GPs:', result);
+      console.log('📋 Fetched GPs result:', result);
       if (result.success) {
-        // The service returns GPs in data.gps or data array
-        const gpsList = Array.isArray(result.data?.gps) 
-          ? result.data.gps 
-          : (Array.isArray(result.data) ? result.data : []);
-        console.log('📋 GPs list:', gpsList);
+        // The service returns GPs directly in data array
+        // Handle both possible structures: result.data (array) or result.data.gps (array)
+        let gpsList = [];
+        if (Array.isArray(result.data)) {
+          gpsList = result.data;
+        } else if (Array.isArray(result.data?.gps)) {
+          gpsList = result.data.gps;
+        } else if (Array.isArray(result.data?.data)) {
+          gpsList = result.data.data;
+        }
+        console.log('📋 Processed GPs list:', gpsList);
+        console.log('📋 Number of GPs:', gpsList.length);
         setGps(gpsList);
       } else {
         console.error('Failed to fetch GPs:', result.error);
@@ -250,17 +262,22 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
   };
 
   const handleGPAdded = async (newGPData) => {
+    console.log('🔄 handleGPAdded called with:', newGPData);
+    
     // Close the Add GP modal first
     setIsAddGPModalOpen(false);
     
     // Set pending GP selection if data is provided
     if (newGPData && newGPData.userId) {
+      console.log('⏳ Setting pending GP selection:', newGPData.userId);
       setPendingGPSelection(newGPData.userId);
     }
     
     // Refresh GP list after adding new GP
     // The useEffect will handle auto-selection when the new GP appears in the list
+    console.log('🔄 Refreshing GP list...');
     await fetchGPs();
+    console.log('✅ GP list refreshed');
   };
 
 
@@ -1180,6 +1197,7 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded, onError, isUrologist
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <select
+                          key={`gp-select-${gps.length}-${gps.map(gp => gp.id).join('-')}`}
                           name="selectedGP"
                           value={formData.referringGP || ''}
                           onChange={handleGPSelect}
