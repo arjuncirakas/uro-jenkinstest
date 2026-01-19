@@ -141,9 +141,10 @@ export const getAllGPs = async (req, res) => {
   await withDatabaseClient(async (client) => {
     try {
       const { is_active = true } = req.query;
+      const isActiveFilter = is_active === 'true' || is_active === true;
 
       // When fetching for dropdown, we want all active GPs (regardless of verification status)
-      // This ensures newly created GPs appear immediately
+      // This ensures newly created GPs appear immediately, even if password is not set yet
       const query = `
         SELECT 
           id, email, first_name, last_name, phone, organization, role,
@@ -153,7 +154,9 @@ export const getAllGPs = async (req, res) => {
         ORDER BY first_name, last_name
       `;
 
-      const result = await client.query(query, [is_active === 'true']);
+      console.log(`📋 [getAllGPs] Query params: is_active=${is_active}, filter=${isActiveFilter}`);
+      const result = await client.query(query, [isActiveFilter]);
+      console.log(`📋 [getAllGPs] Found ${result.rows.length} GPs in database`);
 
       // Decrypt and transform to camelCase format for frontend consistency
       const gps = result.rows.map(gp => {
@@ -174,7 +177,10 @@ export const getAllGPs = async (req, res) => {
         };
       });
 
-      console.log(`📋 Returning ${gps.length} active GPs`);
+      // Log verification status for debugging
+      const verifiedCount = gps.filter(gp => gp.isVerified).length;
+      const pendingCount = gps.filter(gp => !gp.isVerified).length;
+      console.log(`📋 [getAllGPs] Returning ${gps.length} active GPs (${verifiedCount} verified, ${pendingCount} pending password setup)`);
 
       res.json({
         success: true,
