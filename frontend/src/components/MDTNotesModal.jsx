@@ -430,6 +430,9 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
       setIsEditing(false);
       setSaveToast({ visible: true, type: 'success', message: 'Meeting record saved successfully' });
       setTimeout(() => setSaveToast(s => ({ ...s, visible: false })), 2000);
+      
+      // Dispatch event to refresh MDT outcomes on dashboard
+      window.dispatchEvent(new CustomEvent('mdt:updated'));
     } else {
       setSaveToast({ visible: true, type: 'error', message: res.error || 'Failed to save MDT notes' });
       setTimeout(() => setSaveToast(s => ({ ...s, visible: false })), 2500);

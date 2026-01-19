@@ -637,12 +637,26 @@ const UrologistDashboard = () => {
         }
 
         // Filter for surgery appointments (check type, notes, and surgeryType field)
+        // Explicitly exclude MDT meetings
         const surgeryAppointments = appointments.filter(apt => {
           const aptType = (apt.type || apt.appointmentType || '').toLowerCase();
           const aptNotes = (apt.notes || '').toLowerCase();
           const aptSurgeryType = (apt.surgeryType || apt.surgery_type || '').toLowerCase();
 
           console.log('Checking appointment:', apt.patientName, 'Type:', apt.type, 'aptType:', aptType);
+
+          // Explicitly exclude MDT meetings
+          const isMdtMeeting = aptType.includes('mdt') ||
+            aptNotes.includes('mdt') ||
+            aptNotes.includes('multidisciplinary team') ||
+            aptNotes.includes('meeting needs to be done') ||
+            apt.type === 'MDT Discussion' ||
+            apt.type === 'MDT Meeting';
+
+          if (isMdtMeeting) {
+            console.log('Excluding MDT meeting:', apt.patientName);
+            return false;
+          }
 
           // Check for surgery in type field
           const isSurgeryType = aptType === 'surgery' ||
@@ -962,9 +976,12 @@ const UrologistDashboard = () => {
     }
   };
 
-  // Refresh MDT schedules when an MDT is created elsewhere
+  // Refresh MDT schedules and outcomes when an MDT is created or updated elsewhere
   useEffect(() => {
-    const handler = () => fetchMdtSchedules();
+    const handler = () => {
+      fetchMdtSchedules();
+      fetchMdtOutcomes();
+    };
     window.addEventListener('mdt:updated', handler);
     return () => window.removeEventListener('mdt:updated', handler);
   }, []);
