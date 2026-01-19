@@ -3161,28 +3161,36 @@ export const getAllAppointments = async (req, res) => {
 
   try {
     const { startDate, endDate, urologistId, search } = req.query;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    
     console.log(`📅 [getAllAppointments ${requestId}] Processing query with startDate: ${startDate}, endDate: ${endDate}, urologistId: ${urologistId}, search: ${search}`);
+    console.log(`📅 [getAllAppointments ${requestId}] Logged-in user: ${userId}, role: ${userRole}`);
 
     let queryParams = [];
 
-    // If urologistId is provided, determine if it's doctors.id or users.id
+    // For urologists/doctors, always filter by the logged-in user's doctor ID
+    // Use urologistId from query if provided, otherwise use req.user.id
+    let effectiveUrologistId = urologistId || (userRole === 'urologist' || userRole === 'doctor' ? userId : null);
+    
+    // If urologistId is provided or we have a logged-in urologist, determine if it's doctors.id or users.id
     // Appointments have urologist_id pointing to doctors.id
     let doctorId = null;
-    if (urologistId) {
-      // First, check if urologistId is already a doctors.id
+    if (effectiveUrologistId) {
+      // First, check if effectiveUrologistId is already a doctors.id
       // Convert to integer to ensure proper type matching
-      const urologistIdInt = parseInt(urologistId);
+      const urologistIdInt = parseInt(effectiveUrologistId);
       const doctorCheck = await client.query(
         'SELECT id FROM doctors WHERE id = $1 AND is_active = true',
         [urologistIdInt]
       );
 
       if (doctorCheck.rows.length > 0) {
-        // urologistId is already a doctors.id
+        // effectiveUrologistId is already a doctors.id
         doctorId = urologistIdInt;
-        console.log(`📅 [getAllAppointments ${requestId}] urologistId ${urologistId} is already a doctors.id`);
+        console.log(`📅 [getAllAppointments ${requestId}] effectiveUrologistId ${effectiveUrologistId} is already a doctors.id`);
       } else {
-        // urologistId might be a users.id, try to find corresponding doctors.id
+        // effectiveUrologistId might be a users.id, try to find corresponding doctors.id
         const userCheck = await client.query(
           'SELECT email FROM users WHERE id = $1',
           [urologistIdInt]
@@ -3195,9 +3203,9 @@ export const getAllAppointments = async (req, res) => {
           );
           if (doctorByEmailCheck.rows.length > 0) {
             doctorId = doctorByEmailCheck.rows[0].id;
-            console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${urologistId}`);
+            console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${effectiveUrologistId}`);
           } else {
-            console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${urologistId} - returning empty results`);
+            console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${effectiveUrologistId} - returning empty results`);
             // Return empty results if no doctor record exists
             client.release();
             return res.json({
@@ -3209,8 +3217,8 @@ export const getAllAppointments = async (req, res) => {
             });
           }
         } else {
-          // urologistId is neither a doctors.id nor a users.id
-          console.log(`📅 [getAllAppointments ${requestId}] urologistId ${urologistId} not found in doctors or users table - returning empty results`);
+          // effectiveUrologistId is neither a doctors.id nor a users.id
+          console.log(`📅 [getAllAppointments ${requestId}] effectiveUrologistId ${effectiveUrologistId} not found in doctors or users table - returning empty results`);
           client.release();
           return res.json({
             success: true,
@@ -3221,6 +3229,10 @@ export const getAllAppointments = async (req, res) => {
           });
         }
       }
+    } else if (userRole === 'urologist' || userRole === 'doctor') {
+      // If no urologistId provided but user is a urologist/doctor, we should still filter
+      // This shouldn't happen if frontend passes urologistId, but as a safety measure
+      console.log(`⚠️ [getAllAppointments ${requestId}] No urologistId provided but user is ${userRole} - this should not happen`);
     }
 
     // Build first part - urologist appointments (includes regular consultations and surgery appointments)
@@ -3231,15 +3243,29 @@ export const getAllAppointments = async (req, res) => {
     // Add urologist filter - use doctors.id only
     // Note: Appointments might have been created with either doctors.id or users.id
     // But we only want to match by doctors.id (as per user requirement)
-    if (urologistId && doctorId) {
+    // For urologists/doctors, ALWAYS filter by their doctor ID to show only their appointments
+    if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
       innerQueryParams.push(doctorId);
       urologistWhere.push(`a.urologist_id = $1`);
-    } else if (urologistId && !doctorId) {
-      // If urologistId was provided but no doctor record found, don't filter (return empty)
+      console.log(`📅 [getAllAppointments ${requestId}] Filtering appointments by doctor ID: ${doctorId}`);
+    } else if ((userRole === 'urologist' || userRole === 'doctor') && !doctorId) {
+      // If user is urologist/doctor but no doctor record found, return empty results
       // This ensures we only show appointments for doctors with proper records
       innerQueryParams.push(-1); // Use invalid ID to return no results
       urologistWhere.push(`a.urologist_id = $1`);
+      console.log(`⚠️ [getAllAppointments ${requestId}] User is ${userRole} but no doctor record found - returning empty results`);
+    } else if (effectiveUrologistId && doctorId) {
+      // If urologistId was provided in query and we found doctorId, filter by it
+      innerQueryParams.push(doctorId);
+      urologistWhere.push(`a.urologist_id = $1`);
+      console.log(`📅 [getAllAppointments ${requestId}] Filtering appointments by doctor ID from query: ${doctorId}`);
+    } else if (effectiveUrologistId && !doctorId) {
+      // If urologistId was provided but no doctor record found, return empty
+      innerQueryParams.push(-1); // Use invalid ID to return no results
+      urologistWhere.push(`a.urologist_id = $1`);
+      console.log(`⚠️ [getAllAppointments ${requestId}] urologistId provided but no doctor record found - returning empty results`);
     }
+    // If no urologist filter (e.g., for nurses or superadmin), show all appointments
 
     // Note: Surgery appointments are stored in the appointments table with appointment_type = 'surgery'
     // They are already included in the first part of the UNION query

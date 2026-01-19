@@ -212,12 +212,11 @@ const Users = () => {
     }
   }, [error]);
 
-  // Get general role term for the column (Doctor for both doctor and urologist)
+  // Get general role term for the column - properly distinguish between doctor and urologist
   const getGeneralRole = (role) => {
-    if (role === 'urologist' || role === 'doctor') {
-      return 'Urologist';
-    }
     const roleMap = {
+      'urologist': 'Urologist',
+      'doctor': 'Doctor',
       'gp': 'General Practitioner',
       'urology_nurse': 'Urology Nurse'
     };
