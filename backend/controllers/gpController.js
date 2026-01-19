@@ -318,7 +318,7 @@ export const createGP = async (req, res) => {
             `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified, email_hash, phone_hash) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
              RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-            [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', false, false, emailHash, phoneHash]
+            [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', true, false, emailHash, phoneHash]
           );
         } catch (dbError) {
           await client.query('ROLLBACK');
