@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { HiHome } from 'react-icons/hi';
-import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaProcedures, FaHeartbeat } from 'react-icons/fa';
+import { FaUsers, FaCalendarAlt, FaChevronDown, FaChevronRight, FaProcedures, FaHeartbeat, FaEye } from 'react-icons/fa';
 import { IoLogOutOutline, IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import authService from '../../services/authService';
 import TermsAndConditionsModal from '../modals/TermsAndConditionsModal';
@@ -45,14 +45,14 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [isNPPModalOpen, setIsNPPModalOpen] = useState(false);
 
-  // Auto-expand Patients menu when on any patients route
-  const isPatientsExpanded = location.pathname.startsWith('/urologist/patients');
-  // Track manual expand/collapse state - initialize based on whether we're on patients route
+  // Auto-expand Patients menu when on any patients route or active-surveillance
+  const isPatientsExpanded = location.pathname.startsWith('/urologist/patients') || location.pathname === '/urologist/active-surveillance';
+  // Track manual expand/collapse state - initialize based on whether we're on patients route or active-surveillance
   const [isPatientsMenuOpen, setIsPatientsMenuOpen] = useState(() =>
-    location.pathname.startsWith('/urologist/patients')
+    location.pathname.startsWith('/urologist/patients') || location.pathname === '/urologist/active-surveillance'
   );
 
-  // Auto-expand when navigating to patients route, but preserve manual state when navigating away
+  // Auto-expand when navigating to patients route or active-surveillance, but preserve manual state when navigating away
   useEffect(() => {
     if (isPatientsExpanded) {
       setIsPatientsMenuOpen(true);
@@ -65,12 +65,13 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
       name: 'Patients',
       icon: FaUsers,
       path: '/urologist/patients/patients-under-me',
-      active: location.pathname.startsWith('/urologist/patients'),
+      active: location.pathname.startsWith('/urologist/patients') || location.pathname === '/urologist/active-surveillance',
       hasSubItems: true,
       subItems: [
         { name: 'Patients Under Me', icon: FaUsers, path: '/urologist/patients/patients-under-me', active: location.pathname === '/urologist/patients/patients-under-me' },
         { name: 'Surgery Pathway', icon: FaProcedures, path: '/urologist/patients/surgery-pathway', active: location.pathname === '/urologist/patients/surgery-pathway' },
         { name: 'Post-op Followup', icon: FaHeartbeat, path: '/urologist/patients/post-op-followup', active: location.pathname === '/urologist/patients/post-op-followup' },
+        { name: 'Active Surveillance', icon: FaEye, path: '/urologist/active-surveillance', active: location.pathname === '/urologist/active-surveillance' },
         { name: 'All Patients', icon: FaUsers, path: '/urologist/patients/all', active: location.pathname === '/urologist/patients/all' },
       ]
     },

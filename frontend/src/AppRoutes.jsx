@@ -21,6 +21,7 @@ import Unauthorized from './pages/Unauthorized';
 import UrologistDashboard from './pages/urologist/Dashboard';
 import Patients from './pages/urologist/Patients';
 import Appointments from './pages/urologist/Appointments';
+import ActiveSurveillance from './pages/urologist/ActiveSurveillance';
 
 // GP Pages
 import GPDashboard from './pages/gp/Dashboard';
@@ -90,6 +91,7 @@ const AppRoutes = () => {
         <Route path="patients/post-op-followup" element={<Patients />} />
         <Route path="patients/all" element={<Patients />} />
         <Route path="appointments" element={<Appointments />} />
+        <Route path="active-surveillance" element={<ActiveSurveillance />} />
       </Route>
 
       {/* GP Routes - Only accessible by GPs */}
