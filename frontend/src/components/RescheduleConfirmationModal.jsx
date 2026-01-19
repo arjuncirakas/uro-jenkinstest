@@ -125,24 +125,32 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
 
   // Load available time slots when doctor or date changes
   const loadAvailableSlots = async (doctorId, date) => {
-    if (!doctorId || !date) return;
+    if (!doctorId || !date) {
+      console.warn('[RescheduleConfirmationModal] Cannot load slots - missing doctorId or date:', { doctorId, date });
+      return;
+    }
 
+    console.log('[RescheduleConfirmationModal] Fetching available slots for doctor:', doctorId, 'date:', date);
     setLoadingSlots(true);
     setError(null);
     setAvailableSlots([]); // Initialize as empty array
 
     try {
       const result = await bookingService.getAvailableTimeSlots(doctorId, date, appointment?.type?.toLowerCase());
+      console.log('[RescheduleConfirmationModal] Available slots result:', result);
       if (result.success) {
-        setAvailableSlots(result.data || []);
+        const slots = result.data || [];
+        console.log('[RescheduleConfirmationModal] Loaded', slots.length, 'slots. Available:', slots.filter(s => s.available).length);
+        setAvailableSlots(slots);
       } else {
+        console.error('[RescheduleConfirmationModal] Failed to load slots:', result.error);
         setError(result.error || 'Failed to load available slots');
         setAvailableSlots([]); // Ensure it's an array even on error
       }
     } catch (error) {
+      console.error('[RescheduleConfirmationModal] Error loading available slots:', error);
       setError('Failed to load available slots');
       setAvailableSlots([]); // Ensure it's an array even on error
-      console.error('Error loading available slots:', error);
     } finally {
       setLoadingSlots(false);
     }
@@ -162,10 +170,22 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
     const slots = [];
     const slotsData = Array.isArray(availableSlots) ? availableSlots : [];
 
+    // If we haven't loaded slots yet or loading failed, mark all as available (let backend validate)
+    // This prevents false positives when API hasn't been called or failed
+    const hasLoadedSlots = !loadingSlots && slotsData.length > 0;
+
     for (let hour = 8; hour <= 17; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const isAvailable = slotsData.some(slot => slot.time === timeString && slot.available);
+        let isAvailable = true; // Default to available if we don't have data
+        
+        if (hasLoadedSlots) {
+          // Only check availability if we have successfully loaded slots
+          const slotData = slotsData.find(slot => slot.time === timeString);
+          isAvailable = slotData ? slotData.available : false;
+        }
+        // If slots are still loading or we have no data, default to available (backend will validate)
+        
         slots.push({
           time: timeString,
           available: isAvailable
@@ -183,15 +203,20 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
       return;
     }
 
-    // Validate that the selected time slot is available
-    const selectedSlot = allTimeSlots.find(slot => slot.time === selectedTime);
-    if (!selectedSlot || !selectedSlot.available) {
-      setErrorModal({
-        isOpen: true,
-        message: `The selected time slot (${formatTime(selectedTime)}) is already booked. Appointments must never overlap. Please select an available time slot to avoid scheduling conflicts.`
-      });
-      return;
+    // Only validate frontend if we have successfully loaded slots
+    // If slots are still loading or failed to load, let the backend handle validation
+    if (!loadingSlots && availableSlots.length > 0) {
+      const selectedSlot = allTimeSlots.find(slot => slot.time === selectedTime);
+      if (selectedSlot && !selectedSlot.available) {
+        setErrorModal({
+          isOpen: true,
+          message: `The selected time slot (${formatTime(selectedTime)}) is already booked. Appointments must never overlap. Please select an available time slot to avoid scheduling conflicts.`
+        });
+        return;
+      }
     }
+    // If slots haven't loaded yet or loading failed, proceed and let backend validate
+    // This prevents false positives when API hasn't been called or failed
 
     setIsConfirming(true);
     setError(null);
@@ -492,10 +517,17 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                     <button
                       key={slot.time}
                       onClick={() => {
-                        if (slot.available) {
+                        // Only block if we have loaded slots and this slot is marked unavailable
+                        // If slots are still loading, allow selection (backend will validate)
+                        if (loadingSlots || availableSlots.length === 0) {
+                          // Slots not loaded yet, allow selection
+                          setSelectedTime(slot.time);
+                          setError(null);
+                        } else if (slot.available) {
                           setSelectedTime(slot.time);
                           setError(null); // Clear any previous errors
                         } else {
+                          // Only show error if we have confirmed this slot is unavailable
                           setErrorModal({
                             isOpen: true,
                             message: `The time slot ${formatTime(slot.time)} is already booked. Appointments must never overlap. Please select an available time slot to avoid scheduling conflicts.`
