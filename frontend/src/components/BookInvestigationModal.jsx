@@ -589,7 +589,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="text-base font-semibold text-gray-900">{patient?.name}</h3>
-                  {patient?.referredByGP && (
+                  {patient?.referredByGP && patient?.isReferredByGP && (
                     <span className="px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 text-xs rounded-full font-medium">
                       GP Referral
                     </span>
@@ -602,7 +602,7 @@ const BookInvestigationModal = ({ isOpen, onClose, patient, onSuccess }) => {
                 </div>
                 {patient?.referredByGP && (
                   <div className="mt-1 text-sm text-teal-600 font-medium">
-                    Referred by: {patient.referredByGP}
+                    GP Name: {patient.referredByGP}
                   </div>
                 )}
               </div>

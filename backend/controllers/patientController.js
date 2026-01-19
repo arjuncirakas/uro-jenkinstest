@@ -983,13 +983,14 @@ export const getPatients = async (req, res) => {
         p.care_pathway, p.created_by, p.created_at, p.updated_at,
         p.triage_symptoms, p.dre_done, p.dre_findings, p.prior_biopsy,
         p.prior_biopsy_date, p.gleason_score, p.comorbidities,
-        p.gp_name, p.gp_contact,
+        p.gp_name, p.gp_contact, p.referred_by_gp_id,
         TO_CHAR(p.date_of_birth, 'YYYY-MM-DD') as date_of_birth,
         TO_CHAR(p.referral_date, 'YYYY-MM-DD') as referral_date,
         TO_CHAR(p.initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,
         TO_CHAR(p.prior_biopsy_date, 'YYYY-MM-DD') as prior_biopsy_date_formatted,
         u.first_name as created_by_first_name,
         u.last_name as created_by_last_name,
+        u.role as created_by_role,
         gp.first_name as gp_first_name,
         gp.last_name as gp_last_name,
         COALESCE(next_apt.appointment_date, next_inv_apt.appointment_date) as next_appointment_date,
@@ -1138,7 +1139,9 @@ export const getPatients = async (req, res) => {
         createdByName: decryptedPatient.created_by_first_name && decryptedPatient.created_by_last_name
           ? `${decryptedPatient.created_by_first_name} ${decryptedPatient.created_by_last_name}`
           : 'Unknown',
+        createdByRole: decryptedPatient.created_by_role,
         referredByGP: decryptedPatient.gp_first_name ? `Dr. ${decryptedPatient.gp_first_name} ${decryptedPatient.gp_last_name}` : null,
+        isReferredByGP: patient.referred_by_gp_id !== null && decryptedPatient.created_by_role === 'gp',
         createdAt: decryptedPatient.created_at,
         updatedAt: decryptedPatient.updated_at,
         // New fields for appointments and monitoring
@@ -1460,6 +1463,7 @@ export const getNewPatients = async (req, res) => {
           createdBy: patient.created_by_name ? `${patient.created_by_name} ${patient.created_by_last_name}` : 'System',
           createdByRole: patient.created_by_role,
           referredByGP: patient.gp_first_name ? `Dr. ${patient.gp_first_name} ${patient.gp_last_name}` : null,
+          isReferredByGP: patient.referred_by_gp_id !== null && patient.created_by_role === 'gp',
           assignedUrologist: patient.assigned_urologist,
           createdAt: patient.created_at,
           updatedAt: patient.updated_at,
@@ -1545,12 +1549,14 @@ export const getPatientById = async (req, res) => {
         p.care_pathway, p.created_by, p.created_at, p.updated_at,
         p.triage_symptoms, p.dre_done, p.dre_findings, p.prior_biopsy,
         p.prior_biopsy_date, p.gleason_score, p.comorbidities,
+        p.referred_by_gp_id,
         TO_CHAR(p.date_of_birth, 'YYYY-MM-DD') as date_of_birth,
         TO_CHAR(p.referral_date, 'YYYY-MM-DD') as referral_date,
         TO_CHAR(p.initial_psa_date, 'YYYY-MM-DD') as initial_psa_date,
         TO_CHAR(p.prior_biopsy_date, 'YYYY-MM-DD') as prior_biopsy_date_formatted,
         u.first_name as created_by_first_name,
         u.last_name as created_by_last_name,
+        u.role as created_by_role,
         gp.first_name as gp_first_name,
         gp.last_name as gp_last_name
       FROM patients p
@@ -1630,7 +1636,9 @@ export const getPatientById = async (req, res) => {
           createdByName: decryptedPatient.created_by_first_name && decryptedPatient.created_by_last_name
             ? `${decryptedPatient.created_by_first_name} ${decryptedPatient.created_by_last_name}`
             : 'Unknown',
+          createdByRole: decryptedPatient.created_by_role,
           referredByGP: decryptedPatient.gp_first_name ? `Dr. ${decryptedPatient.gp_first_name} ${decryptedPatient.gp_last_name}` : null,
+          isReferredByGP: patient.referred_by_gp_id !== null && decryptedPatient.created_by_role === 'gp',
           createdAt: decryptedPatient.created_at,
           updatedAt: decryptedPatient.updated_at,
           latest_psa: latestPSA,

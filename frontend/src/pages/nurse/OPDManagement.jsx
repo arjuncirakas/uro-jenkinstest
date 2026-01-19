@@ -1064,11 +1064,11 @@ const OPDManagement = () => {
                             </div>
                             {patient.referredByGP && (
                               <div className="text-xs text-teal-600 mb-1">
-                                Referred by: {patient.referredByGP}
+                                GP Name: {patient.referredByGP}
                               </div>
                             )}
-                            {/* Only show GP Referral tag if patient was created by a GP */}
-                            {patient.createdByRole === 'gp' && (
+                            {/* Only show GP Referral tag if patient was created by a GP and NOT referred by GP */}
+                            {patient.createdByRole === 'gp' && !patient.isReferredByGP && (
                               <div className="text-xs text-teal-600 mb-1">
                                 Created by GP
                               </div>
