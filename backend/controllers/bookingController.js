@@ -2398,6 +2398,16 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
     console.log(`[rescheduleNoShowAppointment] Found doctor: ${doctorName} (Doctor ID: ${finalDoctorId}, Source: ${doctorSource})`);
 
+    // Get user details for author information in timeline entries
+    const userQuery = await client.query(
+      'SELECT first_name, last_name, role FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const authorName = userQuery.rows.length > 0
+      ? `${userQuery.rows[0].first_name} ${userQuery.rows[0].last_name}`
+      : 'Unknown User';
+    const authorRole = userQuery.rows.length > 0 ? userQuery.rows[0].role : req.user.role || 'Unknown';
+
     // Start transaction
     await client.query('BEGIN');
 
@@ -2518,8 +2528,8 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         // Add timeline entry
         const timelineNote = `Appointment type changed from ${originalAppointmentType} to investigation and scheduled for ${newDate} at ${newTime} with ${doctorName}`;
         await client.query(
-          'INSERT INTO patient_notes (patient_id, note_content, author_id, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
-          [patientIdForTimeline, timelineNote, req.user.id]
+          'INSERT INTO patient_notes (patient_id, note_content, author_id, author_name, author_role, created_at) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)',
+          [patientIdForTimeline, timelineNote, req.user.id, authorName, authorRole]
         );
 
         // Commit and return
@@ -2701,14 +2711,14 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
       // Add timeline entry for the update
       const timelineQuery = `
-        INSERT INTO patient_notes (patient_id, note_content, author_id, created_at)
-        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+        INSERT INTO patient_notes (patient_id, note_content, author_id, author_name, author_role, created_at)
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
       `;
 
       const timelineNote = currentStatus === 'no_show'
         ? `Investigation appointment rescheduled from no-show to ${newDate} at ${newTime} with ${doctorName}`
         : `Investigation appointment updated to ${newDate} at ${newTime} with ${doctorName}`;
-      await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id]);
+      await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id, authorName, authorRole]);
 
     } else {
       // Update urologist appointment (for both no-show and regular appointments)
@@ -2817,8 +2827,8 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
       // Add timeline entry for the update (if rescheduleReason is provided, include it)
       const timelineQuery = `
-        INSERT INTO patient_notes (patient_id, note_content, author_id, created_at)
-        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+        INSERT INTO patient_notes (patient_id, note_content, author_id, author_name, author_role, created_at)
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
       `;
 
       let timelineNote = currentStatus === 'no_show'
@@ -2829,7 +2839,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         timelineNote += `. Reason: ${rescheduleReason.trim()}`;
       }
 
-      await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id]);
+      await client.query(timelineQuery, [patientIdForTimeline, timelineNote, req.user.id, authorName, authorRole]);
     }
 
     // Commit transaction
