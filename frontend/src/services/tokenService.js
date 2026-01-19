@@ -173,7 +173,36 @@ class TokenService {
         throw new Error('Token refresh failed');
       } catch (error) {
         console.error('❌ [Token Service] Proactive token refresh error:', error);
-        this.clearAuth();
+        
+        // Check if this is a network error vs actual auth failure
+        const isNetworkError = !error.response && (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('Failed to fetch'));
+        const isAuthFailure = error.response?.status === 401 || 
+                             error.response?.status === 403 ||
+                             error.message?.includes('expired') ||
+                             error.message?.includes('invalid');
+        
+        // Only clear auth on actual authentication failures, not network errors
+        if (isNetworkError) {
+          console.warn('⚠️ [Token Service] Network error during proactive refresh - not clearing auth. Will retry later.');
+          return false; // Return false but don't clear auth
+        }
+        
+        // Check if refresh token is actually expired
+        if (!this.isRefreshTokenValid()) {
+          console.warn('⚠️ [Token Service] Refresh token expired - clearing auth');
+          this.clearAuth();
+          return false;
+        }
+        
+        // If it's an auth failure but refresh token is still valid, might be server issue
+        if (isAuthFailure) {
+          console.warn('⚠️ [Token Service] Authentication failure - clearing auth');
+          this.clearAuth();
+          return false;
+        }
+        
+        // For other errors (server errors, etc.), don't clear auth
+        console.warn('⚠️ [Token Service] Token refresh failed but not clearing auth - may be temporary server issue');
         return false;
       }
     }

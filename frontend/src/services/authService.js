@@ -171,8 +171,35 @@ class AuthService {
 
       return response.data;
     } catch (error) {
-      // If refresh fails, clear auth data
-      tokenService.clearAuth();
+      // Check if this is a network error vs actual auth failure
+      const isNetworkError = !error.response && (error.message?.includes('network') || error.message?.includes('timeout') || error.message?.includes('ECONNREFUSED'));
+      const isAuthFailure = error.response?.status === 401 || 
+                           error.response?.status === 403 ||
+                           error.message?.includes('expired') ||
+                           error.message?.includes('invalid');
+      
+      // Only clear auth on actual authentication failures, not network errors
+      if (isNetworkError) {
+        console.warn('⚠️ [Auth Service] Network error during token refresh - not clearing auth');
+        throw handleApiError(error);
+      }
+      
+      // Check if refresh token is actually expired
+      if (!tokenService.isRefreshTokenValid()) {
+        console.warn('⚠️ [Auth Service] Refresh token expired - clearing auth');
+        tokenService.clearAuth();
+        throw handleApiError(error);
+      }
+      
+      // If it's an auth failure but refresh token is still valid, clear auth
+      if (isAuthFailure) {
+        console.warn('⚠️ [Auth Service] Authentication failure - clearing auth');
+        tokenService.clearAuth();
+        throw handleApiError(error);
+      }
+      
+      // For other errors (server errors, etc.), don't clear auth
+      console.warn('⚠️ [Auth Service] Token refresh failed but not clearing auth - may be temporary server issue');
       throw handleApiError(error);
     }
   }

@@ -143,13 +143,44 @@ apiClient.interceptors.response.use(
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
-        // Refresh failed, clear auth data and redirect to login
-        const { default: tokenService } = await import('../services/tokenService.js');
-        tokenService.clearAuth();
         
-        // Redirect to login page
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+        // Import tokenService dynamically
+        const { default: tokenService } = await import('../services/tokenService.js');
+        
+        // Check if this is a network error (no response) vs actual auth failure
+        const isNetworkError = !refreshError.response;
+        const isAuthFailure = refreshError.response?.status === 401 || 
+                              refreshError.response?.status === 403 ||
+                              refreshError.message?.includes('expired') ||
+                              refreshError.message?.includes('invalid');
+        
+        // Only logout on actual authentication failures, not network errors
+        if (isNetworkError) {
+          console.warn('⚠️ [Axios] Network error during token refresh - not logging out. Original request will fail.');
+          // Don't logout on network errors - just reject the original request
+          // The user can retry when network is back
+          return Promise.reject(error);
+        }
+        
+        // Check if refresh token is actually expired
+        if (!tokenService.isRefreshTokenValid()) {
+          console.warn('⚠️ [Axios] Refresh token expired - logging out');
+          tokenService.clearAuth();
+          window.location.href = '/login';
+          return Promise.reject(refreshError);
+        }
+        
+        // If it's an auth failure but refresh token is still valid, logout
+        if (isAuthFailure) {
+          console.warn('⚠️ [Axios] Authentication failure during token refresh - logging out');
+          tokenService.clearAuth();
+          window.location.href = '/login';
+          return Promise.reject(refreshError);
+        }
+        
+        // For other errors (server errors, etc.), don't logout - just reject
+        console.warn('⚠️ [Axios] Token refresh failed but not logging out - may be temporary server issue');
+        return Promise.reject(error);
       }
     }
     
