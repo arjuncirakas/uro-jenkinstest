@@ -17,6 +17,7 @@ import SuccessModal from './modals/SuccessModal';
 import ErrorModal from './modals/ErrorModal';
 import { doctorsService } from '../services/doctorsService';
 import { investigationService } from '../services/investigationService';
+import authService from '../services/authService';
 
 const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
   // Early return if patient is not provided
@@ -99,6 +100,78 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
       setAvailableTeamMembers(doctorsResponse);
       setDepartments(departmentsResponse.success ? departmentsResponse.data : []);
       
+      // After fetching doctors, automatically add current doctor to team members if not already added
+      const currentUser = authService.getCurrentUser();
+      if (currentUser) {
+        const currentUserFirstName = (currentUser.first_name || currentUser.firstName || '').toLowerCase().trim();
+        const currentUserLastName = (currentUser.last_name || currentUser.lastName || '').toLowerCase().trim();
+        
+        // Find current user in the doctors list by ID first, then by name
+        let currentDoctor = null;
+        if (currentUser.id) {
+          currentDoctor = doctorsResponse.find(doctor => {
+            const doctorId = doctor.id || doctor.user_id;
+            return doctorId === currentUser.id;
+          });
+        }
+        
+        // If not found by ID, try to find by name
+        if (!currentDoctor && currentUserFirstName && currentUserLastName) {
+          currentDoctor = doctorsResponse.find(doctor => {
+            const doctorFirstName = (doctor.first_name || '').toLowerCase().trim();
+            const doctorLastName = (doctor.last_name || '').toLowerCase().trim();
+            return doctorFirstName === currentUserFirstName && doctorLastName === currentUserLastName;
+          });
+        }
+        
+        if (currentDoctor) {
+          // Use the formatted name from the dropdown (includes specialization)
+          const formattedName = currentDoctor.name || doctorsService.formatDoctorName(currentDoctor);
+          
+          // Add to team members if not already present
+          setMdtForm(prev => {
+            const isAlreadyAdded = prev.teamMembers.some(member => {
+              const memberLower = member.toLowerCase();
+              return member === formattedName || 
+                     memberLower.includes(currentUserFirstName) ||
+                     memberLower.includes(currentUserLastName);
+            });
+            
+            if (!isAlreadyAdded) {
+              return {
+                ...prev,
+                teamMembers: [formattedName, ...prev.teamMembers]
+              };
+            }
+            return prev;
+          });
+        } else {
+          // If current doctor not in list, add with basic name format
+          const firstName = currentUser.first_name || currentUser.firstName || '';
+          const lastName = currentUser.last_name || currentUser.lastName || '';
+          
+          if (firstName && lastName) {
+            const basicName = `${firstName} ${lastName}`.trim();
+            setMdtForm(prev => {
+              const isAlreadyAdded = prev.teamMembers.some(member => {
+                const memberLower = member.toLowerCase();
+                return member === basicName || 
+                       memberLower.includes(firstName.toLowerCase()) ||
+                       memberLower.includes(lastName.toLowerCase());
+              });
+              
+              if (!isAlreadyAdded) {
+                return {
+                  ...prev,
+                  teamMembers: [basicName, ...prev.teamMembers]
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      }
+      
       console.log('Updated available team members:', doctorsResponse);
       console.log('Updated departments:', departmentsResponse.success ? departmentsResponse.data : []);
     } catch (error) {
@@ -177,7 +250,7 @@ const MDTSchedulingModal = ({ isOpen, onClose, onScheduled, patient }) => {
         notes: ''
       });
       
-      // Fetch doctors and departments
+      // Fetch doctors and departments (will automatically add current doctor after fetch)
       fetchDoctorsAndDepartments();
     }
   }, [isOpen]);

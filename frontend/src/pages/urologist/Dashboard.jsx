@@ -1381,7 +1381,7 @@ const UrologistDashboard = () => {
               <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex-shrink-0">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-base sm:text-lg font-semibold text-gray-900">
-                    {activeTab === 'appointments' ? "Today's Appointments" : activeTab === 'recentPatients' ? "Recent Patients" : "My Surgical Queue"}
+                    {activeTab === 'appointments' ? "Today's Appointments" : "My Surgical Queue"}
                   </h2>
                   {/* Tabs */}
                   <div className="flex bg-gray-100 rounded-lg p-1">
@@ -1403,15 +1403,6 @@ const UrologistDashboard = () => {
                     >
                       Surgical Queue
                     </button>
-                    <button
-                      onClick={() => setActiveTab('recentPatients')}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${activeTab === 'recentPatients'
-                        ? 'bg-teal-600 text-white'
-                        : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                    >
-                      Recent Patients
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1429,19 +1420,11 @@ const UrologistDashboard = () => {
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Priority</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Actions</th>
                           </>
-                        ) : activeTab === 'appointments' ? (
-                          <>
-                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Time</th>
-                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Patient Name</th>
-                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Age</th>
-                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Actions</th>
-                          </>
                         ) : (
                           <>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Time</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Patient Name</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Age</th>
-                            <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Status</th>
                             <th className="text-left py-3 px-3 sm:px-6 font-medium text-gray-600 text-xs sm:text-sm">Actions</th>
                           </>
                         )}
@@ -1563,50 +1546,6 @@ const UrologistDashboard = () => {
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 <button
                                   onClick={() => patientModalRef.current?.openPatientDetails(patient.patient, { age: patient.age }, 'surgery-pathway')}
-                                  className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
-                                  aria-label={`View details for ${patient.patient}`}
-                                >
-                                  View
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )
-                      ) : (
-                        loadingRecentPatients ? (
-                          <tr>
-                            <td colSpan="5" className="py-8 text-center text-gray-500">
-                              Loading recent patients...
-                            </td>
-                          </tr>
-                        ) : recentPatientsError ? (
-                          <tr>
-                            <td colSpan="5" className="py-8 text-center text-red-500">
-                              Error: {recentPatientsError}
-                            </td>
-                          </tr>
-                        ) : recentPatients.length === 0 ? (
-                          <tr>
-                            <td colSpan="5" className="py-8 text-center text-gray-500">
-                              No recent patients
-                            </td>
-                          </tr>
-                        ) : (
-                          recentPatients.map((patient, index) => (
-                            <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.time}</td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-900 text-xs sm:text-sm font-medium">
-                                <div className="flex items-center space-x-2">
-                                  <span>{patient.patient}</span>
-                                </div>
-                              </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">{patient.age ? `${patient.age} years old` : 'N/A'}</td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6">
-                                {getStatusBadge(patient.status, patient.statusColor)}
-                              </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6">
-                                <button
-                                  onClick={() => patientModalRef.current?.openPatientDetails(patient.patient, { age: patient.age })}
                                   className="px-3 py-1 bg-teal-600 text-white text-xs rounded-md hover:bg-teal-700 transition-colors"
                                   aria-label={`View details for ${patient.patient}`}
                                 >
