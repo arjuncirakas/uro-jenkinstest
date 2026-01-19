@@ -1007,7 +1007,6 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                         }}
                         className="px-3 py-2 bg-teal-600 text-white text-sm rounded hover:bg-teal-700 flex items-center gap-1"
                       >
-                        <Plus className="h-4 w-4" />
                         Add
                       </button>
                     </div>
@@ -1070,7 +1069,6 @@ const MDTNotesModal = ({ isOpen, onClose, patientName, outcome, meetingId }) => 
                         }}
                         className="px-3 py-2 bg-teal-600 text-white text-sm rounded hover:bg-teal-700 flex items-center gap-1"
                       >
-                        <Plus className="h-4 w-4" />
                         Add
                       </button>
                     </div>

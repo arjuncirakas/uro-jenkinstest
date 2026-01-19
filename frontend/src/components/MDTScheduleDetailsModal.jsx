@@ -15,7 +15,6 @@ import {
   Stethoscope,
   Activity,
   CheckCircle,
-  Plus,
   Upload,
   Eye,
   Download,
@@ -602,7 +601,6 @@ const MDTScheduleDetailsModal = ({ isOpen, onClose, schedule }) => {
                       disabled={!newRecommendation.trim()}
                       className="px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                      <Plus className="h-4 w-4" />
                       Add
                     </button>
                   </div>
@@ -664,7 +662,6 @@ const MDTScheduleDetailsModal = ({ isOpen, onClose, schedule }) => {
                       disabled={!newFollowUpAction.trim()}
                       className="px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                      <Plus className="h-4 w-4" />
                       Add
                     </button>
                   </div>
