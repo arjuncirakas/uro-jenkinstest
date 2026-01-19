@@ -10,7 +10,8 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  X
+  X,
+  Activity
 } from 'lucide-react';
 
 const ViewUserModal = ({ isOpen, onClose, user }) => {
