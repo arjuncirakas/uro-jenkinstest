@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { sendPasswordEmail } from '../services/emailService.js';
+import { sendPasswordSetupEmail } from '../services/emailService.js';
 import { validationResult } from 'express-validator';
 import { withDatabaseClient } from '../utils/dbHelper.js';
 import { encrypt, decryptFields, createSearchableHash } from '../services/encryptionService.js';
@@ -102,41 +102,33 @@ const checkUserExists = async (client, email, phone) => {
   return { exists: false };
 };
 
-// Helper function to send password email with logging
-const sendPasswordEmailWithLogging = async (email, firstName, tempPassword) => {
+// Helper function to send password setup email with logging
+const sendPasswordSetupEmailWithLogging = async (email, firstName, setupToken) => {
   let emailSent = false;
   let emailError = null;
 
   try {
-    console.log(`📧 ========== Starting email send process ==========`);
+    console.log(`📧 ========== Starting password setup email send process ==========`);
     console.log(`📧 Recipient: ${email}`);
     console.log(`📧 GP Name: ${firstName}`);
-    console.log(`📧 Password length: ${tempPassword.length} characters`);
+    console.log(`📧 Setup token: ${setupToken.substring(0, 8)}...`);
 
-    const emailResult = await sendPasswordEmail(email, firstName, tempPassword);
+    const emailResult = await sendPasswordSetupEmail(email, firstName, setupToken);
     emailSent = emailResult.success;
 
     if (emailResult.success) {
-      console.log(`✅ ========== Email sent successfully ==========`);
+      console.log(`✅ ========== Password setup email sent successfully ==========`);
       console.log(`✅ Message ID: ${emailResult.messageId}`);
-      console.log(`✅ Accepted recipients:`, emailResult.accepted);
-      console.log(`✅ SMTP Response:`, emailResult.response);
     } else {
-      console.error(`❌ ========== Email send failed ==========`);
+      console.error(`❌ ========== Password setup email send failed ==========`);
       console.error(`❌ Error:`, emailResult.error || emailResult.message);
-      console.error(`❌ Accepted:`, emailResult.accepted);
-      console.error(`❌ Rejected:`, emailResult.rejected);
-      console.error(`❌ Response:`, emailResult.response);
       emailError = emailResult.error || emailResult.message;
     }
   } catch (error) {
-    console.error('❌ ========== Exception during email send ==========');
+    console.error('❌ ========== Exception during password setup email send ==========');
     console.error('❌ Exception type:', error.constructor.name);
     console.error('❌ Exception message:', error.message);
     console.error('❌ Exception code:', error.code);
-    console.error('❌ Exception command:', error.command);
-    console.error('❌ Exception response:', error.response);
-    console.error('❌ Exception responseCode:', error.responseCode);
     console.error('❌ Error stack:', error.stack);
     emailError = error.message || 'Unknown error';
   }
@@ -285,11 +277,11 @@ export const createGP = async (req, res) => {
           return sendResponse(userCheck.response.status, userCheck.response.json);
         }
 
-        // Generate password and hash
+        // Generate a temporary password hash (will be changed on first login via password setup)
         let tempPassword;
         let passwordHash;
         try {
-          tempPassword = generateSecurePassword();
+          tempPassword = crypto.randomBytes(12).toString('hex');
           const saltRounds = 12;
           passwordHash = await bcrypt.hash(tempPassword, saltRounds);
         } catch (hashError) {
@@ -319,14 +311,14 @@ export const createGP = async (req, res) => {
           });
         }
 
-        // Insert new GP with encrypted data and hashes
+        // Insert new GP with encrypted data and hashes (not verified yet, will be activated after password setup)
         let result;
         try {
           result = await client.query(
             `INSERT INTO users (email, password_hash, first_name, last_name, phone, organization, role, is_active, is_verified, email_hash, phone_hash) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
              RETURNING id, email, first_name, last_name, phone, organization, role, created_at`,
-            [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', true, true, emailHash, phoneHash]
+            [encryptedEmail, passwordHash, first_name, last_name, encryptedPhone, organization || null, 'gp', false, false, emailHash, phoneHash]
           );
         } catch (dbError) {
           await client.query('ROLLBACK');
@@ -369,11 +361,21 @@ export const createGP = async (req, res) => {
           decryptedGP = newGP;
         }
 
-        // Send password email - wrap in try-catch to prevent email errors from failing the entire operation
+        // Generate password setup token
+        const setupToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+        // Store password setup token
+        await client.query(
+          'INSERT INTO password_setup_tokens (user_id, email, token, expires_at) VALUES ($1, $2, $3, $4)',
+          [newGP.id, email, setupToken, expiresAt]
+        );
+
+        // Send password setup email - wrap in try-catch to prevent email errors from failing the entire operation
         let emailSent = false;
         let emailError = null;
         try {
-          const emailResult = await sendPasswordEmailWithLogging(email, first_name, tempPassword);
+          const emailResult = await sendPasswordSetupEmailWithLogging(email, first_name, setupToken);
           emailSent = emailResult.emailSent;
           emailError = emailResult.emailError;
         } catch (emailErr) {
@@ -386,17 +388,16 @@ export const createGP = async (req, res) => {
 
         // Log the result
         if (emailSent) {
-          console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), email sent to ${email}`);
+          console.log(`✅ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), password setup email sent to ${email}`);
         } else {
           console.warn(`⚠️ GP created successfully: ${first_name} ${last_name} (ID: ${newGP.id}), but email failed: ${emailError || 'Unknown error'}`);
-          console.warn(`⚠️ Temporary password for ${email}: ${tempPassword}`);
         }
 
         sendResponse(201, {
           success: true,
           message: emailSent
-            ? 'GP created successfully. Login credentials have been sent to the email address. Please check the inbox and spam folder.'
-            : `GP created successfully but email sending failed: ${emailError || 'Unknown error'}. Please contact support.`,
+            ? 'GP created successfully. Password setup email sent.'
+            : 'GP created successfully but email sending failed. Please contact support.',
           data: {
             userId: decryptedGP.id,
             email: decryptedGP.email || email, // Use decrypted or fallback to original
@@ -404,8 +405,7 @@ export const createGP = async (req, res) => {
             lastName: decryptedGP.last_name || last_name,
             role: decryptedGP.role || 'gp',
             emailSent,
-            emailError: emailError || null,
-            ...(emailSent ? {} : { tempPassword: tempPassword })
+            emailError: emailError || null
           }
         });
       } catch (error) {
