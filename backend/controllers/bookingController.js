@@ -1,6 +1,6 @@
 import pool from '../config/database.js';
 import { decryptFields } from '../services/encryptionService.js';
-import { PATIENT_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
+import { PATIENT_ENCRYPTED_FIELDS, USER_ENCRYPTED_FIELDS } from '../constants/encryptionFields.js';
 import { sendAppointmentReminderEmail } from '../services/emailService.js';
 
 // Helper function to get test result status
@@ -3191,22 +3191,41 @@ export const getAllAppointments = async (req, res) => {
         console.log(`📅 [getAllAppointments ${requestId}] effectiveUrologistId ${effectiveUrologistId} is already a doctors.id`);
       } else {
         // effectiveUrologistId might be a users.id, try to find corresponding doctors.id
+        // Note: users.email is encrypted, doctors.email is plaintext, so we need to decrypt
         const userCheck = await client.query(
           'SELECT email FROM users WHERE id = $1',
           [urologistIdInt]
         );
         if (userCheck.rows.length > 0) {
-          const userEmail = userCheck.rows[0].email;
-          const doctorByEmailCheck = await client.query(
-            'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
-            [userEmail]
-          );
-          if (doctorByEmailCheck.rows.length > 0) {
-            doctorId = doctorByEmailCheck.rows[0].id;
-            console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${effectiveUrologistId}`);
+          const userEmailEncrypted = userCheck.rows[0].email;
+          
+          // Decrypt the user's email to compare with doctors.email (which is plaintext)
+          const decryptedUser = decryptFields({ email: userEmailEncrypted }, USER_ENCRYPTED_FIELDS);
+          const decryptedEmail = decryptedUser.email;
+          
+          if (decryptedEmail) {
+            const doctorByEmailCheck = await client.query(
+              'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+              [decryptedEmail]
+            );
+            
+            if (doctorByEmailCheck.rows.length > 0) {
+              doctorId = doctorByEmailCheck.rows[0].id;
+              console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${effectiveUrologistId} (email: ${decryptedEmail})`);
+            } else {
+              console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${effectiveUrologistId} with email ${decryptedEmail} - returning empty results`);
+              // Return empty results if no doctor record exists
+              client.release();
+              return res.json({
+                success: true,
+                data: {
+                  appointments: [],
+                  count: 0
+                }
+              });
+            }
           } else {
-            console.log(`📅 [getAllAppointments ${requestId}] No doctor record found for user ${effectiveUrologistId} - returning empty results`);
-            // Return empty results if no doctor record exists
+            console.log(`📅 [getAllAppointments ${requestId}] Could not decrypt email for user ${effectiveUrologistId} - returning empty results`);
             client.release();
             return res.json({
               success: true,
@@ -3244,26 +3263,22 @@ export const getAllAppointments = async (req, res) => {
     // Note: Appointments might have been created with either doctors.id or users.id
     // But we only want to match by doctors.id (as per user requirement)
     // For urologists/doctors, ALWAYS filter by their doctor ID to show only their appointments
-    if ((userRole === 'urologist' || userRole === 'doctor') && doctorId) {
+    if (doctorId) {
+      // If we found a doctorId (either from query or from logged-in user), ALWAYS filter by it
       innerQueryParams.push(doctorId);
       urologistWhere.push(`a.urologist_id = $1`);
-      console.log(`📅 [getAllAppointments ${requestId}] Filtering appointments by doctor ID: ${doctorId}`);
-    } else if ((userRole === 'urologist' || userRole === 'doctor') && !doctorId) {
+      console.log(`📅 [getAllAppointments ${requestId}] ✅ Filtering appointments by doctor ID: ${doctorId} (user role: ${userRole}, effectiveUrologistId: ${effectiveUrologistId})`);
+    } else if (userRole === 'urologist' || userRole === 'doctor') {
       // If user is urologist/doctor but no doctor record found, return empty results
       // This ensures we only show appointments for doctors with proper records
       innerQueryParams.push(-1); // Use invalid ID to return no results
       urologistWhere.push(`a.urologist_id = $1`);
       console.log(`⚠️ [getAllAppointments ${requestId}] User is ${userRole} but no doctor record found - returning empty results`);
-    } else if (effectiveUrologistId && doctorId) {
-      // If urologistId was provided in query and we found doctorId, filter by it
-      innerQueryParams.push(doctorId);
-      urologistWhere.push(`a.urologist_id = $1`);
-      console.log(`📅 [getAllAppointments ${requestId}] Filtering appointments by doctor ID from query: ${doctorId}`);
-    } else if (effectiveUrologistId && !doctorId) {
-      // If urologistId was provided but no doctor record found, return empty
+    } else if (effectiveUrologistId) {
+      // If urologistId was provided in query but no doctor record found, return empty
       innerQueryParams.push(-1); // Use invalid ID to return no results
       urologistWhere.push(`a.urologist_id = $1`);
-      console.log(`⚠️ [getAllAppointments ${requestId}] urologistId provided but no doctor record found - returning empty results`);
+      console.log(`⚠️ [getAllAppointments ${requestId}] urologistId ${effectiveUrologistId} provided but no doctor record found - returning empty results`);
     }
     // If no urologist filter (e.g., for nurses or superadmin), show all appointments
 

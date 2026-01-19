@@ -26,6 +26,13 @@ const Appointments = () => {
 
   // Get current urologist ID from authentication
   const currentUrologistId = tokenService.getUserId();
+  const currentUser = tokenService.getUser();
+  
+  // Log for debugging
+  useEffect(() => {
+    console.log('🔍 [Urologist Appointments] Current user ID:', currentUrologistId);
+    console.log('🔍 [Urologist Appointments] Current user:', currentUser);
+  }, [currentUrologistId, currentUser]);
 
   // Memoized callback to close profile dropdown
   const handleProfileClose = useCallback(() => {
@@ -38,6 +45,7 @@ const Appointments = () => {
     setAppointmentsError(null);
 
     try {
+      console.log('🔍 [Urologist Appointments] Fetching appointments for urologist ID:', currentUrologistId);
       const result = await bookingService.getAllAppointments({
         urologistId: currentUrologistId, // Always filter by logged-in doctor
         search: searchQuery
