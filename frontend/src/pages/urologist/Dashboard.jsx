@@ -1555,7 +1555,7 @@ const UrologistDashboard = () => {
                             </tr>
                           ))
                         )
-                      )}
+                      ) : null}
                     </tbody>
                   </table>
                 </div>
