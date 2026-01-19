@@ -1228,25 +1228,19 @@ export const getNewPatients = async (req, res) => {
         const userEmail = req.user?.email;
         console.log(`👥 [getNewPatients ${requestId}] Looking up doctor ID for user ${userId} (email: ${userEmail})`);
 
-        // First try to find by user_id
-        let doctorCheck = await client.query(
-          `SELECT id FROM doctors WHERE user_id = $1`,
-          [userId]
-        );
-
-        // If not found, try by email
-        if (doctorCheck.rows.length === 0 && userEmail) {
-          doctorCheck = await client.query(
-            `SELECT id FROM doctors WHERE email = $1`,
+        // Find doctor by email (doctors table links to users via email)
+        if (userEmail) {
+          const doctorCheck = await client.query(
+            `SELECT id FROM doctors WHERE email = $1 AND is_active = true`,
             [userEmail]
           );
-        }
 
-        if (doctorCheck.rows.length > 0) {
-          doctorId = doctorCheck.rows[0].id;
-          console.log(`👥 [getNewPatients ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
-        } else {
-          console.log(`👥 [getNewPatients ${requestId}] No doctor record found for user ${userId}`);
+          if (doctorCheck.rows.length > 0) {
+            doctorId = doctorCheck.rows[0].id;
+            console.log(`👥 [getNewPatients ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
+          } else {
+            console.log(`👥 [getNewPatients ${requestId}] No doctor record found for user ${userId}`);
+          }
         }
       } catch (doctorIdError) {
         console.error(`👥 [getNewPatients ${requestId}] Error getting doctor ID:`, doctorIdError);

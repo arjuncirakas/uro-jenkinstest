@@ -1475,25 +1475,19 @@ export const getUpcomingAppointments = async (req, res) => {
     let doctorId = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
       try {
-        // First try to find by user_id
-        let doctorCheck = await client.query(
-          `SELECT id FROM doctors WHERE user_id = $1 AND is_active = true`,
-          [userId]
-        );
-
-        // If not found, try by email
-        if (doctorCheck.rows.length === 0 && userEmail) {
-          doctorCheck = await client.query(
+        // Find doctor by email (doctors table links to users via email)
+        if (userEmail) {
+          const doctorCheck = await client.query(
             `SELECT id FROM doctors WHERE email = $1 AND is_active = true`,
             [userEmail]
           );
-        }
 
-        if (doctorCheck.rows.length > 0) {
-          doctorId = doctorCheck.rows[0].id;
-          console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
-        } else {
-          console.log(`📅 [getUpcomingAppointments ${requestId}] No doctor record found for user ${userId}`);
+          if (doctorCheck.rows.length > 0) {
+            doctorId = doctorCheck.rows[0].id;
+            console.log(`📅 [getUpcomingAppointments ${requestId}] Found doctor ID: ${doctorId} for user ${userId}`);
+          } else {
+            console.log(`📅 [getUpcomingAppointments ${requestId}] No doctor record found for user ${userId}`);
+          }
         }
       } catch (doctorIdError) {
         console.error(`📅 [getUpcomingAppointments ${requestId}] Error getting doctor ID:`, doctorIdError);
