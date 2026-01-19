@@ -3404,7 +3404,7 @@ export const getPatientsDueForReview = async (req, res) => {
       postOpFollowup: patients.filter(p => p.type === 'Post-Op Follow-up').length,
       investigation: patients.filter(p => p.type === 'Investigation').length,
       surgical: patients.filter(p => p.type === 'Surgery').length,
-      followup: patients.filter(p => p.type === 'Follow-up').length
+      followup: patients.filter(p => p.type === 'Follow-up' || p.type === 'Follow-up Appointment').length
     };
 
     console.log(`[getPatientsDueForReview] Found ${patients.length} patients due for review`);

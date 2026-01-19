@@ -81,7 +81,8 @@ const UrologistDashboard = () => {
     total: 0,
     postOpFollowup: 0,
     investigation: 0,
-    surgical: 0
+    surgical: 0,
+    followup: 0
   });
   const [loadingPatientsDueForReview, setLoadingPatientsDueForReview] = useState(false);
   const [patientsDueForReviewError, setPatientsDueForReviewError] = useState(null);
@@ -904,7 +905,8 @@ const UrologistDashboard = () => {
           total: 0,
           postOpFollowup: 0,
           investigation: 0,
-          surgical: 0
+          surgical: 0,
+          followup: 0
         };
 
         // Transform appointments to match the modal's expected format
@@ -958,7 +960,8 @@ const UrologistDashboard = () => {
           total: 0,
           postOpFollowup: 0,
           investigation: 0,
-          surgical: 0
+          surgical: 0,
+          followup: 0
         });
       }
     } catch (error) {
@@ -1625,6 +1628,10 @@ const UrologistDashboard = () => {
                             <div className="flex justify-between">
                               <span>Surgical:</span>
                               <span className="font-medium">{patientsDueForReviewSummary.surgical}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Followup:</span>
+                              <span className="font-medium">{patientsDueForReviewSummary.followup}</span>
                             </div>
                           </div>
                         </div>

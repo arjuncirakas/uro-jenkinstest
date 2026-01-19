@@ -1823,7 +1823,23 @@ export const getUpcomingAppointments = async (req, res) => {
       ).length,
       surgical: formattedAppointments.filter(apt =>
         apt.type === 'Surgery Appointment' || apt.type === 'surgery' || apt.type === 'Surgery'
-      ).length
+      ).length,
+      followup: formattedAppointments.filter(apt => {
+        // Count as followup if:
+        // 1. Type is 'automatic' (auto-booked follow-up appointments)
+        // 2. TypeLabel is 'Follow-up Appointment'
+        // 3. Type is not investigation, surgery, and care pathway is not Post-op or Investigation
+        const isAutomaticFollowup = apt.type === 'automatic' || apt.typeLabel === 'Follow-up Appointment';
+        const isNotOtherType = apt.type !== 'investigation' && 
+                              apt.type !== 'surgery' && 
+                              apt.type !== 'surgical' &&
+                              apt.type !== 'Investigation Appointment' &&
+                              apt.type !== 'Surgery Appointment';
+        const isNotOtherPathway = apt.carePathway !== 'Post-op Transfer' && 
+                                 apt.carePathway !== 'Post-op Followup' &&
+                                 apt.carePathway !== 'Investigation Pathway';
+        return isAutomaticFollowup || (isNotOtherType && isNotOtherPathway);
+      }).length
     };
 
     res.json({
