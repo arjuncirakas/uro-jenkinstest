@@ -359,8 +359,17 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className={`w-4 h-4 rounded mt-0.5 ${appointment.typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500'
-                    }`}></div>
+                  <div className={`w-4 h-4 rounded mt-0.5 ${
+                    appointment.typeColor === 'orange' ? 'bg-orange-500' :
+                    appointment.typeColor === 'teal' ? 'bg-teal-500' :
+                    appointment.typeColor === 'green' ? 'bg-green-500' :
+                    appointment.typeColor === 'blue' ? 'bg-blue-500' :
+                    appointment.typeColor === 'purple' ? 'bg-purple-500' :
+                    (appointment.type || appointment.appointment_type || '').toLowerCase().includes('surgery') ? 'bg-orange-500' :
+                    (appointment.type || appointment.appointment_type || '').toLowerCase().includes('investigation') ? 'bg-purple-500' :
+                    (appointment.type || appointment.appointment_type || '').toLowerCase().includes('mdt') ? 'bg-green-500' :
+                    'bg-teal-500'
+                  }`}></div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Type</p>
                     <p className="text-sm font-medium text-gray-900">{appointment.type}</p>
@@ -402,8 +411,17 @@ const RescheduleConfirmationModal = ({ isOpen, appointment, newDate, newTime, on
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className={`w-4 h-4 rounded mt-0.5 ${appointment.typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500'
-                    }`}></div>
+                  <div className={`w-4 h-4 rounded mt-0.5 ${
+                    appointment.typeColor === 'orange' ? 'bg-orange-500' :
+                    appointment.typeColor === 'teal' ? 'bg-teal-500' :
+                    appointment.typeColor === 'green' ? 'bg-green-500' :
+                    appointment.typeColor === 'blue' ? 'bg-blue-500' :
+                    appointment.typeColor === 'purple' ? 'bg-purple-500' :
+                    (appointment.type || appointment.appointment_type || '').toLowerCase().includes('surgery') ? 'bg-orange-500' :
+                    (appointment.type || appointment.appointment_type || '').toLowerCase().includes('investigation') ? 'bg-purple-500' :
+                    (appointment.type || appointment.appointment_type || '').toLowerCase().includes('mdt') ? 'bg-green-500' :
+                    'bg-teal-500'
+                  }`}></div>
                   <div>
                     <p className="text-xs text-gray-500 mb-0.5">Type</p>
                     <p className="text-sm font-medium text-gray-900">{appointment.type}</p>

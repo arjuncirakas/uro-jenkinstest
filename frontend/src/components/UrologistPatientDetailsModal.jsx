@@ -1815,17 +1815,10 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
     return (
       <div className="space-y-3">
-        {/* Transfer To and Priority in same row */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1">
-            <div className="text-sm font-medium text-gray-500 mb-1">Transfer To</div>
-            <div className="text-base text-gray-900">{displayPathway}</div>
-          </div>
-          {data.priority && (
-            <span className={`px-3 py-1.5 rounded-md text-xs font-semibold border ${getPriorityColor(data.priority)}`}>
-              {data.priority} Priority
-            </span>
-          )}
+        {/* Transfer To */}
+        <div>
+          <div className="text-sm font-medium text-gray-500 mb-1">Transfer To</div>
+          <div className="text-base text-gray-900">{displayPathway}</div>
         </div>
 
         {/* Reason for Transfer */}
@@ -6537,7 +6530,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div className={`grid gap-4 mb-4 ${(selectedPathway === 'Active Monitoring' || selectedPathway === 'Active Surveillance') ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Reason for Transfer *
@@ -6551,20 +6544,22 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                                 required
                               />
                             </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Priority *
-                              </label>
-                              <select
-                                value={transferDetails.priority}
-                                onChange={(e) => setTransferDetails(prev => ({ ...prev, priority: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
-                              >
-                                <option value="normal">Normal</option>
-                                <option value="high">High</option>
-                                <option value="urgent">Urgent</option>
-                              </select>
-                            </div>
+                            {selectedPathway !== 'Active Monitoring' && selectedPathway !== 'Active Surveillance' && (
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Priority *
+                                </label>
+                                <select
+                                  value={transferDetails.priority}
+                                  onChange={(e) => setTransferDetails(prev => ({ ...prev, priority: e.target.value }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm bg-white"
+                                >
+                                  <option value="normal">Normal</option>
+                                  <option value="high">High</option>
+                                  <option value="urgent">Urgent</option>
+                                </select>
+                              </div>
+                            )}
                           </div>
 
                           <div className="mb-4">
@@ -7270,8 +7265,7 @@ Surgery Appointment Scheduled:
                               transferNoteContent = `
 PATHWAY TRANSFER
 
-Transfer To: ${selectedPathway}
-Priority: ${transferDetails.priority ? transferDetails.priority.charAt(0).toUpperCase() + transferDetails.priority.slice(1) : 'Normal'}
+Transfer To: ${selectedPathway}${(selectedPathway !== 'Active Monitoring' && selectedPathway !== 'Active Surveillance' && transferDetails.priority) ? `\nPriority: ${transferDetails.priority.charAt(0).toUpperCase() + transferDetails.priority.slice(1)}` : ''}
 
 Reason for Transfer:
 ${transferDetails.reason || 'Not specified'}

@@ -43,8 +43,38 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
     }
   };
 
-  const getTypeColor = (typeColor) => {
-    return typeColor === 'teal' ? 'bg-teal-500' : 'bg-purple-500';
+  const getTypeColor = (typeColor, appointmentType) => {
+    // Check typeColor first (set by backend)
+    if (typeColor === 'orange') {
+      return 'bg-orange-500';
+    }
+    if (typeColor === 'teal') {
+      return 'bg-teal-500';
+    }
+    if (typeColor === 'green') {
+      return 'bg-green-500';
+    }
+    if (typeColor === 'blue') {
+      return 'bg-blue-500';
+    }
+    if (typeColor === 'purple') {
+      return 'bg-purple-500';
+    }
+    
+    // Fallback: determine color from appointment type if typeColor is not set
+    const typeLabel = (appointmentType || '').toLowerCase();
+    if (typeLabel.includes('surgery') || typeLabel.includes('surgical')) {
+      return 'bg-orange-500';
+    }
+    if (typeLabel.includes('investigation')) {
+      return 'bg-purple-500';
+    }
+    if (typeLabel.includes('mdt')) {
+      return 'bg-green-500';
+    }
+    
+    // Default to teal for urologist consultations
+    return 'bg-teal-500';
   };
 
   // Parse notes to separate surgery time from other notes and format JSON notes
@@ -307,7 +337,7 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
               </h5>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded ${getTypeColor(appointment.typeColor)}`}></div>
+                  <div className={`w-4 h-4 rounded ${getTypeColor(appointment.typeColor, appointment.type || appointment.appointment_type || appointment.appointmentType)}`}></div>
                   <span className="text-sm text-gray-600">Type:</span>
                   <span className="text-sm font-medium text-gray-900">
                     {appointment.type || appointment.appointment_type || appointment.appointmentType || 'N/A'}
