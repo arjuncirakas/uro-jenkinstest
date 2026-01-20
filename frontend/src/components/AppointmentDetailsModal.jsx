@@ -210,6 +210,20 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
                        (appointment.first_name && appointment.last_name ? `${appointment.first_name} ${appointment.last_name}` : '') ||
                        appointment.name || '';
     
+    // Check if it's a surgery appointment
+    // Check multiple indicators: surgeryTime in notes, appointment type, or typeColor
+    const appointmentTypeLower = (appointmentType || '').toLowerCase();
+    const isSurgeryAppointment = surgeryTime !== null || 
+      appointmentTypeLower.includes('surgery') || 
+      appointmentTypeLower.includes('surgical') ||
+      appointment.appointment_type === 'surgery' ||
+      appointment.appointment_type === 'Surgery' ||
+      appointment.type === 'surgery' ||
+      appointment.type === 'Surgery' ||
+      appointment.appointmentType === 'surgery' ||
+      appointment.appointmentType === 'Surgery' ||
+      appointment.typeColor === 'orange';
+    
     return {
       id: patientId,
       name: patientName,
@@ -220,15 +234,17 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
       nextAppointmentId: appointment.id,
       nextAppointmentDate: appointmentDate,
       nextAppointmentTime: appointmentTime,
-      nextAppointmentType: appointmentType === 'Investigation' || appointmentType === 'investigation' ? 'investigation' : 'urologist',
+      nextAppointmentType: isSurgeryAppointment ? 'surgery' : 
+                          (appointmentType === 'Investigation' || appointmentType === 'investigation' ? 'investigation' : 'urologist'),
       urologist: appointment.urologist || appointment.doctorName || appointment.doctor_name || appointment.urologist_name || '',
       notes: otherNotes || '',
       surgeryTime: surgeryTime || '',
       hasAppointment: true,
       // Check if it's a surgery appointment
-      hasSurgeryAppointment: surgeryTime !== null,
+      hasSurgeryAppointment: isSurgeryAppointment,
       surgeryDate: appointmentDate,
-      surgeryStartTime: surgeryTime || appointmentTime
+      surgeryStartTime: surgeryTime || appointmentTime,
+      surgeryAppointmentId: isSurgeryAppointment ? appointment.id : null
     };
   };
 
@@ -460,7 +476,23 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
         onClose={() => setIsRescheduleModalOpen(false)}
         patient={getPatientForReschedule()}
         onSuccess={handleRescheduleSuccess}
-        appointmentType={(appointment.type || appointment.appointment_type || appointment.appointmentType || '').toLowerCase() === 'investigation' ? 'investigation' : 'urologist'}
+        appointmentType={
+          (() => {
+            const aptType = appointment.type || appointment.appointment_type || appointment.appointmentType || '';
+            const aptTypeLower = aptType.toLowerCase();
+            // Check for surgery appointment
+            if (surgeryTime !== null || aptTypeLower.includes('surgery') || aptTypeLower.includes('surgical') || 
+                appointment.appointment_type === 'surgery' || appointment.type === 'surgery') {
+              return 'surgery';
+            }
+            // Check for investigation
+            if (aptTypeLower === 'investigation') {
+              return 'investigation';
+            }
+            // Default to urologist
+            return 'urologist';
+          })()
+        }
       />
     </div>
   );

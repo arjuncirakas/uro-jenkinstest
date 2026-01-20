@@ -272,11 +272,14 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
         // Set appointment type to 'surgery' for surgery pathway patients
         setAppointmentTypeSelected('surgery');
       } else if (patient.hasSurgeryAppointment && patient.surgeryAppointmentId) {
-        // Surgery appointments are stored with appointmentType='urologist' and surgeryType set
-        setAppointmentTypeSelected('urologist');
+        // Surgery appointments - set to 'surgery' to preserve the type
+        setAppointmentTypeSelected('surgery');
       } else if (patient.nextAppointmentType) {
         // Set appointment type based on what patient already has
         setAppointmentTypeSelected(patient.nextAppointmentType);
+      } else if (appointmentType === 'surgery') {
+        // If appointmentType prop is 'surgery', use it
+        setAppointmentTypeSelected('surgery');
       } else if (patient.nextAppointmentDate || patient.nextAppointmentTime) {
         // If patient has appointment but type is not specified, default to urologist
         setAppointmentTypeSelected('urologist');
@@ -449,7 +452,8 @@ const UpdateAppointmentModal = ({ isOpen, onClose, patient, onSuccess, appointme
 
       // Check if patient has an existing appointment to update
       const appointmentIdToUpdate = patient?.surgeryAppointmentId || patient?.nextAppointmentId;
-      const appointmentTypeToUpdate = patient?.nextAppointmentType || (patient?.hasSurgeryAppointment ? 'urologist' : null);
+      // appointmentTypeToUpdate is not used in the reschedule call, but kept for reference
+      const appointmentTypeToUpdate = patient?.nextAppointmentType || (patient?.hasSurgeryAppointment ? 'surgery' : null);
 
       if (appointmentIdToUpdate) {
         // Update existing appointment (reschedule)

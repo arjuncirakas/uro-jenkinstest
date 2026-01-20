@@ -2594,6 +2594,8 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         });
       } else {
         // Create new urologist appointment
+        // Use the appointmentType from request (could be 'urologist' or 'surgery')
+        const newAppointmentType = appointmentType === 'surgery' ? 'surgery' : 'urologist';
         const newAppointmentQuery = `
           INSERT INTO appointments (
             patient_id, appointment_type, appointment_date, appointment_time, 
@@ -2603,7 +2605,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         `;
         const newAppointmentResult = await client.query(newAppointmentQuery, [
           patientIdForTimeline,
-          'urologist',
+          newAppointmentType,
           newDate,
           newTime,
           finalDoctorId, // Use doctors.id, not users.id
@@ -2624,7 +2626,8 @@ export const rescheduleNoShowAppointment = async (req, res) => {
         );
 
         // Add timeline entry
-        const timelineNote = `Appointment type changed from ${originalAppointmentType} to urologist consultation and scheduled for ${newDate} at ${newTime} with Dr. ${doctorName}`;
+        const appointmentTypeLabel = newAppointmentType === 'surgery' ? 'surgery' : 'urologist consultation';
+        const timelineNote = `Appointment type changed from ${originalAppointmentType} to ${appointmentTypeLabel} and scheduled for ${newDate} at ${newTime} with Dr. ${doctorName}`;
         await client.query(
           'INSERT INTO patient_notes (patient_id, note_content, author_id, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)',
           [patientIdForTimeline, timelineNote, req.user.id]
@@ -2640,7 +2643,7 @@ export const rescheduleNoShowAppointment = async (req, res) => {
             newDate,
             newTime,
             doctorName,
-            appointmentType: 'urologist'
+            appointmentType: newAppointmentType
           }
         });
       }
@@ -2826,6 +2829,10 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
       // Build notes update - append new notes if provided
       const notesText = req.body.notes || '';
+      
+      // Preserve appointment_type: if appointmentType is 'surgery', set it to 'surgery', otherwise keep existing or default to 'urologist'
+      const appointmentTypeToSet = appointmentType === 'surgery' ? 'surgery' : 
+                                    (appointmentType === 'urologist' ? 'urologist' : 'urologist');
 
       let updateQuery;
       let updateParams;
@@ -2837,14 +2844,15 @@ export const rescheduleNoShowAppointment = async (req, res) => {
               appointment_time = $2, 
               urologist_id = $3,
               urologist_name = $4,
-              surgery_type = $5,
+              appointment_type = $5,
+              surgery_type = $6,
               status = 'scheduled',
-              notes = COALESCE(notes, '') || '\n' || $6,
+              notes = COALESCE(notes, '') || '\n' || $7,
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $7
+          WHERE id = $8
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, finalDoctorId, doctorName, surgeryType || null, notesText, appointmentId];
+        updateParams = [newDate, newTime, finalDoctorId, doctorName, appointmentTypeToSet, surgeryType || null, notesText, appointmentId];
       } else {
         updateQuery = `
           UPDATE appointments 
@@ -2852,13 +2860,14 @@ export const rescheduleNoShowAppointment = async (req, res) => {
               appointment_time = $2, 
               urologist_id = $3,
               urologist_name = $4,
-              surgery_type = $5,
+              appointment_type = $5,
+              surgery_type = $6,
               status = 'scheduled',
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $6
+          WHERE id = $7
           RETURNING patient_id
         `;
-        updateParams = [newDate, newTime, finalDoctorId, doctorName, surgeryType || null, appointmentId];
+        updateParams = [newDate, newTime, finalDoctorId, doctorName, appointmentTypeToSet, surgeryType || null, appointmentId];
       }
 
       const updateResult = await client.query(updateQuery, updateParams);
@@ -3558,7 +3567,8 @@ export const getAllAppointments = async (req, res) => {
       let typeColor = 'teal'; // Default for urologist consultations
       let appointmentType = 'Urologist Consultation';
 
-      const aptType = (decryptedRow.type || '').toLowerCase();
+      // Check both 'type' (aliased from appointment_type) and 'appointment_type' field
+      const aptType = (decryptedRow.type || decryptedRow.appointment_type || '').toLowerCase();
 
       if (aptType === 'automatic') {
         typeColor = 'blue';
@@ -3583,6 +3593,9 @@ export const getAllAppointments = async (req, res) => {
       return {
         id: decryptedRow.id,
         patientId: decryptedRow.patient_id,
+        appointmentType: appointmentType,
+        type: appointmentType,
+        appointment_type: aptType,
         patientName: `${decryptedRow.first_name} ${decryptedRow.last_name}`,
         upi: decryptedRow.upi,
         phone: decryptedRow.phone || '', // Decrypted
