@@ -71,7 +71,7 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
         { name: 'Patients Under Me', icon: FaUsers, path: '/urologist/patients/patients-under-me', active: location.pathname === '/urologist/patients/patients-under-me' },
         { name: 'Surgery Pathway', icon: FaProcedures, path: '/urologist/patients/surgery-pathway', active: location.pathname === '/urologist/patients/surgery-pathway' },
         { name: 'Post-op Followup', icon: FaHeartbeat, path: '/urologist/patients/post-op-followup', active: location.pathname === '/urologist/patients/post-op-followup' },
-        { name: 'Active Surveillance', icon: FaEye, path: '/urologist/active-surveillance', active: location.pathname === '/urologist/active-surveillance' },
+        { name: 'Active Monitoring', icon: FaEye, path: '/urologist/active-surveillance', active: location.pathname === '/urologist/active-surveillance' },
         { name: 'All Patients', icon: FaUsers, path: '/urologist/patients/all', active: location.pathname === '/urologist/patients/all' },
       ]
     },

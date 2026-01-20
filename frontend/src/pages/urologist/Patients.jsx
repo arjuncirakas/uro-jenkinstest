@@ -741,7 +741,9 @@ const Patients = () => {
                               {category === 'surgery-pathway' ? searchQueryMySurgery : searchQueryMyPostOp ? 'No patients found matching your search' : 'No patients added by you'}
                             </div>
                             <div className="text-xs text-teal-600">
-                              {category === 'surgery-pathway' ? searchQueryMySurgery : searchQueryMyPostOp ? 'Try a different search term' : 'Patients you add will appear here'}
+                              {category === 'surgery-pathway' 
+                                ? (searchQueryMySurgery ? 'Try a different search term' : 'No surgery pathway patients have been added by you yet. Patients you add to the surgery pathway will appear here.')
+                                : (searchQueryMyPostOp ? 'Try a different search term' : 'Patients you add will appear here')}
                             </div>
                           </div>
                         </td>
@@ -867,7 +869,9 @@ const Patients = () => {
                               {category === 'surgery-pathway' ? searchQueryAllSurgery : searchQueryAllPostOp ? 'No patients found matching your search' : 'No patients available'}
                             </div>
                             <div className="text-xs text-teal-600">
-                              {category === 'surgery-pathway' ? searchQueryAllSurgery : searchQueryAllPostOp ? 'Try a different search term' : 'Assigned patients for this category will appear here'}
+                              {category === 'surgery-pathway' 
+                                ? (searchQueryAllSurgery ? 'Try a different search term' : 'No patients are currently in the surgery pathway. Patients will appear here once they are assigned to the surgical care pathway.')
+                                : (searchQueryAllPostOp ? 'Try a different search term' : 'Assigned patients for this category will appear here')}
                             </div>
                           </div>
                         </td>
