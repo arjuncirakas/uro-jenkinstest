@@ -15,23 +15,23 @@ const SubNavItem = ({ subItem, onLinkClick }) => {
   return (
     <li className="relative group">
       {/* Horizontal line connecting to vertical line */}
-      <div className="absolute left-[20px] top-[20px] w-[16px] h-[2px] bg-teal-300"></div>
+      <div className="absolute left-[18px] top-[18px] w-[14px] h-[2px] bg-teal-300"></div>
 
       <Link
         to={subItem.path}
         onClick={onLinkClick}
-        className={`flex items-center pl-8 py-2.5 rounded-lg transition-all ${subItem.active
+        className={`flex items-center pl-7 py-2.5 rounded-lg transition-all ${subItem.active
             ? 'bg-teal-50 text-teal-700 shadow-sm'
             : 'text-gray-600 hover:bg-gray-50'
           }`}
       >
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${subItem.active
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center mr-3 flex-shrink-0 ${subItem.active
             ? 'bg-teal-100'
             : 'bg-gray-100'
           }`}>
-          <SubIconComponent className={`text-sm ${subItem.active ? 'text-teal-600' : 'text-gray-500'}`} />
+          <SubIconComponent className={`text-base ${subItem.active ? 'text-teal-600' : 'text-gray-500'}`} />
         </div>
-        <span className="text-sm font-medium">{subItem.name}</span>
+        <span className="text-sm font-medium whitespace-nowrap">{subItem.name}</span>
       </Link>
     </li>
   );
@@ -99,7 +99,7 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
 
   return (
     <div className={`
-      ${isCollapsed ? 'w-[80px]' : 'w-[280px]'} bg-white flex flex-col h-screen border-r border-gray-200
+      ${isCollapsed ? 'w-[80px]' : 'w-[300px]'} bg-white flex flex-col h-screen border-r border-gray-200
       fixed lg:static z-40 transition-all duration-300 ease-in-out
       ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
     `} style={{ overflow: 'visible' }}>
@@ -179,7 +179,7 @@ const UrologistSidebar = ({ isOpen, onClose, onOpenAddPatient }) => {
                     {!isCollapsed && isPatientsMenuOpen && (
                       <div className="mt-2 ml-4 relative">
                         {/* Main vertical line */}
-                        <div className="absolute left-[20px] top-0 w-[2px] h-full bg-teal-300"></div>
+                        <div className="absolute left-[18px] top-0 w-[2px] h-full bg-teal-300"></div>
 
                         <ul className="space-y-1">
                           {item.subItems.map((subItem, index) => (
