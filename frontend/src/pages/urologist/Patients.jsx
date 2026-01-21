@@ -65,7 +65,7 @@ const Patients = () => {
       case 'post-op-followup':
         return 'Patients requiring post-operative follow-up care';
       default:
-        return 'All patients assigned to you across all pathways';
+        return 'All patients in the system across all pathways';
     }
   }, [category]);
 
@@ -101,6 +101,9 @@ const Patients = () => {
 
   // Pagination state
   const itemsPerPage = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalPatients, setTotalPatients] = useState(0);
   const [currentPageAllSurgery, setCurrentPageAllSurgery] = useState(1);
   const [currentPageMySurgery, setCurrentPageMySurgery] = useState(1);
   const [currentPageAllPostOp, setCurrentPageAllPostOp] = useState(1);
@@ -115,15 +118,30 @@ const Patients = () => {
   };
 
   // Helper function to fetch patients for a category
-  const fetchPatientsForCategory = React.useCallback(async (cat, setLoadingState, setErrorState, setDataState) => {
+  const fetchPatientsForCategory = React.useCallback(async (cat, setLoadingState, setErrorState, setDataState, page = 1, limit = 10, setPaginationState = null) => {
     setLoadingState(true);
     setErrorState(null);
-    const res = await patientService.getAssignedPatients(cat);
+    const res = await patientService.getAssignedPatients(cat, { page, limit });
     if (res.success) {
       setDataState(res.data || []);
+      // Update pagination state if callback provided
+      if (setPaginationState && res.pagination) {
+        setPaginationState({
+          currentPage: res.pagination.page,
+          totalPages: res.pagination.pages,
+          total: res.pagination.total
+        });
+      }
     } else {
       setErrorState(res.error || `Failed to fetch patients for ${cat}`);
       setDataState([]);
+      if (setPaginationState) {
+        setPaginationState({
+          currentPage: 1,
+          totalPages: 1,
+          total: 0
+        });
+      }
     }
     setLoadingState(false);
   }, []);
@@ -182,13 +200,41 @@ const Patients = () => {
       }
     } else {
       const cat = apiCategoryMap[category] || 'all';
-      await fetchPatientsForCategory(cat, setLoading, setError, setPatients);
+      // For 'all' category, use pagination
+      if (cat === 'all') {
+        await fetchPatientsForCategory(
+          cat, 
+          setLoading, 
+          setError, 
+          setPatients, 
+          currentPage, 
+          itemsPerPage,
+          (pagination) => {
+            setCurrentPage(pagination.currentPage);
+            setTotalPages(pagination.totalPages);
+            setTotalPatients(pagination.total);
+          }
+        );
+      } else {
+        // For other categories, fetch all without pagination (backward compatibility)
+        await fetchPatientsForCategory(cat, setLoading, setError, setPatients);
+      }
     }
-  }, [category, fetchPatientsForCategory]);
+  }, [category, fetchPatientsForCategory, currentPage, itemsPerPage]);
 
   useEffect(() => {
     fetchPatients();
   }, [fetchPatients]);
+
+  // Reset to page 1 when category changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [category]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // Listen for patient added event to refresh the list
   useEffect(() => {
@@ -270,7 +316,23 @@ const Patients = () => {
       console.log('🔄 Refreshing patient list to ensure accuracy');
       // Refresh the list to ensure accuracy
       const cat = apiCategoryMap[category] || 'all';
-      await fetchPatientsForCategory(cat, setLoading, setError, setPatients);
+      if (cat === 'all') {
+        await fetchPatientsForCategory(
+          cat, 
+          setLoading, 
+          setError, 
+          setPatients, 
+          currentPage, 
+          itemsPerPage,
+          (pagination) => {
+            setCurrentPage(pagination.currentPage);
+            setTotalPages(pagination.totalPages);
+            setTotalPatients(pagination.total);
+          }
+        );
+      } else {
+        await fetchPatientsForCategory(cat, setLoading, setError, setPatients);
+      }
     }
   };
 
@@ -1033,6 +1095,58 @@ const Patients = () => {
                 </tbody>
               </table>
             </div>
+            {/* Pagination for All Patients category */}
+            {category === 'all' && filteredPatients.length > 0 && totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalPatients)} of {totalPatients} patients
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
+                      // Show page numbers with ellipsis for large page counts
+                      let pageNum;
+                      if (totalPages <= 10) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 4) {
+                        pageNum = totalPages - 9 + i;
+                      } else {
+                        pageNum = currentPage - 4 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-1 rounded-md text-sm font-medium ${
+                            currentPage === pageNum
+                              ? 'bg-teal-600 text-white'
+                              : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

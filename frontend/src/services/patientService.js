@@ -30,7 +30,8 @@ export const patientService = {
       return {
         success: true,
         data: response.data.data.patients,
-        count: response.data.data.count
+        count: response.data.data.count,
+        pagination: response.data.data.pagination
       };
     } catch (error) {
       return {

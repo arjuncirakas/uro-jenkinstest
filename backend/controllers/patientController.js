@@ -2057,9 +2057,13 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
-    const { category = 'all', limit = 100 } = req.query;
+    const { category = 'all', limit = 100, page = 1 } = req.query;
 
-    console.log(`[getAssignedPatientsForDoctor] User ID: ${userId}, Role: ${userRole}, Category: ${category}`);
+    const pageNum = parseInt(page) || 1;
+    const queryLimit = parseInt(limit) || 100;
+    const offset = (pageNum - 1) * queryLimit;
+
+    console.log(`[getAssignedPatientsForDoctor] User ID: ${userId}, Role: ${userRole}, Category: ${category}, Page: ${pageNum}, Limit: ${queryLimit}`);
 
     // Resolve doctor's full name to match patients.assigned_urologist string field
     // First try to get from doctors table (since appointments use doctors.id)
@@ -2127,8 +2131,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     // This ensures patients rescheduled to different doctors appear in their lists
     // Also normalize by removing "Dr." prefix from both sides for consistent matching
     // Simplify to avoid SQL syntax issues - use COALESCE to handle NULL values
-    // Validate query parameters first
-    const queryLimit = parseInt(limit) || 100;
+    // Validate query parameters
     const queryName = normalizedDoctorName || doctorName;
 
     // For my-patients category, we need a different WHERE clause that doesn't require assigned_urologist
@@ -2136,16 +2139,27 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
     let additionalWhere = '';
     let queryParams = [];
     let limitParamIndex = 2; // Default limit parameter index
+    let offsetParamIndex = 3; // Default offset parameter index
 
     if (category === 'my-patients') {
       // My Patients = patients created by the current urologist (regardless of assigned_urologist)
       whereBase = `p.status = 'Active' AND p.created_by = $1`;
-      queryParams = [userId, queryLimit]; // userId, limit
+      queryParams = [userId, queryLimit, offset]; // userId, limit, offset
       limitParamIndex = 2; // limit is $2
+      offsetParamIndex = 3; // offset is $3
+    } else if (category === 'all') {
+      // All Patients = return ALL active patients regardless of assigned_urologist
+      // This is specifically for the "All Patients" tab in urologist panel
+      whereBase = `p.status = 'Active'`;
+      queryParams = [queryLimit, offset]; // limit, offset
+      limitParamIndex = 1; // limit is $1
+      offsetParamIndex = 2; // offset is $2
     } else {
       // For other categories, use the standard assigned_urologist matching
       whereBase = `p.status = 'Active' AND p.assigned_urologist IS NOT NULL AND TRIM(LOWER(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($1))`;
-      queryParams = [queryName, queryLimit]; // name, limit
+      queryParams = [queryName, queryLimit, offset]; // name, limit, offset
+      limitParamIndex = 2; // limit is $2
+      offsetParamIndex = 3; // offset is $3
 
       // Category filters
       if (category === 'new') {
@@ -2171,7 +2185,8 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       }
     }
 
-    if (!queryName || queryName.trim() === '') {
+    // Only validate queryName for non-'all' categories (except my-patients which uses userId)
+    if (category !== 'all' && category !== 'my-patients' && (!queryName || queryName.trim() === '')) {
       console.error(`[getAssignedPatientsForDoctor] Invalid doctor name for query`);
       return res.status(400).json({
         success: false,
@@ -2179,7 +2194,31 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       });
     }
 
-    // Build the complete query string
+    // Get total count first for pagination
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM patients p
+      WHERE ${whereBase} ${additionalWhere}
+    `.trim();
+    
+    // Remove limit and offset from count query params
+    const countParams = category === 'all' 
+      ? [] // No params for 'all' category
+      : category === 'my-patients'
+      ? [userId] // Only userId for my-patients
+      : [queryName]; // Only queryName for other categories
+
+    let totalCount = 0;
+    try {
+      const countResult = await client.query(countQuery, countParams);
+      totalCount = parseInt(countResult.rows[0].total);
+      console.log(`[getAssignedPatientsForDoctor] Total count: ${totalCount}`);
+    } catch (countError) {
+      console.error(`[getAssignedPatientsForDoctor] Error getting count:`, countError);
+      // Continue with 0 total if count fails
+    }
+
+    // Build the complete query string with pagination
     const query = `
       SELECT 
         p.id,
@@ -2195,7 +2234,7 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       FROM patients p
       WHERE ${whereBase} ${additionalWhere}
       ORDER BY p.created_at DESC
-      LIMIT $${limitParamIndex}
+      LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}
     `.trim();
 
     console.log(`[getAssignedPatientsForDoctor] Executing query with name: "${queryName}", limit: ${queryLimit}, category: ${category}`);
@@ -2210,11 +2249,11 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       console.log(`[getAssignedPatientsForDoctor] Query returned ${result.rows.length} results`);
       finalResult = result;
 
-      // If no results with normalized name, try with original name (only for non-my-patients categories)
-      if (finalResult.rows.length === 0 && normalizedDoctorName !== doctorName && doctorName && category !== 'my-patients') {
+      // If no results with normalized name, try with original name (only for non-my-patients and non-'all' categories)
+      if (finalResult.rows.length === 0 && normalizedDoctorName !== doctorName && doctorName && category !== 'my-patients' && category !== 'all') {
         console.log(`[getAssignedPatientsForDoctor] No results with normalized name, trying original name...`);
         try {
-          const originalParams = category === 'my-patients' ? [doctorName, userId, queryLimit] : [doctorName, queryLimit];
+          const originalParams = [doctorName, queryLimit];
           const originalResult = await client.query(query, originalParams);
           if (originalResult.rows.length > 0) {
             finalResult = originalResult;
@@ -2285,9 +2324,11 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       console.log(`[getAssignedPatientsForDoctor] Using doctor name "${normalizedDoctorName || doctorName}" for appointments query (ID not found)`);
     }
 
-    // For my-patients category, skip appointments table check since we only want patients created by the urologist
-    if (category === 'my-patients') {
-      console.log(`[getAssignedPatientsForDoctor] Skipping appointments table check for my-patients category`);
+    // For my-patients and 'all' categories, skip appointments table check
+    // - my-patients: we only want patients created by the urologist
+    // - all: we want ALL patients, not just those with appointments
+    if (category === 'my-patients' || category === 'all') {
+      console.log(`[getAssignedPatientsForDoctor] Skipping appointments table check for ${category} category`);
     } else {
       // Add category filters for appointments query
       if (category === 'new') {
@@ -2384,7 +2425,23 @@ export const getAssignedPatientsForDoctor = async (req, res) => {
       category: category // Requested category filter
     }));
 
-    res.json({ success: true, message: 'Assigned patients retrieved', data: { patients, count: patients.length } });
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / queryLimit);
+
+    res.json({ 
+      success: true, 
+      message: 'Assigned patients retrieved', 
+      data: { 
+        patients, 
+        count: patients.length,
+        pagination: {
+          page: pageNum,
+          limit: queryLimit,
+          total: totalCount,
+          pages: totalPages
+        }
+      } 
+    });
   } catch (error) {
     console.error('Get assigned patients error:', error);
     console.error('Error stack:', error.stack);
