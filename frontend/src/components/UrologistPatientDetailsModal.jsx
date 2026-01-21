@@ -4469,6 +4469,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                           assignedUrologist !== 'not assigned' &&
                           assignedUrologist.trim() !== '' &&
                           assignedUrologist.trim() !== 'null';
+                        // Show "Reassign Urologist" if already assigned, "Assign Urologist" if not
                         const buttonText = hasAssignedUrologist ? 'Reassign Urologist' : 'Assign Urologist';
                         const displayUrologist = hasAssignedUrologist ? assignedUrologist : 'Not assigned';
                         
