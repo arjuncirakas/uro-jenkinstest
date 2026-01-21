@@ -1,12 +1,43 @@
-import React, { useState } from 'react';
-import { FiX, FiCalendar, FiClock, FiUser, FiPhone, FiMail, FiMapPin, FiFileText, FiTag, FiEdit } from 'react-icons/fi';
+import React, { useState, useEffect } from 'react';
+import { FiX, FiCalendar, FiClock, FiUser, FiPhone, FiMail, FiMapPin, FiFileText, FiTag, FiEdit, FiUserCheck } from 'react-icons/fi';
 import { useEscapeKey } from '../utils/useEscapeKey';
 import UpdateAppointmentModal from './UpdateAppointmentModal';
+import ReassignUrologistModal from './ReassignUrologistModal';
+import { patientService } from '../services/patientService';
 
 const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule }) => {
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [patientData, setPatientData] = useState(null);
+  const [loadingPatient, setLoadingPatient] = useState(false);
   // Handle Escape key to close modal (read-only, no unsaved changes check)
   useEscapeKey(onClose, isOpen);
+
+  // Fetch patient data when modal opens to get assigned urologist
+  useEffect(() => {
+    if (isOpen && appointment) {
+      const patientId = appointment.patientId || appointment.patient_id || appointment.patientID;
+      if (patientId) {
+        fetchPatientData(patientId);
+      }
+    } else {
+      setPatientData(null);
+    }
+  }, [isOpen, appointment]);
+
+  const fetchPatientData = async (patientId) => {
+    setLoadingPatient(true);
+    try {
+      const result = await patientService.getPatientById(patientId);
+      if (result.success && result.data) {
+        setPatientData(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching patient data:', error);
+    } finally {
+      setLoadingPatient(false);
+    }
+  };
 
   if (!isOpen || !appointment) return null;
 
@@ -195,7 +226,20 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
     return urologistName || 'Unassigned';
   };
   
-  const doctorName = getDoctorName();
+  // Get doctor name - prioritize patient's assigned urologist, then appointment urologist
+  const getDisplayDoctorName = () => {
+    // First check patient data (most accurate)
+    if (patientData?.assignedUrologist || patientData?.assigned_urologist) {
+      const assigned = patientData.assignedUrologist || patientData.assigned_urologist;
+      if (assigned && assigned !== 'Not assigned' && assigned.trim() !== '') {
+        return assigned;
+      }
+    }
+    // Fall back to appointment urologist
+    return getDoctorName();
+  };
+  
+  const doctorName = getDisplayDoctorName();
 
   // Prepare patient object for UpdateAppointmentModal
   const getPatientForReschedule = () => {
@@ -285,6 +329,55 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
 
         {/* Content - Scrollable */}
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
+          
+          {/* Assigned Urologist and Action Button */}
+          <div className="bg-white border border-gray-200 rounded p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-teal-50 border border-teal-200 rounded flex items-center justify-center">
+                  <FiUserCheck className="w-5 h-5 text-teal-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Assigned Urologist</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {doctorName || 'Not assigned'}
+                  </p>
+                </div>
+              </div>
+              {(() => {
+                const patientId = appointment.patientId || appointment.patient_id || appointment.patientID;
+                const assignedUrologist = patientData?.assignedUrologist || patientData?.assigned_urologist || 
+                                         appointment.urologist || appointment.urologist_name || 
+                                         appointment.doctorName || appointment.doctor_name || null;
+                const hasAssignedUrologist = assignedUrologist && 
+                  assignedUrologist !== 'Not assigned' && 
+                  assignedUrologist !== 'not assigned' &&
+                  assignedUrologist.trim() !== '' &&
+                  assignedUrologist.trim() !== 'null';
+                const buttonText = hasAssignedUrologist ? 'Reassign Urologist' : 'Assign Urologist';
+                
+                // Construct patient object for ReassignUrologistModal
+                const patientForReassign = patientId ? {
+                  id: patientId,
+                  first_name: appointment.first_name || (appointment.patientName ? appointment.patientName.split(' ')[0] : ''),
+                  last_name: appointment.last_name || (appointment.patientName ? appointment.patientName.split(' ').slice(1).join(' ') : ''),
+                  upi: appointment.upi || '',
+                  assignedUrologist: patientData?.assignedUrologist || patientData?.assigned_urologist || null,
+                  assigned_urologist: patientData?.assignedUrologist || patientData?.assigned_urologist || null
+                } : null;
+
+                return patientForReassign ? (
+                  <button
+                    onClick={() => setIsReassignModalOpen(true)}
+                    className="px-4 py-2 text-sm font-medium text-teal-700 bg-teal-100 border border-teal-400 rounded-lg hover:bg-teal-200 transition-colors flex items-center gap-2"
+                  >
+                    <FiUserCheck className="w-4 h-4" />
+                    {buttonText}
+                  </button>
+                ) : null;
+              })()}
+            </div>
+          </div>
           
           {/* Patient Information */}
           <div className="bg-gray-50 border border-gray-200 rounded p-4">
@@ -494,6 +587,41 @@ const AppointmentDetailsModal = ({ isOpen, appointment, onClose, onReschedule })
           })()
         }
       />
+
+      {/* Reassign Urologist Modal */}
+      {(() => {
+        const patientId = appointment.patientId || appointment.patient_id || appointment.patientID;
+        const patientForReassign = patientId ? {
+          id: patientId,
+          first_name: appointment.first_name || (appointment.patientName ? appointment.patientName.split(' ')[0] : '') || 
+                     (patientData?.firstName || patientData?.first_name || ''),
+          last_name: appointment.last_name || (appointment.patientName ? appointment.patientName.split(' ').slice(1).join(' ') : '') || 
+                     (patientData?.lastName || patientData?.last_name || ''),
+          upi: appointment.upi || patientData?.upi || '',
+          assignedUrologist: patientData?.assignedUrologist || patientData?.assigned_urologist || null,
+          assigned_urologist: patientData?.assignedUrologist || patientData?.assigned_urologist || null
+        } : null;
+
+        return patientForReassign ? (
+          <ReassignUrologistModal
+            isOpen={isReassignModalOpen}
+            onClose={() => setIsReassignModalOpen(false)}
+            patient={patientForReassign}
+            onReassigned={(data) => {
+              // Refresh patient data after reassignment
+              if (patientForReassign.id) {
+                fetchPatientData(patientForReassign.id);
+              }
+              // Refresh appointments if callback provided
+              if (onReschedule) {
+                onReschedule();
+              }
+              // Dispatch event to refresh appointment lists
+              window.dispatchEvent(new CustomEvent('appointment:updated'));
+            }}
+          />
+        ) : null;
+      })()}
     </div>
   );
 };
