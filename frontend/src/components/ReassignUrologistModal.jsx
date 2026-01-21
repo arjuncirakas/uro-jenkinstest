@@ -50,7 +50,7 @@ const ReassignUrologistModal = ({ isOpen, onClose, patient, onReassigned }) => {
         // Filter out current urologist if patient has one
         const currentUrologist = patient?.assignedUrologist || patient?.assigned_urologist;
         let filteredUrologists = result.data || [];
-        
+
         // Only filter if patient has an assigned urologist
         if (currentUrologist && currentUrologist !== 'Not assigned' && currentUrologist.trim() !== '') {
           filteredUrologists = filteredUrologists.filter(u => {
@@ -58,7 +58,7 @@ const ReassignUrologistModal = ({ isOpen, onClose, patient, onReassigned }) => {
             return urologistName !== currentUrologist;
           });
         }
-        
+
         setUrologists(filteredUrologists);
       } else {
         setError(result.error || 'Failed to load urologists');
@@ -212,7 +212,7 @@ const ReassignUrologistModal = ({ isOpen, onClose, patient, onReassigned }) => {
           {/* Info Message */}
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
             <p className="text-sm text-yellow-800">
-              <strong>Note:</strong> {hasAssignedUrologist ? 'Reassigning' : 'Assigning'} will update all future appointments to the {hasAssignedUrologist ? 'new' : 'selected'} urologist. 
+              <strong>Note:</strong> {hasAssignedUrologist ? 'Reassigning' : 'Assigning'} will update all future appointments to the {hasAssignedUrologist ? 'new' : 'selected'} urologist.
               If there are scheduling conflicts, appointments will be automatically rescheduled to available slots.
             </p>
           </div>

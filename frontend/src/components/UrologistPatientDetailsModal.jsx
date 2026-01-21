@@ -4462,9 +4462,15 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
 
                         console.log('🔍 Pipeline Data:', pipelineData);
 
-                        const assignedUrologist = displayPatient?.assignedUrologist || displayPatient?.assigned_urologist || 'Not assigned';
-                        const hasAssignedUrologist = assignedUrologist && assignedUrologist !== 'Not assigned' && assignedUrologist.trim() !== '';
+                        const assignedUrologist = displayPatient?.assignedUrologist || displayPatient?.assigned_urologist || null;
+                        // Check if patient has an assigned urologist (not null, not empty, not 'Not assigned')
+                        const hasAssignedUrologist = assignedUrologist && 
+                          assignedUrologist !== 'Not assigned' && 
+                          assignedUrologist !== 'not assigned' &&
+                          assignedUrologist.trim() !== '' &&
+                          assignedUrologist.trim() !== 'null';
                         const buttonText = hasAssignedUrologist ? 'Reassign Urologist' : 'Assign Urologist';
+                        const displayUrologist = hasAssignedUrologist ? assignedUrologist : 'Not assigned';
                         
                         return (
                           <>
@@ -4473,7 +4479,7 @@ const UrologistPatientDetailsModal = ({ isOpen, onClose, patient, loading, error
                               {/* Assigned Urologist Info */}
                               <div className="flex-1">
                                 <p className="text-sm text-gray-600 mb-1">Assigned Urologist</p>
-                                <p className="text-base font-medium text-gray-900">{assignedUrologist}</p>
+                                <p className="text-base font-medium text-gray-900">{displayUrologist}</p>
                               </div>
                               
                               {/* Action Buttons */}

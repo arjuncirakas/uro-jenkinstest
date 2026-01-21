@@ -26,7 +26,7 @@ export const validatePatientForBooking = async (client, patientId, errorContext 
   }
 
   if (patientCheck.rows[0].status === 'Expired') {
-    const contextMessage = errorContext === 'appointment' 
+    const contextMessage = errorContext === 'appointment'
       ? 'Cannot book appointment for an expired patient'
       : 'Cannot book investigation for an expired patient';
     return {
@@ -1644,7 +1644,7 @@ export const getUpcomingAppointments = async (req, res) => {
           const { USER_ENCRYPTED_FIELDS } = await import('../constants/encryptionFields.js');
           const decryptedUser = decryptFields({ email: userEmail }, USER_ENCRYPTED_FIELDS);
           const decryptedEmail = decryptedUser.email;
-          
+
           if (decryptedEmail) {
             const doctorCheck = await client.query(
               `SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true`,
@@ -1725,7 +1725,7 @@ export const getUpcomingAppointments = async (req, res) => {
             AND a.status != 'cancelled'
             AND a.urologist_id = $3
         `;
-        
+
         let paramIndex = 4;
         if (doctorName) {
           baseQuery += `
@@ -1754,13 +1754,13 @@ export const getUpcomingAppointments = async (req, res) => {
             AND TRIM(ib.investigation_name) = $` + paramIndex;
           paramIndex++;
         }
-        
+
         baseQuery += `
           ORDER BY appointment_date ASC, appointment_time ASC
           LIMIT $` + paramIndex + ` OFFSET $` + (paramIndex + 1);
-        
+
         query = baseQuery;
-        queryParams = doctorName 
+        queryParams = doctorName
           ? [tomorrowStr, endDateStr, doctorId, doctorName, parseInt(limit, 10), parseInt(offset, 10)]
           : [tomorrowStr, endDateStr, doctorId, parseInt(limit, 10), parseInt(offset, 10)];
       } else {
@@ -1786,7 +1786,7 @@ export const getUpcomingAppointments = async (req, res) => {
             AND a.status != 'cancelled'
             AND a.urologist_id = $2
         `;
-        
+
         let paramIndex = 3;
         if (doctorName) {
           baseQuery += `
@@ -1814,11 +1814,11 @@ export const getUpcomingAppointments = async (req, res) => {
             AND TRIM(ib.investigation_name) = $` + paramIndex;
           paramIndex++;
         }
-        
+
         baseQuery += `
           ORDER BY appointment_date ASC, appointment_time ASC
           LIMIT $` + paramIndex + ` OFFSET $` + (paramIndex + 1);
-        
+
         query = baseQuery;
         queryParams = doctorName
           ? [today, doctorId, doctorName, parseInt(limit, 10), parseInt(offset, 10)]
@@ -1992,14 +1992,14 @@ export const getUpcomingAppointments = async (req, res) => {
         // 2. TypeLabel is 'Follow-up Appointment'
         // 3. Type is not investigation, surgery, and care pathway is not Post-op or Investigation
         const isAutomaticFollowup = apt.type === 'automatic' || apt.typeLabel === 'Follow-up Appointment';
-        const isNotOtherType = apt.type !== 'investigation' && 
-                              apt.type !== 'surgery' && 
-                              apt.type !== 'surgical' &&
-                              apt.type !== 'Investigation Appointment' &&
-                              apt.type !== 'Surgery Appointment';
-        const isNotOtherPathway = apt.carePathway !== 'Post-op Transfer' && 
-                                 apt.carePathway !== 'Post-op Followup' &&
-                                 apt.carePathway !== 'Investigation Pathway';
+        const isNotOtherType = apt.type !== 'investigation' &&
+          apt.type !== 'surgery' &&
+          apt.type !== 'surgical' &&
+          apt.type !== 'Investigation Appointment' &&
+          apt.type !== 'Surgery Appointment';
+        const isNotOtherPathway = apt.carePathway !== 'Post-op Transfer' &&
+          apt.carePathway !== 'Post-op Followup' &&
+          apt.carePathway !== 'Investigation Pathway';
         return isAutomaticFollowup || (isNotOtherType && isNotOtherPathway);
       }).length
     };
@@ -2991,10 +2991,10 @@ export const rescheduleNoShowAppointment = async (req, res) => {
 
       // Build notes update - append new notes if provided
       const notesText = req.body.notes || '';
-      
+
       // Preserve appointment_type: if appointmentType is 'surgery', set it to 'surgery', otherwise keep existing or default to 'urologist'
-      const appointmentTypeToSet = appointmentType === 'surgery' ? 'surgery' : 
-                                    (appointmentType === 'urologist' ? 'urologist' : 'urologist');
+      const appointmentTypeToSet = appointmentType === 'surgery' ? 'surgery' :
+        (appointmentType === 'urologist' ? 'urologist' : 'urologist');
 
       let updateQuery;
       let updateParams;
@@ -3132,7 +3132,7 @@ export const getAvailableTimeSlots = async (req, res) => {
       if (usersTableResult.rows.length > 0) {
         doctor = usersTableResult.rows[0];
         doctorSource = 'users_table';
-        
+
         // If found in users table, find corresponding doctors.id
         const userEmail = usersTableResult.rows[0].email;
         const doctorByEmailCheck = await client.query(
@@ -3381,7 +3381,7 @@ export const getAllAppointments = async (req, res) => {
     const { startDate, endDate, urologistId, search } = req.query;
     const userRole = req.user?.role;
     const userId = req.user?.id;
-    
+
     console.log(`📅 [getAllAppointments ${requestId}] Processing query with startDate: ${startDate}, endDate: ${endDate}, urologistId: ${urologistId}, search: ${search}`);
     console.log(`📅 [getAllAppointments ${requestId}] Logged-in user: ${userId}, role: ${userRole}`);
 
@@ -3390,7 +3390,7 @@ export const getAllAppointments = async (req, res) => {
     // For urologists/doctors, always filter by the logged-in user's doctor ID
     // Use urologistId from query if provided, otherwise use req.user.id
     let effectiveUrologistId = urologistId || (userRole === 'urologist' || userRole === 'doctor' ? userId : null);
-    
+
     // If urologistId is provided or we have a logged-in urologist, determine if it's doctors.id or users.id
     // Appointments have urologist_id pointing to doctors.id
     let doctorId = null;
@@ -3416,17 +3416,17 @@ export const getAllAppointments = async (req, res) => {
         );
         if (userCheck.rows.length > 0) {
           const userEmailEncrypted = userCheck.rows[0].email;
-          
+
           // Decrypt the user's email to compare with doctors.email (which is plaintext)
           const decryptedUser = decryptFields({ email: userEmailEncrypted }, USER_ENCRYPTED_FIELDS);
           const decryptedEmail = decryptedUser.email;
-          
+
           if (decryptedEmail) {
             const doctorByEmailCheck = await client.query(
               'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
               [decryptedEmail]
             );
-            
+
             if (doctorByEmailCheck.rows.length > 0) {
               doctorId = doctorByEmailCheck.rows[0].id;
               console.log(`📅 [getAllAppointments ${requestId}] Found doctor record with id: ${doctorId} for user ${effectiveUrologistId} (email: ${decryptedEmail})`);
@@ -3549,7 +3549,7 @@ export const getAllAppointments = async (req, res) => {
       LEFT JOIN doctors d ON a.urologist_id = d.id
       WHERE ${urologistWhere.join(' AND ')}
     `;
-    
+
     // Add investigation bookings - only if we have doctorId and doctorName to filter
     if (doctorId && doctorName) {
       const invParamIndex = innerQueryParams.length + 1;
@@ -3588,7 +3588,7 @@ export const getAllAppointments = async (req, res) => {
       `;
       console.log(`📅 [getAllAppointments ${requestId}] Added investigation bookings filter for doctor: "${doctorName}"`);
     }
-    
+
     // Add MDT meetings - only if we have doctorId and userId to filter
     if (doctorId && userId) {
       const mdtParamIndex = innerQueryParams.length + (doctorName ? 2 : 1);
@@ -3689,7 +3689,7 @@ export const getAllAppointments = async (req, res) => {
     const formattedAppointments = result.rows.map(row => {
       // Decrypt patient data
       const decryptedRow = decryptFields(row, PATIENT_ENCRYPTED_FIELDS);
-      
+
       // Format date using local timezone to avoid UTC conversion issues
       const formatDate = (dateString) => {
         if (!dateString) return '';
