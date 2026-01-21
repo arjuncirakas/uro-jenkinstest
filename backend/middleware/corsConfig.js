@@ -50,43 +50,55 @@ export const corsOptions = {
       // 2. CORS only applies to cross-origin requests
       // 3. Server-to-server requests may not have Origin header
       // Security: We still validate all requests that DO have an origin header
-      console.log('✅ CORS: Allowing request with no origin (same-origin or server-to-server)');
+      if (process.env.NODE_ENV === 'development' || process.env.DEBUG_CORS === 'true') {
+        console.log('✅ CORS: Allowing request with no origin (same-origin or server-to-server)');
+      }
       return callback(null, true);
     }
     
     // If allowedOrigins is false, only allow same-origin requests
     if (!allowedOrigins) {
-      console.warn(`⚠️  CORS: Rejecting origin ${origin} - no allowed origins configured`);
-      return callback(new Error('Not allowed by CORS'));
+      if (process.env.NODE_ENV === 'development' || process.env.DEBUG_CORS === 'true') {
+        console.warn(`⚠️  CORS: Rejecting origin ${origin} - no allowed origins configured`);
+      }
+      return callback(null, false);
     }
     
     // Check if origin is in allowed list
     if (Array.isArray(allowedOrigins)) {
       if (allowedOrigins.includes(origin)) {
-        console.log(`✅ CORS: Allowing origin: ${origin}`);
+        if (process.env.NODE_ENV === 'development' || process.env.DEBUG_CORS === 'true') {
+          console.log(`✅ CORS: Allowing origin: ${origin}`);
+        }
         return callback(null, origin);
       } else {
-        console.warn(`⚠️  CORS: Rejecting unauthorized origin: ${origin}`);
-        console.warn(`   Allowed origins: ${allowedOrigins.join(', ')}`);
-        return callback(new Error('Not allowed by CORS'));
+        if (process.env.NODE_ENV === 'development' || process.env.DEBUG_CORS === 'true') {
+          console.warn(`⚠️  CORS: Rejecting unauthorized origin: ${origin}`);
+          console.warn(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+        }
+        return callback(null, false);
       }
     }
     
     // If allowedOrigins is a string (single origin)
     if (typeof allowedOrigins === 'string') {
       if (allowedOrigins === origin) {
-        console.log(`✅ CORS: Allowing origin: ${origin}`);
+        if (process.env.NODE_ENV === 'development' || process.env.DEBUG_CORS === 'true') {
+          console.log(`✅ CORS: Allowing origin: ${origin}`);
+        }
         return callback(null, origin);
       } else {
-        console.warn(`⚠️  CORS: Rejecting unauthorized origin: ${origin}`);
-        console.warn(`   Allowed origin: ${allowedOrigins}`);
-        return callback(new Error('Not allowed by CORS'));
+        if (process.env.NODE_ENV === 'development' || process.env.DEBUG_CORS === 'true') {
+          console.warn(`⚠️  CORS: Rejecting unauthorized origin: ${origin}`);
+          console.warn(`   Allowed origin: ${allowedOrigins}`);
+        }
+        return callback(null, false);
       }
     }
     
     // Fallback: reject if we can't determine allowed origins
     console.error('❌ CORS: Unable to determine allowed origins');
-    return callback(new Error('Not allowed by CORS'));
+    return callback(null, false);
   },
   
   // Enable credentials to work with withCredentials: true from frontend

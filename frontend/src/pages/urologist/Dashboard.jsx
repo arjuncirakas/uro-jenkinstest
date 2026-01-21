@@ -260,7 +260,27 @@ const UrologistDashboard = () => {
           console.log('Normalized current name:', normalizedCurrentName);
         }
 
-        setAppointments(filteredAppointments);
+        // Filter out patients with no appointments (assigned_no_appointment type)
+        // Only show actual appointments with scheduled times
+        const appointmentsWithTimes = filteredAppointments.filter(apt => {
+          const aptType = apt.type || '';
+          // Exclude assigned_no_appointment type - these are patients assigned but without appointments
+          return aptType !== 'assigned_no_appointment';
+        });
+
+        // Sort appointments by time
+        const sortedAppointments = appointmentsWithTimes.sort((a, b) => {
+          const aTime = a.time || a.appointmentTime || a.appointment_time || '';
+          const bTime = b.time || b.appointmentTime || b.appointment_time || '';
+          
+          if (!aTime && !bTime) return 0;
+          if (!aTime) return 1;
+          if (!bTime) return -1;
+          
+          return aTime.localeCompare(bTime);
+        });
+
+        setAppointments(sortedAppointments);
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
         console.error('Error fetching appointments:', result.error);
@@ -1472,15 +1492,22 @@ const UrologistDashboard = () => {
                           </tr>
                         ) : (
                           appointments.map((appointment, index) => (
-                            <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <tr key={index} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${appointment.type === 'assigned_no_appointment' ? 'bg-yellow-50' : ''}`}>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
-                                {appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
-                                  ? 'Flexible'
-                                  : formatTime(appointment.time || appointment.appointmentTime || appointment.scheduledTime || appointment.appointment_time) || 'N/A'}
+                                {appointment.type === 'assigned_no_appointment'
+                                  ? <span className="text-yellow-700 font-medium">TBD</span>
+                                  : appointment.appointment_type === 'automatic' || appointment.type === 'automatic'
+                                    ? 'Flexible'
+                                    : formatTime(appointment.time || appointment.appointmentTime || appointment.scheduledTime || appointment.appointment_time) || 'N/A'}
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-900 text-xs sm:text-sm font-medium">
                                 <div className="flex items-center space-x-2">
                                   <span>{appointment.patientName || 'Unknown Patient'}</span>
+                                  {appointment.type === 'assigned_no_appointment' && (
+                                    <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded font-medium">
+                                      No Appointment
+                                    </span>
+                                  )}
                                   {(appointment.type === 'Investigation Appointment' || appointment.type === 'investigation' || (appointment.type && appointment.type.toLowerCase() === 'investigation')) && (
                                     <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded font-medium">
                                       Investigation

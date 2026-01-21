@@ -334,6 +334,27 @@ export const patientService = {
         details: error.response?.data?.errors
       };
     }
+  },
+
+  // Reassign patient to a new urologist
+  reassignUrologist: async (patientId, urologistId) => {
+    try {
+      const response = await apiClient.post(`/patients/${patientId}/reassign-urologist`, {
+        urologistId
+      });
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Error reassigning urologist:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        details: error.response?.data?.errors
+      };
+    }
   }
 };
 

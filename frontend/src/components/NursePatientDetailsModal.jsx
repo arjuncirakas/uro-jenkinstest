@@ -30,6 +30,7 @@ import InvestigationRequestItem from './shared/InvestigationRequestItem';
 import UploadResultButton from './shared/UploadResultButton';
 import { createRequestFromMatchOrTest as createRequestFromMatchOrTestHelper, createRequestFromClinicalInvestigation as createRequestFromClinicalInvestigationHelper, prepareEditResultData } from '../utils/investigationRequestHelpers';
 import EditPatientModal from './EditPatientModal';
+import ReassignUrologistModal from './ReassignUrologistModal';
 import { calculatePSAVelocity } from '../utils/psaVelocity';
 import { getPatientPipelineStage } from '../utils/patientPipeline';
 import AppointmentBookingSection from './AppointmentBookingSection';
@@ -55,6 +56,9 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
   // Edit modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  
+  // Reassign urologist modal state
+  const [isReassignUrologistModalOpen, setIsReassignUrologistModalOpen] = useState(false);
 
   // Notes API state
   const [clinicalNotes, setClinicalNotes] = useState([]);
@@ -4202,17 +4206,37 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
 
                         console.log('🔍 Nurse Pipeline Data:', pipelineData);
 
+                        const assignedUrologist = displayPatient?.assignedUrologist || displayPatient?.assigned_urologist || 'Not assigned';
+                        const hasAssignedUrologist = assignedUrologist && assignedUrologist !== 'Not assigned' && assignedUrologist.trim() !== '';
+                        const buttonText = hasAssignedUrologist ? 'Reassign Urologist' : 'Assign Urologist';
+                        
                         return (
                           <>
-                            {/* Edit Button */}
-                            <div className="flex justify-end mb-4">
-                              <button
-                                onClick={() => setIsEditModalOpen(true)}
-                                className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center"
-                              >
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Patient Details
-                              </button>
+                            {/* Assigned Urologist and Action Buttons */}
+                            <div className="flex items-center justify-between mb-4">
+                              {/* Assigned Urologist Info */}
+                              <div className="flex-1">
+                                <p className="text-sm text-gray-600 mb-1">Assigned Urologist</p>
+                                <p className="text-base font-medium text-gray-900">{assignedUrologist}</p>
+                              </div>
+                              
+                              {/* Action Buttons */}
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => setIsReassignUrologistModalOpen(true)}
+                                  className="px-4 py-2 bg-teal-100 text-teal-700 border border-teal-400 text-sm font-medium rounded-lg hover:bg-teal-200 transition-colors flex items-center"
+                                >
+                                  <FaUserMd className="w-4 h-4 mr-2" />
+                                  {buttonText}
+                                </button>
+                                <button
+                                  onClick={() => setIsEditModalOpen(true)}
+                                  className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center"
+                                >
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit Patient Details
+                                </button>
+                              </div>
                             </div>
 
                             {/* Patient Journey Pipeline */}
@@ -6444,6 +6468,27 @@ const NursePatientDetailsModal = ({ isOpen, onClose, patient, onPatientUpdated }
         onError={(errorData) => {
           console.error('Error updating patient:', errorData);
           // You can show an error modal here if needed
+        }}
+      />
+
+      {/* Reassign Urologist Modal */}
+      <ReassignUrologistModal
+        isOpen={isReassignUrologistModalOpen}
+        onClose={() => setIsReassignUrologistModalOpen(false)}
+        patient={fullPatientData || patient}
+        onReassigned={async (reassignData) => {
+          // Refresh patient data to show updated urologist
+          await fetchFullPatientData();
+          // Notify parent component
+          if (onPatientUpdated) {
+            onPatientUpdated(fullPatientData || patient);
+          }
+          // Dispatch events to refresh patient list and appointments
+          window.dispatchEvent(new CustomEvent('patient:updated', {
+            detail: { patient: fullPatientData || patient }
+          }));
+          window.dispatchEvent(new CustomEvent('appointment:updated'));
+          setIsReassignUrologistModalOpen(false);
         }}
       />
     </>

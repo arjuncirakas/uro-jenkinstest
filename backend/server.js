@@ -93,6 +93,7 @@ app.use((req, res, next) => {
 // Rate limiting removed - no longer applying rate limiting to any routes
 
 // CORS configuration with enhanced logging
+// Apply CORS before any other middleware to ensure preflight requests are handled
 app.use(cors(corsOptions));
 app.use(corsLoggingMiddleware);
 

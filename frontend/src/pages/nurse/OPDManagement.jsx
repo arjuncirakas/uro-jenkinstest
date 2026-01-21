@@ -88,7 +88,31 @@ const OPDManagement = () => {
           console.log('✅ OPDManagement: First appointment keys:', Object.keys(appointments[0]));
         }
 
-        setAppointments(appointments);
+        // Sort appointments: assigned_no_appointment first, then by time
+        const sortedAppointments = appointments.sort((a, b) => {
+          const aType = a.type || '';
+          const bType = b.type || '';
+          
+          // Put assigned_no_appointment at the top
+          if (aType === 'assigned_no_appointment' && bType !== 'assigned_no_appointment') {
+            return -1;
+          }
+          if (aType !== 'assigned_no_appointment' && bType === 'assigned_no_appointment') {
+            return 1;
+          }
+          
+          // For regular appointments, sort by time
+          const aTime = a.appointmentTime || a.time || a.appointment_time || '';
+          const bTime = b.appointmentTime || b.time || b.appointment_time || '';
+          
+          if (!aTime && !bTime) return 0;
+          if (!aTime) return 1;
+          if (!bTime) return -1;
+          
+          return aTime.localeCompare(bTime);
+        });
+
+        setAppointments(sortedAppointments);
 
       } else {
         setAppointmentsError(result.error || 'Failed to fetch appointments');
@@ -808,15 +832,33 @@ const OPDManagement = () => {
 
                         return filteredAppointments
                           .sort((a, b) => {
-                            if (a.appointmentTime && !b.appointmentTime) return -1;
-                            if (!a.appointmentTime && b.appointmentTime) return 1;
-                            if (a.appointmentTime && b.appointmentTime) return a.appointmentTime.localeCompare(b.appointmentTime);
-                            return 0;
+                            const aType = a.type || '';
+                            const bType = b.type || '';
+                            
+                            // Put assigned_no_appointment at the top
+                            if (aType === 'assigned_no_appointment' && bType !== 'assigned_no_appointment') {
+                              return -1;
+                            }
+                            if (aType !== 'assigned_no_appointment' && bType === 'assigned_no_appointment') {
+                              return 1;
+                            }
+                            
+                            // For regular appointments, sort by time
+                            const aTime = a.appointmentTime || a.time || a.appointment_time || '';
+                            const bTime = b.appointmentTime || b.time || b.appointment_time || '';
+                            
+                            if (!aTime && !bTime) return 0;
+                            if (!aTime) return 1;
+                            if (!bTime) return -1;
+                            
+                            return aTime.localeCompare(bTime);
                           })
                           .map((appointment, index, array) => {
-                            const showSeparator = !appointment.appointmentTime && (index === 0 || array[index - 1].appointmentTime);
+                            const hasNoTime = !appointment.appointmentTime && !appointment.time && !appointment.appointment_time;
+                            const isAssignedNoAppointment = appointment.type === 'assigned_no_appointment';
+                            const showSeparator = hasNoTime && (index === 0 || (array[index - 1].appointmentTime || array[index - 1].time || array[index - 1].appointment_time));
                             return (
-                              <React.Fragment key={appointment.id}>
+                              <React.Fragment key={appointment.id || `appointment-${index}`}>
                                 {showSeparator && (
                                   <tr>
                                     <td colSpan={activeAppointmentTab === 'investigation' ? "7" : "4"} className="bg-slate-100 py-3 px-6 font-bold text-sm text-slate-700 border-y border-slate-200">
@@ -827,14 +869,21 @@ const OPDManagement = () => {
                                     </td>
                                   </tr>
                                 )}
-                                <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${!appointment.appointmentTime ? 'bg-slate-50/50' : ''}`}>
+                                <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${hasNoTime ? 'bg-yellow-50' : ''}`}>
                                   <td className="py-3 sm:py-4 px-3 sm:px-6">
                                     <div className="flex items-center space-x-2">
                                       <div className="w-7 h-7 bg-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
                                         {getInitials(appointment.patientName)}
                                       </div>
                                       <div className="min-w-0 flex-1">
-                                        <div className="font-medium text-gray-900 text-xs sm:text-sm truncate">{appointment.patientName}</div>
+                                        <div className="font-medium text-gray-900 text-xs sm:text-sm truncate flex items-center gap-2">
+                                          {appointment.patientName}
+                                          {isAssignedNoAppointment && (
+                                            <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded font-medium">
+                                              No Appointment
+                                            </span>
+                                          )}
+                                        </div>
                                         <div className="text-xs text-gray-600 truncate">
                                           {appointment.age} years old
                                         </div>
@@ -847,7 +896,9 @@ const OPDManagement = () => {
                                   </td>
                                   <td className="py-3 sm:py-4 px-3 sm:px-6 text-gray-700 text-xs sm:text-sm">
                                     <div className="font-medium truncate">{formatDate(appointment.appointmentDate)}</div>
-                                    <div className="text-xs text-gray-500 truncate">{formatTime(appointment.appointmentTime)}</div>
+                                    <div className="text-xs text-gray-500 truncate">
+                                      {hasNoTime ? <span className="text-yellow-700 font-medium">TBD</span> : formatTime(appointment.appointmentTime || appointment.time || appointment.appointment_time)}
+                                    </div>
                                   </td>
                                   {activeAppointmentTab === 'investigation' ? (
                                     <>

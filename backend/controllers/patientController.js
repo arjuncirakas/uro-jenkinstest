@@ -3566,3 +3566,386 @@ export const getAllUrologists = async (req, res) => {
   }
 };
 
+// Reassign patient to a new urologist
+// This updates the patient's assigned_urologist and all future appointments
+export const reassignUrologist = async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { id } = req.params;
+    const { urologistId } = req.body;
+    const userId = req.user.id;
+    
+    if (!urologistId) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Urologist ID is required'
+      });
+    }
+    
+    // Parse IDs to integers to ensure type consistency
+    const patientId = parseInt(id, 10);
+    const parsedUrologistId = parseInt(urologistId, 10);
+    
+    if (isNaN(patientId)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid patient ID'
+      });
+    }
+    
+    if (isNaN(parsedUrologistId)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid urologist ID'
+      });
+    }
+    
+    // Get patient details
+    const patientQuery = await client.query(
+      `SELECT id, upi, first_name, last_name, assigned_urologist 
+       FROM patients 
+       WHERE id = $1`,
+      [patientId]
+    );
+    
+    if (patientQuery.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Patient not found'
+      });
+    }
+    
+    const patient = patientQuery.rows[0];
+    const previousUrologist = patient.assigned_urologist;
+    
+    // Get new urologist details
+    // First try doctors table
+    let urologistCheck = await client.query(
+      `SELECT id, first_name, last_name, email 
+       FROM doctors 
+       WHERE id = $1 AND is_active = true`,
+      [parsedUrologistId]
+    );
+    
+    let finalUrologistId = parsedUrologistId;
+    let urologistName = null;
+    
+    // If not found in doctors table, try users table and get corresponding doctors.id
+    if (urologistCheck.rows.length === 0) {
+      const userCheck = await client.query(
+        `SELECT id, first_name, last_name, role, email 
+         FROM users 
+         WHERE id = $1 AND role IN ('urologist', 'doctor') AND is_active = true`,
+        [parsedUrologistId]
+      );
+      
+      if (userCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({
+          success: false,
+          message: 'Urologist not found or inactive'
+        });
+      }
+      
+      // Found in users table, now find corresponding doctors.id
+      const userEmail = userCheck.rows[0].email;
+      const doctorByEmailCheck = await client.query(
+        `SELECT id, first_name, last_name 
+         FROM doctors 
+         WHERE email = $1 AND is_active = true`,
+        [userEmail]
+      );
+      
+      if (doctorByEmailCheck.rows.length > 0) {
+        finalUrologistId = doctorByEmailCheck.rows[0].id;
+        urologistCheck = doctorByEmailCheck;
+        console.log(`[reassignUrologist] Converted users.id ${parsedUrologistId} to doctors.id ${finalUrologistId}`);
+      } else {
+        // Urologist exists in users but not in doctors table
+        // Use users table data for name, but we need doctors.id for appointments
+        // This is an edge case - log warning
+        console.warn(`[reassignUrologist] Urologist ${userCheck.rows[0].first_name} ${userCheck.rows[0].last_name} not found in doctors table`);
+        urologistCheck = userCheck;
+      }
+    }
+    
+    if (urologistCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Urologist not found'
+      });
+    }
+    
+    urologistName = `${urologistCheck.rows[0].first_name} ${urologistCheck.rows[0].last_name}`.trim();
+    
+    // Check if reassigning to the same urologist
+    if (previousUrologist && previousUrologist.trim() === urologistName) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Patient is already assigned to this urologist'
+      });
+    }
+    
+    // Update patient's assigned urologist
+    await client.query(
+      `UPDATE patients 
+       SET assigned_urologist = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $2`,
+      [urologistName, patientId]
+    );
+    
+    console.log(`[reassignUrologist] Updated patient ${patient.upi} assigned_urologist from "${previousUrologist}" to "${urologistName}"`);
+    
+    // Get all future appointments for this patient (excluding cancelled, no_show, missed, completed)
+    const appointmentsQuery = await client.query(
+      `SELECT id, appointment_date, appointment_time, appointment_type, surgery_type, status, notes
+       FROM appointments
+       WHERE patient_id = $1
+       AND status NOT IN ('cancelled', 'no_show', 'missed', 'completed')
+       AND (appointment_date > CURRENT_DATE OR (appointment_date = CURRENT_DATE AND appointment_time >= CURRENT_TIME))
+       ORDER BY appointment_date, appointment_time`,
+      [patientId]
+    );
+    
+    const appointments = appointmentsQuery.rows;
+    const updatedAppointments = [];
+    const rescheduledAppointments = [];
+    
+    // Helper function to find next available slot
+    const findNextAvailableSlot = async (date, preferredTime) => {
+      const timeSlots = [];
+      // Generate all possible time slots (9:00 AM to 5:00 PM, 30-minute intervals)
+      for (let hour = 9; hour <= 17; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+          const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+          timeSlots.push(timeString);
+        }
+      }
+      
+      // Start from preferred time or 9:00
+      const preferredIndex = timeSlots.indexOf(preferredTime);
+      const startIndex = preferredIndex >= 0 ? preferredIndex : 0;
+      
+      // Check slots starting from preferred time
+      for (let i = startIndex; i < timeSlots.length; i++) {
+        const slot = timeSlots[i];
+        const conflictCheck = await client.query(
+          `SELECT id FROM appointments 
+           WHERE urologist_id = $1 
+           AND appointment_date = $2 
+           AND appointment_time = $3 
+           AND status IN ('scheduled', 'confirmed')
+           AND appointment_type != 'automatic'
+           AND id != $4`,
+          [finalUrologistId, date, slot, appointments.find(a => a.appointment_date === date && a.appointment_time === preferredTime)?.id || 0]
+        );
+        
+        if (conflictCheck.rows.length === 0) {
+          return slot;
+        }
+      }
+      
+      // If no slot found on same day, try next day
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      const nextDateStr = nextDate.toISOString().split('T')[0];
+      
+      // Try first slot of next day
+      const firstSlotCheck = await client.query(
+        `SELECT id FROM appointments 
+         WHERE urologist_id = $1 
+         AND appointment_date = $2 
+         AND appointment_time = $3 
+         AND status IN ('scheduled', 'confirmed')
+         AND appointment_type != 'automatic'`,
+        [finalUrologistId, nextDateStr, '09:00']
+      );
+      
+      if (firstSlotCheck.rows.length === 0) {
+        return { time: '09:00', date: nextDateStr, rescheduled: true };
+      }
+      
+      // Try other slots on next day
+      for (const slot of timeSlots) {
+        const slotCheck = await client.query(
+          `SELECT id FROM appointments 
+           WHERE urologist_id = $1 
+           AND appointment_date = $2 
+           AND appointment_time = $3 
+           AND status IN ('scheduled', 'confirmed')
+           AND appointment_type != 'automatic'`,
+          [finalUrologistId, nextDateStr, slot]
+        );
+        
+        if (slotCheck.rows.length === 0) {
+          return { time: slot, date: nextDateStr, rescheduled: true };
+        }
+      }
+      
+      // If still no slot found, return preferred time (backend validation will catch this)
+      return preferredTime;
+    };
+    
+    // Update each appointment
+    for (const appointment of appointments) {
+      const originalDate = appointment.appointment_date;
+      const originalTime = appointment.appointment_time;
+      
+      // Check for conflict with new urologist
+      const conflictCheck = await client.query(
+        `SELECT id FROM appointments 
+         WHERE urologist_id = $1 
+         AND appointment_date = $2 
+         AND appointment_time = $3 
+         AND status IN ('scheduled', 'confirmed')
+         AND appointment_type != 'automatic'
+         AND id != $4`,
+        [finalUrologistId, originalDate, originalTime, appointment.id]
+      );
+      
+      let newDate = originalDate;
+      let newTime = originalTime;
+      let wasRescheduled = false;
+      
+      // If conflict exists, find alternative slot
+      if (conflictCheck.rows.length > 0) {
+        const alternativeSlot = await findNextAvailableSlot(originalDate, originalTime);
+        
+        if (typeof alternativeSlot === 'object' && alternativeSlot.rescheduled) {
+          newDate = alternativeSlot.date;
+          newTime = alternativeSlot.time;
+          wasRescheduled = true;
+        } else {
+          newTime = alternativeSlot;
+        }
+      }
+      
+      // Build notes update - append reassignment info if needed
+      let updatedNotes = appointment.notes || '';
+      const needsUpdate = wasRescheduled || conflictCheck.rows.length > 0;
+      
+      if (needsUpdate) {
+        const rescheduleInfo = (newDate !== originalDate || newTime !== originalTime)
+          ? ` - Rescheduled from ${originalDate} ${originalTime} to ${newDate} ${newTime}`
+          : '';
+        
+        const reassignmentNote = `[Reassigned to ${urologistName}${rescheduleInfo}]`;
+        
+        if (updatedNotes && updatedNotes.trim() !== '') {
+          updatedNotes = `${updatedNotes}\n\n${reassignmentNote}`;
+        } else {
+          updatedNotes = reassignmentNote;
+        }
+      }
+      
+      // Update appointment
+      const updateQuery = `
+        UPDATE appointments 
+        SET urologist_id = $1,
+            urologist_name = $2,
+            appointment_date = $3,
+            appointment_time = $4,
+            notes = $5,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $6
+        RETURNING id, appointment_date, appointment_time
+      `;
+      
+      const updateResult = await client.query(updateQuery, [
+        finalUrologistId,
+        urologistName,
+        newDate,
+        newTime,
+        updatedNotes,
+        appointment.id
+      ]);
+      
+      updatedAppointments.push(updateResult.rows[0]);
+      
+      if (wasRescheduled || (conflictCheck.rows.length > 0 && newTime !== originalTime)) {
+        rescheduledAppointments.push({
+          id: appointment.id,
+          originalDate,
+          originalTime,
+          newDate,
+          newTime,
+          type: appointment.appointment_type
+        });
+      }
+    }
+    
+    // Get user info for timeline note
+    const userQuery = await client.query(
+      `SELECT first_name, last_name, role 
+       FROM users 
+       WHERE id = $1`,
+      [userId]
+    );
+    
+    const userName = userQuery.rows.length > 0 
+      ? `${userQuery.rows[0].first_name} ${userQuery.rows[0].last_name}` 
+      : 'System';
+    const userRole = userQuery.rows.length > 0 ? userQuery.rows[0].role : 'system';
+    
+    // Create timeline note
+    let noteContent = `UROLOGIST REASSIGNMENT\n\n`;
+    noteContent += `Previous Urologist: ${previousUrologist || 'Not assigned'}\n`;
+    noteContent += `New Urologist: ${urologistName}\n`;
+    noteContent += `Reassigned by: ${userName} (${userRole})\n`;
+    
+    if (updatedAppointments.length > 0) {
+      noteContent += `\n📅 APPOINTMENTS UPDATED (${updatedAppointments.length}):\n`;
+      updatedAppointments.forEach((apt, index) => {
+        noteContent += `${index + 1}. ${apt.appointment_date} at ${apt.appointment_time}\n`;
+      });
+    }
+    
+    if (rescheduledAppointments.length > 0) {
+      noteContent += `\n⚠️ RESCHEDULED APPOINTMENTS (${rescheduledAppointments.length}):\n`;
+      rescheduledAppointments.forEach((apt, index) => {
+        noteContent += `${index + 1}. ${apt.type || 'Appointment'} rescheduled from ${apt.originalDate} ${apt.originalTime} to ${apt.newDate} ${apt.newTime}\n`;
+      });
+    }
+    
+    await client.query(
+      `INSERT INTO patient_notes (patient_id, note_content, author_id, author_name, author_role, created_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+      [patientId, noteContent, userId, userName, userRole]
+    );
+    
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      message: `Patient successfully reassigned to ${urologistName}`,
+      data: {
+        previousUrologist,
+        newUrologist: urologistName,
+        appointmentsUpdated: updatedAppointments.length,
+        appointmentsRescheduled: rescheduledAppointments.length,
+        rescheduledAppointments
+      }
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Reassign urologist error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reassign urologist',
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+};
+

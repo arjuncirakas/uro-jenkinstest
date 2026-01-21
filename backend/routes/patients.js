@@ -11,7 +11,8 @@ import {
   getPatientsDueForReview,
   searchPatients,
   expirePatient,
-  getAllUrologists
+  getAllUrologists,
+  reassignUrologist
 } from '../controllers/patientController.js';
 import {
   getDischargeSummary,
@@ -95,6 +96,20 @@ router.get('/urologists',
   authenticateToken,
   requireRole(['urologist', 'doctor', 'urology_nurse', 'gp']),
   getAllUrologists
+);
+
+// Reassign patient to a new urologist - accessible by urologists, doctors, and nurses
+router.post('/:id/reassign-urologist',
+  generalLimiter,
+  authenticateToken,
+  requireRole(['urologist', 'doctor', 'urology_nurse']),
+  (req, res, next) => {
+    // Map :id parameter to patientId for IDOR protection
+    req.params.patientId = req.params.id;
+    next();
+  },
+  checkPatientAccess,
+  reassignUrologist
 );
 
 // Get patient by ID - accessible by urologists, doctors, nurses, and GPs

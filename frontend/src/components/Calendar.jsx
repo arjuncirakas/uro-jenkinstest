@@ -309,6 +309,11 @@ const Calendar = ({
   // This ensures that investigation appointments (purple) and urologist consultations (teal)
   // maintain their colors when rescheduled
   const getAppointmentColor = (appointment) => {
+    // Check for assigned_no_appointment type first (yellow)
+    if (appointment.type === 'assigned_no_appointment') {
+      return 'yellow';
+    }
+    
     // If status is missed, always show red
     if (appointment.status === 'missed' || appointment.status === 'no_show' || appointment.status === 'no-show') {
       return 'red';
@@ -732,9 +737,11 @@ const Calendar = ({
                                     ? 'bg-purple-500 text-white'
                                     : getAppointmentColor(appointment) === 'orange'
                                       ? 'bg-orange-500 text-white'
-                                      : getAppointmentColor(appointment) === 'green'
-                                        ? 'bg-green-500 text-white'
-                                        : 'bg-gray-500 text-white'
+                                      : getAppointmentColor(appointment) === 'yellow'
+                                        ? 'bg-yellow-500 text-white'
+                                        : getAppointmentColor(appointment) === 'green'
+                                          ? 'bg-green-500 text-white'
+                                          : 'bg-gray-500 text-white'
                               }`}
                           >
                             <div className="flex items-center justify-between">
@@ -770,11 +777,13 @@ const Calendar = ({
                                 ? 'bg-teal-500 text-white border-teal-600'
                                 : color === 'orange'
                                   ? 'bg-orange-500 text-white border-orange-600'
-                                  : color === 'green'
-                                    ? 'bg-green-500 text-white border-green-600'
-                                    : color === 'red'
-                                      ? 'bg-red-500 text-white border-red-600'
-                                      : 'bg-gray-500 text-white border-gray-600';
+                                  : color === 'yellow'
+                                    ? 'bg-yellow-500 text-white border-yellow-600'
+                                    : color === 'green'
+                                      ? 'bg-green-500 text-white border-green-600'
+                                      : color === 'red'
+                                        ? 'bg-red-500 text-white border-red-600'
+                                        : 'bg-gray-500 text-white border-gray-600';
 
                           return (
                             <div
@@ -1062,9 +1071,11 @@ const Calendar = ({
                                     ? 'bg-purple-500 text-white'
                                     : getAppointmentColor(appointment) === 'orange'
                                       ? 'bg-orange-500 text-white'
-                                      : getAppointmentColor(appointment) === 'green'
-                                        ? 'bg-green-500 text-white'
-                                        : 'bg-gray-500 text-white'
+                                      : getAppointmentColor(appointment) === 'yellow'
+                                        ? 'bg-yellow-500 text-white'
+                                        : getAppointmentColor(appointment) === 'green'
+                                          ? 'bg-green-500 text-white'
+                                          : 'bg-gray-500 text-white'
                               }`}
                           >
                             <div className="flex items-start justify-between">
@@ -1142,9 +1153,11 @@ const Calendar = ({
                             ? 'bg-orange-500 text-white border-orange-600'
                             : color === 'green'
                               ? 'bg-green-500 text-white border-green-600'
-                              : color === 'red'
-                                ? 'bg-red-500 text-white border-red-600'
-                                : 'bg-gray-500 text-white border-gray-600';
+                              : color === 'yellow'
+                                ? 'bg-yellow-500 text-white border-yellow-600'
+                                : color === 'red'
+                                  ? 'bg-red-500 text-white border-red-600'
+                                  : 'bg-gray-500 text-white border-gray-600';
 
                     return (
                       <div
@@ -1161,7 +1174,9 @@ const Calendar = ({
                             <div className="font-semibold text-base">
                               {appointment.patientName}
                             </div>
-                            <div className="text-xs opacity-90 mt-1">{appointment.type || 'Automatic Appointment'}</div>
+                            <div className="text-xs opacity-90 mt-1">
+                              {appointment.type === 'assigned_no_appointment' ? 'Assigned - No Appointment' : (appointment.type || 'Automatic Appointment')}
+                            </div>
                             {appointment.notes && (
                               <div className="text-xs opacity-80 mt-1">{appointment.notes}</div>
                             )}

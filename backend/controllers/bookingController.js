@@ -922,18 +922,20 @@ export const getTodaysAppointments = async (req, res) => {
 
     // For urologists/doctors, get their doctors.id (appointments use doctors.id, not users.id)
     let doctorId = null;
+    let doctorName = null;
     if (userRole === 'urologist' || userRole === 'doctor') {
       console.log(`📅 [getTodaysAppointments ${requestId}] Looking up doctor record for email: ${userEmail}`);
       // Find doctor record by email (since doctors and users are linked by email)
       try {
         const doctorCheck = await client.query(
-          'SELECT id FROM doctors WHERE email = $1 AND is_active = true',
+          'SELECT id, first_name, last_name FROM doctors WHERE email = $1 AND is_active = true',
           [userEmail]
         );
         console.log(`📅 [getTodaysAppointments ${requestId}] Doctor lookup query executed, found ${doctorCheck.rows.length} records`);
         if (doctorCheck.rows.length > 0) {
           doctorId = doctorCheck.rows[0].id;
-          console.log(`📅 [getTodaysAppointments ${requestId}] ✅ Found doctor record with id: ${doctorId} for user ${userId} (email: ${userEmail})`);
+          doctorName = `${doctorCheck.rows[0].first_name} ${doctorCheck.rows[0].last_name}`.trim();
+          console.log(`📅 [getTodaysAppointments ${requestId}] ✅ Found doctor record with id: ${doctorId}, name: ${doctorName} for user ${userId} (email: ${userEmail})`);
         } else {
           console.log(`📅 [getTodaysAppointments ${requestId}] ⚠️ No doctor record found for user ${userId} (email: ${userEmail}) - returning empty results`);
           // Return empty results if no doctor record exists
@@ -1045,9 +1047,47 @@ export const getTodaysAppointments = async (req, res) => {
           AND a.appointment_type = 'urologist'
           AND a.urologist_id = $2
           AND a.status != 'cancelled'  -- Includes: scheduled, confirmed, no_show, missed, etc.
-          ORDER BY a.appointment_time
+          
+          UNION ALL
+          
+          SELECT 
+            NULL as id,
+            p.id as patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
+            NULL as appointment_date,
+            NULL as appointment_time,
+            p.assigned_urologist as urologist,
+            'pending' as status,
+            NULL as notes,
+            'assigned_no_appointment' as type
+          FROM patients p
+          WHERE p.status = 'Active'
+          AND p.assigned_urologist IS NOT NULL
+          AND TRIM(p.assigned_urologist) != ''
+          AND TRIM(LOWER(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($3))
+          AND NOT EXISTS (
+            SELECT 1 FROM appointments a2
+            WHERE a2.patient_id = p.id
+            AND a2.appointment_date = $1
+            AND a2.status != 'cancelled'
+          )
+          
+          ORDER BY appointment_time NULLS FIRST, type
         `;
-        queryParams.push(doctorId);
+        queryParams.push(doctorId, doctorName);
       } else {
         console.log(`📅 [getTodaysAppointments ${requestId}] Using unfiltered urologist query (nurse or no doctorId)`);
         query = `
@@ -1079,7 +1119,44 @@ export const getTodaysAppointments = async (req, res) => {
           WHERE a.appointment_date = $1 
           AND a.appointment_type = 'urologist'
           AND a.status != 'cancelled'  -- Includes: scheduled, confirmed, no_show, missed, etc.
-          ORDER BY a.appointment_time
+          
+          UNION ALL
+          
+          SELECT 
+            NULL as id,
+            p.id as patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
+            NULL as appointment_date,
+            NULL as appointment_time,
+            p.assigned_urologist as urologist,
+            'pending' as status,
+            NULL as notes,
+            'assigned_no_appointment' as type
+          FROM patients p
+          WHERE p.status = 'Active'
+          AND p.assigned_urologist IS NOT NULL
+          AND TRIM(p.assigned_urologist) != ''
+          AND NOT EXISTS (
+            SELECT 1 FROM appointments a2
+            WHERE a2.patient_id = p.id
+            AND a2.appointment_date = $1
+            AND a2.status != 'cancelled'
+          )
+          
+          ORDER BY appointment_time NULLS FIRST, type
         `;
       }
     } else {
@@ -1149,9 +1226,52 @@ export const getTodaysAppointments = async (req, res) => {
           WHERE ib.scheduled_date = $1
           AND ib.status != 'cancelled'
           
-          ORDER BY appointment_time
+          UNION ALL
+          
+          SELECT 
+            NULL as id,
+            p.id as patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
+            NULL as appointment_date,
+            NULL as appointment_time,
+            p.assigned_urologist as urologist,
+            'pending' as status,
+            NULL as notes,
+            'assigned_no_appointment' as type
+          FROM patients p
+          WHERE p.status = 'Active'
+          AND p.assigned_urologist IS NOT NULL
+          AND TRIM(p.assigned_urologist) != ''
+          AND TRIM(LOWER(REGEXP_REPLACE(p.assigned_urologist, '^Dr\\.\\s*', '', 'i'))) = TRIM(LOWER($3))
+          AND NOT EXISTS (
+            SELECT 1 FROM appointments a2
+            WHERE a2.patient_id = p.id
+            AND a2.appointment_date = $1
+            AND a2.status != 'cancelled'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM investigation_bookings ib2
+            WHERE ib2.patient_id = p.id
+            AND ib2.scheduled_date = $1
+            AND ib2.status != 'cancelled'
+          )
+          
+          ORDER BY appointment_time NULLS FIRST, type
         `;
-        queryParams.push(doctorId);
+        queryParams.push(doctorId, doctorName);
       } else {
         console.log(`📅 [getTodaysAppointments ${requestId}] Using unfiltered 'all' query (nurse or no doctorId)`);
         query = `
@@ -1213,7 +1333,49 @@ export const getTodaysAppointments = async (req, res) => {
           WHERE ib.scheduled_date = $1
           AND ib.status != 'cancelled'
           
-          ORDER BY appointment_time
+          UNION ALL
+          
+          SELECT 
+            NULL as id,
+            p.id as patient_id,
+            p.first_name,
+            p.last_name,
+            p.upi,
+            EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age,
+            p.gender,
+            COALESCE(
+              (SELECT ir.result::numeric 
+               FROM investigation_results ir 
+               WHERE ir.patient_id = p.id 
+               AND LOWER(ir.test_type) = 'psa' 
+               ORDER BY ir.test_date DESC, ir.created_at DESC 
+               LIMIT 1),
+              p.initial_psa
+            ) as psa,
+            NULL as appointment_date,
+            NULL as appointment_time,
+            p.assigned_urologist as urologist,
+            'pending' as status,
+            NULL as notes,
+            'assigned_no_appointment' as type
+          FROM patients p
+          WHERE p.status = 'Active'
+          AND p.assigned_urologist IS NOT NULL
+          AND TRIM(p.assigned_urologist) != ''
+          AND NOT EXISTS (
+            SELECT 1 FROM appointments a2
+            WHERE a2.patient_id = p.id
+            AND a2.appointment_date = $1
+            AND a2.status != 'cancelled'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM investigation_bookings ib2
+            WHERE ib2.patient_id = p.id
+            AND ib2.scheduled_date = $1
+            AND ib2.status != 'cancelled'
+          )
+          
+          ORDER BY appointment_time NULLS FIRST, type
         `;
       }
     }
@@ -3375,6 +3537,7 @@ export const getAllAppointments = async (req, res) => {
         a.notes,
         a.appointment_type as type,
         a.urologist_id,
+        a.urologist_name,
         d.first_name as urologist_first_name,
         d.last_name as urologist_last_name,
         COALESCE(a.reminder_sent, false) as reminder_sent,
@@ -3613,6 +3776,13 @@ export const getAllAppointments = async (req, res) => {
           if (decryptedRow.type === 'investigation') {
             return decryptedRow.urologist_first_name || 'Unassigned';
           }
+          // Prioritize urologist_name from appointments table (updated during reassignment)
+          if (decryptedRow.urologist_name && decryptedRow.urologist_name.trim() !== '') {
+            // If it already has "Dr." prefix, use as-is, otherwise add it
+            const urologistName = decryptedRow.urologist_name.trim();
+            return urologistName.startsWith('Dr.') ? urologistName : `Dr. ${urologistName}`;
+          }
+          // Fallback to doctors table join if urologist_name is not set
           if (decryptedRow.urologist_first_name && decryptedRow.urologist_last_name) {
             return `Dr. ${decryptedRow.urologist_first_name} ${decryptedRow.urologist_last_name}`;
           }

@@ -206,6 +206,23 @@ const Patients = () => {
     };
   }, [category, fetchPatients]);
 
+  // Listen for patient reassignment events to refresh the list
+  // When a patient is assigned/reassigned to a urologist, refresh the lists
+  useEffect(() => {
+    const handlePatientReassigned = (event) => {
+      console.log('🔄 Patient reassigned event received, refreshing patient list...', event.detail);
+      // Refresh the patient list to show newly assigned patients
+      // This applies to all categories, especially 'new' and 'patients-under-me'
+      fetchPatients();
+    };
+
+    window.addEventListener('patient:reassigned', handlePatientReassigned);
+
+    return () => {
+      window.removeEventListener('patient:reassigned', handlePatientReassigned);
+    };
+  }, [fetchPatients]);
+
   // Listen for appointment booking events to refresh the list
   // When a nurse books an appointment, the patient should appear in the urologist's list
   useEffect(() => {
