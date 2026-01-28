@@ -36,8 +36,8 @@ module.exports = {
     },
     {
       name: 'uroprep-frontend',
-      script: 'npx',
-      args: 'serve -s dist -l 3000',
+      script: 'npm',
+      args: 'start',
       cwd: './frontend',
       instances: 1,
       exec_mode: 'fork',
