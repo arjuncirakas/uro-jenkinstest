@@ -126,19 +126,31 @@ print_step "Navigating to project root..."
 cd "$PROJECT_ROOT"
 
 print_step "Stopping existing PM2 processes (if any)..."
+sudo -u ec2-user bash << EOF
+export PM2_HOME=/home/ec2-user/.pm2
 pm2 delete all 2>/dev/null || true
+EOF
 print_success "Previous processes stopped"
 
 print_step "Starting applications with PM2..."
+sudo -u ec2-user bash << EOF
+export PM2_HOME=/home/ec2-user/.pm2
 pm2 start ecosystem.config.cjs --env production
+EOF
 print_success "Applications started"
 
 print_step "Saving PM2 process list..."
+sudo -u ec2-user bash << EOF
+export PM2_HOME=/home/ec2-user/.pm2
 pm2 save
+EOF
 print_success "PM2 process list saved"
 
 print_step "Setting up PM2 startup script..."
+sudo -u ec2-user bash << EOF
+export PM2_HOME=/home/ec2-user/.pm2
 pm2 startup | tail -n 1 | bash || true
+EOF
 print_success "PM2 startup script configured"
 
 # Display status
